@@ -1,0 +1,72 @@
+# Khung nội dung báo cáo
+
+**Trạng thái:** Khung nội dung sống; chưa đánh số chương cho tới khi nhận mẫu ĐATN hiện hành và xác nhận của giảng viên hướng dẫn.
+
+## Bối cảnh và vấn đề
+
+- Bối cảnh hệ thống đặt vé sự kiện trực tuyến.
+- Tính cấp thiết của nhất quán và độ tin cậy trong vòng đời vé.
+- Hiện trạng quy trình chẩn đoán lỗi thủ công.
+- Giới hạn của khảo sát hệ thống bên ngoài.
+
+**Nguồn dự kiến:** A1, A2, B1 và bằng chứng khảo sát.
+
+## Mục tiêu, phạm vi và phương pháp
+
+- Mục tiêu tổng quát và mục tiêu đo được.
+- Phạm vi nghiệp vụ và phần loại trừ.
+- Câu hỏi nghiên cứu.
+- Phương pháp thu thập bằng chứng và đánh giá.
+
+**Nguồn dự kiến:** A3–A7.
+
+## Cơ sở lựa chọn
+
+Chỉ trình bày khái niệm thực sự được dùng trong quyết định hoặc phép đánh giá: phân rã microservice, nhất quán phân tán, Saga/Outbox, idempotency, logging có cấu trúc, Drain và LLM API.
+
+## Phân tích yêu cầu và nghiệp vụ
+
+- Tác nhân, use case và đặc tả use case.
+- Quy trình nghiệp vụ có nhánh thất bại.
+- Từ điển miền, mô hình miền và bất biến.
+- Yêu cầu chức năng, ASR và kịch bản chất lượng.
+- Thiết kế tương tác cho các luồng chính sau khi phạm vi được chốt.
+
+**Nguồn dự kiến:** B2–B10.
+
+## Thiết kế hệ thống
+
+- C4 System Context và Container.
+- Lập luận ranh giới context/service.
+- Sở hữu dữ liệu, schema độc lập và kế hoạch chuyển bảng.
+- API, sự kiện và các luồng Saga được chọn.
+- Check-in trực tuyến, idempotency và xử lý cạnh tranh.
+- Logging, Drain, context builder, khử nhạy cảm và trợ lý chẩn đoán.
+- Kiến trúc triển khai trên hai EC2 sau khi so sánh/đo thử.
+- UML cần thiết: use case, hoạt động, tuần tự, lớp, trạng thái và triển khai theo đúng mục đích từng hình.
+
+**Nguồn dự kiến:** B5.5, B11–B18 và ADR.
+
+## Hiện thực
+
+- Thành phần đã xây và phương pháp phát triển phần mềm được áp dụng thực tế.
+- Phần mã/bảng tiền nhiệm được giữ, sửa, tách, viết mới hoặc bỏ.
+- Sai lệch giữa thiết kế và mã nguồn, cùng ADR thay thế nếu có.
+
+Không mô tả mục tiêu đồ án là “refactor repo cũ” và không tuyên bố toàn bộ hệ thống được viết từ số không.
+
+## Kiểm thử và đánh giá
+
+- Kiểm thử chức năng và hợp đồng.
+- Kiểm thử bất biến: oversell, callback/thông điệp lặp, check-in đồng thời.
+- Hiệu năng, độ trễ, thông lượng và khả năng phục hồi trong cấu hình được công bố.
+- Đánh giá chất lượng trợ lý trên tập ca lỗi thật/kiểm soát được.
+- Giới hạn hiệu lực và các kết quả không đạt.
+
+**Nguồn dự kiến:** B15, B17–B19 và `experiments/`.
+
+## Kết luận và hướng phát triển
+
+- Đối chiếu mục tiêu với kết quả.
+- Đóng góp kỹ thuật và đóng góp của từng thành viên.
+- Hạn chế, rủi ro còn lại và hướng phát triển.

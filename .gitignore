@@ -1,0 +1,37 @@
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Credentials and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Build and dependency outputs
+**/target/
+**/build/
+**/dist/
+**/node_modules/
+.gradle/
+
+# Runtime and test artifacts
+*.log
+logs/
+tmp/
+coverage/
+test-results/
