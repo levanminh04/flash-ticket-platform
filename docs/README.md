@@ -19,6 +19,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Kịch bản chất lượng | `quality-scenarios/` |
 | Kịch bản đo và kết quả thô | `experiments/` |
 | Bằng chứng khảo sát và quy trình dò lỗi | `evidence/` |
+| Phiếu nghiên cứu đã điền/đang nháp | `research/` |
 | Khung báo cáo | `report/` |
 | Baseline, phân vai và trạng thái thực hiện | `project/` |
 

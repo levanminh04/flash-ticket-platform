@@ -6,7 +6,7 @@ Repository này là không gian làm việc chính thức của đồ án. Mã n
 
 ## Trạng thái
 
-Đang ở **Giai đoạn 0 — Nền tảng làm việc**. Chưa chốt danh sách service, ranh giới dữ liệu, Saga hoặc cách bố trí hai EC2; vì vậy chưa chuyển mã nguồn nghiệp vụ vào repository này.
+Đang ở **Giai đoạn 1 — Vấn đề và bối cảnh**. Giai đoạn 0 đã hoàn thành phần kỹ thuật; câu hỏi cho giảng viên và phân vai chi tiết đang chờ nhóm thực hiện. Chưa chốt danh sách service, ranh giới dữ liệu, Saga hoặc cách bố trí hai EC2; vì vậy chưa chuyển mã nguồn nghiệp vụ vào repository này.
 
 ## Ràng buộc đã chốt
 

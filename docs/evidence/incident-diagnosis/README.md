@@ -1,5 +1,7 @@
 # Quy trình chẩn đoán sự cố hiện tại — B1
 
+**Baseline đã lập:** [Quy trình hiện tại, kiểm kê logging và INC-01](B1-current-diagnosis-baseline.md).
+
 ## Baseline đã biết
 
 Khi có bug do khách hàng báo hoặc bug âm thầm, người xử lý mở Loki hoặc SSH vào máy Linux, cố tái hiện lỗi, đợi log xuất hiện để lấy tên lỗi rồi dò đoạn mã liên quan. Mô tả này là đầu vào ban đầu, chưa phải phép đo hoàn chỉnh.

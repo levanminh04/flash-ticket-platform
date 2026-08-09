@@ -1,0 +1,44 @@
+# A4 — Nháp câu hỏi nghiên cứu
+
+- **Trạng thái:** Nháp, chưa chốt
+- **Đi vào báo cáo:** Chỉ đưa vào nếu mẫu báo cáo/giảng viên thấy câu hỏi nghiên cứu giúp mạch đánh giá rõ hơn
+- **Nguyên tắc:** Một câu hỏi trung tâm, tối đa hai câu phụ, không chứa tên công nghệ
+
+## Câu hỏi trung tâm
+
+> Trong giới hạn hạ tầng của đồ án, một hệ thống đặt vé phân tán có thể duy trì các bất biến cốt lõi và cung cấp bằng chứng chẩn đoán sự cố ở mức độ nào khi gặp yêu cầu đồng thời, thông điệp lặp và lỗi từng phần?
+
+### Bằng chứng cần có
+
+- Số lần bán vượt sau workload đồng thời.
+- Số tác dụng phụ lặp khi cùng yêu cầu/callback/message được gửi lại.
+- Số lần check-in thành công trên cùng một vé khi nhiều thiết bị gửi gần đồng thời.
+- Trạng thái cuối và thời gian phục hồi của các luồng lỗi đã chọn.
+- Độ trễ, thông lượng và tỷ lệ lỗi trong cấu hình triển khai được công bố.
+- Với nhánh chẩn đoán: context có chứa bằng chứng cần thiết, vùng/nguyên nhân được chỉ đúng, gợi ý kiểm tra hữu ích và số nhận định không có bằng chứng.
+
+## Câu hỏi phụ 1
+
+> Các cách phối hợp trạng thái giữa những bước của vòng đời vé đánh đổi thế nào giữa tính đúng đắn, khả năng phục hồi và chi phí hiệu năng?
+
+**Phục vụ câu trung tâm:** Giải thích vì sao một phương án duy trì được bất biến và cái giá phải trả, thay vì chỉ trả lời “có hoạt động”.
+
+**Bằng chứng:** Kết quả test bất biến, fault injection, p95/p99, thông lượng, tài nguyên, số lần thử lại/bù trừ và trạng thái cuối.
+
+## Câu hỏi phụ 2
+
+> Việc chuẩn hóa và liên kết dấu vết vận hành hỗ trợ xác định vùng lỗi và bước kiểm tra tiếp theo ở mức độ nào trên tập ca sự cố đã biết?
+
+**Phục vụ câu trung tâm:** Đo khả năng tạo bằng chứng chẩn đoán cho các sự cố ảnh hưởng đến độ tin cậy vận hành.
+
+**Bằng chứng tối thiểu:** Tập ca có nguyên nhân thật; tỷ lệ context chứa tín hiệu cần thiết; đánh giá đúng vùng/nguyên nhân; tính hữu ích của bước kiểm tra; số lần bịa bằng chứng/hành động. Thời gian chẩn đoán thủ công so với có hỗ trợ chỉ đo thêm nếu thu được dữ liệu nhất quán.
+
+## BÁO CÁO — Cách sử dụng
+
+Nếu giữ A4, phần Kết luận phải trả lời lần lượt câu trung tâm và hai câu phụ bằng số liệu ở chương Đánh giá. Nếu không đủ bằng chứng cho câu phụ 2, hạ phạm vi thành “đánh giá tính đầy đủ và hữu ích trên tập ca giới hạn”, không tuyên bố rút ngắn thời gian chẩn đoán.
+
+## CẦN XÁC NHẬN
+
+1. Giảng viên có yêu cầu trình bày câu hỏi nghiên cứu thành mục riêng không.
+2. Nhóm có chấp nhận câu hỏi trung tâm bao gồm cả bằng chứng chẩn đoán, hay muốn A4 chỉ tập trung nhất quán vòng đời vé và đưa AI xuống mục tiêu phụ.
+3. Ngưỡng định lượng chưa chốt ở đây; phải chốt trong B9–B10 trước khi triển khai benchmark.

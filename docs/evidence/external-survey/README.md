@@ -1,5 +1,7 @@
 # Khảo sát hệ thống bên ngoài — B1
 
+**Bản khảo sát đã thực hiện:** [Ticketbox, TicketGo và Eventbrite — 2026-08-09](B1-public-ticketing-survey-2026-08-09.md).
+
 Chỉ khảo sát luồng công khai hoặc miễn phí có thể quan sát hợp pháp. Không yêu cầu mua tài khoản hoặc tiếp cận màn hình admin/organizer đóng.
 
 | Hệ thống | Luồng/công việc cần khảo sát | Bằng chứng cần lưu | Có thể quan sát? | Kết quả | Giới hạn/suy luận |
