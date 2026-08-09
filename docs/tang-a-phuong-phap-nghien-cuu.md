@@ -35,7 +35,7 @@ Peffers và cộng sự (2007) đề xuất DSRM để lấp chỗ đó: một q
 
 **Tư tưởng cốt lõi — chỉ cần nhớ đúng một câu:**
 
-> Mục tiêu phải được đặt ra và định lượng **trước khi** xây, rồi **đo lại đúng những mục tiêu đó** sau khi xây xong.
+> Mục tiêu và cách kiểm chứng phải được xác định **trước khi** xây; ngưỡng số chỉ chốt khi có căn cứ hoặc phép đo thăm dò, rồi được đo lại trên phương án cuối.
 
 Mọi thứ còn lại của DSRM là bộ khung để bảo đảm câu trên được thực hiện nghiêm túc. Nếu bạn chỉ giữ được một ý từ toàn bộ Tầng A, giữ ý này.
 
@@ -89,7 +89,7 @@ Và có **vòng phản hồi**: từ hoạt động 5 (Đánh giá) quay lại h
 | Thành phần DSRM | Quyết định | Lý do (chiếu vào ĐATN của bạn) |
 |---|---|---|
 | **Sáu hoạt động** | 🟡 **THAM KHẢO** | Dùng để tự kiểm tra có đủ vấn đề, mục tiêu, thiết kế, hiện thực và đánh giá; **không ánh xạ máy móc sáu hoạt động vào chương báo cáo** |
-| **Nguyên tắc "mục tiêu đặt trước — đo lại sau"** | 🔴 **LẤY** | Giữ mạch mục tiêu–bằng chứng, nhưng chỉ định lượng những thuộc tính thực sự đo được; mục tiêu chức năng có thể kiểm chứng bằng test/use case |
+| **Nguyên tắc "mục tiêu và bằng chứng đặt trước — đo lại sau"** | 🔴 **LẤY** | Giữ mạch mục tiêu–bằng chứng; chỉ chốt ngưỡng số khi có căn cứ, còn mục tiêu chức năng có thể kiểm chứng bằng test/use case |
 | **Tách trình diễn khỏi đánh giá** | 🔴 **LẤY về ý nghĩa** | Có thể trình bày ở hai mục hoặc cùng một chương tùy mẫu báo cáo; điều quan trọng là không lấy ảnh demo làm toàn bộ bằng chứng đánh giá |
 | **Vòng phản hồi 5 → 3** | 🟡 **LẤY gọn** | Ghi ADR khi một **quyết định kiến trúc quan trọng** thay đổi; không tạo bản ghi cho mọi chỉnh sửa nhỏ |
 | **Bốn điểm khởi đầu** | 🟡 **LẤY 1, biết 3** | Đề tài của bạn khởi đầu từ vấn đề → chỉ dùng điểm thứ nhất. Ba cái kia chỉ cần biết để trả lời nếu hội đồng hỏi, **không đưa vào báo cáo** |
@@ -105,7 +105,7 @@ Và có **vòng phản hồi**: từ hoạt động 5 (Đánh giá) quay lại h
 Từ DSRM giữ lại **bốn nguyên tắc thực dụng**:
 
 1. Phát biểu vấn đề và mục tiêu trước khi lựa chọn giải pháp.
-2. Mỗi mục tiêu quan trọng phải có cách kiểm chứng tương ứng.
+2. Mỗi mục tiêu quan trọng phải có cách kiểm chứng tương ứng; ngưỡng số chưa có căn cứ được chốt sau phép đo thăm dò.
 3. Phân biệt hệ thống “chạy được” với bằng chứng “đáp ứng đến mức nào”.
 4. Ghi lại thay đổi kiến trúc quan trọng và đánh giá bằng kiểm thử, thực nghiệm hoặc phân tích phù hợp.
 
@@ -180,36 +180,34 @@ Thứ tự điền đề xuất: A1 → A2 → A3 → A4 → A5 → A6 → A8 �
 
 ### ⚠️ Trường hợp đề tài không mới — cách trình bày đúng
 
-Bài toán bán vé trong hệ phân tán **đã được giải quyết trong công nghiệp**, và các mẫu thiết kế liên quan đều đã công bố. Viết A1 theo lối "hiện chưa có giải pháp nào" là **sai sự thật và dễ bị bác ngay**.
+Bài toán bán vé trong hệ phân tán **đã được giải quyết trong công nghiệp**, và các mẫu thiết kế liên quan đều đã công bố. Viết A1 theo lối “hiện chưa có giải pháp nào” là sai sự thật. Ngược lại, đồ án đại học cũng không bắt buộc phải chứng minh một “khoảng trống nghiên cứu toàn cầu” nếu chưa thực hiện tổng quan tài liệu đủ rộng.
 
-**Bốn nước đi thay thế** — không tuyên bố tính mới mà vẫn đứng vững:
+**Bốn nước đi thay thế** — tập trung vào bài toán kỹ thuật và bằng chứng:
 
 | Nước | Nội dung | Điều KHÔNG được viết |
 |---|---|---|
-| **1. Vấn đề có thật và có hậu quả** | Chứng minh bằng quan sát có bằng chứng ở B1, không bằng khẳng định suông | *"Ngày nay công nghệ thông tin phát triển mạnh mẽ…"* |
-| **2. Giải pháp có tồn tại — nhưng ở đâu?** | Các hệ thống thương mại giải được, nhưng **kiến trúc của họ không công bố**. Các mẫu thiết kế thì công bố rời rạc, mỗi mẫu một nguồn | *"Chưa có hệ thống nào giải quyết được vấn đề này"* |
-| **3. Khoảng trống thật** | Không phải *"chưa ai giải"* mà là *"chưa có tài liệu công khai nào **đo** hiệu quả của các cơ chế này khi phối hợp với nhau dưới một bộ ràng buộc cụ thể"* | *"Đồ án đề xuất cơ chế Saga/Outbox"* — đó là mẫu của người khác |
-| **4. Vì sao vẫn đáng làm** | Ba lý do hợp lệ: (a) đối sánh có kiểm chứng — đo các cơ chế dưới cùng một điều kiện, có đường cơ sở đối chứng; (b) nghiên cứu điển hình dưới ràng buộc — công nghiệp không chạy trên 2 vCPU nên không ai công bố hành vi ở quy mô này; (c) phần trợ lý sửa lỗi nhắm vào lớp ca ít được xử lý | *"Lần đầu tiên", "vượt trội"* |
+| **1. Vấn đề nghiệp vụ có thật và có hậu quả** | Chứng minh bằng quan sát có bằng chứng ở B1: giữ chỗ, hết vé, thanh toán, phát hành, check-in | *“Ngày nay công nghệ thông tin phát triển mạnh mẽ…”* |
+| **2. Vì sao kiến trúc phân tán làm bài toán khó hơn** | Nêu lỗi từng phần, yêu cầu/thông điệp lặp, dữ liệu thuộc nhiều chủ sở hữu và các bất biến cần giữ | *“Chưa có hệ thống nào giải quyết được vấn đề này”* |
+| **3. Vì sao mô tả kiến trúc là chưa đủ** | Cần kiểm chứng bất biến, hiệu năng, phục hồi và khả năng chẩn đoán trong cấu hình được công bố | Dùng thiếu sót của một repository làm “khoảng trống nghiên cứu” |
+| **4. Đồ án tạo ra và đánh giá gì** | Thiết kế ranh giới/dữ liệu, phối hợp các mẫu đã biết, hiện thực hệ thống và đánh giá bằng test/thực nghiệm phù hợp | *“Lần đầu tiên”, “vượt trội”, “chưa ai đo”* khi chưa có tổng quan chứng minh |
 
-**Điểm cần hiểu rõ:** ở bậc đại học, hội đồng **không chấm điểm tính mới** — họ chấm **độ sâu và độ chặt chẽ**. Một bài toán quen thuộc được xử lý có đo đạc, có đối chứng, có phân tích đánh đổi **luôn thắng** một bài toán lạ được xử lý hời hợt. Đề tài không mới không phải điểm yếu cần che; nó chỉ đòi bạn chuyển tuyên bố từ *"tôi giải được thứ chưa ai giải"* sang *"tôi đo được thứ chưa ai đo và công bố"*.
-
-
+**Điểm cần hiểu rõ:** ở bậc đại học, giá trị nằm ở độ sâu, tính nhất quán giữa vấn đề–thiết kế–mã nguồn và chất lượng bằng chứng. Đề tài quen thuộc không phải điểm yếu cần che và cũng không cần biến lịch sử phát triển mã thành động cơ nghiên cứu.
 
 **Ô trống:**
 ```
-Nước 1 — Vấn đề có thật:
+Nước 1 — Vấn đề nghiệp vụ có thật:
   Bối cảnh rộng: ____________________________________________
-  Thu hẹp về lĩnh vực: ______________________________________
-  Thực trạng quan sát được (kèm nguồn từ B1): _______________
-Nước 2 — Giải pháp hiện có nằm ở đâu:
-  Hệ thống thương mại giải được nhưng không công bố: ________
-  Mẫu thiết kế đã công bố (nguồn): __________________________
-Nước 3 — Khoảng trống (KHÔNG phải "chưa ai giải"):
-  Thứ chưa được đo/công bố: _________________________________
-Nước 4 — Vì sao vẫn đáng làm:
-  (a) đối sánh có kiểm chứng: _______________________________
-  (b) ràng buộc đặc thù: ____________________________________
-  (c) lớp ca ít được xử lý: _________________________________
+  Thu hẹp về vòng đời vé: ___________________________________
+  Quan sát có bằng chứng từ B1: _____________________________
+Nước 2 — Thách thức khi phân tán:
+  Bất biến/trạng thái liên thuộc: ____________________________
+  Điều kiện lỗi hoặc cạnh tranh: _____________________________
+Nước 3 — Bằng chứng cần có:
+  Bất biến/thuộc tính cần kiểm chứng: ________________________
+  Bằng chứng vận hành cần thu: _______________________________
+Nước 4 — Giá trị của đồ án:
+  Tạo tác được thiết kế/xây dựng: ____________________________
+  Phạm vi và cách đánh giá: _________________________________
 ```
 
 **Đi vào:** Chương 1 — Đặt vấn đề / Tính cấp thiết

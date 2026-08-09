@@ -11,7 +11,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Phương pháp nghiên cứu, mục tiêu và bằng chứng | `tang-a-phuong-phap-nghien-cuu.md` |
 | Quy trình phân tích, thiết kế, xây dựng và kiểm chứng | `tang-b-quy-trinh-ky-thuat.md` |
 | Ký hiệu, đặt tên và mẫu biểu | `tang-c-quy-uoc-trinh-bay.md` |
-| Đối chiếu miền đích với mã nguồn tiền nhiệm | `b5.5-doi-chieu-ma-nguon-va-ba-tang.md` |
+| Sổ đối chiếu tài sản hiện thực nội bộ sau khi có miền đích | `b5.5-doi-chieu-ma-nguon-va-ba-tang.md` |
 | Thuật ngữ miền | `glossary.md` |
 | Quyết định kiến trúc | `adr/` |
 | Sơ đồ và tệp nguồn | `diagrams/` |
@@ -26,7 +26,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 ## Quy tắc cập nhật
 
 - Một thông tin chỉ có một nơi sở hữu; tài liệu khác liên kết tới nó thay vì sao chép.
-- Báo cáo đi theo mạch vấn đề → yêu cầu → thiết kế → hiện thực → đánh giá, không đi theo lịch sử refactor.
-- Mã nguồn tiền nhiệm chỉ được dùng làm bằng chứng hiện trạng và nguồn tái sử dụng sau khi đã có phân tích miền sơ bộ.
+- Báo cáo đi theo mạch vấn đề → yêu cầu → phân tích miền → thiết kế đích → hiện thực → đánh giá; không đi theo lịch sử file/package/commit.
+- B5.5 và hồ sơ nguồn tài sản là tài liệu kỹ thuật nội bộ. Chúng phục vụ kiểm soát hiện thực, không được dùng làm bối cảnh, khoảng trống nghiên cứu hoặc nguồn lập luận ranh giới.
 - Chỉ tạo ADR cho quyết định có phương án cạnh tranh hoặc hệ quả kiến trúc đáng kể.
 - Không đưa bí mật, dữ liệu cá nhân hoặc log chưa khử nhạy cảm vào Git.

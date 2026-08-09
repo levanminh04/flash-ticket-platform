@@ -6,7 +6,7 @@
 
 ## Câu hỏi trung tâm
 
-> Trong giới hạn hạ tầng của đồ án, một hệ thống đặt vé phân tán có thể duy trì các bất biến cốt lõi và cung cấp bằng chứng chẩn đoán sự cố ở mức độ nào khi gặp yêu cầu đồng thời, thông điệp lặp và lỗi từng phần?
+> Trong giới hạn hạ tầng của đồ án, một hệ thống đặt vé phân tán có thể duy trì các bất biến cốt lõi và phục hồi về trạng thái chấp nhận được ở mức độ nào khi gặp yêu cầu đồng thời, thông điệp lặp và lỗi từng phần?
 
 ### Bằng chứng cần có
 
@@ -15,7 +15,6 @@
 - Số lần check-in thành công trên cùng một vé khi nhiều thiết bị gửi gần đồng thời.
 - Trạng thái cuối và thời gian phục hồi của các luồng lỗi đã chọn.
 - Độ trễ, thông lượng và tỷ lệ lỗi trong cấu hình triển khai được công bố.
-- Với nhánh chẩn đoán: context có chứa bằng chứng cần thiết, vùng/nguyên nhân được chỉ đúng, gợi ý kiểm tra hữu ích và số nhận định không có bằng chứng.
 
 ## Câu hỏi phụ 1
 
@@ -29,7 +28,7 @@
 
 > Việc chuẩn hóa và liên kết dấu vết vận hành hỗ trợ xác định vùng lỗi và bước kiểm tra tiếp theo ở mức độ nào trên tập ca sự cố đã biết?
 
-**Phục vụ câu trung tâm:** Đo khả năng tạo bằng chứng chẩn đoán cho các sự cố ảnh hưởng đến độ tin cậy vận hành.
+**Phục vụ câu trung tâm:** Bổ sung khả năng giải thích và kiểm tra các sự cố quan sát được trong quá trình đánh giá độ tin cậy; đây là nhánh hỗ trợ, không thay thế trục nhất quán vòng đời vé.
 
 **Bằng chứng tối thiểu:** Tập ca có nguyên nhân thật; tỷ lệ context chứa tín hiệu cần thiết; đánh giá đúng vùng/nguyên nhân; tính hữu ích của bước kiểm tra; số lần bịa bằng chứng/hành động. Thời gian chẩn đoán thủ công so với có hỗ trợ chỉ đo thêm nếu thu được dữ liệu nhất quán.
 
@@ -40,5 +39,4 @@ Nếu giữ A4, phần Kết luận phải trả lời lần lượt câu trung 
 ## CẦN XÁC NHẬN
 
 1. Giảng viên có yêu cầu trình bày câu hỏi nghiên cứu thành mục riêng không.
-2. Nhóm có chấp nhận câu hỏi trung tâm bao gồm cả bằng chứng chẩn đoán, hay muốn A4 chỉ tập trung nhất quán vòng đời vé và đưa AI xuống mục tiêu phụ.
-3. Ngưỡng định lượng chưa chốt ở đây; phải chốt trong B9–B10 trước khi triển khai benchmark.
+2. Ngưỡng định lượng chưa chốt ở đây; phải chốt trong B9–B10 trước khi triển khai benchmark.

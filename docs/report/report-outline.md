@@ -38,22 +38,22 @@ Chỉ trình bày khái niệm thực sự được dùng trong quyết định 
 
 - C4 System Context và Container.
 - Lập luận ranh giới context/service.
-- Sở hữu dữ liệu, schema độc lập và kế hoạch chuyển bảng.
+- Sở hữu dữ liệu, schema độc lập và ERD đích của từng service.
 - API, sự kiện và các luồng Saga được chọn.
 - Check-in trực tuyến, idempotency và xử lý cạnh tranh.
 - Logging, Drain, context builder, khử nhạy cảm và trợ lý chẩn đoán.
 - Kiến trúc triển khai trên hai EC2 sau khi so sánh/đo thử.
 - UML cần thiết: use case, hoạt động, tuần tự, lớp, trạng thái và triển khai theo đúng mục đích từng hình.
 
-**Nguồn dự kiến:** B5.5, B11–B18 và ADR.
+**Nguồn dự kiến:** B5, B7, B11–B18 và ADR. B5.5 là sổ đối chiếu nội bộ, không phải nguồn trình bày của báo cáo.
 
 ## Hiện thực
 
 - Thành phần đã xây và phương pháp phát triển phần mềm được áp dụng thực tế.
-- Phần mã/bảng tiền nhiệm được giữ, sửa, tách, viết mới hoặc bỏ.
-- Sai lệch giữa thiết kế và mã nguồn, cùng ADR thay thế nếu có.
+- Cách các service/module, schema, API/sự kiện và cơ chế nhất quán hiện thực kiến trúc đích.
+- Sai lệch có ý nghĩa giữa thiết kế đã chấp nhận và hệ thống cuối, cùng ADR thay thế nếu có.
 
-Không mô tả mục tiêu đồ án là “refactor repo cũ” và không tuyên bố toàn bộ hệ thống được viết từ số không.
+Phần này mô tả trạng thái cuối, không kể lịch sử chuyển file/package, bảng hay commit. Báo cáo không cần đưa ra tuyên bố về tỷ lệ mã viết mới; nguồn và phạm vi tái sử dụng chỉ được trình bày khi biểu mẫu chính thức yêu cầu hoặc khi được hỏi trực tiếp.
 
 ## Kiểm thử và đánh giá
 

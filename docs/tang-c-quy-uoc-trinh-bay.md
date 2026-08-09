@@ -329,17 +329,17 @@ docs/
 > | Phương án | Ưu | Nhược |
 > |---|---|---|
 > | Không ghi lại, dựa vào trí nhớ và lịch sử commit | Không tốn công | Đến tháng 11 không tái dựng được lý do; phần lập luận của báo cáo phải viết theo hồi tưởng |
-> | Ghi trong một tài liệu chung, sửa trực tiếp khi đổi ý | Gọn, một chỗ | Mất lịch sử thay đổi — đúng thứ có giá trị nhất; không thấy được quá trình nghiên cứu |
+> | Ghi trong một tài liệu chung, sửa trực tiếp khi đổi ý | Gọn, một chỗ | Mất lý do của quyết định đã bị thay thế; khó giải thích vì sao kiến trúc cuối chọn phương án hiện tại |
 > | ADR đánh số, giữ lịch sử, có chuỗi thay thế | Tái dựng được quyết định và người chịu trách nhiệm | Tốn công viết; chỉ đáng dùng cho quyết định lớn |
 >
 > ## Quyết định
 > Áp dụng ADR đánh số tuần tự cho các quyết định kiến trúc quan trọng trong `docs/adr/`. Quyết định bị đảo ngược được thể hiện bằng ADR mới kèm liên kết thay thế. Mỗi ADR nêu yêu cầu/kịch bản phục vụ và cách kiểm chứng khi áp dụng được.
 >
 > ## Phục vụ ASR nào
-> Không phục vụ một ASR kỹ thuật cụ thể; phục vụ yêu cầu về tính truy vết và tính minh bạch của quá trình nghiên cứu, theo ràng buộc đặt ra ở Tầng A (vòng phản hồi phải được ghi nhận, không giấu).
+> Không phục vụ một ASR kỹ thuật cụ thể; phục vụ khả năng truy vết từ yêu cầu tới quyết định và tái dựng lập luận của kiến trúc cuối.
 >
 > ## Hệ quả tích cực
-> - Chuỗi ADR có sửa đổi kèm lý do thực nghiệm là bằng chứng cho thấy đồ án có quá trình nghiên cứu thật, thay vì một bản thiết kế "đúng ngay từ đầu"
+> - Chuỗi ADR giúp giải thích kiến trúc cuối bằng các phương án, bằng chứng và đánh đổi đã thực sự được cân nhắc
 > - Mỗi câu hỏi của hội đồng về một quyết định đều có một tệp trả lời sẵn
 > - Chương thiết kế của báo cáo có nguyên liệu viết sẵn, không phải hồi tưởng
 >

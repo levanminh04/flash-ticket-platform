@@ -4,6 +4,8 @@
 >
 > **Nguyên tắc soạn:** chỉ ghi những gì chủ đồ án đã nói hoặc đã viết. Không thêm phân tích, không thêm đề xuất, không suy diễn. Cột **Nguồn** cho biết thông tin lấy từ đâu để kiểm chứng lại.
 >
+> **Phân loại sử dụng:** đây là hồ sơ bối cảnh nội bộ, không phải văn bản đưa nguyên trạng vào báo cáo. Mạch báo cáo được viết độc lập theo vấn đề → yêu cầu → phân tích miền → thiết kế đích → hiện thực → đánh giá; lịch sử repository không được dùng làm tính cấp thiết hoặc khoảng trống nghiên cứu.
+>
 > **Ký hiệu nguồn:** `[TĐ]` = trao đổi trực tiếp · `[ĐH]` = file *ĐỊNH HƯỚNG ĐỒ ÁN TỐT NGHIỆP.pdf* · `[KH]` = file *FlashTicket Automated Error Detection and Remediation Assistant: Design Plan.pdf* · `[TL]` = bộ tài liệu ba tầng (A/B/C, B5.5)
 
 ---
@@ -16,7 +18,8 @@
 | Đề tài | Hệ thống đặt vé sự kiện trực tuyến | [ĐH] |
 | Thành viên | Lê Văn Minh (B22DCCN533) · Phạm Văn Tuyến (B22DCCN773) · Phạm Long Nhật (B22DCCN581) | [ĐH] |
 | Giảng viên hướng dẫn | Cô Liên | [ĐH] |
-| Mã nguồn | github.com/levanminh04/flash-ticket-system | [ĐH] |
+| Repository hiện thực ĐATN | github.com/levanminh04/flash-ticket-platform | [TĐ] |
+| Nguồn tài sản hiện thực nội bộ | github.com/levanminh04/flash-ticket-system | [ĐH] [TĐ] |
 | Hạn nộp | 14/12/2026 | [TL] |
 | Hình thức chấm | Chấm điểm cá nhân, một quyển báo cáo, hỏi theo phần | [TL] |
 
@@ -93,7 +96,7 @@
 |---|---|---|
 | 1 | **Xác định rõ kiến trúc hệ thống ngay từ đầu**, trước khi viết dòng code đầu tiên | [TĐ] |
 | 2 | Rút kinh nghiệm: lần trước **không chốt kiến trúc rõ ràng trước mà vừa chốt vừa làm**, đến khi mọi thứ quá lớn thì không đập đi xây lại được | [TĐ] |
-| 3 | **Clone repo ra mới, tách service trên bản mới, không ghi đè bản cũ** — vì sửa rồi tách trên bản cũ cảm giác hổ lốn | [TĐ] |
+| 3 | **Dùng repo mới để hiện thực kiến trúc đích, không ghi đè bản cũ** — đã hoàn thành với `flash-ticket-platform`; tài sản đưa vào phải khớp thiết kế và kiểm thử của phiên bản ĐATN | [TĐ] |
 | 4 | Cần **tách service, chủ yếu là `core-service`** | [TĐ] |
 | 5 | Ý định ban đầu của hai repo là **so sánh monolith với microservices** | [TĐ] |
 | 6 | Lỗi Redis ở IPN **không phải ưu tiên** — sẽ review và sửa lại khi làm bản mới | [TĐ] |

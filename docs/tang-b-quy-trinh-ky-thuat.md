@@ -11,7 +11,7 @@
 
 **Không chứa:** nội dung nghiệp vụ cụ thể (có bao nhiêu service, tên là gì, bảng nào). Đó là thứ bạn điền vào Phần 4 khi thực sự làm.
 
-**Ràng buộc kế thừa từ Tầng A** — Tầng B không được mâu thuẫn với bảy điều ở Phần 5 Tầng A. Quan trọng nhất: mục tiêu phải định lượng **trước** khi thiết kế kiến trúc, và mọi thay đổi thiết kế phải ghi bằng bản ghi mới chứ không sửa bản cũ.
+**Ràng buộc từ Tầng A** — Tầng B không được mâu thuẫn với các điều ở Phần 5 Tầng A. Quan trọng nhất: mục tiêu quan trọng phải có cách kiểm chứng trước khi hiện thực; ngưỡng số chỉ chốt khi có căn cứ hoặc phép đo thăm dò. Chỉ quyết định kiến trúc đã được chấp nhận và sau đó bị đảo mới cần ADR thay thế.
 
 Ký hiệu: 🔴 bắt buộc · 🟡 nên có · ⚪ cắt được
 
@@ -75,8 +75,8 @@ DDD có hai nửa tách biệt:
 Entity · Value Object · **Aggregate** (và Aggregate Root) · Repository · Domain Service · **Domain Event** · Factory · Specification.
 
 > **Khái niệm quan trọng nhất trong nửa này: Aggregate.**
-> Aggregate là một cụm đối tượng được coi như **một đơn vị nhất quán duy nhất** — mọi thay đổi bên trong nó xảy ra trong **một giao dịch**. Ngược lại, thay đổi xuyên nhiều aggregate **không** được nằm trong một giao dịch, mà phải dùng nhất quán cuối cùng.
-> Nói cách khác: **ranh giới aggregate chính là ranh giới giao dịch.** Đây là chỗ DDD chạm thẳng vào trục nghiên cứu của bạn.
+> Aggregate là một cụm đối tượng được bảo vệ như **một đơn vị nhất quán**. Trong thiết kế thông thường, thay đổi một aggregate được hoàn tất trong một giao dịch cục bộ; thay đổi xuyên aggregate cần phối hợp rõ ràng và thường chấp nhận nhất quán cuối cùng.
+> Vì vậy, ranh giới aggregate là đầu vào quan trọng để xác định ranh giới giao dịch, nhưng không phải công thức máy móc “mỗi aggregate luôn bằng một service”. Đây là chỗ DDD chạm thẳng vào trục nghiên cứu của bạn.
 
 ### Hai mẫu phân rã dịch vụ
 
@@ -176,9 +176,9 @@ Không mô hình hóa nghiệp vụ, không lấy yêu cầu chức năng, khôn
 | Thành phần | Quyết định | Lý do |
 |---|---|---|
 | **Ngôn ngữ chung** | 🔴 LẤY | Chi phí gần bằng 0, quyết định tên lớp/bảng/API về sau. Làm sai từ đầu thì phải đổi tên hàng loạt vào tháng 10 |
-| **Bounded Context + Context Map** | 🔴 LẤY | Đây là lý do chính dùng DDD: nó trả lời "chia service thế nào và vì sao" |
+| **Bounded Context + Context Map** | 🔴 LẤY | Đây là đầu vào chính để đề xuất ranh giới service; quyết định cuối còn phải xét bất biến, dữ liệu, quan hệ gọi, chu kỳ thay đổi/tải và chi phí vận hành |
 | **Phân loại miền con (cốt lõi / hỗ trợ / chung)** | 🟡 LẤY | Rẻ và có tác dụng thật: nó chỉ ra chỗ nào đáng đầu tư công sức, chỗ nào chỉ cần chạy được. Khớp trực tiếp với ba vòng phạm vi ở Tầng A |
-| **Aggregate** | 🔴 LẤY, **coi là khái niệm trung tâm của Tầng B** | Ranh giới aggregate = ranh giới giao dịch. Xác định aggregate đúng thì biết được chỗ nào dùng ACID, chỗ nào buộc phải dùng Saga. Đây là mắt xích nối miền nghiệp vụ với trục nghiên cứu |
+| **Aggregate** | 🔴 LẤY, **coi là khái niệm trung tâm của Tầng B** | Aggregate xác định đơn vị nhất quán được bảo vệ bằng giao dịch cục bộ. Kết hợp aggregate với ranh giới service mới cho biết chỗ nào dùng ACID và chỗ nào cần phối hợp phân tán. Đây là mắt xích nối miền nghiệp vụ với trục nghiên cứu |
 | **Domain Event** | 🔴 LẤY | Là đầu vào của Event Storming và là đơn vị giao tiếp bất đồng bộ giữa service |
 | **Entity, Value Object** | 🟡 LẤY nhẹ | Dùng để phân biệt cái gì có định danh, cái gì không. Không cần đào sâu |
 | **Anti-Corruption Layer** | 🔴 LẤY | Đúng hai chỗ cần: (a) tích hợp VNPay — không để mô hình của cổng thanh toán rò vào mô hình nghiệp vụ; (b) **tính năng AI — đây chính là cơ chế kỹ thuật để thực thi ràng buộc "AI không được sửa logic nghiệp vụ"** |
@@ -213,12 +213,12 @@ Không mô hình hóa nghiệp vụ, không lấy yêu cầu chức năng, khôn
 |---|---|---|
 | Nghiệp vụ vận hành thế nào? | Event Storming (Big Picture) + Biểu đồ hoạt động | — |
 | Hệ thống phải làm những chức năng gì? | Use Case + đặc tả | — |
-| **Chia thành mấy service, ranh giới ở đâu?** | **Bounded Context (DDD)** | ❌ **Không phải Use Case** |
+| **Chia thành mấy service, ranh giới ở đâu?** | **Bounded Context + bất biến + dữ liệu + ghép nối/chi phí vận hành** | ❌ **Không suy trực tiếp từ Use Case hoặc package mã nguồn** |
 | Chỗ nào dùng được giao dịch ACID, chỗ nào buộc phải nhất quán cuối cùng? | **Aggregate (DDD chiến thuật)** | — |
 | Kiến trúc phải ưu tiên điều gì? | **Kịch bản chất lượng + bảng ưu tiên** | ❌ Không phải chỉ từ Use Case |
 | Thiết kế có hợp lý không, đánh đổi ở đâu? | So sánh phương án trong các ADR quan trọng + kết quả kiểm chứng | — |
 
-> ⚠️ **Lỗi phổ biến nhất cần tránh:** nhìn biểu đồ use case rồi chia service theo nhóm use case — ví dụ gom mọi use case của Admin thành "Admin Service". Đó là chia theo **vai trò người dùng**, không phải theo **miền nghiệp vụ**, và là một sai lầm kiến trúc. Ranh giới service đến từ Event Storming, không đến từ use case.
+> ⚠️ **Lỗi phổ biến nhất cần tránh:** nhìn biểu đồ use case rồi chia service theo nhóm use case — ví dụ gom mọi use case của Admin thành “Admin Service”. Đó là chia theo vai trò người dùng, không phải theo miền nghiệp vụ. Dòng sự kiện miền giúp đề xuất đường cắt, nhưng ranh giới cuối phải được kiểm tra thêm bằng bất biến, aggregate, quyền sở hữu dữ liệu, ghép nối và chi phí triển khai.
 
 ## 3.2 Chuỗi bàn giao
 
@@ -229,7 +229,7 @@ Khảo sát đối sánh
    └→ Từ điển miền ────────────────────┐
    └→ Biểu đồ hoạt động                │ (nuôi tên gọi cho mọi
         └→ Event Storming Big Picture  │  mô hình phía sau)
-             └→ Bounded Context ───────┴→ RANH GIỚI SERVICE
+             └→ Bounded Context ───────┴→ RANH GIỚI ỨNG VIÊN
                   └→ Aggregate ──────────→ RANH GIỚI GIAO DỊCH
                                               └→ Cơ chế nhất quán (Saga/Outbox…)
    └→ Use Case + đặc tả ────────────────→ CHỨC NĂNG + neo cho test
@@ -239,7 +239,7 @@ Khảo sát đối sánh
                                               └→ Quyết định kiến trúc (ADR)
 ```
 
-Hai nhánh trái (miền nghiệp vụ) và phải (chất lượng) chạy song song, và **gặp nhau ở bước ra quyết định kiến trúc**: ranh giới service đến từ nhánh trái, còn cơ chế bên trong ranh giới đó đến từ nhánh phải.
+Hai nhánh trái (miền nghiệp vụ) và phải (chất lượng) chạy song song, và **gặp nhau ở bước ra quyết định kiến trúc**: nhánh miền tạo context/aggregate ứng viên; nhánh chất lượng cùng các ràng buộc dữ liệu, ghép nối và vận hành quyết định cách gộp/tách thành service triển khai.
 
 ## 3.3 ❗ Bốn thứ không framework nào phủ — phải bổ sung
 
@@ -251,7 +251,7 @@ OOAD cho ra biểu đồ lớp → ERD, nhưng theo giả định một CSDL duy
 
 **Bổ sung — ba phần thay cho một ERD tổng:**
 1. **Bản đồ sở hữu dữ liệu** — bảng: mỗi thực thể nghiệp vụ × service nào được ghi × service nào chỉ đọc bản sao
-2. **ERD riêng cho từng schema/CSDL của từng service** — gồm cả bảng hiện tại được giữ/sửa và bảng mới phát sinh
+2. **ERD đích riêng cho từng schema/CSDL của từng service** — chỉ phản ánh cấu trúc bền vững của kiến trúc cuối
 3. **Chiến lược dữ liệu xuyên service** — sao chép qua sự kiện hay gọi API; chấp nhận độ trễ bao lâu; xử lý dữ liệu mồ côi
 
 **Quy tắc kiểm tra:** mỗi service dùng credential chỉ có quyền trên schema/CSDL của mình; không có khóa ngoại, `JOIN`, repository hoặc truy vấn trực tiếp xuyên ranh giới. Liên kết ngoài miền là ID mềm; dữ liệu cần dùng cục bộ lấy qua API hoặc bản sao/read model đồng bộ bằng sự kiện.
@@ -356,7 +356,7 @@ Chính sách (khi X thì Y): ______________________________
 
 ### 🔴 B5 — Bản đồ Bounded Context *(bạn quyết định)*
 **Đầu vào:** B4
-**Phương pháp:** gom cụm các sự kiện gắn kết chặt → mỗi cụm là một context ứng viên. Phân loại mỗi context: cốt lõi / hỗ trợ / chung. Sau đó **gộp** để giữ trong hai trần dưới đây, mỗi lần gộp ghi một lý do.
+**Phương pháp:** gom cụm các sự kiện gắn kết chặt → mỗi cụm là một context ứng viên. Phân loại mỗi context: cốt lõi / hỗ trợ / chung. Phải đưa cả vòng đời vé, hồ sơ người dùng, chatbot và trợ lý chẩn đoán vào context map; độ sâu có thể khác nhau. Sau đó đề xuất service triển khai bằng cách kiểm tra thêm bất biến, dữ liệu, quan hệ gọi, chu kỳ thay đổi/tải và chi phí vận hành, rồi gộp để giữ trong hai trần dưới đây.
 **Phép thử — hai trần dự án đã chốt:**
 - Số **service nghiệp vụ** sau khi gộp **≤ 8**.
 - Số **luồng giao dịch xuyên service (Saga) ≤ 3**.
@@ -477,12 +477,12 @@ Nhóm quyết định cần có ADR (điền tên và mã):
 **Đi vào:** phần Kiến trúc và giải thích quyết định
 
 ### 🔴 B12 — Bản đồ sở hữu dữ liệu + ERD từng service *(bạn quyết định)*
-**Đầu vào:** B5, B7, B11 và lược đồ hiện tại
-**Phương pháp:** (1) kiểm kê bảng hiện tại; (2) gán service sở hữu; (3) quyết định giữ/sửa/tách/bỏ/viết mới; (4) vẽ ERD riêng cho từng schema/CSDL; (5) xác định dữ liệu xuyên service lấy qua API hay bản sao sự kiện. Các bảng AI chỉ chốt sau khi workflow B16–B18 rõ.
+**Đầu vào:** B5, B7, B11; B5.5 chỉ dùng sau đó cho ánh xạ hiện thực nội bộ
+**Phương pháp:** (1) từ B5/B7 lập danh sách dữ liệu mà từng service cần sở hữu; (2) thiết kế schema/CSDL và ERD đích; (3) xác định dữ liệu xuyên service lấy qua API hay bản sao sự kiện; (4) kiểm tra credential và ràng buộc truy cập; (5) sau khi thiết kế đích đủ ổn định mới dùng B5.5 nội bộ để ánh xạ tài sản bảng/migration có thể dùng lại. Các bảng AI chỉ chốt sau khi workflow B16–B18 rõ.
 **Phép thử:** mỗi service có schema/CSDL và credential độc lập; không khóa ngoại, `JOIN`, repository hoặc truy vấn trực tiếp xuyên ranh giới. Biểu đồ lớp theo context và ERD của service phải dùng nhất quán cùng thuật ngữ, nhưng không bắt buộc ánh xạ một-một.
 ```
-Thực thể/bảng hiện tại | Service sở hữu | Xử lý (giữ/sửa/tách/bỏ/mới) | Service cần bản sao | API/sự kiện đồng bộ
-_____________________ | _______________ | ___________________________ | ___________________ | _________________
+Thực thể dữ liệu đích | Service sở hữu | Bất biến/quy tắc ghi | Service cần bản sao | API/sự kiện đồng bộ
+____________________ | _______________ | ___________________ | ___________________ | _________________
 ERD từng service: ______________________________________
 Độ trễ nhất quán chấp nhận được: _______________________
 ```
@@ -491,7 +491,7 @@ ERD từng service: ______________________________________
 ### 🔴 B13 — Hợp đồng API và Event *(bạn quyết định)*
 **Đầu vào:** B5, B11
 **Phương pháp:** đặc tả API đồng bộ + lược đồ sự kiện. **Chốt trước khi chia việc code.**
-**Phép thử:** không có vòng lặp phụ thuộc đồng bộ (A gọi B, B gọi A). Có thì thiết kế sai, quay lại B5.
+**Phép thử:** không chấp nhận vòng lặp phụ thuộc đồng bộ (A gọi B, B gọi A) trong kiến trúc của đồ án. Nếu xuất hiện, coi đó là dấu hiệu ranh giới/hợp đồng cần xem lại ở B5 hoặc thay một chiều bằng sự kiện/read model.
 ```
 API đồng bộ: ______  Sự kiện bất đồng bộ: ______
 Ma trận giao tiếp service × service: ____________________
@@ -528,7 +528,7 @@ ________ | __________ | ______________________ | ______________________________
 ### 🔴 B16 — Chuẩn logging và thu thập *(bạn quyết định)*
 **Đầu vào:** B11 (ranh giới service), B13 (hợp đồng)
 **Phương pháp:** định nghĩa log JSON với tối thiểu `timestamp`, `service_name`, `environment`, `level`, `message/event_code`, `trace_id` hoặc `correlation_id`, `span_id` nếu có, `exception_type` và mã nghiệp vụ cần thiết. Xác định cách truyền trace qua REST/message, thu log và che bí mật/PII trước khi lưu hoặc gửi LLM. Không log token, mật khẩu, thông tin thanh toán đầy đủ hay nội dung cá nhân không cần thiết.
-**Mốc chặn của nhánh AI:** chốt chuẩn này trước khi tách/viết các service mới và áp dụng trước hết cho những luồng được chọn để đánh giá. Code cũ được di trú dần; không giả định có thể quay ngược về “trước dòng code đầu tiên”.
+**Mốc chặn của nhánh AI:** chốt chuẩn này trước khi hiện thực các luồng xuyên service dùng để đánh giá và áp dụng thống nhất cho các service tham gia. Tài sản mã được đưa vào phiên bản ĐATN cũng phải đáp ứng chuẩn này trước khi được coi là hoàn thành.
 **Phép thử:** với một trace/correlation ID của luồng thử, ghép lại được đường đi qua các service liên quan và không lộ dữ liệu nhạy cảm.
 ```
 Trường bắt buộc mỗi dòng log: ______________________________

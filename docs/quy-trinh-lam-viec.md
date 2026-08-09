@@ -17,8 +17,8 @@
      ┌──────────┼──────────┬──────────────┐
      ▼          ▼          ▼              ▼
   TẦNG A     TẦNG B     TẦNG C          B5.5
- phương     quy trình   quy ước      hiện trạng
-  pháp       kỹ thuật   trình bày    mã nguồn
+ phương     quy trình   quy ước       sổ nội bộ
+  pháp       kỹ thuật   trình bày    tài sản mã
      └──────────┴──────────┴──────────────┘
         = CHI TIẾT — mỗi bước làm cụ thể thế nào
 ```
@@ -36,21 +36,21 @@ Mã chính thức của sản phẩm công việc: **`A1–A9` · `B1–B19` · 
 
 ## 0.3 Đọc theo thứ tự nào
 
-Một lần ở giai đoạn lập kế hoạch: tài liệu này → phần chắt lọc của Tầng A/B/C → B5.5. Có thể kiểm kê mã nguồn bất cứ lúc nào để biết tài sản hiện có; chỉ **không dùng cấu trúc code làm căn cứ duy nhất để chốt ranh giới**. Sau đó mở đúng phiếu cần thiết, không phải tuần tự hoàn thành mọi biểu mẫu.
+Một lần ở giai đoạn lập kế hoạch: tài liệu này → phần chắt lọc của Tầng A/B/C. Chỉ dùng B5.5 sau khi đã có context map sơ bộ; kiểm kê tài sản có thể làm sớm nhưng không được biến thành căn cứ kiến trúc. Sau đó mở đúng phiếu cần thiết, không phải tuần tự hoàn thành mọi biểu mẫu.
 
 ---
 
 # PHẦN 1 — BỐI CẢNH ĐỊNH HÌNH QUY TRÌNH
 
-**1. Báo cáo bắt đầu từ vấn đề, không bắt đầu từ thao tác refactor.** Nhóm đã có một nguyên mẫu chạy được và sẽ tái sử dụng có chọn lọc, nhưng mạch báo cáo vẫn là *vấn đề → yêu cầu → thiết kế → hiện thực → đánh giá*. Repo cũ là tài sản tiền nhiệm và bằng chứng hiện trạng, không phải lý do kiến trúc. Nhóm không viết mục tiêu là “refactor repo cũ”, cũng không giả vờ toàn bộ hệ thống được viết từ số không.
+**1. Báo cáo bắt đầu từ vấn đề và mô tả kiến trúc đích.** Mạch chính là *vấn đề → yêu cầu → phân tích miền → thiết kế → hiện thực → đánh giá*. Lịch sử repository, thao tác chuyển mã và quá trình refactor không được dùng làm bối cảnh, tính cấp thiết, khoảng trống nghiên cứu hoặc trục trình bày của báo cáo.
 
-**2. Trọng tâm phân rã nằm ở `core-service`, nhưng mọi ranh giới kế thừa vẫn phải được rà soát.** `user-service` và `discovery-service` là điểm xuất phát có kho dữ liệu/vòng đời riêng; giữ gần như nguyên nếu phân tích không cho thấy lý do đổi.
+**2. Mọi service đều phải có căn cứ trong phân tích đích; độ sâu phân tích không cần bằng nhau.** Trọng tâm phân rã và kiểm chứng chuyên sâu nằm ở vòng đời vé, đặc biệt các miền đang tập trung trong `core-service`. Các miền hồ sơ người dùng, chatbot và trợ lý chẩn đoán vẫn phải xuất hiện trong bản đồ context, quyền sở hữu dữ liệu, hợp đồng và mô hình quyền; chúng có thể được phân tích gọn hơn vì là miền hỗ trợ.
 
-> **Cách khai báo đúng trong báo cáo:** đây là các thành phần kế thừa được đánh giá và tái sử dụng. Sau phần phân tích, nêu ranh giới nào được giữ, ranh giới nào thay đổi và lý do. Không trình bày như thể mọi service đều được suy ra hoàn toàn mới từ một workshop.
+> **Cách trình bày trong báo cáo:** mô tả trách nhiệm, dữ liệu sở hữu và quan hệ của từng service trong kiến trúc cuối, rồi giải thích ranh giới bằng nghiệp vụ, bất biến và thuộc tính chất lượng. Không dùng lý do “service này đã tồn tại” hoặc “package này có sẵn”.
 >
-> Câu hỏi chính: **các miền hiện nằm trong `core-service` nên được phân rã và sở hữu dữ liệu thế nào trong hai trần đã chốt**. Repo hiện có các package nghiệp vụ `event`, `booking`, `payment`, `notification`, `promotion` cùng `common/shared`, nhưng chưa có ranh giới module được cưỡng chế.
+> Câu hỏi trọng tâm: **các năng lực trong vòng đời vé nên được phân rã và sở hữu dữ liệu thế nào trong hai trần đã chốt**, đồng thời các miền hỗ trợ nối vào kiến trúc đó bằng quyền và hợp đồng nào.
 
-**3. Repo cũ là nguồn mã và bảng dữ liệu có thể tái sử dụng, không phải đường cơ sở đối chứng mặc định.** Hướng so sánh monolith với microservices không phải trục nghiên cứu.
+**3. Tài sản hiện thực có thể được dùng lại có kiểm soát, nhưng không quyết định kiến trúc.** Việc đối chiếu và tái sử dụng được quản lý bằng hồ sơ nội bộ B5.5 sau khi có bản đồ miền sơ bộ. Hướng so sánh monolith với microservices không phải trục nghiên cứu và các chi tiết chuyển đổi không đi vào mạch báo cáo.
 
 > Chỉ tạo bản đối chứng/cờ tắt khi cần trả lời một câu hỏi so sánh cụ thể và có thể cài đặt công bằng. Nhiều bất biến như oversell = 0 hoặc check-in trùng = 0 được kiểm chứng trực tiếp, không cần cố tình tạo một bản sai. Nhánh AI có thể so với quy trình thủ công nếu điều kiện cho phép; đánh giá tối thiểu vẫn phải có ca lỗi và nguyên nhân thật.
 
@@ -80,16 +80,17 @@ Dù mẫu cuối có 3, 4 hay 5 chương, báo cáo cần giữ mạch sau:
 | **Mục tiêu, phạm vi, phương pháp** | Làm đến đâu và lấy gì làm bằng chứng | A3–A7 |
 | **Cơ sở lựa chọn** | Khái niệm/mẫu nào thực sự dùng: microservices, nhất quán, Saga/Outbox, idempotency, logging, Drain/LLM | Tài liệu nghiên cứu gắn với ADR |
 | **Phân tích yêu cầu/nghiệp vụ** | Actor, use case, bất biến và mô hình miền | B2–B10 |
-| **Thiết kế** | Ranh giới service, schema độc lập, API/event, Saga, check-in trực tuyến, logging và trợ lý | B5.5, B11–B18 |
-| **Hiện thực** | Thành phần đã xây, phần mã/bảng cũ tái sử dụng và thay đổi, sai lệch so với thiết kế | Code, migration, ADR |
+| **Thiết kế** | Ranh giới service, schema độc lập, API/event, Saga, check-in trực tuyến, logging và trợ lý | B5, B7, B11–B18 |
+| **Hiện thực** | Thành phần đã xây, cách hiện thực các quyết định đích và sai lệch có ý nghĩa so với thiết kế | Code, hợp đồng, schema, ADR |
 | **Kiểm thử và đánh giá** | Chức năng, bất biến, hiệu năng/khả năng phục hồi và mức hữu ích của trợ lý | B15, B17–B19 |
 | **Kết luận và hạn chế** | Mục tiêu nào đạt, không đạt, giới hạn suy rộng và hướng phát triển | A4, A8, kết quả |
 
-### Cách viết để không biến báo cáo thành “nhật ký refactor”
+### Cách viết theo trạng thái đích
 
-- Phần Phân tích/Thiết kế được viết từ yêu cầu và quyết định đích, không đi theo thứ tự file/package cũ.
-- Repo cũ xuất hiện ở mục hiện trạng hoặc hiện thực hóa: bảng nào/lớp nào được giữ, sửa, tách, viết mới hoặc bỏ.
-- Những nội dung như cấu trúc package cũ, commit/migration chi tiết có thể đưa vào phụ lục; phần chính tập trung vào lý do và kiến trúc đích.
+- Phần Phân tích/Thiết kế được viết từ yêu cầu, mô hình miền, bất biến và quyết định đích; không đi theo lịch sử file, package hoặc commit.
+- Phần Hiện thực mô tả service/module, schema, hợp đồng và cơ chế đã xây theo kiến trúc cuối; chỉ nêu sai lệch có ý nghĩa so với thiết kế đã chấp nhận.
+- Hồ sơ đối chiếu tài sản mã, bảng và migration là tài liệu kỹ thuật nội bộ, không phải nội dung hoặc phụ lục mặc định của báo cáo.
+- Báo cáo không cần tuyên bố mọi dòng mã đều được viết mới. Nếu biểu mẫu hoặc hội đồng hỏi trực tiếp về nguồn mã, nhóm trả lời đúng phạm vi tái sử dụng và nhấn mạnh phần phân tích, thiết kế, hiện thực mới hoặc thay đổi của phiên bản ĐATN.
 - Viết báo cáo **song song** với khảo sát, thiết kế và đánh giá. Không đợi hệ thống xong mới hồi tưởng toàn bộ lập luận.
 
 ### Cơ sở lý thuyết
@@ -115,7 +116,7 @@ Nhánh T không phải phần phụ làm sau. Nó có bounded context/quyền ri
 | N+T | Lập `docs/`: `adr/`, `glossary.md`, `diagrams/src/`, `contracts/`, `experiments/` | Tầng C mục 3.5 |
 | N+T | Chốt mẫu ADR gọn; ADR-000 chỉ cần nếu nhóm muốn ghi quyết định dùng ADR | Tầng C mẫu C1 |
 | N+T | Chốt quy ước đặt tên và bảng phân vai ký hiệu | Tầng C mục 3.1, 3.3 |
-| N | Clone repo mới; repo cũ để nguyên làm nguồn mã tham khảo | — |
+| N | Dùng repository `flash-ticket-platform` làm không gian hiện thực chính; mọi mã đưa vào phải phù hợp kiến trúc đích và qua kiểm thử của phiên bản ĐATN | — |
 | N | Xóa `.env` khỏi repo mới, xoay khóa nếu là khóa thật | — |
 | N+T | Hỏi cô Liên: đề cương/cấu trúc chương ĐATN? · xin file mẫu trình bày hiện hành của khoa | Tầng A, Tầng C |
 | N+T | Tạo khung báo cáo ngay từ đầu và ghi nội dung đã có bằng nguồn/ghi chú, chưa chốt số chương | Phần 2 |
@@ -148,7 +149,7 @@ Nhánh T không phải phần phụ làm sau. Nó có bounded context/quyền ri
 | N | Mô hình quy trình nghiệp vụ, mỗi quy trình có ít nhất một nhánh thất bại | B3 |
 | N | Lập dòng thời gian sự kiện miền gọn, tham khảo Event Storming | B4 |
 | N | Gom cụm → Bounded Context ứng viên → phân loại cốt lõi/hỗ trợ/chung | B5 |
-| N | Hoàn thiện đối chiếu context đích với các package/bảng hiện có; quyết định giữ/sửa/tách/viết mới/bỏ | B5.5 |
+| N | Sau khi có context đích sơ bộ, đối chiếu nội bộ với tài sản mã/bảng để ước lượng phần dùng lại, sửa hoặc thay thế; không dùng bảng này làm lập luận báo cáo | B5.5 |
 | N | Xác định aggregate và bất biến trong mỗi context | B7 |
 | **T** | **Định nghĩa "sự cố" là gì** và phân loại 4 lớp mục tiêu: lỗi âm thầm · lỗi ngoại lệ · lỗi CSDL · lỗi hạ tầng | B4, B5 |
 | **T** | Xác định trợ lý sửa lỗi là **một bounded context riêng**; chốt ranh giới quyền: chỉ đọc, không ghi nghiệp vụ | B5 |
@@ -158,7 +159,7 @@ Nhánh T không phải phần phụ làm sau. Nó có bounded context/quyền ri
 **Điều kiện sẵn sàng:**
 - Kiến trúc ứng viên không vượt **8 service nghiệp vụ** và **3 luồng Saga** — hai trần đã chốt
 - Mọi điểm nóng đã giải quyết hoặc chuyển vào danh sách rủi ro
-- Mọi module của `core-service` đã ánh xạ được vào ít nhất một context
+- Mọi năng lực trong phạm vi sản phẩm đã ánh xạ được vào context; các tài sản trong `core-service`, `user-service` và `discovery-service` đã có hướng xử lý nội bộ
 - **Đã có ADR cho vị trí aggregate tồn kho vé** (3 phương án ở B5.5 mục 2.3)
 - Trợ lý sửa lỗi đã có ranh giới quyền rõ ràng bằng văn bản
 
@@ -183,12 +184,12 @@ Nhánh T không phải phần phụ làm sau. Nó có bounded context/quyền ri
 
 ## GIAI ĐOẠN 4 — Kiến trúc và bản vẽ 🔑
 
-> Giai đoạn chốt **các quyết định xuyên service cần có trước khi tách/viết mới** — xem Phần 5. Code nguyên mẫu đã tồn tại nên không dùng cụm “trước dòng code đầu tiên” theo nghĩa đen.
+> Giai đoạn chốt **các quyết định xuyên service cần có trước khi hiện thực kiến trúc đích** — xem Phần 5. Các chi tiết nội bộ từng service tiếp tục được hoàn thiện theo lát dọc.
 
 | | Việc | Mã |
 |---|---|---|
-| N | Chốt phân rã `core-service`, ghi ADR cho từng quyết định lớn | B11 |
-| N | Bản đồ sở hữu dữ liệu; chuyển đổi bảng cũ; schema/CSDL và ERD riêng từng service; credential độc lập | B12 |
+| N | Chốt kiến trúc service toàn hệ thống, ưu tiên các đường cắt trong vòng đời vé; ghi ADR cho từng quyết định lớn | B11 |
+| N | Bản đồ sở hữu dữ liệu; schema/CSDL và ERD đích riêng từng service; credential độc lập | B12 |
 | N | Hợp đồng API + lược đồ sự kiện | B13 |
 | N | Sequence diagram các Saga và luồng liên service cốt lõi, gồm luồng lỗi/idempotency | B14 |
 | N | So sánh các phương án bố trí 2 EC2; chỉ chốt bằng ADR sau sơ đồ và đo thử sơ bộ | B11 |
@@ -210,7 +211,7 @@ Nhánh T không phải phần phụ làm sau. Nó có bounded context/quyền ri
 | | Việc |
 |---|---|
 | N | **Bộ khung xuyên suốt** — lát cắt mỏng chạy xuyên hệ thống, triển khai lên EC2 thật |
-| N | Hiện thực theo lát dọc; tái sử dụng có chọn lọc mã và migration từ repo cũ, ghi rõ phần giữ/sửa/viết mới |
+| N | Hiện thực theo lát dọc; mọi tài sản mã được dùng phải qua đối chiếu nội bộ và được điều chỉnh để khớp ranh giới, hợp đồng, schema và chuẩn logging đích |
 | N | Tách schema/CSDL, cấp credential riêng và thay mọi truy cập chéo bằng API/sự kiện/read model |
 | N | Cài đặt cơ chế nhất quán; chỉ thêm cấu hình đối chứng khi phép đánh giá cần so sánh |
 | **T** | Xây đường ống `structured log → collector → Drain → context builder → LLM API → tư vấn` |
@@ -251,7 +252,7 @@ Hoàn thiện A7 (phương pháp), A8 (ý nghĩa/đóng góp), A9 (bố cục/ph
 
 Phần này là **phương pháp**. Danh sách service cụ thể bàn riêng.
 
-**Phạm vi áp dụng:** chỉ `core-service`. `user-service` và `discovery-service` là ràng buộc kế thừa, khai báo chứ không suy ra.
+**Phạm vi áp dụng:** toàn bộ các context/service nghiệp vụ. Phần phân tích chuyên sâu ưu tiên vòng đời vé và các đường cắt đang tập trung trong `core-service`; các miền hỗ trợ vẫn phải được biện minh ở mức trách nhiệm, dữ liệu, hợp đồng và quyền.
 
 ## 4.1 Bắt đầu từ sự kiện, không từ danh từ
 
@@ -293,13 +294,11 @@ Số hợp đồng API phải chốt:         ___
 
 **Cả hai trần đều đã chốt.** Trần Saga cần chú ý đặc biệt vì mỗi luồng kéo theo trạng thái, idempotency, bù trừ, quan sát và kiểm thử lỗi.
 
-## 4.5 Vì sao mã nguồn cũ không được quyết định kiến trúc đích
+## 4.5 Quan hệ giữa phân tích đích và tài sản hiện thực
 
-`core-service` có các package nghiệp vụ `event`/`booking`/`payment`/`notification`/`promotion` nhưng chưa có ranh giới module được cưỡng chế. Cám dỗ là lấy nguyên package làm service.
+Ranh giới service phải được lập luận từ sự kiện nghiệp vụ, bất biến, quyền sở hữu dữ liệu, chu kỳ thay đổi/tải, quan hệ giao tiếp và chi phí vận hành. Cấu trúc package hoặc bảng đang có chỉ là nguồn kiểm kê kỹ thuật, không phải bằng chứng kiến trúc.
 
-**Vấn đề không phải đọc code sớm, mà là dùng code làm căn cứ duy nhất.** Nhóm vẫn nên kiểm kê mã/bảng để ước lượng tái sử dụng và phát hiện ghép nối; nhưng phải lập luận đường cắt từ nghiệp vụ, bất biến, quyền sở hữu dữ liệu và quan hệ gọi.
-
-Kết quả có thể trùng một phần với package hiện tại. Khi đó báo cáo nêu: phân tích miền và dữ liệu dẫn tới các ranh giới nào; đối chiếu code cho thấy phần nào trùng/lệch; cách di trú mỗi điểm truy cập entity/repository xuyên package và mỗi bảng sang schema sở hữu mới.
+Sau khi có context map và aggregate sơ bộ, nhóm dùng B5.5 để phát hiện điểm ghép nối, ước lượng công việc và quyết định tài sản nào có thể dùng lại. Nếu một phần mã tình cờ trùng với ranh giới đích, điều đó không làm thay đổi cách báo cáo: phần chính vẫn trình bày ranh giới được suy ra thế nào và hệ thống cuối hiện thực ranh giới đó ra sao.
 
 ---
 
@@ -307,7 +306,7 @@ Kết quả có thể trùng một phần với package hiện tại. Khi đó b
 
 ## 5.1 Tiêu chí phân loại
 
-Code nguyên mẫu đã tồn tại, nên mục tiêu không phải tái hiện một lịch sử “chưa có dòng code nào”. Nhóm cần chốt trước những quyết định mà nếu sai sẽ làm nhiều service/schema cùng sửa; chi tiết nội bộ có thể phát triển lặp.
+Nhóm cần chốt trước những quyết định mà nếu sai sẽ làm nhiều service/schema cùng sửa; chi tiết nội bộ có thể phát triển lặp. “Thiết kế từ đầu” ở đây có nghĩa là kiến trúc đích được suy ra từ vấn đề và nghiệp vụ trước khi khóa cách hiện thực xuyên service, không phải cố định mọi lớp và bảng ngay một lần.
 
 > **Bản vẽ nào mà sai thì phải sửa NHIỀU service cùng lúc → phải có TRƯỚC.**
 > **Bản vẽ nào mà sai thì chỉ sửa TRONG một service → làm SAU được.**
@@ -320,7 +319,7 @@ Nỗi lo *"tài liệu nền tảng sai từ đầu thì thảm họa"* **đúng
 |---|---|---|---|
 | 1 | **Bản đồ context/service + ADR phân rã** | Chốt ranh giới trong trần ≤8 service, ≤3 Saga | B5, B11 |
 | 2 | **C4 System Context + Container** | Chốt trong/ngoài, đơn vị triển khai và quan hệ chính | B11 |
-| 3 | **Bản đồ sở hữu dữ liệu + kế hoạch chuyển bảng** | Chốt schema/credential độc lập và dữ liệu lấy qua API/sự kiện | B12 |
+| 3 | **Bản đồ sở hữu dữ liệu + schema đích** | Chốt schema/credential độc lập và dữ liệu lấy qua API/sự kiện | B12 |
 | 4 | **Hợp đồng API + lược đồ sự kiện cốt lõi** | Cho phép các thành viên tích hợp độc lập | B13 |
 | 5 | **Sequence các Saga/luồng tranh chấp chính** | Chốt idempotency, lỗi, thử lại và bù trừ | B14 |
 | 6 | **Chuẩn logging + trace/context của trợ lý** | Chốt đầu vào cho Drain/LLM và bảo vệ dữ liệu | B16–B18 |
@@ -333,7 +332,7 @@ Không bắt buộc mỗi dòng phải là một hình riêng; có thể là b�
 | Bản vẽ | Làm khi nào |
 |---|---|
 | Biểu đồ lớp mức thiết kế | Khi bắt đầu code chính service đó |
-| ERD chi tiết từng service | Hoàn thiện sau khi đã chốt quyền sở hữu/schema, trước migration của service đó |
+| ERD chi tiết từng service | Hoàn thiện sau khi đã chốt quyền sở hữu/schema, trước khi hiện thực dữ liệu của service đó |
 | Biểu đồ trạng thái (vòng đời Đơn hàng, vòng đời Vé) | Khi cài đặt vòng đời đó |
 | C4 L3/component | Chỉ cho service cần giải thích cấu trúc bên trong |
 | Wireframe giao diện | Song song, không chặn backend |
@@ -383,7 +382,7 @@ Khi theo dõi tiến độ, nhóm có thể dùng lịch tuần bình thường.
 | Bố cục/số chương báo cáo chính thức | Xác nhận với cô Liên và mẫu ĐATN hiện hành; sau đó ánh xạ mạch nội dung ở Phần 2 |
 | Cơ sở lý thuyết chi tiết | Viết song song từ các quyết định thực sự dùng, không đặt chỉ tiêu trang |
 | Hai câu nghiệp vụ để ngỏ: chính sách hoàn tiền · tỉ lệ giữ lại phòng hoàn tiền | Giai đoạn 2, trong phân tích dòng sự kiện miền |
-| Vị trí aggregate tồn kho vé (3 phương án ở B5.5) | Giai đoạn 2, là ADR kiến trúc đầu tiên |
+| Vị trí aggregate tồn kho vé (các phương án được tổng hợp nội bộ ở B5.5) | Giai đoạn 2, là ADR kiến trúc đầu tiên |
 | Workflow chi tiết của context builder, prompt/đầu ra LLM và bảng AI cần lưu | Giai đoạn 4, phiếu B18; chỉ chốt schema sau khi workflow rõ |
 | Bố trí 2 EC2 | Sau sơ đồ container/deployment ứng viên và một lần đo thử sơ bộ |
 

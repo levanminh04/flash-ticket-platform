@@ -2,7 +2,7 @@
 
 Đồ án tốt nghiệp về hệ thống đặt vé sự kiện trực tuyến, tập trung vào tính nhất quán và độ tin cậy trong vòng đời vé: giữ chỗ, thanh toán, phát hành vé và check-in trực tuyến.
 
-Repository này là không gian làm việc chính thức của đồ án. Mã nguồn tiền nhiệm tại `levanminh04/flash-ticket-system` được giữ nguyên làm bằng chứng hiện trạng và nguồn tái sử dụng có chọn lọc; cấu trúc của repository đó không mặc nhiên quyết định kiến trúc đích.
+Repository này là không gian phân tích, thiết kế, hiện thực và đánh giá chính thức của đồ án. Kiến trúc được lập luận từ miền nghiệp vụ, bất biến, quyền sở hữu dữ liệu và thuộc tính chất lượng; mọi tài sản mã được đưa vào phải phù hợp các quyết định đích và vượt qua kiểm thử của phiên bản ĐATN.
 
 ## Trạng thái
 

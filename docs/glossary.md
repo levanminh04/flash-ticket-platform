@@ -4,7 +4,6 @@
 
 | Thuật ngữ | Định nghĩa thống nhất | Phân biệt với | Context dự kiến | Trạng thái |
 |---|---|---|---|---|
-| Repository tiền nhiệm | Mã nguồn FlashTicket đã tồn tại trước đồ án, dùng làm bằng chứng hiện trạng và nguồn tái sử dụng có chọn lọc | Kiến trúc đích | Toàn hệ thống | Đã chốt |
 | Kiến trúc đích | Thiết kế được lập luận từ vấn đề, nghiệp vụ, bất biến và quyền sở hữu dữ liệu của đồ án | Cấu trúc package hiện tại | Toàn hệ thống | Đã chốt |
 | *(Bổ sung ở B2)* |  |  |  | Nháp |
 

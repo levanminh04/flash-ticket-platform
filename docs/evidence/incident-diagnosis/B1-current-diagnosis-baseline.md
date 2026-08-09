@@ -1,13 +1,13 @@
 # B1 — Baseline quy trình chẩn đoán sự cố hiện tại
 
 - **Ngày kiểm kê:** 2026-08-09
-- **Nguồn:** Bối cảnh do chủ đồ án cung cấp, log cục bộ và kiểm kê mã nguồn tiền nhiệm tại commit `609fa2d37cad69aafa593b7db5b6cedeaf803da5`
+- **Nguồn:** Kinh nghiệm xử lý sự cố do chủ đồ án cung cấp; log và mã nguồn phát triển được kiểm kê nội bộ tại commit `609fa2d37cad69aafa593b7db5b6cedeaf803da5`
 - **Trạng thái:** Đã dựng được quy trình và một ca lỗi thật; thời gian chẩn đoán chưa có số đo
 
 ## Nhãn sử dụng
 
-- **BÁO CÁO:** Quy trình hiện tại, điểm nghẽn và số liệu kiểm kê logging sau khi nhóm xác nhận.
-- **NỘI BỘ/PHỤ LỤC:** Đường dẫn file, thống kê chi tiết và ca lỗi khởi động.
+- **BÁO CÁO:** Quy trình chẩn đoán thủ công và điểm nghẽn sau khi nhóm xác nhận; kết quả cuối phải dùng log/ca lỗi sinh từ phiên bản ĐATN.
+- **NỘI BỘ:** Đường dẫn file, thống kê tài sản phát triển và ca lỗi khởi động dùng để thiết kế pipeline ban đầu; không đưa vào báo cáo như kết quả đánh giá.
 - **CẦN XÁC NHẬN:** Thời gian thực tế và 2–4 ca lỗi bổ sung do các thành viên từng xử lý.
 
 ## 1. Quy trình hiện tại được tái dựng
@@ -25,11 +25,11 @@
 
 Mô tả “vài chục phút đến vài giờ” hiện chỉ là tự báo cáo trong bối cảnh, **không được trình bày như số đo** cho tới khi có bảng thời gian của các ca cụ thể.
 
-## 2. Kiểm kê logging ở repository tiền nhiệm
+## 2. Kiểm kê tài sản logging phát triển — NỘI BỘ
 
 | Hạng mục | Kết quả quan sát | Ý nghĩa |
 |---|---|---|
-| Lời gọi log trong Java | `core-service`: 151 lời gọi/38 file; `user-service`: 70/11; `discovery-service`: 30/13 | Hệ thống có tài sản log đáng kể để tái sử dụng |
+| Lời gọi log trong Java | `core-service`: 151 lời gọi/38 file; `user-service`: 70/11; `discovery-service`: 30/13 | Có dữ liệu phát triển để nhận diện loại thông điệp và thiết kế chuẩn mới |
 | `trace_id`, `correlation_id`, `span_id` hoặc MDC | Không tìm thấy trong bốn ứng dụng được kiểm kê | Chưa có bằng chứng về liên kết một giao dịch xuyên service |
 | Cấu hình log | Chủ yếu cấu hình level theo package | Chưa thấy cấu hình JSON có schema trường thống nhất |
 | Log thực tế tìm được | Một file `discovery-service/error.log`, 116 dòng, 10 dòng ERROR, 6 WARN; file không được Git theo dõi | Có thể dùng làm ca thử ban đầu sau khi khử nhạy cảm |
@@ -62,7 +62,7 @@ Ca này phù hợp để thử Drain ở bước sau vì có phần thông đi�
 | CAND-03 | Hạ tầng/message | Hai instance scheduler cùng khôi phục tồn kho | Có nguy cơ cộng tồn kho lặp | Audit code, chưa chạy |
 | CAND-04 | Tích hợp | Email/QR không gửi được sau khi giao dịch thành công | Phân biệt thành công nghiệp vụ với lỗi thông báo | Phân tích luồng, chưa chạy |
 
-Các ca ứng viên lấy từ `docs/concurrency_audit.md` và `docs/flow_trace_analysis.md` của repository tiền nhiệm. Trước khi đưa vào báo cáo như kết quả, nhóm phải tái hiện, lưu workload/cấu hình và xác nhận nguyên nhân bằng test hoặc log.
+Các ca ứng viên lấy từ tài liệu audit nội bộ. Chúng chỉ gợi ý kịch bản. Trước khi đưa vào báo cáo như kết quả, nhóm phải tái hiện trên phiên bản ĐATN, lưu workload/cấu hình và xác nhận nguyên nhân bằng test hoặc log.
 
 ## 5. Bảng nhóm cần điền khi xử lý ca tiếp theo
 
@@ -75,4 +75,4 @@ Tối thiểu cần thêm 2 ca thật hoặc tái hiện được. Không cần 
 
 ## 6. BÁO CÁO — Đoạn mô tả baseline có thể sử dụng
 
-Quy trình chẩn đoán hiện tại bắt đầu từ mô tả lỗi hoặc hành vi bất thường, sau đó người phát triển xác định thành phần nghi ngờ, cố tái hiện, tìm log trên hệ thống tập trung hoặc máy chủ và lần từ exception/thông điệp về đoạn mã liên quan. Kiểm kê repository tiền nhiệm cho thấy các service đã có nhiều lời gọi log, nhưng chưa thấy một schema log có cấu trúc hoặc mã tương quan được áp dụng thống nhất xuyên service. Vì vậy, một giao dịch đi qua nhiều thành phần chưa có đường nối rõ trong dữ liệu vận hành, còn việc chọn log liên quan và ánh xạ về mã nguồn phụ thuộc nhiều vào thao tác thủ công. Đây là baseline để thiết kế chuẩn logging và đánh giá trợ lý chẩn đoán; chưa đủ dữ liệu để kết luận mức thời gian được rút ngắn.
+Quy trình chẩn đoán thủ công bắt đầu từ mô tả lỗi hoặc hành vi bất thường, sau đó người phát triển xác định thành phần nghi ngờ, cố tái hiện, tìm log trên hệ thống tập trung hoặc máy chủ và lần từ exception/thông điệp về đoạn mã liên quan. Khi log của cùng một giao dịch không có schema và mã tương quan thống nhất xuyên service, việc chọn bản ghi liên quan, dựng lại trình tự và xác định vùng mã phụ thuộc nhiều vào thao tác thủ công. Đây là cơ sở để thiết kế chuẩn logging và pipeline trợ lý chẩn đoán. Mức cải thiện chỉ được kết luận sau khi đánh giá trên các ca lỗi có nguyên nhân biết trước của phiên bản ĐATN; mô tả “vài chục phút đến vài giờ” không được dùng như số đo nếu chưa có bảng thời gian cụ thể.

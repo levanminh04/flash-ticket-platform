@@ -7,7 +7,7 @@
 
 | Đầu ra | Trạng thái | Bằng chứng/việc còn lại |
 |---|---|---|
-| Repository ĐATN riêng | Hoàn thành | `flash-ticket-platform`; repository tiền nhiệm được giữ nguyên |
+| Repository ĐATN riêng | Hoàn thành | `flash-ticket-platform` là không gian hiện thực và đánh giá chính thức |
 | Không đưa `.env`/bí mật vào repo mới | Hoàn thành bước đầu | `.gitignore`, `.env.example`; tiếp tục quét trước mỗi lần nhập mã |
 | Bộ plan A/B/C, tài liệu chủ và B5.5 | Hoàn thành | `docs/` |
 | Nơi ghi quyết định và mẫu ADR | Hoàn thành | `docs/adr/`, ADR-000 |
