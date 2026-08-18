@@ -15,12 +15,19 @@
 credentials.json
 service-account*.json
 
+# Claude Code local wiring
+# .claude/skills/govern-capstone-work is a filesystem junction to
+# .agents/skills/govern-capstone-work. Git resolves it and would commit the same
+# files twice, so ignore the mirror and keep .agents/ as the tracked source.
+.claude/skills/govern-capstone-work/
+
 # IDE and operating-system files
 .idea/
 .vscode/
 *.iml
 .DS_Store
 Thumbs.db
+~$*.docx
 
 # Build and dependency outputs
 **/target/

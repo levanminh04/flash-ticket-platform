@@ -19,8 +19,8 @@
 
 ## Cách sử dụng baseline
 
-- Không dùng cấu trúc package hoặc bảng hiện tại làm căn cứ duy nhất để chia service.
-- Sau khi hoàn thành B5, dùng B5.5 nội bộ để phân loại từng tài sản thành: dùng lại, sửa, tách, thay thế hoặc bỏ.
+- Không dùng cấu trúc package, bảng, import hoặc tên service hiện tại làm căn cứ hình thành ranh giới hay phương án kiến trúc đích.
+- Có thể kiểm kê tài sản sớm trong luồng `COMPARISON`, nhưng luồng `FORMATION` không đọc baseline/B5.5 ở B2–B10 hoặc B11-A. Chỉ sau khi tập phương án độc lập tại `docs/architecture/B11-A-independent-alternatives.md` được người thật duyệt `APPROVED` mới dùng B5.5 ở B11-B để kiểm tra tái sử dụng, di trú và tính khả thi; B11-B ghi đúng phiên bản B11-A và không sinh, bổ sung, xếp hạng hoặc sửa phương án. Bảng xử lý từng tài sản chỉ được chốt sau B11-C/B12.
 - Khi dùng mã/migration, ghi nguồn theo commit và thay đổi trong sổ nội bộ để nhóm kiểm soát phạm vi và rủi ro.
 - Nếu các tệp cấu hình nguồn chứa khóa thật, chủ sở hữu phải xoay khóa; việc xóa tệp ở repository mới không thu hồi được khóa đã lộ trong lịch sử nguồn.
 

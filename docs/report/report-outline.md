@@ -37,7 +37,7 @@ Chỉ trình bày khái niệm thực sự được dùng trong quyết định 
 ## Thiết kế hệ thống
 
 - C4 System Context và Container.
-- Lập luận ranh giới context/service.
+- Lập luận ranh giới context, sau đó lập luận riêng cách gộp/tách thành service vật lý.
 - Sở hữu dữ liệu, schema độc lập và ERD đích của từng service.
 - API, sự kiện và các luồng Saga được chọn.
 - Check-in trực tuyến, idempotency và xử lý cạnh tranh.
@@ -45,7 +45,7 @@ Chỉ trình bày khái niệm thực sự được dùng trong quyết định 
 - Kiến trúc triển khai trên hai EC2 sau khi so sánh/đo thử.
 - UML cần thiết: use case, hoạt động, tuần tự, lớp, trạng thái và triển khai theo đúng mục đích từng hình.
 
-**Nguồn dự kiến:** B5, B7, B11–B18 và ADR. B5.5 là sổ đối chiếu nội bộ, không phải nguồn trình bày của báo cáo.
+**Nguồn dự kiến:** B5/B7 cho ranh giới khái niệm và bất biến; B10/B11 cùng ADR cho kiến trúc/service vật lý; B12–B18 cho dữ liệu, hợp đồng, tương tác, logging và trợ lý. B5.5 là sổ đối chiếu nội bộ, không phải nguồn sinh lập luận hoặc nguồn trình bày của báo cáo.
 
 ## Hiện thực
 

@@ -1,0 +1,58 @@
+@startuml
+title B3-01 — Vòng đời sự kiện bán vé
+
+|Nhà tổ chức|
+start
+:Tạo event DRAFT;
+:Nhập thời gian, địa điểm, cửa sổ bán, giới hạn mua và salesMode;
+:Cấu hình loại vé và nguồn cung;
+:Gửi duyệt;
+
+|Hệ thống|
+:Khóa cấu hình thương mại và salesMode;
+
+|Quản trị viên|
+:Kiểm duyệt nội dung;
+if (Chấp thuận?) then (Không)
+  :Từ chối hoặc trả lại;
+  |Hệ thống|
+  :Đưa event về DRAFT;
+  stop
+else (Có)
+  :Nhập tỷ lệ phí nền tảng;
+  |Hệ thống|
+  :Đánh dấu đã duyệt;
+endif
+
+|Nhà tổ chức|
+:Công bố event;
+|Hệ thống|
+:Hiển thị event;
+:Bỏ qua tác dụng phụ nếu yêu cầu công bố bị lặp;
+if (Đủ điều kiện và trong cửa sổ bán?) then (Có)
+  :Cho phép tạo đơn;
+else (Không)
+  :Chỉ hiển thị hoặc từ chối mua;
+endif
+
+|Nhà tổ chức|
+if (Yêu cầu hủy?) then (Có)
+  |Hệ thống|
+  if (now < eventStartAt?) then (Không)
+    :Từ chối luồng hủy tự động;
+  else (Có)
+    if (Đã có đơn thu tiền?) then (Có)
+      |Quản trị viên|
+      if (Xác nhận hủy?) then (Không)
+        :Từ chối yêu cầu hủy;
+        stop
+      else (Có)
+        :Xác nhận hủy;
+      endif
+      |Hệ thống|
+    endif
+    :Đóng bán và chuyển xử lý đơn sang Quy trình 3;
+  endif
+endif
+stop
+@enduml

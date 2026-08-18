@@ -1,0 +1,7 @@
+interface:
+  display_name: "Govern Capstone Work"
+  short_description: "Govern evidence and phase gates"
+  default_prompt: "Use $govern-capstone-work to review this capstone task against its evidence states and phase gates."
+
+policy:
+  allow_implicit_invocation: true

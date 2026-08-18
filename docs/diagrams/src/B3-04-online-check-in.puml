@@ -1,0 +1,34 @@
+@startuml
+title B3-04 — Organizer check-in trực tuyến
+
+|Organizer trên mobile|
+start
+:Đăng nhập;
+:Chọn event thuộc mình;
+:Quét QR;
+
+|Hệ thống|
+:Xác thực organizer sở hữu event;
+:Kiểm tra eventStartAt <= now <= eventEndAt;
+:Xác định vé và kiểm tra đúng event;
+:Kiểm tra vé đã phát hành, chưa hoàn/hủy/vô hiệu/chưa sử dụng;
+if (Tất cả hợp lệ?) then (Không)
+  :Từ chối và ghi dấu vết;
+  |Organizer trên mobile|
+  :Hiển thị lý do từ chối;
+  stop
+else (Có)
+  |Hệ thống|
+  :Chuyển trạng thái chưa dùng sang đã dùng bằng thao tác nguyên tử;
+endif
+
+|Organizer trên mobile|
+:Hiển thị loại vé, sector, ghế nếu có và trạng thái;
+note right
+Không hiển thị danh tính attendee.
+Không có check-out, hoàn tác hoặc tái vào cửa.
+Cùng tài khoản có thể dùng trên nhiều thiết bị,
+nhưng mỗi vé chỉ thành công tối đa một lần.
+end note
+stop
+@enduml

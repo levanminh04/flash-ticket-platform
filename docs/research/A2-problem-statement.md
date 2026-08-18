@@ -1,6 +1,8 @@
 # A2 — Phát biểu vấn đề
 
-- **Trạng thái:** Bản đề xuất, cần chủ đồ án xác nhận
+- **Trạng thái:** `APPROVED` — baseline Giai đoạn 1; tái kiểm tra sau B10 và impact check tại B11-C
+- **Người duyệt:** Lê Văn Minh
+- **Ngày duyệt:** 2026-08-13
 - **Đi vào báo cáo:** Phần Đặt vấn đề, sau A1
 - **Ràng buộc:** Không quá 150 từ và không chứa tên công nghệ
 
@@ -24,6 +26,6 @@
 - Nêu rõ chủ thể, hậu quả, hoàn cảnh và vấn đề gốc.
 - Nhánh chẩn đoán được đặt ở vai trò hỗ trợ vận hành cho cùng hệ thống, không trở thành đề tài độc lập thứ hai.
 
-## CẦN XÁC NHẬN
+## Kết quả xác nhận
 
-Chủ đồ án cần xác nhận phát biểu này sau khi A1 được duyệt, để bảo đảm thuật ngữ “trạng thái chấp nhận được” khớp với các trạng thái và cơ chế bù trừ sẽ chốt ở B7/B11.
+Chủ đồ án đã duyệt phát biểu ở mức baseline. Cụm “trạng thái chấp nhận được” được giữ ở mức vấn đề, chưa ngầm chốt chính sách phục hồi hoặc cơ chế bù trừ; B3/B4/B7 sẽ làm rõ trạng thái nghiệp vụ, còn B11 mới quyết định cơ chế kiến trúc. Nếu các kết quả đó làm đổi nghĩa phát biểu vấn đề, A2 phải được tái kiểm tra theo phase gate.

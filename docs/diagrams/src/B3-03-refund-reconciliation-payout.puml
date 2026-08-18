@@ -1,0 +1,46 @@
+@startuml
+title B3-03 — Hoàn tiền, hủy event, đối soát và chi trả
+
+|Nhà tổ chức / Quản trị viên|
+start
+if (Hủy event?) then (Có)
+  |Hệ thống|
+  if (now < eventStartAt?) then (Không)
+    :Đưa xử lý sự cố muộn ra ngoài hệ thống;
+    stop
+  else (Có)
+    :Đóng bán, vô hiệu vé, không mở lại nguồn cung;
+    :Hủy đơn chưa thanh toán;
+    :Trả giới hạn mua và lượt mã đúng một lần;
+    :Lập danh sách đơn đã thu cần hoàn;
+  endif
+else (Không - hoàn kỹ thuật)
+  |Hệ thống|
+  :Xác định khoản thu và nguyên nhân hoàn;
+endif
+
+repeat
+  |Hệ thống|
+  :Tạo/tiếp tục một nghĩa vụ hoàn idempotent;
+  |Cổng thanh toán|
+  :Xử lý hoàn toàn bộ;
+  |Hệ thống|
+  :Ghi kết quả và cập nhật đối soát;
+repeat while (Còn đơn cần xử lý?) is (Có)
+-> Không;
+
+|Hệ thống|
+:Tổng hợp sổ cái chỉ đọc;
+if (Event đã kết thúc và không còn payment/refund pending?) then (Không)
+  :Chưa mở điều kiện chi trả;
+  stop
+else (Có)
+  |Quản trị viên|
+  :Đối chiếu báo cáo cổng thanh toán;
+  |Quy trình chi trả ngoài hệ thống|
+  :Chuyển tiền ngoài hệ thống;
+  |Quản trị viên|
+  :Đánh dấu PAID đúng một lần;
+endif
+stop
+@enduml

@@ -241,7 +241,45 @@ Khảo sát đối sánh
 
 Hai nhánh trái (miền nghiệp vụ) và phải (chất lượng) chạy song song, và **gặp nhau ở bước ra quyết định kiến trúc**: nhánh miền tạo context/aggregate ứng viên; nhánh chất lượng cùng các ràng buộc dữ liệu, ghép nối và vận hành quyết định cách gộp/tách thành service triển khai.
 
-## 3.3 ❗ Bốn thứ không framework nào phủ — phải bổ sung
+## 3.3 Phân lớp tạo tác, nguồn được phép và cổng duyệt
+
+Tách hai lớp tạo tác để không dùng hiện trạng làm nguyên nhân ngược cho thiết kế đích:
+
+| Lớp | Tạo tác điển hình | Nguồn được phép dùng để hình thành kết luận |
+|---|---|---|
+| **FORMATION — hình thành thiết kế đích** | A1–A7; B2–B10; B11-A; B11-C; B12–B14; ADR kiến trúc đích; lập luận thiết kế trong báo cáo | Yêu cầu, khảo sát công khai có giới hạn, thuật ngữ, quy trình, sự kiện, bất biến, aggregate, ASR và ràng buộc đã được xác nhận |
+| **COMPARISON — đối chiếu hiện thực** | B5.5, legacy baseline, B11-B, bảng tái sử dụng/di trú và bằng chứng hiện thực | Mã/bảng/import/package hiện tại, metric ghép nối, khả năng dùng lại và rủi ro triển khai |
+
+Tạo tác mới chưa được phân lớp thì mặc định là **FORMATION**. Tạo tác FORMATION không được dùng B5.5, legacy baseline, package, bảng hoặc tên service hiện tại để sinh ranh giới hay phương án kiến trúc. B11-B là ngoại lệ `COMPARISON` có chủ đích trong dải B2–B14: chỉ được mở B5.5 sau khi tập phương án độc lập B11-A đã được người thật duyệt `APPROVED`, và chỉ kiểm tra tái sử dụng, di trú, ghép nối cùng tính khả thi trước quyết định B11-C.
+
+Mỗi tạo tác canonical từ B2 đến B14, gồm cả B11-B thuộc lớp `COMPARISON`, phải có metadata tối thiểu:
+
+```text
+Trạng thái: DRAFT | REVIEW_READY | APPROVED
+Người duyệt: <người thật; AI không tự duyệt>
+Ngày duyệt: YYYY-MM-DD | —
+Đầu vào và phiên bản: <mã tạo tác + phiên bản/commit/ngày>
+```
+
+Cho phép tạo bản nháp phía sau để khám phá và phản hồi sớm. Không cho phép chuyển tạo tác phía sau sang `APPROVED`, hoặc dùng nó để nâng quyết định thành `DECIDED`, nếu đầu vào bắt buộc chưa `APPROVED`. Khi đầu vào thay đổi có ý nghĩa, tạo tác phụ thuộc quay lại `REVIEW_READY`; không bắt buộc chờ một ngày hay xin giảng viên duyệt mọi phiếu.
+
+Chuỗi phụ thuộc tối thiểu của phân tích miền là `B2 baseline → B3 → B4 → B5 → B7`. B2 là từ điển sống: có baseline trước B3 và tiếp tục được cập nhật khi phát hiện thuật ngữ mới; thay đổi làm đổi nghĩa nghiệp vụ phải được duyệt lại cùng tạo tác phụ thuộc.
+
+Đường dẫn canonical để tài liệu, auditor và agent cùng dùng một hợp đồng:
+
+| Mã | Đường dẫn |
+|---|---|
+| B2 | `docs/glossary.md` |
+| B3 | `docs/domain/B3-business-processes.md` |
+| B4 | `docs/domain/B4-domain-event-map.md` |
+| B5 | `docs/domain/B5-bounded-context-map.md` |
+| B7 | `docs/domain/B7-aggregates-and-invariants.md` |
+| B11-A | `docs/architecture/B11-A-independent-alternatives.md` |
+| B11-B | `docs/architecture/B11-B-legacy-feasibility.md` |
+
+Không tự tạo tên file thay thế hoặc một hồ sơ hotspot riêng để lách chuỗi duyệt; hotspot nằm trong B4/B5/B7. Tệp nguồn sơ đồ, nếu có, là tạo tác hỗ trợ và không thay thế tài liệu canonical.
+
+## 3.4 ❗ Bốn thứ không framework nào phủ — phải bổ sung
 
 Đây là chỗ dễ hụt nhất, vì cả ba framework đều im lặng:
 
@@ -274,10 +312,10 @@ Cả ba đều là framework thiết kế, không nói xây theo thứ tự nào
 
 Không framework nào cho biết đặt một thành phần AI vào đâu trong kiến trúc.
 
-**Tính năng AI đã chốt: trợ lý hỗ trợ chẩn đoán lỗi** theo hướng `structured logging → Drain → tạo context → LLM API`. Ba quy tắc bố trí:
-1. Hệ thống con AI là **một bounded context riêng**, không nhét vào context nghiệp vụ có sẵn
-2. Nó chỉ đọc log/dấu vết/sự kiện cần thiết qua adapter/ACL và credential riêng; **không có đường ghi vào nghiệp vụ, không truy cập trực tiếp schema nghiệp vụ**. ACL ở đây làm nhiệm vụ dịch và cách ly mô hình, còn quyền truy cập phải được thực thi bằng phân quyền thật. Ràng buộc chỉ đọc không áp cho chatbot mua vé dùng API công khai. Xem B5.5 mục 2.4
-3. Hai vai trò (chatbot mua vé / trợ lý sửa lỗi) là **hai bounded context**, kể cả khi triển khai chung một tiến trình — tách bạch bằng module, tool và vai trò phân quyền riêng. Ghi một ADR nêu lý do triển khai chung
+**Tính năng AI đã chốt: trợ lý chẩn đoán sự cố** theo hướng `structured logging → Drain → tạo context → LLM API`. Ba ràng buộc phân tích:
+1. Trợ lý chỉ đọc log/dấu vết/sự kiện cần thiết qua adapter/ACL và credential riêng; **không có đường ghi vào nghiệp vụ, không truy cập trực tiếp schema nghiệp vụ**. ACL ở đây làm nhiệm vụ dịch và cách ly mô hình, còn quyền truy cập phải được thực thi bằng phân quyền thật. Ràng buộc chỉ đọc không áp cho chatbot mua vé dùng API công khai; khả năng tái sử dụng thành phần hiện có chỉ được kiểm tra ở B11-B.
+2. Chatbot mua vé và trợ lý chẩn đoán sự cố có mục đích, dữ liệu được phép đọc và quyền công cụ khác nhau; B4 phải thể hiện các sự kiện/quyền liên quan trước khi B5 gom chúng vào context ứng viên.
+3. Không tiền-chốt hai năng lực thành một hay hai bounded context. B5 hình thành ranh giới ứng viên từ B4; B11 mới quyết định cách gộp/tách thành tiến trình hoặc service vật lý và chỉ ghi ADR khi hệ quả đủ đáng kể.
 
 ---
 
@@ -324,7 +362,7 @@ Những gì không thể quan sát/không được suy luận: ________
 ### 🔴 B2 — Từ điển miền
 **Đầu vào:** B1
 **Phương pháp:** liệt kê mọi danh từ nghiệp vụ, định nghĩa 1–2 câu. Quan trọng nhất là **chỉ ra các cặp từ dễ nhầm** và phân biệt dứt khoát.
-**Phép thử:** ba thành viên cùng mô tả luồng đặt vé — dùng khác từ cho cùng khái niệm nghĩa là chưa xong.
+**Phép thử:** ba thành viên cùng mô tả luồng đặt vé — dùng khác từ cho cùng khái niệm nghĩa là chưa xong. Phải có một baseline `APPROVED` trước khi B3 được duyệt; B2 tiếp tục là từ điển sống và được duyệt lại khi nghĩa nghiệp vụ thay đổi.
 ```
 Thuật ngữ | Định nghĩa | Dễ nhầm với | Khác ở chỗ
 _________ | __________ | ____________ | ___________
@@ -334,7 +372,7 @@ _________ | __________ | ____________ | ___________
 ### 🔴 B3 — Mô hình quy trình nghiệp vụ
 **Đầu vào:** B1, B2
 **Phương pháp:** Biểu đồ hoạt động có swimlane cho 4 quy trình. **Chưa nhắc bất kỳ tên công nghệ nào ở bước này.**
-**Phép thử:** mỗi quy trình có ít nhất một nhánh rẽ sang thất bại. Không có thì chưa xong.
+**Phép thử:** mỗi quy trình có ít nhất một nhánh rẽ sang thất bại. Không có thì chưa xong. B3 chỉ được `APPROVED` khi baseline B2 dùng làm đầu vào đã `APPROVED`.
 ```
 Quy trình 1: ______  Quy trình 2: ______
 Quy trình 3: ______  Quy trình 4: ______
@@ -345,7 +383,7 @@ Nhánh thất bại của từng quy trình: _____________________
 ### 🔴 B4 — Bản đồ sự kiện miền
 **Đầu vào:** B2, B3
 **Phương pháp:** lập dòng thời gian sự kiện miền cho các luồng cốt lõi, tham khảo Event Storming: sự kiện đã xảy ra → lệnh/tác nhân → chính sách → điểm chưa thống nhất. Có thể làm bằng bảng hoặc sơ đồ đơn giản; chỉ đưa vào báo cáo nếu nó giúp giải thích ranh giới tốt hơn biểu đồ hoạt động.
-**Phép thử:** mọi điểm nóng đã được giải quyết hoặc chuyển vào danh sách rủi ro.
+**Phép thử:** mọi điểm nóng đã được giải quyết ở mức nghiệp vụ hoặc ghi `OPEN` kèm đầu vào, người chịu trách nhiệm và gate xử lý. B4 chỉ được `APPROVED` khi B2/B3 tương ứng đã `APPROVED`.
 ```
 Chuỗi sự kiện theo thời gian: __________________________
 Các lệnh tương ứng: ____________________________________
@@ -356,17 +394,19 @@ Chính sách (khi X thì Y): ______________________________
 
 ### 🔴 B5 — Bản đồ Bounded Context *(bạn quyết định)*
 **Đầu vào:** B4
-**Phương pháp:** gom cụm các sự kiện gắn kết chặt → mỗi cụm là một context ứng viên. Phân loại mỗi context: cốt lõi / hỗ trợ / chung. Phải đưa cả vòng đời vé, hồ sơ người dùng, chatbot và trợ lý chẩn đoán vào context map; độ sâu có thể khác nhau. Sau đó đề xuất service triển khai bằng cách kiểm tra thêm bất biến, dữ liệu, quan hệ gọi, chu kỳ thay đổi/tải và chi phí vận hành, rồi gộp để giữ trong hai trần dưới đây.
-**Phép thử — hai trần dự án đã chốt:**
-- Số **service nghiệp vụ** sau khi gộp **≤ 8**.
-- Số **luồng giao dịch xuyên service (Saga) ≤ 3**.
-- Context nào được phân loại "cốt lõi" phải nằm trong vòng 1 phạm vi ở Tầng A
-> Một bounded context **không nhất thiết phải là một tiến trình triển khai riêng.** Hai context có thể ở chung một service dạng module tách bạch — khi đó tính là 1 service nhưng vẫn là 2 context trong tài liệu. Mỗi lần làm vậy ghi một ADR. Xem B5.5 mục 3.4.
+**Phương pháp:** gom cụm các sự kiện gắn kết chặt → mỗi cụm là một context ứng viên. Phân loại mỗi context: cốt lõi / hỗ trợ / chung. Phải xem xét đủ vòng đời vé, hồ sơ người dùng, chatbot và trợ lý chẩn đoán sự cố; năng lực nào thuộc context nào phải truy được về B4, không được khai báo sẵn. Độ sâu có thể khác nhau. Chỉ mô tả ngôn ngữ, trách nhiệm, quan hệ và hotspot của context; chưa gộp context thành service vật lý, chưa chọn Saga, schema hoặc ADR kiến trúc.
+**Phép thử:**
+- Context nào được phân loại "cốt lõi" phải nằm trong vòng 1 phạm vi ở Tầng A.
+- Mỗi context truy được về sự kiện/quy trình ở B4; mọi điểm chưa rõ giữ `OPEN`, không lấp bằng cấu trúc repo cũ.
+- Không chọn, xếp hạng, khuyến nghị hoặc đổi nhãn một phương án vị trí aggregate/service được đóng khung sẵn trong chat hay tài liệu cũ thành “bounded context ứng viên”, kể cả dưới nhãn `CANDIDATE`. Nếu chưa truy được lựa chọn về B4 đã duyệt và bất biến cần phân tích ở B7, chỉ ghi hotspot `OPEN` và không đưa ra hướng đặt ưu tiên.
+- B5 chỉ được `APPROVED` khi B4 tương ứng đã `APPROVED`; bounded context vẫn là ranh giới khái niệm ứng viên.
+
+> Một bounded context **không nhất thiết phải là một tiến trình triển khai riêng.** Cách gộp/tách thành service và việc có cần ADR chỉ được đánh giá ở B11 sau B10. Hai trần **≤ 8 service nghiệp vụ** và **≤ 3 Saga** là ràng buộc đánh giá phương án tại B10/B11, không phải số mục phải điền ở B5.
 ```
 Context | Phân loại (cốt lõi/hỗ trợ/chung) | Sự kiện thuộc về
 _______ | _________________________________ | ________________
-Các lần gộp | Lý do gộp
-___________ | _________
+Quan hệ với context khác | Hotspot/điểm OPEN
+________________________ | __________________
 ```
 **Đi vào:** phần Phân tích và làm căn cứ cho phần Thiết kế
 
@@ -386,8 +426,8 @@ _____ | ___ | ________ | ______________________ | _________________
 
 ### 🔴 B7 — Mô hình miền theo context + xác định Aggregate *(bạn quyết định phần Aggregate)*
 **Đầu vào:** B2, B5
-**Phương pháp:** biểu đồ lớp **mức phân tích** — chỉ tên lớp, thuộc tính chính, quan hệ, bội số. Không kiểu dữ liệu, không phương thức. **Vẽ riêng cho từng context.** Sau đó xác định aggregate và aggregate root trong mỗi context.
-**Phép thử:** mọi lớp có tên xuất hiện trong B2. Với mỗi aggregate, trả lời được: *"thay đổi bên trong nó có nằm gọn trong một giao dịch không?"* — nếu không thì ranh giới aggregate đang sai.
+**Phương pháp:** biểu đồ lớp **mức phân tích** — chỉ tên lớp, thuộc tính chính, quan hệ, bội số. Không kiểu dữ liệu, không phương thức. **Vẽ riêng cho từng context.** Sau đó xác định aggregate, aggregate root và bất biến ứng viên trong mỗi context; chưa gán aggregate cho service/schema vật lý.
+**Phép thử:** mọi lớp có tên xuất hiện trong B2. Với mỗi aggregate, trả lời được: *"thay đổi bên trong nó có nằm gọn trong một giao dịch không?"* — nếu không thì ranh giới aggregate đang sai. B7 chỉ được `APPROVED` khi B2/B5 tương ứng đã `APPROVED`; ownership triển khai vẫn chờ B11/B12.
 ```
 Context: ______
  Lớp: ______  Aggregate root: ______
@@ -457,12 +497,17 @@ Danh sách ASR: _________________________________
 
 ---
 
-## NHÓM 4 — THIẾT KẾ *(tổng hợp + phần bổ sung ở mục 3.3)*
+## NHÓM 4 — THIẾT KẾ *(tổng hợp + phần bổ sung ở mục 3.4)*
 
 ### 🔴 B11 — Tập quyết định kiến trúc (ADR) *(bạn quyết định — phiếu quan trọng nhất)*
 **Đầu vào:** B5 (ranh giới), B7 (aggregate), B10 (ASR)
-**Phương pháp:** mỗi quyết định kiến trúc có phương án cạnh tranh hoặc hệ quả dài hạn mới cần một bản ghi riêng. Không đặt chỉ tiêu số lượng ADR.
-**Phép thử:** mỗi ADR nêu được (a) các phương án thực sự đã cân nhắc, (b) yêu cầu/kịch bản nào nó phục vụ, (c) sẽ kiểm chứng bằng cách nào. Không tạo phương án giả chỉ để đủ biểu mẫu.
+**Phương pháp:** thực hiện theo ba cổng có dấu vết:
+
+1. **B11-A — hình thành độc lập:** chỉ dùng B5, B7, B10 và các ràng buộc `USER_CONFIRMED/DECIDED` để tạo, so sánh và ghi tập phương án kiến trúc tại `docs/architecture/B11-A-independent-alternatives.md`. Không đọc B5.5, legacy baseline hoặc repo cũ. Một người thật phải duyệt tập phương án này thành `APPROVED` trước khi B11-B được phép mở B5.5; đây là duyệt tập đầu vào độc lập, chưa phải chọn kiến trúc cuối.
+2. **B11-B — kiểm tra khả thi:** ghi kết quả tại `docs/architecture/B11-B-legacy-feasibility.md`, trong đó nêu đúng phiên bản/commit/ngày của B11-A được đối chiếu. Chỉ đánh giá đúng tập phương án đã duyệt về tái sử dụng, thay thế, di trú, ghép nối và rủi ro triển khai; không sinh, bổ sung, xếp hạng hoặc sửa phương án kiến trúc. Nếu một rủi ro buộc phải làm lại tập phương án, đóng B5.5, trả về B11-A một ràng buộc khả thi đã khái quát và không mang theo phương án sinh từ package/bảng hiện tại. Mọi thay đổi có ý nghĩa của B11-A làm B11-B cũ mất hiệu lực và phải được lập lại từ phiên bản mới.
+3. **B11-C — quyết định:** chỉ dùng B11-A và B11-B đã `APPROVED` để chọn phương án, rồi ghi ADR cho quyết định có phương án cạnh tranh hoặc hệ quả dài hạn. Trước khi ADR chuyển sang `Chấp nhận`, ghi `Tác động lên A1–A6: Không | Có — <tạo tác và lý do>`; nếu có tác động tới phát biểu vấn đề, mục tiêu, phạm vi, câu hỏi nghiên cứu hoặc cách đánh giá, đưa tạo tác liên quan về `REVIEW_READY`, cập nhật và duyệt lại cùng các đầu vào phụ thuộc. Không đặt chỉ tiêu số lượng ADR.
+
+**Phép thử:** B11-B truy được đúng phiên bản B11-A đã duyệt; mỗi ADR nêu được (a) các phương án thực sự đã cân nhắc ở B11-A, (b) ASR/bất biến nào nó phục vụ, (c) kết quả kiểm tra khả thi B11-B, (d) sẽ kiểm chứng bằng cách nào và (e) kết quả impact check A1–A6. Không tạo phương án giả chỉ để đủ biểu mẫu; không dùng B5.5 làm nguồn sinh hoặc sửa phương án.
 ```
 Nhóm quyết định cần có ADR (điền tên và mã):
  Kiểu kiến trúc tổng thể: ADR-___
@@ -581,7 +626,7 @@ Thời gian có/không trợ lý (nếu đo): __________________________
 
 ## 5.1 Phân bổ tham chiếu (điều chỉnh theo lịch thực tế của nhóm)
 
-Bản phân bổ này đã **hiệu chỉnh theo điều kiện nhóm có công cụ AI** (xem B5.5 Phần 3B): tăng phần thiết kế, giảm phần xây dựng, **giữ nguyên phần kiểm chứng** vì nó bị chặn bởi thời gian thực chứ không phải bởi năng suất.
+Bản phân bổ này đã **hiệu chỉnh theo điều kiện nhóm có công cụ AI**: tăng phần thiết kế, giảm phần xây dựng, **giữ nguyên phần kiểm chứng** vì nó bị chặn bởi thời gian thực chứ không phải bởi năng suất.
 
 | Giai đoạn | Phiếu | Thời lượng | Ghi chú kiểm soát |
 |---|---|---|---|
@@ -636,6 +681,8 @@ Các con số trên là tỷ lệ tham khảo, không phải quy trình chấm c
 |---|---|---|
 | 2026-08-07 | Bản đầu | — |
 | 2026-08-08 | Giản lược ATAM/Event Storming/truy vết; thêm khảo sát công khai, schema độc lập, mobile trực tuyến và pipeline Drain→context→LLM | Phù hợp mức ĐATN đại học và quyết định mới |
+| 2026-08-12 | Phân loại B11-B là `COMPARISON`; đặt đường dẫn canonical, duyệt đầu vào B11-A và impact check A1–A6 ở B11-C | Khóa chiều phụ thuộc thiết kế → đối chiếu và làm cho provenance B11 kiểm tra được |
+| 2026-08-17 | Bỏ tiền-chốt hệ thống con AI thành một hoặc hai bounded context; yêu cầu truy ranh giới ứng viên từ B4/B5 | Đồng bộ phase gate và tránh biến quyền khác nhau thành kết luận context có sẵn |
 
 ---
 

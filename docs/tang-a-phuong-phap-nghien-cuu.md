@@ -356,7 +356,8 @@ VÒNG 3 — Ngoài phạm vi (mục | lý do không làm):
  ______________ | ______________
 
 Giới hạn hạ tầng: 2 EC2 m7i-flex.large (2 vCPU/8 GiB mỗi máy),
-  hai tài khoản AWS riêng; cách bố trí chưa chốt — xem B5.5 mục 3.3
+  hai tài khoản AWS riêng; cách bố trí chưa chốt — B11-A tạo phương án,
+  B11-B kiểm tra tính khả thi và B11-C mới quyết định
 Giới hạn thời gian: __________________________________________
 ```
 

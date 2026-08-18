@@ -1,6 +1,8 @@
 # A1 — Bối cảnh và tính cấp thiết
 
-- **Trạng thái:** Nháp có nguồn, cần chủ đồ án duyệt cách diễn đạt
+- **Trạng thái:** `APPROVED` — baseline Giai đoạn 1; tái kiểm tra sau B10
+- **Người duyệt:** Lê Văn Minh
+- **Ngày duyệt:** 2026-08-13
 - **Đi vào báo cáo:** Phần Đặt vấn đề/Tính cấp thiết
 - **Nguồn:** B1 khảo sát công khai ngày 2026-08-09 và các tài liệu kỹ thuật được ghi trong `source-register.md`
 
@@ -40,8 +42,8 @@ Từ đó, đồ án thiết kế và xây dựng FlashTicket Platform theo các
 - Quan sát sản phẩm và nguồn kỹ thuật được phân biệt.
 - Chưa đưa ngưỡng hiệu năng khi chưa có QS/benchmark.
 
-## 4. CẦN XÁC NHẬN
+## 4. Kết quả xác nhận và vấn đề còn mở
 
-1. Cô Liên có muốn phần tính cấp thiết nhấn mạnh nghiệp vụ đặt vé hay kiến trúc phân tán nhiều hơn.
-2. Nhóm có thống nhất gọi nhánh AI là “trợ lý chẩn đoán sự cố” trong toàn báo cáo hay không.
-3. Sau khi có mẫu trích dẫn của khoa, chuyển các liên kết trên thành tài liệu tham khảo đánh số.
+1. **Đã duyệt:** phần tính cấp thiết bắt đầu từ hậu quả nghiệp vụ của vòng đời vé; kiến trúc phân tán được trình bày sau như yếu tố làm tăng độ khó phối hợp và kiểm chứng, không phải lý do tự thân để chọn đề tài.
+2. **Đã chốt:** dùng thống nhất tên **“trợ lý chẩn đoán sự cố”**.
+3. **`OPEN`:** mẫu trích dẫn của khoa chưa được ban hành do kỳ đồ án chưa bắt đầu. Tạm giữ URL/DOI làm dấu vết nguồn; chuẩn hóa cách đánh số và trình bày sau khi nhận mẫu, không chặn phân tích.

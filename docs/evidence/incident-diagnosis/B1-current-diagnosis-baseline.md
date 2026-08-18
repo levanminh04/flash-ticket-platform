@@ -2,13 +2,19 @@
 
 - **Ngày kiểm kê:** 2026-08-09
 - **Nguồn:** Kinh nghiệm xử lý sự cố do chủ đồ án cung cấp; log và mã nguồn phát triển được kiểm kê nội bộ tại commit `609fa2d37cad69aafa593b7db5b6cedeaf803da5`
-- **Trạng thái:** Đã dựng được quy trình và một ca lỗi thật; thời gian chẩn đoán chưa có số đo
+- **Trạng thái:** `APPROVED` — baseline quy trình và INC-01; độ bao phủ tập ca và thời gian chẩn đoán còn `OPEN`
+- **Người duyệt:** Lê Văn Minh
+- **Ngày duyệt:** 2026-08-13
 
 ## Nhãn sử dụng
 
 - **BÁO CÁO:** Quy trình chẩn đoán thủ công và điểm nghẽn sau khi nhóm xác nhận; kết quả cuối phải dùng log/ca lỗi sinh từ phiên bản ĐATN.
 - **NỘI BỘ:** Đường dẫn file, thống kê tài sản phát triển và ca lỗi khởi động dùng để thiết kế pipeline ban đầu; không đưa vào báo cáo như kết quả đánh giá.
-- **CẦN XÁC NHẬN:** Thời gian thực tế và 2–4 ca lỗi bổ sung do các thành viên từng xử lý.
+- **`OPEN`:** Thời gian thực tế và tối thiểu 2 ca lỗi bổ sung/tái hiện được; nếu không thu được thì phải công bố giới hạn một ca và không kết luận về rút ngắn thời gian.
+
+## Ranh giới chức năng đã xác nhận
+
+Trợ lý hỗ trợ thu thập và liên kết dấu vết, đề xuất nguyên nhân khả dĩ cùng bước kiểm tra tiếp theo; **không cam kết loại bỏ việc tái hiện lỗi, không tự kết luận nguyên nhân cuối cùng và không tự sửa hệ thống**. Người vận hành hoặc nhà phát triển vẫn phải xác minh bằng chứng, tái hiện khi dữ liệu quan sát chưa đủ và kiểm tra lại sau khi sửa.
 
 ## 1. Quy trình hiện tại được tái dựng
 
@@ -51,7 +57,7 @@ Các con số là kết quả tìm tĩnh tại commit baseline, không chứng m
 | Thời gian phát hiện/chẩn đoán | Không có dữ liệu đáng tin cậy |
 | Trạng thái hiện tại | Code baseline sau đó đã chuyển sang cấu hình provider khác; chưa xác định chính xác commit sửa ca này |
 
-Ca này phù hợp để thử Drain ở bước sau vì có phần thông điệp ổn định xen lẫn tên bean/lớp biến đổi. Tuy nhiên, nó chỉ kiểm tra lỗi khởi động một service, chưa kiểm tra context xuyên service.
+Ca này là một **ca kiểm chứng có đáp án gốc**, không đại diện cho mọi loại lỗi. Nó phù hợp làm smoke test cho Drain/context builder vì có phần thông điệp ổn định xen lẫn tên bean/lớp biến đổi và có nguyên nhân thật để đối chiếu. Tuy nhiên, nó chỉ kiểm tra lỗi khởi động một service, chưa kiểm tra context xuyên service và không đủ để kết luận mức hữu ích chung của trợ lý.
 
 ## 4. Ca ứng viên cần tái hiện — chưa phải sự cố đã xảy ra
 
@@ -75,4 +81,4 @@ Tối thiểu cần thêm 2 ca thật hoặc tái hiện được. Không cần 
 
 ## 6. BÁO CÁO — Đoạn mô tả baseline có thể sử dụng
 
-Quy trình chẩn đoán thủ công bắt đầu từ mô tả lỗi hoặc hành vi bất thường, sau đó người phát triển xác định thành phần nghi ngờ, cố tái hiện, tìm log trên hệ thống tập trung hoặc máy chủ và lần từ exception/thông điệp về đoạn mã liên quan. Khi log của cùng một giao dịch không có schema và mã tương quan thống nhất xuyên service, việc chọn bản ghi liên quan, dựng lại trình tự và xác định vùng mã phụ thuộc nhiều vào thao tác thủ công. Đây là cơ sở để thiết kế chuẩn logging và pipeline trợ lý chẩn đoán. Mức cải thiện chỉ được kết luận sau khi đánh giá trên các ca lỗi có nguyên nhân biết trước của phiên bản ĐATN; mô tả “vài chục phút đến vài giờ” không được dùng như số đo nếu chưa có bảng thời gian cụ thể.
+Quy trình chẩn đoán thủ công bắt đầu từ mô tả lỗi hoặc hành vi bất thường, sau đó người phát triển xác định thành phần nghi ngờ, cố tái hiện, tìm log trên hệ thống tập trung hoặc máy chủ và lần từ exception/thông điệp về đoạn mã liên quan. Khi log của cùng một giao dịch không có schema và mã tương quan thống nhất xuyên service, việc chọn bản ghi liên quan, dựng lại trình tự và xác định vùng mã phụ thuộc nhiều vào thao tác thủ công. Đây là cơ sở để thiết kế chuẩn logging và pipeline trợ lý chẩn đoán nhằm tự động hóa một phần việc gom dấu vết, dựng context và hình thành giả thuyết có bằng chứng. Trợ lý không thay thế bước xác minh của con người và không bảo đảm loại bỏ việc tái hiện khi log chưa đủ hoặc khi cần kiểm tra bản sửa. Mức cải thiện chỉ được kết luận sau khi đánh giá trên các ca lỗi có nguyên nhân biết trước của phiên bản ĐATN; mô tả “vài chục phút đến vài giờ” không được dùng như số đo nếu chưa có bảng thời gian cụ thể.

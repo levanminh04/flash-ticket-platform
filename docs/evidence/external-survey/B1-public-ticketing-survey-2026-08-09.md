@@ -3,13 +3,15 @@
 - **Ngày quan sát:** 2026-08-09
 - **Phạm vi:** Luồng người mua và tài liệu trợ giúp/chính sách công khai
 - **Hệ thống:** Ticketbox, TicketGo, Eventbrite
-- **Trạng thái:** Bản nháp có bằng chứng; không thực hiện giao dịch trả phí
+- **Trạng thái:** `APPROVED` — baseline công khai đủ dùng để bắt đầu B2; không thực hiện giao dịch trả phí
+- **Người duyệt:** Lê Văn Minh
+- **Ngày duyệt:** 2026-08-13
 
 ## Nhãn sử dụng
 
 - **BÁO CÁO:** Phương pháp khảo sát, bảng quan sát–giới hạn, kết quả đối sánh và đoạn tổng hợp cuối tài liệu.
 - **NỘI BỘ:** URL sự kiện cụ thể có thể thay đổi và ghi chú thao tác chi tiết.
-- **CẦN XÁC NHẬN:** Nhóm có muốn bổ sung ảnh chụp thủ công của 1–2 luồng hay chỉ dùng URL/tài liệu chính thức làm bằng chứng.
+- **ĐÃ XÁC NHẬN:** Ticketbox, TicketGo và Eventbrite cùng các URL/tài liệu chính thức hiện có đủ làm baseline cho B2. Ảnh chụp công khai có thể bổ sung sau để tăng bằng chứng trực quan, không chặn phân tích.
 
 ## 1. Mục đích và phương pháp
 
@@ -84,6 +86,6 @@ Khảo sát ba nền tảng bán vé cho thấy luồng người mua thường �
 - Không coi quy định của một sự kiện là chính sách toàn nền tảng.
 - Không tuyên bố đã kiểm thử thanh toán, cạnh tranh ghế hoặc check-in thật.
 
-### CẦN XÁC NHẬN/BỔ SUNG
+### BỔ SUNG KHÔNG CHẶN
 
-Nếu nhóm muốn tăng bằng chứng trực quan, mỗi thành viên có thể chụp 1–2 ảnh giao diện công khai theo đúng URL và ngày quan sát. Không cần mua vé hoặc xin quyền organizer/admin.
+Nếu nhóm muốn tăng bằng chứng trực quan trước khi hoàn thiện báo cáo, mỗi thành viên có thể chụp 1–2 ảnh giao diện công khai theo đúng URL và ngày quan sát. Không cần mua vé hoặc xin quyền organizer/admin; việc này không phải điều kiện bắt đầu B2.

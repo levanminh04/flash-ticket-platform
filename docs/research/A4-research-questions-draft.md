@@ -1,6 +1,8 @@
 # A4 — Nháp câu hỏi nghiên cứu
 
-- **Trạng thái:** Nháp, chưa chốt
+- **Trạng thái:** `APPROVED` — phạm vi baseline Giai đoạn 1; ngưỡng đo và bản cuối chờ B9–B10
+- **Người duyệt:** Lê Văn Minh
+- **Ngày duyệt:** 2026-08-13
 - **Đi vào báo cáo:** Chỉ đưa vào nếu mẫu báo cáo/giảng viên thấy câu hỏi nghiên cứu giúp mạch đánh giá rõ hơn
 - **Nguyên tắc:** Một câu hỏi trung tâm, tối đa hai câu phụ, không chứa tên công nghệ
 
@@ -36,7 +38,8 @@
 
 Nếu giữ A4, phần Kết luận phải trả lời lần lượt câu trung tâm và hai câu phụ bằng số liệu ở chương Đánh giá. Nếu không đủ bằng chứng cho câu phụ 2, hạ phạm vi thành “đánh giá tính đầy đủ và hữu ích trên tập ca giới hạn”, không tuyên bố rút ngắn thời gian chẩn đoán.
 
-## CẦN XÁC NHẬN
+## Kết quả xác nhận và vấn đề còn mở
 
-1. Giảng viên có yêu cầu trình bày câu hỏi nghiên cứu thành mục riêng không.
-2. Ngưỡng định lượng chưa chốt ở đây; phải chốt trong B9–B10 trước khi triển khai benchmark.
+1. **Đã duyệt phạm vi:** giữ một câu hỏi trung tâm và hai câu hỏi phụ như trên; nhánh trợ lý chẩn đoán tiếp tục là nhánh hỗ trợ cho trục độ tin cậy của vòng đời vé.
+2. **`OPEN` về trình bày:** chờ giảng viên/mẫu ĐATN xác nhận có cần một mục “Câu hỏi nghiên cứu” riêng hay chỉ trình bày dưới dạng mục tiêu và nội dung đánh giá.
+3. **`OPEN` về ngưỡng:** chưa chốt ngưỡng định lượng ở A4; B9–B10 phải xác định phép đo và ngưỡng có căn cứ trước benchmark.

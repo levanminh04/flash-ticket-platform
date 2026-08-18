@@ -1,0 +1,67 @@
+@startuml
+title B3-02 — Chọn vé, giữ chỗ, thanh toán và phát hành vé
+
+|Người mua|
+start
+:Chọn vé của một event;
+if (SEAT_MAP?) then (Có)
+  :Chọn trong đúng một sector;
+endif
+
+|Hệ thống|
+:Kiểm tra mở bán, nguồn cung, giới hạn mua và loại vé;
+if (Hợp lệ?) then (Không)
+  :Từ chối, không tạo giữ chỗ;
+  stop
+else (Có)
+  :Tạo một đơn, một giữ chỗ và một thời hạn chung;
+endif
+
+|Người mua|
+if (Áp dụng mã?) then (Có)
+  |Hệ thống|
+  :Kiểm tra mã thuộc event, hiệu lực, lượt dùng và giá cuối > 0;
+  if (Mã hợp lệ?) then (Có)
+    :Giữ lượt dùng cùng đơn;
+  else (Không)
+    :Thông báo không áp dụng mã;
+  endif
+endif
+
+|Người mua|
+if (Hủy đơn trước khi thu tiền?) then (Có)
+  |Hệ thống|
+  :Hủy đơn và trả tài nguyên đúng một lần;
+  :Chặn lần thanh toán mới;
+  stop
+endif
+:Khởi tạo thanh toán;
+
+|Cổng thanh toán|
+:Trả callback/IPN;
+|Hệ thống|
+if (Đơn đã hết hạn hoặc bị hủy?) then (Có)
+  :Tạo nghĩa vụ hoàn toàn bộ;
+  :Không trả tài nguyên lần hai;
+  stop
+endif
+if (Thanh toán hợp lệ?) then (Không)
+  if (Đơn còn hiệu lực?) then (Có)
+    |Người mua|
+    :Có thể tạo lần thử mới tuần tự;
+  endif
+  stop
+endif
+:Chỉ giữ một kết quả thu hợp lệ;
+:Phát hành vé;
+if (Phát hành thành công?) then (Không)
+  :Vô hiệu vé dở dang;
+  :Trả lượt khuyến mãi đúng một lần;
+  :Tạo nghĩa vụ hoàn toàn bộ;
+  stop
+else (Có)
+  :Cho buyer xem/tải QR của đơn mình;
+  :Thử gửi thông tin vé;
+endif
+stop
+@enduml

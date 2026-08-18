@@ -151,18 +151,20 @@
 
 | Mục | Nội dung | Nguồn |
 |---|---|---|
-| Tính năng AI | **Trợ lý hỗ trợ chẩn đoán lỗi** theo hướng chỉ đọc: log có cấu trúc → Drain gom mẫu log → chọn ngữ cảnh → gọi LLM API để đưa ra tư vấn đơn giản | [TĐ] [TL] |
+| Tính năng AI | **Trợ lý chẩn đoán sự cố** theo hướng chỉ đọc: log có cấu trúc → Drain gom mẫu log → chọn ngữ cảnh → gọi LLM API để đưa ra tư vấn đơn giản | [TĐ] [TL] |
 | Khung phương pháp | Bộ tài liệu ba tầng A (phương pháp nghiên cứu) / B (quy trình kỹ thuật) / C (quy ước trình bày) | [TL] |
 | Trần service | ≤ 8 service nghiệp vụ | [TĐ] |
 | Trần Saga | ≤ 3 luồng Saga | [TĐ] |
 | Hạ tầng | Sử dụng 2 máy EC2; **chưa chốt** service/thành phần nào đặt trên máy nào | [TĐ] |
 | Mobile | Dùng lại backend Spring Boot cho nghiệp vụ check-in trực tuyến; **bỏ check-in offline** | [TĐ] |
 | CI/CD | Là phần hỗ trợ, có thì tốt; không phải trục nghiên cứu hoặc tiêu chí bắt buộc | [TĐ] |
-| Ranh giới quyền của AI | Trợ lý sửa lỗi chỉ đọc log/dấu vết/sự kiện, không ghi nghiệp vụ; chatbot mua vé được gọi API công khai | [TL] |
+| Ranh giới quyền của AI | Trợ lý chẩn đoán sự cố chỉ đọc log/dấu vết/sự kiện, không ghi nghiệp vụ; chatbot mua vé được gọi API công khai | [TL] |
 
-**Nghiệp vụ đã đồng ý bổ sung** [TĐ] — *chủ đồ án xác nhận "đồng ý hoàn toàn"*: kiểm duyệt sự kiện trước khi mở bán · hoàn tiền một đơn · chính sách hủy/hoàn theo sự kiện · giới hạn vé mỗi người · saga xuất bản sự kiện idempotent · sổ cái đối soát chỉ đọc.
+**Nghiệp vụ đã đồng ý bổ sung** [TĐ] — *chủ đồ án xác nhận "đồng ý hoàn toàn"*: kiểm duyệt sự kiện trước khi mở bán · hoàn tiền một đơn · chính sách hủy/hoàn theo sự kiện · giới hạn vé mỗi tài khoản trong một sự kiện · công bố sự kiện idempotent · sổ cái đối soát chỉ đọc. Cụm lịch sử “Saga xuất bản sự kiện” chỉ được hiểu là yêu cầu lặp thao tác không tạo tác dụng phụ; việc có dùng Saga hay không chờ B10/B11.
 
 **Nghiệp vụ đã đồng ý bỏ** [TĐ]: hủy sự kiện hàng loạt (có thể bỏ qua) · hoàn tiền một phần · chargeback · tranh chấp · chuyển nhượng vé · định giá động · đa tiền tệ · tích điểm.
+
+**Làm rõ sau khi chốt nghiệp vụ** [TĐ]: “hủy sự kiện hàng loạt” ở dòng lịch sử trên là thao tác hủy đồng thời nhiều sự kiện và vẫn nằm ngoài phạm vi. Khi **một** sự kiện bị hủy, hệ thống có thể phải xử lý hoàn tiền cho nhiều đơn của chính sự kiện đó; đây là quy trình khác, đã được ghi tại `BIZ-014`.
 
 ---
 
@@ -172,11 +174,12 @@
 |---|---|---|
 | H1 | Chính sách hoàn tiền do nền tảng áp đặt hay nhà tổ chức tự đặt | [TL] |
 | H3 | Tỉ lệ giữ lại phòng hoàn tiền và mốc mở kỳ đối soát | [TL] |
-| — | Vị trí của aggregate tồn kho vé (3 phương án đã nêu ở B5.5 mục 2.3) | [TL] |
-| — | Xử lý 12 điểm ghép nối `booking → event` | [TL] |
-| — | Tách tool ghi/đọc trong `discovery-service` | [TL] |
+| — | Bất biến giữ chỗ/chống bán vượt và trách nhiệm khái niệm quanh tồn kho vé; chưa suy ra service, Saga hoặc schema | [TL] |
+| — | Ranh giới quyền giữa chatbot mua vé và trợ lý chẩn đoán; cách triển khai vật lý chờ B11 | [TL] |
 | — | Cách bố trí hai EC2 sau khi có sơ đồ container, nhu cầu triển khai và kết quả đo thử ban đầu | [TĐ] |
 | — | Workflow cuối cùng của trợ lý chẩn đoán: nguồn log, cách tạo context, dữ liệu cần lưu và bộ ca đánh giá | [TĐ] |
+
+**Tình trạng các câu hỏi lịch sử:** H1 đã được đóng bởi `BIZ-033`; H3 đã được đóng bởi `BIZ-036` và `BIZ-050`–`BIZ-054`. Hai dòng H1/H3 được giữ nguyên ở trên để bảo toàn dấu vết câu hỏi từng tồn tại, không còn là đầu vào `OPEN` của Giai đoạn 2.
 
 ---
 
