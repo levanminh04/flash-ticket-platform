@@ -51,6 +51,7 @@ If two applicable sources at any level conflict materially, do not mutate. Cite 
 - Record durable decisions in `docs/project/decision-register.md` with evidence, owner, gate, and affected artifacts.
 - Record a user-confirmed decision atomically and preserve its explicit meaning. Do not append inferred policies, conditions, consequences, or scope to the same `USER_CONFIRMED` statement; record each implication separately as `CANDIDATE` or `OPEN`.
 - A request that delegates a choice to the agent is not user confirmation of the option the agent selects. Only the option explicitly selected by the user may be `USER_CONFIRMED`.
+- When resolving review feedback or an `OPEN` point, stop before adopting a proposal that would add or materially change application code, an API or contract, schema/data, web or mobile UI, or behavior outside the approved scope. Present the concrete implementation and interface impact and obtain Lê Văn Minh's explicit confirmation before recording it as a requirement or decision. A documentation correction that only restores already-approved behavior is not a scope expansion.
 - Before changing more than three files or promoting a material decision, present an impact map. Exact approval in the user's current request satisfies this requirement.
 - Edit the authoritative artifact first and derived status/index/report artifacts afterward.
 - Do not create an ADR merely to satisfy a checklist. An ADR requires its authorized gate, alternatives, decision drivers, consequences, and verification method.
