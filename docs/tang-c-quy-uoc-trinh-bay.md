@@ -248,6 +248,18 @@ Riêng sơ đồ C4 mức 1–3: hộp ghi **tên · loại · công nghệ (n�
 
 **Phép thử:** đưa sơ đồ cho một người chưa từng nghe về đề tài — họ có đoán được mũi tên này nghĩa là gì không? Không thì thiếu nhãn.
 
+### 3.2.1 Quy tắc ưu tiên cho sơ đồ dùng trong báo cáo
+
+Sơ đồ trong báo cáo phải gần với cách trình bày quen thuộc của đồ án kỹ thuật tại PTIT/HUST, nhưng cụm này **không** được hiểu thành một bộ ký hiệu mới mang tên “phong cách PTIT/HUST”. Thứ tự ưu tiên là:
+
+1. **Đúng nghĩa và đúng loại sơ đồ trước:** sơ đồ UML dùng đúng phần tử và quan hệ UML mà Visual Paradigm hỗ trợ; chọn đúng loại sơ đồ trong Visual Paradigm khi dựng bản cuối. Không dùng màu sắc, hình tự chế hoặc bố cục để thay đổi nghĩa của ký hiệu.
+2. **Người đọc báo cáo nhìn thấy tên nghiệp vụ trước:** tên tiếng Việt dễ hiểu là nhãn chính. Mã quản trị/truy vết như `BC-CAND-01`, `B4-OPEN-02` hoặc ID nội bộ chỉ đặt nhỏ ở dòng phụ/chú giải khi thật sự cần đối chiếu; mặc định bỏ khỏi hình dành cho báo cáo. Trạng thái ứng viên phải nói một lần ở tiêu đề, chú thích hoặc chú giải, không lặp chữ `CANDIDATE` trong mọi hộp.
+3. **Dùng stereotype và chú giải đúng chỗ:** phân loại bổ sung như `«Cốt lõi»`, `«Hỗ trợ»` hoặc `«Chung»` có thể thể hiện bằng stereotype/chú giải nhất quán. Mọi hình hoặc đường tùy biến ngoài ký pháp chính phải được giải thích; không được khiến người đọc nhầm bounded context với service, package mã nguồn hoặc schema.
+4. **Ưu tiên khả năng đọc trên trang báo cáo:** mỗi hình có một thông điệp chính, hướng đọc rõ, hạn chế đường cắt nhau, chữ còn đọc được khi đặt trên một trang A4, màu ít và vẫn phân biệt được khi in thang xám. Phần giải thích bằng văn bản nằm ngay trước hoặc sau hình; hình không phải nơi nhồi toàn bộ mã truy vết.
+5. **Mẫu chính thức có quyền cao nhất về hình thức:** font, cỡ chữ, lề, số hình và chú thích tuân theo mẫu ĐATN hiện hành của Khoa CNTT 1 PTIT hoặc chỉ dẫn của giảng viên hướng dẫn. Trong khi chưa có mẫu đó, dùng quy ước Việt Nam tại §2.5 và tham khảo cách trình bày của tài liệu chính thức PTIT/HUST; không tuyên bố đang tuân thủ một mẫu chưa nhận được.
+
+Quy tắc này áp dụng cho cả bản nháp bằng mã và bản dựng lại trên Visual Paradigm. PlantUML được phép khác về nét vẽ mặc định, nhưng phải giữ đúng loại phần tử, nghĩa quan hệ, tên hiển thị và thứ bậc thông tin của bản cuối.
+
 ## 3.3 Quy ước đặt tên
 
 | Đối tượng | Quy ước | Ví dụ dạng |
@@ -471,6 +483,8 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 **Hình thức**
 - [ ] Mục lục sinh tự động từ style?
 - [ ] Mọi hình có số theo chương, chú thích **dưới**, có nguồn nếu lấy ngoài?
+- [ ] Mỗi sơ đồ dùng đúng loại/ký pháp; tên nghiệp vụ tiếng Việt là nhãn chính, còn mã truy vết nội bộ chỉ xuất hiện khi cần đối chiếu?
+- [ ] Sơ đồ vẫn đọc được khi đặt trên trang báo cáo, có hướng đọc rõ, hạn chế đường cắt nhau và có chú giải cho ký hiệu tùy biến?
 - [ ] Mọi bảng có số theo chương, chú thích **trên**?
 - [ ] Đủ ba danh mục đầu quyển?
 - [ ] Mọi trích dẫn khớp Tài liệu tham khảo?
@@ -525,6 +539,7 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 |---|---|---|
 | 2026-08-07 | Bản đầu | — |
 | 2026-08-08 | Bỏ cơ chế arc42/ISO/ma trận truy vết mang tính thủ tục; sửa quy ước C4/UML và mẫu thí nghiệm | Giữ mức tài liệu phù hợp ĐATN đại học |
+| 2026-08-21 | Bổ sung thứ tự ưu tiên cho sơ đồ báo cáo: đúng ký pháp UML/Visual Paradigm, tên nghiệp vụ dễ đọc, mã truy vết chỉ là thông tin phụ và hình thức cuối theo mẫu PTIT hiện hành | Ngăn sơ đồ nội bộ mang nguyên mã governance sang báo cáo và làm rõ nghĩa “gần phong cách PTIT/HUST” |
 
 ---
 
@@ -534,4 +549,7 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 - Brown, S. *The C4 Model for Visualising Software Architecture.* c4model.com
 - Nygard, M. *Documenting Architecture Decisions.* — mẫu ADR gốc
 - ISO/IEC/IEEE 42010 — *Systems and software engineering — Architecture description* (bản 2011 và bản 2022)
+- Visual Paradigm — [UML: Modeling Software Architecture with Packages](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/modeling-software-architecture-with-package/)
+- HUST — [Học phần Phân tích và thiết kế hệ thống](https://seee.hust.edu.vn/en/dao-tao/hoc-phan/ac3010e/) và [Hướng dẫn trình bày đồ án, bảo vệ tốt nghiệp](https://soict.hust.edu.vn/wp-content/uploads/Huong-dan-trinh-bay-do-an-Bao-ve-tot-nghiep-TS.-Trinh-Van-Chien-1.pdf)
+- PTIT — [Bài giảng Phân tích và thiết kế hệ thống thương mại điện tử](https://dlib.ptit.edu.vn/handle/HVCNBCVT/2615); các đồ án trong thư viện số dùng khối “Phân tích và thiết kế hệ thống” với biểu đồ UML
 - Quy định trình bày đồ án/khóa luận tốt nghiệp — **lấy bản chính thức từ Khoa CNTT, PTIT**

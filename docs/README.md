@@ -6,7 +6,8 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 
 | Nội dung | Tệp/thư mục sở hữu |
 |---|---|
-| Bối cảnh, mong muốn và nội dung đã chốt | `boi-canh-va-mong-muon.md` |
+| Bối cảnh và mong muốn được tổng hợp từ chủ đồ án | `boi-canh-va-mong-muon.md` |
+| Trạng thái và bằng chứng của các quyết định bền vững | `project/decision-register.md` |
 | Trình tự công việc và cổng chuyển giai đoạn | `quy-trinh-lam-viec.md` |
 | Phương pháp nghiên cứu, mục tiêu và bằng chứng | `tang-a-phuong-phap-nghien-cuu.md` |
 | Quy trình phân tích, thiết kế, xây dựng và kiểm chứng | `tang-b-quy-trinh-ky-thuat.md` |
@@ -14,6 +15,8 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Sổ đối chiếu hiện thực nội bộ; chỉ mở cho thiết kế ở B11-B sau khi tập phương án độc lập B11-A tại đường dẫn canonical đã được người thật duyệt `APPROVED` | `b5.5-doi-chieu-ma-nguon-va-ba-tang.md` |
 | Thuật ngữ miền | `glossary.md` |
 | Quy trình nghiệp vụ B3 | `domain/B3-business-processes.md` |
+| Bản đồ sự kiện miền B4 | `domain/B4-domain-event-map.md` |
+| Bản đồ bounded context ứng viên B5 | `domain/B5-bounded-context-map.md` |
 | Quyết định kiến trúc | `adr/` |
 | Sơ đồ và tệp nguồn | `diagrams/` |
 | API và lược đồ sự kiện | `contracts/` |

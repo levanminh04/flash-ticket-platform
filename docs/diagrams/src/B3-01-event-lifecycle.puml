@@ -6,10 +6,12 @@ start
 :Tạo event DRAFT;
 :Nhập thời gian, địa điểm, cửa sổ bán, giới hạn mua và salesMode;
 :Cấu hình loại vé và nguồn cung;
+:Cấu hình khuyến mãi có startAt/endAt;
 :Gửi duyệt;
 
 |Hệ thống|
-:Khóa cấu hình thương mại và salesMode;
+:Chuyển event sang PENDING_APPROVAL;
+:Khóa cấu hình thương mại, khuyến mãi và salesMode;
 
 |Quản trị viên|
 :Kiểm duyệt nội dung;
@@ -17,16 +19,21 @@ if (Chấp thuận?) then (Không)
   :Từ chối hoặc trả lại;
   |Hệ thống|
   :Đưa event về DRAFT;
+  :Mở lại cấu hình thương mại, khuyến mãi và salesMode;
+  |Nhà tổ chức|
+  :Có thể sửa và gửi duyệt lại;
   stop
 else (Có)
   :Nhập tỷ lệ phí nền tảng;
   |Hệ thống|
-  :Đánh dấu đã duyệt;
+  :Cố định tỷ lệ phí đã duyệt;
+  :Chuyển event sang APPROVED;
 endif
 
 |Nhà tổ chức|
 :Công bố event;
 |Hệ thống|
+:Chuyển event sang PUBLISHED;
 :Hiển thị event;
 :Bỏ qua tác dụng phụ nếu yêu cầu công bố bị lặp;
 if (Đủ điều kiện và trong cửa sổ bán?) then (Có)
@@ -35,22 +42,29 @@ else (Không)
   :Chỉ hiển thị hoặc từ chối mua;
 endif
 
-|Nhà tổ chức|
-if (Yêu cầu hủy?) then (Có)
+|Nhà tổ chức / Quản trị viên|
+if (Có yêu cầu hoặc quyết định hủy?) then (Có)
   |Hệ thống|
-  if (now < eventStartAt?) then (Không)
-    :Từ chối luồng hủy tự động;
-  else (Có)
-    if (Đã có đơn thu tiền?) then (Có)
+  if (now >= eventStartAt?) then (Có)
+    :Từ chối hủy trong phạm vi sản phẩm;
+  else (Không)
+    if (Organizer yêu cầu và đã có đơn thu tiền?) then (Có)
       |Quản trị viên|
       if (Xác nhận hủy?) then (Không)
         :Từ chối yêu cầu hủy;
+        |Hệ thống|
+        :Đánh dấu yêu cầu REJECTED;
+        :Giữ nguyên trạng thái event và không khởi động hoàn tiền;
         stop
       else (Có)
         :Xác nhận hủy;
       endif
-      |Hệ thống|
+    else (Organizer hủy trực tiếp hoặc admin chủ động)
+      |Nhà tổ chức / Quản trị viên|
+      :Chấp nhận hủy hợp lệ;
     endif
+    |Hệ thống|
+    :Chuyển event sang CANCELLED;
     :Đóng bán và chuyển xử lý đơn sang Quy trình 3;
   endif
 endif

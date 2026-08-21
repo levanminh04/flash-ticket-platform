@@ -5,6 +5,7 @@ title B3-03 — Hoàn tiền, hủy event, đối soát và chi trả
 start
 if (Hủy event?) then (Có)
   |Hệ thống|
+  :Tiếp nhận quyết định hủy đã hợp lệ từ Quy trình 1;
   if (now < eventStartAt?) then (Không)
     :Đưa xử lý sự cố muộn ra ngoài hệ thống;
     stop
@@ -12,26 +13,37 @@ if (Hủy event?) then (Có)
     :Đóng bán, vô hiệu vé, không mở lại nguồn cung;
     :Hủy đơn chưa thanh toán;
     :Trả giới hạn mua và lượt mã đúng một lần;
-    :Lập danh sách đơn đã thu cần hoàn;
+    :Lập danh sách đơn có khoản thu hợp lệ\ncòn số tiền phải hoàn;
+    :Loại giao dịch thu thừa của nhánh\nthanh toán trùng khỏi lô hủy event;
   endif
 else (Không - hoàn kỹ thuật)
   |Hệ thống|
   :Xác định khoản thu và nguyên nhân hoàn;
 endif
 
-repeat
+if (Có khoản thu cần hoàn?) then (Có)
+  repeat
+    |Hệ thống|
+    :Tạo mới hoặc tiếp tục cùng một\nyêu cầu hoàn logic của khoản thu;
+    |Cổng thanh toán|
+    :Xử lý hoàn toàn bộ;
+    |Hệ thống|
+    if (Hoàn thành công?) then (Có)
+      :Ghi kết quả và cập nhật đối soát;
+    else (Không)
+      :Giữ cùng yêu cầu ở trạng thái chưa hoàn tất;
+      :Đánh dấu cần thử lại hoặc điều tra;
+    endif
+  repeat while (Còn khoản thu cần xử lý?) is (Có)
+  -> Không;
+else (Không)
   |Hệ thống|
-  :Tạo/tiếp tục một nghĩa vụ hoàn idempotent;
-  |Cổng thanh toán|
-  :Xử lý hoàn toàn bộ;
-  |Hệ thống|
-  :Ghi kết quả và cập nhật đối soát;
-repeat while (Còn đơn cần xử lý?) is (Có)
--> Không;
+  :Không tạo yêu cầu hoàn mới;
+endif
 
 |Hệ thống|
 :Tổng hợp sổ cái chỉ đọc;
-if (Event đã kết thúc và không còn payment/refund pending?) then (Không)
+if (Event đã kết thúc và không còn thanh toán/hoàn tiền đang xử lý?) then (Không)
   :Chưa mở điều kiện chi trả;
   stop
 else (Có)

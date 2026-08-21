@@ -86,7 +86,7 @@
 - **Không kỳ vọng** hỗ trợ tận gốc cho những bug hoặc sự cố lớn
 - Bám sát nghiệp vụ flash ticket với ba vai trò: admin, buyer, organizer
 
-**Hướng kỹ thuật đang cân nhắc** [TĐ]: chuẩn hóa log trước, dùng Drain để gom các dòng log thành mẫu, sau đó chọn ngữ cảnh liên quan và gửi tới LLM API để nhận tư vấn đơn giản. Nhóm chưa chốt chi tiết cách chọn ngữ cảnh, cách hiệu chỉnh Drain và cách đánh giá tính năng.
+**Hướng kỹ thuật đã chốt ở mức định hướng** [TĐ]: chuẩn hóa log trước, dùng Drain để gom các dòng log thành mẫu, sau đó chọn ngữ cảnh liên quan và gửi tới LLM API để nhận tư vấn đơn giản. Nhóm chưa chốt chi tiết cách chọn ngữ cảnh, cách hiệu chỉnh Drain và cách đánh giá tính năng.
 
 ---
 
@@ -152,6 +152,11 @@
 | Mục | Nội dung | Nguồn |
 |---|---|---|
 | Tính năng AI | **Trợ lý chẩn đoán sự cố** theo hướng chỉ đọc: log có cấu trúc → Drain gom mẫu log → chọn ngữ cảnh → gọi LLM API để đưa ra tư vấn đơn giản | [TĐ] [TL] |
+| Danh tính và tài khoản | Dùng Keycloak để quản lý danh tính và vòng đời tài khoản; không hỗ trợ đăng nhập qua nhà cung cấp mạng xã hội; tài khoản tự đăng ký có `BUYER` mặc định và có thể đồng thời mang nhiều role trong bộ `BUYER`, `ORGANIZER`, `ADMIN` | [TĐ] |
+| Vòng đời organizer | Ứng dụng có hồ sơ nghiệp vụ tối thiểu; buyer được duyệt nhận thêm `ORGANIZER` và vẫn giữ `BUYER`; hồ sơ dùng `PENDING`, `ACTIVE`, `REJECTED`; từ chối phải có lý do và không gửi lại; không làm luồng thu hồi role; chỉ `ACTIVE` được công khai | [TĐ] |
+| Vòng đời sự kiện | Dùng `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `PUBLISHED`, `CANCELLED`; sự kiện bị từ chối/trả lại ở bước duyệt trở về `DRAFT`, không giữ `REJECTED` như trạng thái sự kiện riêng | [TĐ] |
+| Tỷ lệ phí nền tảng | Admin nhập khi phê duyệt và tỷ lệ được cố định cho sự kiện, không sửa âm thầm sau phê duyệt; nơi sở hữu dữ liệu vật lý chờ gate thiết kế dữ liệu | [TĐ] |
+| Tái sử dụng frontend | Dùng frontend hiện tại làm nền nhưng điều chỉnh theo nghiệp vụ và backend mới; frontend không được ép khuôn thiết kế đích và người dùng không cần biết backend được chia vật lý thế nào | [TĐ] |
 | Khung phương pháp | Bộ tài liệu ba tầng A (phương pháp nghiên cứu) / B (quy trình kỹ thuật) / C (quy ước trình bày) | [TL] |
 | Trần service | ≤ 8 service nghiệp vụ | [TĐ] |
 | Trần Saga | ≤ 3 luồng Saga | [TĐ] |
@@ -172,14 +177,17 @@
 
 | Mục | Nội dung | Nguồn |
 |---|---|---|
-| H1 | Chính sách hoàn tiền do nền tảng áp đặt hay nhà tổ chức tự đặt | [TL] |
-| H3 | Tỉ lệ giữ lại phòng hoàn tiền và mốc mở kỳ đối soát | [TL] |
 | — | Bất biến giữ chỗ/chống bán vượt và trách nhiệm khái niệm quanh tồn kho vé; chưa suy ra service, Saga hoặc schema | [TL] |
-| — | Ranh giới quyền giữa chatbot mua vé và trợ lý chẩn đoán; cách triển khai vật lý chờ B11 | [TL] |
+| — | Cách triển khai vật lý và bố trí thành phần cho chatbot mua vé và trợ lý chẩn đoán sự cố chờ B11; ranh giới quyền đã chốt ở Mục 9, không còn là vấn đề `OPEN` | [TL] |
 | — | Cách bố trí hai EC2 sau khi có sơ đồ container, nhu cầu triển khai và kết quả đo thử ban đầu | [TĐ] |
 | — | Workflow cuối cùng của trợ lý chẩn đoán: nguồn log, cách tạo context, dữ liệu cần lưu và bộ ca đánh giá | [TĐ] |
 
-**Tình trạng các câu hỏi lịch sử:** H1 đã được đóng bởi `BIZ-033`; H3 đã được đóng bởi `BIZ-036` và `BIZ-050`–`BIZ-054`. Hai dòng H1/H3 được giữ nguyên ở trên để bảo toàn dấu vết câu hỏi từng tồn tại, không còn là đầu vào `OPEN` của Giai đoạn 2.
+### Câu hỏi lịch sử đã đóng
+
+| Mã | Câu hỏi từng để ngỏ | Kết quả hiện tại |
+|---|---|---|
+| H1 | Chính sách hoàn tiền do nền tảng áp đặt hay nhà tổ chức tự đặt | `CLOSED → BIZ-033` |
+| H3 | Tỉ lệ giữ lại phòng hoàn tiền và mốc mở kỳ đối soát | `CLOSED → BIZ-036`, `BIZ-050`–`BIZ-054` |
 
 ---
 

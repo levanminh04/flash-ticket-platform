@@ -1,0 +1,86 @@
+@startuml
+title Bản đồ các ngữ cảnh nghiệp vụ (Bounded Context) ứng viên
+
+' FORMATION: biểu diễn trực quan đúng nội dung B5 hiện hành đã APPROVED.
+' Tên nghiệp vụ là nhãn chính; mã BC-CAND-* chỉ dùng trong bảng truy vết B5.
+' Mỗi package là bounded context ứng viên, không phải service hoặc schema vật lý.
+
+top to bottom direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam LegendFontSize 11
+skinparam nodesep 70
+skinparam ranksep 75
+skinparam ArrowColor #4F5B66
+skinparam ArrowFontColor #303840
+skinparam ArrowFontSize 11
+skinparam PackageBorderColor #46535F
+skinparam PackageFontColor #1F2A33
+skinparam PackageFontSize 13
+
+package TàiKhoản as "Hồ sơ tài khoản và quyền nghiệp vụ" <<Hỗ trợ>> #D8EAF8
+
+package SựKiện as "Vòng đời sự kiện và cấu hình bán" <<Hỗ trợ>> #D8EAF8
+
+package MuaVé as "Mua vé và cam kết nguồn cung" <<Cốt lõi>> #FFE9A8
+
+package ThanhToán as "Thanh toán và hoàn tiền" <<Cốt lõi>> #FFE9A8
+
+package Vé as "Quyền tham dự và kiểm soát vào cửa" <<Cốt lõi>> #FFE9A8
+
+package ĐốiSoát as "Đối soát và chi trả" <<Hỗ trợ>> #D8EAF8
+
+package GiaoNhận as "Giao nhận thông tin vé" <<Chung>> #E6E6E6
+
+package ChẩnĐoán as "Chẩn đoán sự cố (nhánh đánh giá riêng)" <<Hỗ trợ>> #D8EAF8
+
+rectangle "Dấu vết nghiệp vụ đã khử nhạy cảm\n[đầu vào chỉ đọc — không phải ngữ cảnh]" as TRACE #F5F5F5
+
+' Các quan hệ ngữ nghĩa đã được truy vết tại B5 §5.1.
+TàiKhoản ..> SựKiện : định danh và quyền
+TàiKhoản ..> MuaVé : định danh và quyền
+TàiKhoản ..> ThanhToán : định danh và quyền
+TàiKhoản ..> Vé : định danh và quyền
+TàiKhoản ..> ĐốiSoát : định danh và quyền
+
+SựKiện ..> MuaVé : điều kiện bán; sự kiện hủy
+SựKiện ..> ThanhToán : sự kiện hủy
+SựKiện ..> Vé : thời gian; sự kiện hủy
+SựKiện ..> ĐốiSoát : kết thúc, phí; sự kiện hủy
+
+MuaVé ..> ThanhToán : nghĩa vụ thanh toán
+
+ThanhToán ..> MuaVé : chốt giữ chỗ
+ThanhToán ..> Vé : xác nhận thu/hoàn
+ThanhToán ..> ĐốiSoát : khoản thu/kết quả hoàn
+
+Vé ..> ThanhToán : lỗi phát hành
+Vé ..> MuaVé : trả tài nguyên
+Vé ..> GiaoNhận : giao vé
+
+TRACE ..> ChẩnĐoán : dữ liệu chỉ đọc
+
+' Quan hệ ẩn chỉ điều khiển bố cục, không mang nghĩa miền.
+TàiKhoản -[hidden]down-> SựKiện
+MuaVé -[hidden]right-> ThanhToán
+ThanhToán -[hidden]right-> Vé
+ĐốiSoát -[hidden]right-> GiaoNhận
+GiaoNhận -[hidden]right-> ChẩnĐoán
+
+legend bottom
+  |= Ký hiệu |= Vai trò ứng viên |
+  |<#FFE9A8> «Cốt lõi»| Trực tiếp phục vụ trục vòng đời vé |
+  |<#D8EAF8> «Hỗ trợ»| Năng lực hỗ trợ sản phẩm/vận hành |
+  |<#E6E6E6> «Chung»| Năng lực phổ biến |
+  Tất cả các gói trong hình đều là bounded context ứng viên.
+  Đường nét đứt là luồng thông tin/ngữ nghĩa từ nguồn tới nơi cần dùng;
+  đây không phải quan hệ import/access. Nghĩa đầy đủ nằm tại B5 §5.1.
+  Sơ đồ không biểu diễn service, API, topic, Saga, schema,
+  quyền sở hữu dữ liệu vật lý hoặc hướng gọi đồng bộ.
+endlegend
+
+@enduml

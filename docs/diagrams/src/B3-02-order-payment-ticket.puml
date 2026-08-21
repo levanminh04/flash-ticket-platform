@@ -28,6 +28,14 @@ if (Áp dụng mã?) then (Có)
   endif
 endif
 
+|Hệ thống|
+if (Đơn hết hạn trước thanh toán?) then (Có)
+  :Đánh dấu đơn và giữ chỗ hết hạn;
+  :Trả tài nguyên tạm giữ đúng một lần;
+  :Chặn lần thanh toán mới;
+  stop
+endif
+
 |Người mua|
 if (Hủy đơn trước khi thu tiền?) then (Có)
   |Hệ thống|
@@ -40,8 +48,9 @@ endif
 |Cổng thanh toán|
 :Trả callback/IPN;
 |Hệ thống|
+:Bỏ qua tác dụng phụ nếu callback đã được xử lý;
 if (Đơn đã hết hạn hoặc bị hủy?) then (Có)
-  :Tạo nghĩa vụ hoàn toàn bộ;
+  :Tạo yêu cầu hoàn toàn bộ;
   :Không trả tài nguyên lần hai;
   stop
 endif
@@ -57,11 +66,21 @@ endif
 if (Phát hành thành công?) then (Không)
   :Vô hiệu vé dở dang;
   :Trả lượt khuyến mãi đúng một lần;
-  :Tạo nghĩa vụ hoàn toàn bộ;
+  if (Event vẫn đủ điều kiện bán?) then (Có)
+    :Trả nguồn cung và giới hạn mua đúng một lần;
+  endif
+  :Tạo yêu cầu hoàn toàn bộ;
   stop
 else (Có)
   :Cho buyer xem/tải QR của đơn mình;
   :Thử gửi thông tin vé;
+  if (Gửi thất bại?) then (Có)
+    :Giữ vé hợp lệ và cho phép tải/gửi lại;
+  endif
+endif
+if (Phát hiện giao dịch thu thừa?) then (Có)
+  :Giữ giao dịch và vé hợp lệ;
+  :Tạo yêu cầu hoàn toàn bộ cho từng khoản thu thừa;
 endif
 stop
 @enduml

@@ -6,12 +6,16 @@ start
 :Đăng nhập;
 :Chọn event thuộc mình;
 :Quét QR;
+if (Có kết nối tới hệ thống?) then (Không)
+  :Báo chưa thể xác nhận và cho phép thử lại sau;
+  stop
+endif
 
 |Hệ thống|
 :Xác thực organizer sở hữu event;
 :Kiểm tra eventStartAt <= now <= eventEndAt;
 :Xác định vé và kiểm tra đúng event;
-:Kiểm tra vé đã phát hành, chưa hoàn/hủy/vô hiệu/chưa sử dụng;
+:Kiểm tra vé đã phát hành, chưa bị hủy/vô hiệu và chưa sử dụng;
 if (Tất cả hợp lệ?) then (Không)
   :Từ chối và ghi dấu vết;
   |Organizer trên mobile|
