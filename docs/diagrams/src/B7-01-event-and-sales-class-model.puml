@@ -1,0 +1,131 @@
+@startuml
+title Mô hình lớp phân tích — Vòng đời sự kiện và cấu hình bán
+
+' FORMATION: mô hình miền B7; không biểu diễn service, schema hay API.
+' Tên nghiệp vụ là nhãn chính; các khung chỉ là aggregate ứng viên.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Sự kiện bán vé" as AG_EVENT {
+  class Event as "Sự kiện bán vé" <<Aggregate Root>> {
+    mã sự kiện
+    organizer sở hữu
+    thời điểm bắt đầu
+    thời điểm kết thúc
+    tỷ lệ phí nền tảng đã duyệt
+  }
+  class EventState as "Trạng thái sự kiện" <<Value Object>> {
+    giá trị hiện tại
+  }
+  class SalesWindow as "Cửa sổ mở bán" <<Value Object>> {
+    thời điểm bắt đầu
+    thời điểm kết thúc
+  }
+  class SalesMode as "Chế độ bán" <<Value Object>> {
+    QUANTITY hoặc SEAT_MAP
+  }
+
+  Event "1" *-- "1" EventState
+  Event "1" *-- "1" SalesWindow
+  Event "1" *-- "1" SalesMode
+}
+
+package "Aggregate ứng viên: Yêu cầu hủy sự kiện" as AG_CANCEL {
+  class CancellationRequest as "Yêu cầu hủy sự kiện" <<Aggregate Root>> {
+    sự kiện tham chiếu
+    người gửi
+    trạng thái xử lý
+    lý do từ chối
+  }
+}
+
+package "Aggregate ứng viên: Địa điểm" as AG_VENUE {
+  class Venue as "Địa điểm" <<Aggregate Root>> {
+    mã địa điểm
+    tên
+    thông tin hiển thị
+  }
+}
+
+package "Aggregate ứng viên: Phân loại sự kiện" as AG_CATEGORY {
+  class Category as "Phân loại sự kiện" <<Aggregate Root>> {
+    mã phân loại
+    tên
+  }
+}
+
+package "Aggregate ứng viên: Sector" as AG_SECTOR {
+  class Sector as "Sector" <<Aggregate Root>> {
+    mã sector
+    tên
+    hành vi SEATED hoặc STANDING
+  }
+  class Seat as "Ghế" <<Entity>> {
+    mã ghế
+    nhãn hiển thị
+  }
+  Sector "1" *-- "0..*" Seat
+}
+
+package "Aggregate ứng viên: Loại vé" as AG_TICKET_TYPE {
+  class TicketType as "Loại vé" <<Aggregate Root>> {
+    mã loại vé
+    tên
+    giá
+    hạn mức bán cấu hình
+  }
+}
+
+package "Aggregate ứng viên: Khuyến mãi" as AG_PROMOTION {
+  class Promotion as "Khuyến mãi" <<Aggregate Root>> {
+    mã khuyến mãi
+    cách giảm
+    giá trị giảm
+    thời gian hiệu lực
+    giới hạn tổng lượt
+  }
+}
+
+Event "1" -- "0..*" CancellationRequest : bị xin hủy
+Event "0..*" --> "1" Venue : diễn ra tại
+Event "0..*" --> "0..1" Category : được phân loại
+Event "1" -- "0..*" Sector : cấu hình SEAT_MAP
+Event "1" -- "0..*" TicketType : cấu hình loại vé
+Sector "0..1" -- "0..*" TicketType : áp dụng trong sector
+Event "1" -- "0..*" Promotion : cấu hình
+
+note bottom of CancellationRequest
+  Chỉ phát sinh khi sự kiện đã có đơn thu tiền.
+  Bị từ chối thì chính yêu cầu chuyển REJECTED,
+  trạng thái sự kiện không đổi và không khởi động hoàn tiền.
+  Việc gửi lại sau khi bị từ chối chưa được quyết định.
+end note
+
+note bottom of Event
+  Một sự kiện dùng đúng một chế độ bán.
+  QUANTITY không dùng sector/ghế.
+  SEAT_MAP dùng loại vé theo sector.
+  Bản nháp vừa tạo chưa có loại vé; cấu hình bán đến ở bước sau.
+  Quy tắc gắn bao nhiêu phân loại chưa được chốt.
+end note
+
+legend bottom
+  «Aggregate Root» là aggregate root ứng viên ở mức phân tích.
+  Hình không quyết định service, bảng, schema, API hay cơ sở dữ liệu.
+endlegend
+
+@enduml

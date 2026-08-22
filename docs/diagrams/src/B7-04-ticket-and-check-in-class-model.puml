@@ -1,0 +1,79 @@
+@startuml
+title Mô hình lớp phân tích — Quyền tham dự và kiểm soát vào cửa
+
+' FORMATION: mô hình miền B7; không biểu diễn API quét, khóa hay kho dữ liệu.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Phát hành vé" as AG_ISSUANCE {
+  class Issuance as "Phát hành vé" <<Aggregate Root>> {
+    đơn hàng tham chiếu
+    số quyền được phép phát hành
+    kết quả phát hành
+  }
+  class Ticket as "Vé" <<Entity>> {
+    mã vé
+    trạng thái quyền vào cửa
+    thời điểm phát hành
+    thời điểm sử dụng
+  }
+  class QR as "Mã vé/QR" <<Value Object>> {
+    giá trị định danh
+    trạng thái hiệu lực
+  }
+
+  Issuance "1" *-- "1..*" Ticket
+  Ticket "1" *-- "1" QR
+}
+
+package "Yêu cầu và quy tắc tham chiếu" as REFERENCES {
+  class CheckinRequest as "Yêu cầu check-in" <<Yêu cầu>> {
+    vé tham chiếu
+    sự kiện tham chiếu
+    thời điểm yêu cầu
+  }
+  class CheckinWindow as "Cửa sổ check-in" <<Quy tắc>> {
+    thời điểm bắt đầu sự kiện
+    thời điểm kết thúc sự kiện
+  }
+  class QRAccess as "Quyền truy cập QR" <<Quy tắc>>
+  class EventOwnership as "Sở hữu sự kiện" <<Tham chiếu quyền>>
+}
+
+CheckinRequest "0..*" --> "1" Issuance : yêu cầu root chuyển trạng thái một vé
+Ticket "0..*" --> "1" CheckinWindow : kiểm tra thời gian
+Ticket "0..*" --> "1" QRAccess : kiểm tra quyền đọc
+CheckinRequest "0..*" --> "1" EventOwnership : kiểm tra organizer
+
+note bottom of Ticket
+  Mỗi vé có tối đa một check-in thành công,
+  kể cả khi nhiều thiết bị quét đồng thời.
+end note
+
+note bottom of Issuance
+  Thử lại không tạo nhiều quyền tham dự hơn số đã mua.
+  Hoàn tiền không tự trở thành trạng thái của vé.
+  Mọi thay đổi trạng thái vé đi qua root này.
+end note
+
+legend bottom
+  «Entity» nằm trong aggregate Phát hành vé ở mô hình ứng viên này.
+  Yêu cầu check-in mang tham chiếu vé nhưng không sửa trực tiếp entity Vé.
+  Hình không chọn service, cơ chế khóa hoặc schema.
+endlegend
+
+@enduml

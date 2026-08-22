@@ -273,7 +273,11 @@ Chuỗi phụ thuộc tối thiểu của phân tích miền là `B2 baseline �
 | B3 | `docs/domain/B3-business-processes.md` |
 | B4 | `docs/domain/B4-domain-event-map.md` |
 | B5 | `docs/domain/B5-bounded-context-map.md` |
+| B6 | `docs/domain/B6-use-cases.md` |
 | B7 | `docs/domain/B7-aggregates-and-invariants.md` |
+| B8 | `docs/domain/B8-requirements.md` |
+| B9 | `docs/quality-scenarios/B9-quality-scenarios.md` |
+| B10 | `docs/quality-scenarios/B10-quality-priorities-and-asrs.md` |
 | B11-A | `docs/architecture/B11-A-independent-alternatives.md` |
 | B11-B | `docs/architecture/B11-B-legacy-feasibility.md` |
 

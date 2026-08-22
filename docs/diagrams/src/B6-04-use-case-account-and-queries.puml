@@ -1,0 +1,56 @@
+@startuml
+title Biểu đồ use case — Tài khoản và tra cứu
+
+' FORMATION: dung danh muc use case cua B6 hien hanh.
+' Tang C 3.2.1: mot hinh chu nhat = ranh gioi he thong; tac nhan ngoai, use case trong.
+' Lien ket tac nhan-use case la duong thang khong mui ten; khong mau nen phan nhom.
+' Giai thich bang van ban nam trong B6, khong nhoi vao hinh.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam TitleFontSize 15
+skinparam nodesep 16
+skinparam ranksep 55
+skinparam ActorBackgroundColor white
+skinparam ActorBorderColor black
+skinparam UsecaseBackgroundColor white
+skinparam UsecaseBorderColor black
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor black
+skinparam ArrowColor black
+
+actor "Người dùng chưa có tài khoản" as Guest
+actor "Người mua" as Buyer
+actor "Quản trị viên" as Admin
+actor "Nhà tổ chức" as Organizer
+actor "Nguồn danh tính" as Idp
+
+rectangle "Hệ thống bán vé FlashTicket" {
+  usecase "Đăng ký tài khoản" as UC21
+  usecase "Nộp đơn đăng ký làm nhà tổ chức" as UC22
+  usecase "Duyệt hoặc từ chối hồ sơ nhà tổ chức" as UC23
+  usecase "Tìm sự kiện đã công bố" as UC24
+  usecase "Xem chi tiết sự kiện" as UC25
+  usecase "Theo dõi một nhà tổ chức" as UC26
+  usecase "Xem hồ sơ nhà tổ chức công khai" as UC27
+  usecase "Xem đơn và vé của chính mình" as UC28
+  usecase "Xem sự kiện thuộc chính mình" as UC29
+  usecase "Xem thống kê sự kiện của chính mình" as UC30
+}
+
+Guest -- UC21
+Idp -- UC21
+Buyer -- UC22
+Admin -- UC23
+Idp -- UC23
+Buyer -- UC24
+Buyer -- UC25
+Buyer -- UC26
+Buyer -- UC27
+Buyer -- UC28
+Organizer -- UC29
+Organizer -- UC30
+
+@enduml

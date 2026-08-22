@@ -1,0 +1,79 @@
+@startuml
+title Mô hình lớp phân tích — Chẩn đoán sự cố
+
+' FORMATION: mô hình miền B7 tạm thời; workflow cuối và lưu trữ chờ B16–B19.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+hide methods
+hide circle
+
+package "Aggregate ứng viên tạm thời: Sự cố" as AG_INCIDENT {
+  class Incident as "Sự cố" <<Aggregate Root>> {
+    mã sự cố
+    thời điểm xảy ra
+    vùng ảnh hưởng
+  }
+  class DiagnosisContext as "Context chẩn đoán" <<Entity>> {
+    tóm tắt dữ kiện liên quan
+    dữ kiện đã khử hoặc che nhạy cảm
+    giới hạn bằng chứng
+  }
+  class PossibleCause as "Nguyên nhân khả dĩ" <<Value Object>> {
+    mô tả
+    căn cứ liên quan
+  }
+  class NextStep as "Bước kiểm tra tiếp theo" <<Value Object>> {
+    mô tả bước kiểm tra
+  }
+
+  Incident "1" *-- "1" DiagnosisContext
+  DiagnosisContext "1" *-- "0..*" PossibleCause
+  DiagnosisContext "1" *-- "0..*" NextStep
+}
+
+package "Đầu vào chỉ đọc" as READ_INPUT {
+  class Trace as "Dấu vết vận hành" <<Đầu vào đọc>>
+  class StructuredLog as "Log có cấu trúc" <<Đầu vào đọc>>
+  class CorrelationId as "Mã tương quan" <<Đầu vào đọc>>
+  class DrainPattern as "Mẫu log Drain" <<Đầu vào đọc>>
+
+  Trace "1" o-- "0..*" StructuredLog
+  StructuredLog "0..*" --> "0..1" CorrelationId
+  StructuredLog "0..*" --> "0..1" DrainPattern
+}
+
+class Assistant as "Trợ lý chẩn đoán sự cố" <<Domain Service>>
+
+DiagnosisContext "1" ..> "0..*" Trace : liên kết bằng chứng
+Assistant ..> DiagnosisContext : phân tích
+Assistant ..> PossibleCause : đề xuất
+Assistant ..> NextStep : đề xuất
+
+note bottom of Assistant
+  Không tự kết luận nguyên nhân cuối cùng.
+  Không tự sửa hệ thống.
+end note
+
+note bottom of DiagnosisContext
+  Nguyên nhân và bước kiểm tra là tập của kết quả phân tích hiện tại,
+  không phải lịch sử tích lũy không giới hạn.
+end note
+
+legend bottom
+  Khung có tiêu đề "Aggregate ứng viên tạm thời" chưa được duyệt.
+  Dấu vết và log chỉ được đọc; hình không chốt lưu trữ, API hay thành phần AI.
+endlegend
+
+@enduml

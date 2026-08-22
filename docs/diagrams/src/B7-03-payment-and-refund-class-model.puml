@@ -1,0 +1,95 @@
+@startuml
+title Mô hình lớp phân tích — Thanh toán và hoàn tiền
+
+' FORMATION: mô hình miền B7; không biểu diễn cổng thanh toán, API hay cơ sở dữ liệu.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Xác nhận thanh toán" as AG_PAYMENT {
+  class PaymentConfirmation as "Xác nhận thanh toán" <<Aggregate Root>> {
+    đơn hàng tham chiếu
+    số tiền phải thu
+    kết quả thu hợp lệ
+  }
+  class PaymentAttempt as "Lần thanh toán" <<Entity>> {
+    mã lần thanh toán
+    số tiền ghi nhận
+    kết quả
+  }
+  PaymentConfirmation "1" *-- "0..1" PaymentAttempt : lần đang xử lý
+}
+
+package "Aggregate ứng viên: Yêu cầu hoàn tiền" as AG_REFUND {
+  class RefundRequest as "Yêu cầu hoàn tiền" <<Aggregate Root>> {
+    khoản thu tham chiếu
+    lý do hoàn
+    số tiền phải hoàn
+    trạng thái xử lý
+  }
+  class Refund as "Hoàn tiền" <<Entity>> {
+    lần thực hiện
+    kết quả
+    số tiền thực hoàn
+  }
+  RefundRequest "1" *-- "0..1" Refund : kết quả hiện tại
+}
+
+package "Tham chiếu nghiệp vụ" as REFERENCES {
+  class Order as "Đơn hàng" <<Tham chiếu>>
+  class AmountDue as "Số tiền phải thanh toán" <<Tham chiếu>>
+  class RefundPolicy as "Chính sách hoàn tiền" <<Quy tắc>> {
+    hoàn toàn bộ
+  }
+  class Callback as "Callback/IPN" <<Yêu cầu>> {
+    lần thanh toán tham chiếu
+    thời điểm nhận
+    kết quả được thông báo
+  }
+  class DuplicatePayment as "Thanh toán trùng" <<Kết quả>>
+  class LatePayment as "Thanh toán đến muộn" <<Kết quả>>
+}
+
+PaymentConfirmation "1" --> "1" Order
+PaymentConfirmation "1" --> "1" AmountDue
+Callback "0..*" --> "1" PaymentConfirmation : đề nghị xác nhận
+PaymentConfirmation "1" --> "0..*" DuplicatePayment
+PaymentConfirmation "1" --> "0..*" LatePayment
+DuplicatePayment "0..1" --> "1" RefundRequest
+LatePayment "0..1" --> "1" RefundRequest
+RefundRequest "0..*" --> "1" Order : liên kết kết quả hoàn
+RefundRequest "1" ..> "1" RefundPolicy : áp dụng quy tắc nền tảng
+
+note bottom of PaymentConfirmation
+  Một đơn chỉ giữ một kết quả thu hợp lệ.
+  Callback lặp hội tụ về cùng kết quả.
+end note
+
+note bottom of RefundRequest
+  Một khoản thu chỉ có một yêu cầu hoàn logic.
+  Bốn nguyên nhân: thanh toán đến muộn, thanh toán trùng,
+  phát hành vé thất bại sau thu tiền và hủy sự kiện.
+  Hai nguyên nhân sau đến từ context khác nên không vẽ ở hình này.
+  Thử lại cập nhật cùng kết quả logic, không tích lũy lịch sử.
+  Không hỗ trợ hoàn một phần.
+end note
+
+legend bottom
+  Mỗi khung có tiêu đề "Aggregate ứng viên" biểu diễn một ranh giới ứng viên.
+  Tham chiếu không biểu diễn quyền sở hữu dữ liệu vật lý.
+endlegend
+
+@enduml

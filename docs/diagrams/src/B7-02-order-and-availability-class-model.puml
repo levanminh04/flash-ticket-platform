@@ -1,0 +1,153 @@
+@startuml
+title Mô hình lớp phân tích — Mua vé và cam kết nguồn cung
+
+' FORMATION: mô hình miền B7; không biểu diễn service, schema hay giao thức phối hợp.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+skinparam nodesep 35
+skinparam ranksep 45
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Đơn hàng" as AG_ORDER {
+  class Order as "Đơn hàng" <<Aggregate Root>> {
+    mã đơn
+    tài khoản mua
+    sự kiện tham chiếu
+    thời điểm tạo
+  }
+  class OrderLine as "Dòng đơn hàng" <<Entity>> {
+    vé hoặc nguồn cung tham chiếu
+    số lượng
+    đơn giá
+  }
+  class Hold as "Giữ chỗ" <<Entity>> {
+    thời điểm hết hạn chung
+    kết quả giữ
+  }
+  class AmountDue as "Số tiền phải thanh toán" <<Value Object>> {
+    số tiền
+  }
+  class DiscountedPrice as "Giá sau giảm" <<Value Object>> {
+    số tiền sau giảm
+  }
+
+  Order "1" *-- "1..*" OrderLine
+  Order "1" *-- "1" Hold
+  Order "1" *-- "1" AmountDue
+  DiscountedPrice "1" ..> "1" AmountDue : xác định giá trị
+}
+
+package "Aggregate ứng viên: Ghế" as AG_SEAT {
+  class Seat as "Ghế" <<Aggregate Root>> {
+    mã ghế
+    trạng thái cam kết
+    giữ chỗ tham chiếu
+  }
+}
+
+package "Aggregate ứng viên: Loại vé — QUANTITY" as AG_QUANTITY {
+  class TicketType as "Loại vé" <<Aggregate Root>> {
+    mã loại vé
+    sự kiện tham chiếu
+    hạn mức bán
+    số đang giữ
+    số đã mua
+  }
+  class RemainingQuantity as "Tồn kho vé còn lại" <<Value Object>> {
+    số lượng còn lại
+  }
+  TicketType "1" *-- "1" RemainingQuantity
+}
+
+package "Aggregate ứng viên: Sector — STANDING" as AG_STANDING {
+  class Sector as "Sector" <<Aggregate Root>> {
+    mã sector
+    sự kiện tham chiếu
+    hạn mức bán
+    số đang giữ
+    số đã mua
+  }
+  class RemainingStanding as "Tồn kho vé còn lại" <<Value Object>> {
+    số lượng còn lại
+  }
+  Sector "1" *-- "1" RemainingStanding
+}
+
+package "Aggregate ứng viên: Giới hạn mua" as AG_LIMIT {
+  class PurchaseLimit as "Giới hạn mua" <<Aggregate Root>> {
+    tài khoản tham chiếu
+    sự kiện tham chiếu
+    mức tối đa
+    số đang giữ
+    số đã mua
+  }
+}
+
+package "Aggregate ứng viên: Khuyến mãi — nghĩa sử dụng" as AG_PROMOTION {
+  class Promotion as "Khuyến mãi" <<Aggregate Root>> {
+    cấu hình khuyến mãi tham chiếu
+    giới hạn tổng lượt
+    tổng lượt đang giữ
+    tổng lượt đã chốt
+  }
+}
+
+package "Aggregate ứng viên: Lượt dùng khuyến mãi" as AG_USAGE {
+  class PromotionUsage as "Lượt dùng khuyến mãi" <<Aggregate Root>> {
+    khuyến mãi tham chiếu
+    tài khoản tham chiếu
+    trạng thái giữ, chốt hoặc trả
+  }
+}
+
+package "Kết quả xét" as RESULT {
+  class Availability as "Khả dụng" <<Value Object>> {
+    có thể chọn hay không
+    số lượng có thể chọn
+  }
+}
+
+OrderLine "0..*" --> "0..1" Seat : nguồn SEATED
+OrderLine "0..*" --> "0..1" TicketType : nguồn QUANTITY
+OrderLine "0..*" --> "0..1" Sector : nguồn STANDING
+Seat ..> Availability : tồn kho đầu vào
+TicketType ..> Availability : tồn kho đầu vào
+Sector ..> Availability : tồn kho đầu vào
+Hold ..> Availability : giữ chỗ đang hiệu lực
+PurchaseLimit ..> Availability : phần hạn mức còn lại
+Order "0..*" --> "1" PurchaseLimit
+Order "0..*" --> "0..1" PromotionUsage
+PromotionUsage "0..*" --> "1" Promotion : tính vào trần tổng
+
+note bottom of Order
+  Một đơn thuộc một sự kiện.
+  Đơn SEAT_MAP chỉ chứa một sector.
+  Một đơn có đúng một giữ chỗ và một hạn chung.
+end note
+
+note bottom of Availability
+  Khả dụng là kết quả xét, không phải aggregate root.
+  Xét trên tồn kho, giữ chỗ và giới hạn mua;
+  điều kiện mở bán đến từ context vòng đời sự kiện.
+  Cách phối hợp xuyên aggregate chờ B9–B11.
+end note
+
+legend bottom
+  Mỗi khung có tiêu đề "Aggregate ứng viên" biểu diễn một ranh giới ứng viên.
+  Đường nối giữa các khung là quan hệ nghiệp vụ, không phải API hay message.
+endlegend
+
+@enduml

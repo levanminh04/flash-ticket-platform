@@ -1,11 +1,13 @@
 # B3 — Quy trình nghiệp vụ
 
-- Phiên bản: `B3-v0.9`
+- Phiên bản: `B3-v0.10`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-21
-- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.9`, `APPROVED` ngày 2026-08-21; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng quy trình và đọc trạng thái riêng của mỗi dòng
+- Ngày duyệt: 2026-08-22, sau `B2-v0.10` (bản `B3-v0.9` được duyệt ngày 2026-08-21)
+- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng quy trình và đọc trạng thái riêng của mỗi dòng
 - Phân lớp: `FORMATION`
+
+> **Vì sao có `B3-v0.10`:** bản này **không đổi nội dung nghiệp vụ** so với `B3-v0.9`. `B2-v0.10` chỉ bổ sung mục từ **Yêu cầu hủy sự kiện** cho khái niệm mà B3 §2 vốn đã mô tả, không sửa nghĩa nào đang dùng ở đây. Tài liệu đã trở lại `REVIEW_READY` vì quy tắc chuỗi `B2 → B3 → B4 → B5` không cho một tạo tác giữ `APPROVED` khi đầu vào bắt buộc chưa được duyệt lại, đúng như vòng bỏ `SUPER_ADMIN` ngày 2026-08-21, rồi được Lê Văn Minh duyệt lại ngày 2026-08-22.
 
 ## 1. Mục đích và giới hạn
 

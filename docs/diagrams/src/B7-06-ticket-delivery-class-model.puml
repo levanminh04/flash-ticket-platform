@@ -1,0 +1,52 @@
+@startuml
+title Mô hình lớp phân tích — Giao nhận thông tin vé
+
+' FORMATION: mô hình miền B7; không biểu diễn nhà cung cấp gửi tin hay giao thức.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Gửi vé" as AG_DELIVERY {
+  class Delivery as "Gửi vé" <<Aggregate Root>> {
+    lần phát hành tham chiếu
+    kết quả gửi hiện tại
+    số lần thử
+    thời điểm thử gần nhất
+  }
+}
+
+package "Quyền tham dự được tham chiếu" as REFERENCES {
+  class Ticket as "Vé" <<Tham chiếu>>
+  class QR as "Mã vé/QR" <<Tham chiếu>>
+  class QRAccess as "Quyền truy cập QR" <<Quy tắc>>
+}
+
+Delivery "1" --> "1..*" Ticket : gửi thông tin của
+Ticket "1" --> "1" QR
+Delivery "1" --> "1" QRAccess : áp dụng quyền đọc hiện có
+
+note bottom of Delivery
+  Gửi thất bại không làm vé mất hiệu lực
+  và không tự kích hoạt hoàn tiền.
+  Gửi lại không tạo vé hoặc QR mới.
+end note
+
+legend bottom
+  Aggregate Gửi vé chỉ sở hữu trạng thái giao nhận.
+  Hiệu lực quyền tham dự nằm ngoài ranh giới này.
+endlegend
+
+@enduml

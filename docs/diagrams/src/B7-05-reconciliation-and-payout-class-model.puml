@@ -1,0 +1,94 @@
+@startuml
+title Mô hình lớp phân tích — Đối soát và chi trả
+
+' FORMATION: mô hình miền B7; không biểu diễn tích hợp ngân hàng hay bảng dữ liệu.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+skinparam nodesep 45
+skinparam ranksep 60
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Chi trả" as AG_PAYOUT {
+  class Payout as "Chi trả" <<Aggregate Root>> {
+    sự kiện tham chiếu
+    trạng thái đối soát
+    thời điểm đánh dấu
+  }
+  class PayoutAmount as "Số tiền chi trả" <<Value Object>> {
+    số tiền
+  }
+  class Paid as "Đã chi trả" <<Value Object>> {
+    kết quả xác nhận
+    thời điểm xác nhận
+  }
+
+  Payout "1" *-- "1" PayoutAmount
+  Payout "1" *-- "0..1" Paid
+}
+
+package "Kết quả đọc để đối chiếu" as READ_MODEL {
+  class Ledger as "Sổ cái đối soát chỉ đọc" <<Read Model>> {
+    sự kiện tham chiếu
+    thời điểm tổng hợp
+  }
+  class ActualRevenue as "Doanh thu thực thu" <<Value Object>> {
+    số tiền sau khuyến mãi và hoàn tiền
+  }
+  class PlatformFee as "Phí nền tảng" <<Value Object>> {
+    tỷ lệ đã duyệt
+    số tiền phí
+  }
+
+  Ledger "1" *-- "1" ActualRevenue
+  Ledger "1" *-- "1" PlatformFee
+}
+
+package "Điều kiện tham chiếu" as REFERENCES {
+  class ManualReconciliation as "Đối soát thủ công" <<Quy tắc>>
+  class Event as "Sự kiện bán vé" <<Tham chiếu>>
+  class PaymentConfirmation as "Xác nhận thanh toán" <<Tham chiếu>>
+  class PaymentAttempt as "Lần thanh toán" <<Tham chiếu>>
+  class RefundRequest as "Yêu cầu hoàn tiền" <<Tham chiếu>>
+}
+
+Payout "1" --> "1" Ledger : đối chiếu
+Payout "1" --> "1" ManualReconciliation : điều kiện trước
+Payout "1" --> "1" Event : kiểm tra đã kết thúc
+ManualReconciliation ..> "0..*" PaymentAttempt
+ManualReconciliation ..> "0..*" RefundRequest
+Ledger "1" ..> "0..*" PaymentConfirmation : tổng hợp thu hợp lệ
+Ledger "1" ..> "0..*" RefundRequest : tổng hợp kết quả hoàn
+PayoutAmount "1" ..> "1" ActualRevenue : lấy doanh thu thực thu
+PayoutAmount "1" ..> "1" PlatformFee : trừ phí nền tảng
+
+note bottom of ManualReconciliation
+  Admin xác nhận không còn lần thanh toán
+  và không còn yêu cầu hoàn đang xử lý.
+end note
+
+note bottom of Payout
+  Root giữ trạng thái đối soát và dấu đã chi trả của một sự kiện.
+  Việc chuyển tiền cho nhà tổ chức diễn ra ngoài hệ thống.
+  Một sự kiện chỉ được đánh dấu đã chi trả một lần.
+  Sau PAID không mở lại vòng đời trong sản phẩm.
+end note
+
+legend bottom
+  Sổ cái là read model, không phải aggregate ghi.
+  Hình không quyết định nơi sở hữu dữ liệu vật lý của tỷ lệ phí.
+endlegend
+
+@enduml

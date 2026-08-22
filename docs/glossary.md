@@ -1,9 +1,9 @@
 # B2 — Từ điển miền
 
-- Phiên bản: `B2-v0.9`
+- Phiên bản: `B2-v0.10`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-21
+- Ngày duyệt: 2026-08-22 (bản `B2-v0.9` được duyệt ngày 2026-08-21)
 - Đầu vào và phiên bản: B1 khảo sát công khai `APPROVED` ngày 2026-08-13; B1 chẩn đoán `APPROVED` ngày 2026-08-13; A1/A2/A4 baseline `APPROVED` ngày 2026-08-13; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng định nghĩa và đọc trạng thái riêng của mỗi dòng
 - Phân lớp: `FORMATION` — chỉ dùng yêu cầu, bằng chứng nghiệp vụ và quyết định đã xác nhận để định nghĩa miền đích
 
@@ -57,6 +57,7 @@ Các trường cụ thể của hồ sơ nghiệp vụ, cách đồng bộ kỹ 
 | **Trạng thái sự kiện** | Vòng đời quản trị dùng `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `PUBLISHED` và `CANCELLED`. `DRAFT` là sự kiện đã được organizer tạo, còn được sửa nội dung/cấu hình bán, chưa công khai và chưa được bán vé. Từ chối/trả lại ở bước duyệt đưa sự kiện về `DRAFT`. | **Kết quả từ chối duyệt:** không phải trạng thái `REJECTED` bền vững riêng; **trạng thái mở bán:** kết quả xét điều kiện giao dịch tại một thời điểm. | `USER_CONFIRMED` — `BIZ-143`–`BIZ-145` |
 | **Phê duyệt sự kiện** | Quyết định của admin cho phép sự kiện đi tiếp; admin đồng thời nhập tỷ lệ phí nền tảng theo thỏa thuận ngoài hệ thống. | **Công bố:** làm thông tin hiển thị; phê duyệt không tự công bố hoặc mở bán. | `USER_CONFIRMED` |
 | **Công bố sự kiện** (*publish*) | Hành động của organizer làm sự kiện đã duyệt hiển thị cho người dùng. | **Mở bán:** khả năng giao dịch trong cửa sổ bán. | `USER_CONFIRMED` |
+| **Yêu cầu hủy sự kiện** | Hồ sơ organizer gửi để xin hủy một sự kiện **đã có đơn thu tiền**, chờ admin xác nhận hoặc từ chối. Yêu cầu có vòng đời riêng: khi bị từ chối thì bản thân yêu cầu chuyển `REJECTED`, lý do từ chối là tùy chọn, trạng thái sự kiện không đổi và không luồng hoàn tiền nào được khởi động. Sự kiện chưa có đơn thu tiền được organizer hủy trực tiếp, không qua yêu cầu. | **Sự kiện đã hủy (`CANCELLED`):** trạng thái của chính sự kiện, chỉ đạt được khi admin xác nhận yêu cầu hoặc chủ động hủy; **`REJECTED` của hồ sơ organizer:** thuộc vòng đời đăng ký organizer, không liên quan. | `USER_CONFIRMED` — `BIZ-008`–`BIZ-010`, `BIZ-083`, `BIZ-097`–`BIZ-099` |
 | **Cửa sổ mở bán** | Một khoảng chung cho toàn sự kiện từ `saleStartAt` đến `saleEndAt`, thỏa `saleStartAt < saleEndAt <= eventEndAt`. | **Công bố:** sự kiện có thể hiển thị nhưng chưa tới giờ bán. | `USER_CONFIRMED` |
 | **Mở bán** | Trạng thái khả dụng khi sự kiện đã duyệt, đã công bố, chưa hủy và hiện tại nằm trong cửa sổ bán; event đã bắt đầu không tự đóng bán. | **Công bố:** chỉ quyết định khả năng nhìn thấy. | `USER_CONFIRMED` |
 | **Chế độ bán** (*sales mode*) | Cách tổ chức nguồn cung, nhận đúng một trong hai giá trị `QUANTITY` hoặc `SEAT_MAP`. | **Loại sector:** cách một khu phân bổ nguồn cung. | `USER_CONFIRMED` |
@@ -164,6 +165,7 @@ Các ID được giữ để bảo toàn dấu vết. `CLOSED` là tình trạng
 | `B3-07` | Có khoản giữ lại không và khi nào mở chi trả? | `CLOSED → BIZ-036`, `BIZ-050`–`BIZ-054` |
 | `B3-08` | Vòng đời chi trả và người đánh dấu là gì? | `CLOSED → BIZ-037`, `BIZ-038`, `BIZ-050`–`BIZ-054` |
 | `B2-06` | “Đang soạn” và kết quả từ chối duyệt sự kiện có nghĩa gì? | `CLOSED → BIZ-143`–`BIZ-145` |
+| `B2-07` | Yêu cầu hủy sự kiện có phải một khái niệm riêng, tách khỏi trạng thái `CANCELLED` của sự kiện không? | `CLOSED → BIZ-097`–`BIZ-099`. Vòng kiểm toán B7 ngày 2026-08-22 phát hiện B2 thiếu mục từ này dù B3/B4 đã dùng và `BIZ-098` cho nó một trạng thái `REJECTED` riêng; mục từ được bổ sung tại `B2-v0.10` |
 
 ## 9. Tiêu chí để chuyển B2 thành `APPROVED`
 
@@ -173,6 +175,8 @@ Các ID được giữ để bảo toàn dấu vết. `CLOSED` là tình trạng
 - Không suy từ thuật ngữ sang service, Saga, schema, bảng hoặc hợp đồng kỹ thuật.
 
 Các tiêu chí trên được Lê Văn Minh xác nhận đạt khi duyệt `B2-v0.8` và được xác nhận lại cho `B2-v0.9` ngày 2026-08-21. Các trường dữ liệu và quyết định kỹ thuật được chuyển đúng gate sau, không được xem là khoảng trống chặn B2.
+
+`B2-v0.10` (2026-08-22) chỉ **bổ sung** mục từ **Yêu cầu hủy sự kiện**; không định nghĩa lại, đổi nghĩa hay gỡ bất kỳ mục từ nào đã duyệt. Vì B2 là đầu vào bắt buộc của cả chuỗi, tài liệu và các tạo tác hạ nguồn B3 → B4 → B5 cùng trở lại `REVIEW_READY`, theo đúng cách đã xử lý vòng bỏ `SUPER_ADMIN` ngày 2026-08-21. Lê Văn Minh đã duyệt lại toàn chuỗi `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` trong cùng ngày 2026-08-22.
 
 ## 10. Phần dùng cho báo cáo
 

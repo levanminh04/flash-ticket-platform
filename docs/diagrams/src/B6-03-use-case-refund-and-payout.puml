@@ -1,0 +1,43 @@
+@startuml
+title Biểu đồ use case — Hoàn tiền, đối soát và chi trả
+
+' FORMATION: dung danh muc use case cua B6 hien hanh.
+' Tang C 3.2.1: mot hinh chu nhat = ranh gioi he thong; tac nhan ngoai, use case trong.
+' Lien ket tac nhan-use case la duong thang khong mui ten; khong mau nen phan nhom.
+' Giai thich bang van ban nam trong B6, khong nhoi vao hinh.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam TitleFontSize 15
+skinparam nodesep 16
+skinparam ranksep 55
+skinparam ActorBackgroundColor white
+skinparam ActorBorderColor black
+skinparam UsecaseBackgroundColor white
+skinparam UsecaseBorderColor black
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor black
+skinparam ArrowColor black
+
+actor "Quản trị viên" as Admin
+actor "Nhà tổ chức" as Organizer
+actor "Cổng thanh toán" as Gateway
+
+rectangle "Hệ thống bán vé FlashTicket" {
+  usecase "Xử lý hoàn tiền cho một khoản thu" as UC15
+  usecase "Theo dõi tiến độ hoàn của sự kiện bị hủy" as UC16
+  usecase "Xem báo cáo đối soát" as UC17
+  usecase "Xác nhận đối soát" as UC18
+  usecase "Đánh dấu đã chi trả" as UC19
+}
+
+Admin -- UC16
+Admin -- UC17
+Admin -- UC18
+Admin -- UC19
+Organizer -- UC17
+Gateway -- UC15
+
+@enduml

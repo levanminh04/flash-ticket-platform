@@ -1,0 +1,47 @@
+@startuml
+title Biểu đồ use case — Mua vé và kiểm soát vào cửa
+
+' FORMATION: dung danh muc use case cua B6 hien hanh.
+' Tang C 3.2.1: mot hinh chu nhat = ranh gioi he thong; tac nhan ngoai, use case trong.
+' Lien ket tac nhan-use case la duong thang khong mui ten; khong mau nen phan nhom.
+' Giai thich bang van ban nam trong B6, khong nhoi vao hinh.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam TitleFontSize 15
+skinparam nodesep 16
+skinparam ranksep 55
+skinparam ActorBackgroundColor white
+skinparam ActorBorderColor black
+skinparam UsecaseBackgroundColor white
+skinparam UsecaseBorderColor black
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor black
+skinparam ArrowColor black
+
+actor "Người mua" as Buyer
+actor "Cổng thanh toán" as Gateway
+actor "Nhà tổ chức" as Organizer
+
+rectangle "Hệ thống bán vé FlashTicket" {
+  usecase "Chọn vé và tạo đơn" as UC10
+  usecase "Áp dụng mã khuyến mãi" as UC11
+  usecase "Thanh toán đơn" as UC12
+  usecase "Hủy đơn của chính mình" as UC13
+  usecase "Phát hành vé, xem và tải lại" as UC14
+  usecase "Check-in vé bằng QR" as UC20
+}
+
+Buyer -- UC10
+Buyer -- UC11
+Buyer -- UC12
+Buyer -- UC13
+Buyer -- UC14
+Gateway -- UC12
+Organizer -- UC20
+
+UC11 ..> UC10 : <<extend>>
+
+@enduml

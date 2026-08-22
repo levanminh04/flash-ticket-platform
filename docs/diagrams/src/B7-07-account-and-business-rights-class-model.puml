@@ -1,0 +1,92 @@
+@startuml
+title Mô hình lớp phân tích — Hồ sơ tài khoản và quyền nghiệp vụ
+
+' FORMATION: mô hình miền B7; Keycloak được nêu như nguồn danh tính/role đã được người dùng chốt.
+' Hình không biểu diễn adapter, API quản trị hay nơi lưu dữ liệu.
+
+top to bottom direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype polyline
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam TitleFontSize 18
+skinparam packageStyle rectangle
+skinparam PackageBorderColor #4A6173
+skinparam PackageBackgroundColor white
+skinparam ClassBorderColor #46535F
+skinparam ClassBackgroundColor white
+skinparam ArrowColor #4F5B66
+skinparam nodesep 55
+skinparam ranksep 65
+hide methods
+hide circle
+
+package "Aggregate ứng viên: Hồ sơ nghiệp vụ ứng dụng" as AG_PROFILE {
+  class Profile as "Hồ sơ nghiệp vụ ứng dụng" <<Aggregate Root>> {
+    tài khoản tham chiếu
+    tên tổ chức
+    mô tả ngắn
+  }
+}
+
+package "Aggregate ứng viên: Đăng ký organizer" as AG_APPLICATION {
+  class OrganizerApplication as "Đăng ký organizer" <<Aggregate Root>> {
+    hồ sơ tham chiếu
+    trạng thái PENDING, ACTIVE hoặc REJECTED
+    lý do từ chối
+  }
+}
+
+package "Aggregate ứng viên: Theo dõi organizer" as AG_FOLLOW {
+  class Follow as "Theo dõi organizer" <<Aggregate Root>> {
+    buyer tham chiếu
+    organizer tham chiếu
+  }
+}
+
+package "Nguồn quyền và tham chiếu nghiệp vụ" as REFERENCES {
+  class Identity as "Danh tính và vòng đời tài khoản" <<Nguồn danh tính>>
+  class Roles as "Đa vai trò và bộ role" <<Nguồn quyền>>
+  class Ownership as "Sở hữu sự kiện" <<Tham chiếu quyền>> {
+    tài khoản organizer tham chiếu
+  }
+  class Event as "Sự kiện bán vé" <<Tham chiếu>>
+}
+
+Identity "1" --> "1" Profile : định danh
+Roles "1" --> "1" Profile : BUYER, ORGANIZER, ADMIN
+OrganizerApplication "0..1" --> "1" Profile : hồ sơ đăng ký của
+OrganizerApplication "0..1" ..> "1" Roles : ACTIVE sau khi cấp role
+Follow ..> Roles : buyer/organizer theo role
+Ownership ..> Roles : yêu cầu role ORGANIZER
+Ownership "1" --> "1" Event : đúng một owner cho sự kiện
+
+' Quan hệ ẩn chỉ sắp xếp bố cục; không mang nghĩa nghiệp vụ.
+Profile -[hidden]down-> OrganizerApplication
+OrganizerApplication -[hidden]down-> Follow
+Identity -[hidden]down-> Roles
+Roles -[hidden]down-> Ownership
+Ownership -[hidden]down-> Event
+
+note bottom of OrganizerApplication
+  REJECTED là kết quả cuối và phải có lý do.
+  Không có luồng thu hồi role ORGANIZER trong phạm vi.
+  Chỉ chuyển ACTIVE sau xác nhận cấp role;
+  lỗi từng phần giữa hai phía vẫn OPEN.
+end note
+
+note bottom of Profile
+  Lý do từ chối nằm trong hồ sơ đăng ký khi có.
+  Kiểu dữ liệu, schema và hợp đồng chờ B12/B13.
+  Hồ sơ ứng dụng không thay thế nguồn danh tính/role.
+end note
+
+legend bottom
+  Các khung có tiêu đề "Aggregate ứng viên" là ranh giới ứng viên của context.
+  Nguồn danh tính/quyền chỉ là tham chiếu đã được chốt về nghĩa nghiệp vụ.
+  Thuộc tính buyer/organizer là tham chiếu tài khoản theo role,
+  không tham chiếu hồ sơ đăng ký organizer.
+endlegend
+
+@enduml

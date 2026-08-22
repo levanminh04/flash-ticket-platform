@@ -1,0 +1,49 @@
+@startuml
+title Biểu đồ use case — Quản lý vòng đời sự kiện
+
+' FORMATION: dung danh muc use case cua B6 hien hanh.
+' Tang C 3.2.1: mot hinh chu nhat = ranh gioi he thong; tac nhan ngoai, use case trong.
+' Lien ket tac nhan-use case la duong thang khong mui ten; khong mau nen phan nhom.
+' Giai thich bang van ban nam trong B6, khong nhoi vao hinh.
+
+left to right direction
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam TitleFontSize 15
+skinparam nodesep 16
+skinparam ranksep 55
+skinparam ActorBackgroundColor white
+skinparam ActorBorderColor black
+skinparam UsecaseBackgroundColor white
+skinparam UsecaseBorderColor black
+skinparam RectangleBackgroundColor white
+skinparam RectangleBorderColor black
+skinparam ArrowColor black
+
+actor "Nhà tổ chức" as Organizer
+actor "Quản trị viên" as Admin
+
+rectangle "Hệ thống bán vé FlashTicket" {
+  usecase "Tạo bản nháp sự kiện" as UC01
+  usecase "Cấu hình bán và khuyến mãi" as UC02
+  usecase "Gửi sự kiện để duyệt" as UC03
+  usecase "Duyệt sự kiện và nhập tỷ lệ phí" as UC04
+  usecase "Trả sự kiện về bản nháp" as UC05
+  usecase "Công bố sự kiện" as UC06
+  usecase "Gửi yêu cầu hủy sự kiện" as UC07
+  usecase "Xử lý yêu cầu hủy hoặc chủ động hủy" as UC08
+  usecase "Hủy trực tiếp khi chưa có đơn thu tiền" as UC09
+}
+
+Organizer -- UC01
+Organizer -- UC02
+Organizer -- UC03
+Organizer -- UC06
+Organizer -- UC07
+Organizer -- UC09
+Admin -- UC04
+Admin -- UC05
+Admin -- UC08
+
+@enduml
