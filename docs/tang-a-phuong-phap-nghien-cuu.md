@@ -154,8 +154,8 @@ Ba dữ kiện bối cảnh, mỗi cái đẻ ra một quy tắc:
 | Dữ kiện | Quy tắc phát sinh cho Tầng A |
 |---|---|
 | **Chấm điểm cá nhân, một quyển báo cáo, hỏi theo phần** | Không chia thành nhiều câu hỏi nghiên cứu song song (dễ thành ba đồ án dán lại). Dùng **một trục nghiên cứu duy nhất**, và bổ sung một bảng **phân công thực hiện** để mỗi phần truy được về người làm → Phiếu A9 |
-| **Bạn là người quyết định thiết kế toàn hệ thống** | Trục nghiên cứu đặt ở tầng **kiến trúc và các cơ chế bảo đảm tính đúng đắn**. Mobile là một client của cùng hệ thống và không cần thành nhánh nghiên cứu riêng; tuy vậy, check-in trực tuyến vẫn là use case nghiệp vụ cốt lõi cần API, idempotency và kiểm thử cạnh tranh ở backend |
-| **Trợ lý chẩn đoán dùng hướng Drain + LLM API** | Mục tiêu viết ở mức vấn đề chẩn đoán. Không tuyên bố huấn luyện mô hình; Drain là bước gom template, còn giá trị triển khai nằm ở logging có cấu trúc, tạo context, ranh giới quyền chỉ đọc và đánh giá trên ca lỗi đã biết |
+| **Bạn là người quyết định thiết kế toàn hệ thống** | Trục nghiên cứu là **chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc** (`DH-TEN`). Hệ thống đặt vé là hệ được mô hình hóa ở `DH-MT1`, nên kiến trúc và các cơ chế bảo đảm tính đúng đắn vẫn phải làm — nhưng chúng là **đầu vào và bối cảnh** của trục, không phải bản thân trục. Mobile là một client của cùng hệ thống và không thành nhánh nghiên cứu riêng; check-in trực tuyến vẫn là use case nghiệp vụ cốt lõi cần API, idempotency và kiểm thử cạnh tranh ở backend |
+| **Phần chẩn đoán và giải thích thuộc bộ tài liệu RCA** | Tầng A chỉ phát biểu mục tiêu ở mức vấn đề. Phương pháp — dựng đồ thị, xếp hạng, lớp giải thích — đặc tả ở `docs/research-rca/`, không ở Tầng A và không ở Tầng B. Bộ hệ thống chịu trách nhiệm **dữ liệu quan sát và điểm tích hợp** (`RES-033`). Không tuyên bố huấn luyện mô hình |
 
 ---
 
@@ -245,6 +245,8 @@ Nguyên nhân kỹ thuật gốc: ____________________________________
 
 **Quy tắc điền:**
 - Chia hai tầng: **mục tiêu tổng quát** (1 câu) và **mục tiêu cụ thể** (3–5 gạch đầu dòng)
+- ⚠️ **Sửa 2026-08-28 — phiếu A6 chia phạm vi thành hai vòng, nên A3 phải có HAI khối mục tiêu, không phải một.** Mỗi vòng ở A6 — vòng nghiên cứu và vòng sản phẩm — có **một mục tiêu tổng quát riêng** và **3–5 mục tiêu cụ thể riêng**. Ô trống dưới đây viết cho một vòng; điền hai lần. **Không trộn kết quả hai vòng vào cùng một bảng, biểu đồ hay câu kết luận.** Mẫu này trước đó chỉ nói *"1 câu"*, khiến bản `A3` thực tế lệch mẫu mà mẫu không biết — cùng loại lỗi với phiếu `B10` ở Tầng B (`GOV-039`)
+- **Mục tiêu của vòng sản phẩm có thể mang vai *tiêu chí nghiệm thu* thay vì *đóng góp nghiên cứu*.** Khi vậy, ghi rõ vai đó ngay trong phiếu và báo cáo chúng ở chương Kiểm thử. Đây là cách tránh phải chứng minh cái không mới — xem `RES-046`
 - Mỗi mục tiêu cụ thể phải kèm **cách biết là đã đạt**. Chưa cần con số chính xác ở giai đoạn này (con số chốt ở Tầng B, bước lập kịch bản chất lượng), nhưng phải nói rõ **sẽ đo bằng gì**
 - Mục tiêu liên quan tới AI viết ở mức lớp vấn đề, **không nhắc tên kỹ thuật**
 - Không đặt mục tiêu cần điều kiện mình không có (người dùng thật, hạ tầng lớn)
@@ -334,7 +336,7 @@ Khách thể (bối cảnh áp dụng): ________________________________
 | **Vòng 2 — Phạm vi sản phẩm** | Làm chạy được để vòng 1 có ngữ cảnh hoạt động | Chỉ kiểm thử chức năng |
 | **Vòng 3 — Ngoài phạm vi** | Nêu tên **kèm lý do**, không làm | Không |
 
-- Chỉ đưa vào lớp nghiên cứu những điểm gắn trực tiếp với trục nhất quán/độ tin cậy hoặc trợ lý chẩn đoán và có cách kiểm chứng rõ.
+- Chỉ đưa vào lớp nghiên cứu những điểm gắn trực tiếp với `DH-TEN` — chẩn đoán nguyên nhân gốc bằng đồ thị phụ thuộc — hoặc với các bất biến của hệ giao dịch được mô hình hóa, và có cách kiểm chứng rõ.
 - Nêu các mục ngoài phạm vi quan trọng để tránh hiểu nhầm; không cần liệt kê mọi tính năng không làm.
 - Ghi kèm điều kiện hạ tầng/dữ liệu vì chúng giới hạn khả năng suy rộng kết quả.
 - Mobile được tính trong phạm vi sản phẩm và phân tích nghiệp vụ chung. Check-in trực tuyến thuộc lớp nghiên cứu khi dùng để kiểm chứng bất biến “một vé chỉ check-in thành công một lần”; **check-in offline nằm ngoài phạm vi**.
@@ -387,7 +389,7 @@ Giới hạn thời gian: __________________________________________
 >
 > *Do đề tài không có tổ chức thụ hưởng cụ thể, tri thức nghiệp vụ được thu thập từ ba nguồn. Thứ nhất là phân tích đối sánh các hệ thống bán vé đang vận hành trong và ngoài nước; nguồn này cho phép quan sát hành vi hệ thống ở phía người dùng, song không cho biết cấu trúc bên trong, nên các nhận định về cơ chế được trình bày dưới dạng suy luận. Thứ hai là nghiên cứu tài liệu chuyên ngành về hệ thống phân tán và các mẫu thiết kế liên quan. Thứ ba là kinh nghiệm thực tiễn của thành viên nhóm trong quy trình xử lý sự cố phần mềm tại doanh nghiệp; nguồn này giới hạn trong một bối cảnh tổ chức cụ thể và không được khái quát hóa.*
 >
-> *Kết quả được kiểm chứng bằng kiểm thử chức năng cho các use case chính, thực nghiệm có cấu hình công bố cho các bất biến/thuộc tính chất lượng ưu tiên, và phân tích một số kịch bản lỗi quan trọng. Với trợ lý chẩn đoán, nhóm dùng tập log và ca lỗi đã biết để kiểm tra bước gom template và mức hữu ích của tư vấn. Các kết quả không đạt được báo cáo kèm điều kiện thử và phân tích nguyên nhân.*
+> *Kết quả được kiểm chứng bằng kiểm thử chức năng cho các use case chính, thực nghiệm có cấu hình công bố cho các bất biến/thuộc tính chất lượng ưu tiên, và phân tích một số kịch bản lỗi quan trọng. Với cơ chế chẩn đoán, nhóm chạy trên bộ dữ liệu đã công bố có nhãn nguyên nhân thật, chấm bằng bộ độ đo xếp hạng cùng một mức sàn ngẫu nhiên, và đánh giá riêng chất lượng lời giải thích theo ba tiêu chí định trước. Các kết quả không đạt được báo cáo kèm điều kiện thử và phân tích nguyên nhân.*
 
 ---
 
@@ -470,7 +472,7 @@ PHÂN CÔNG (phần việc | quyết định thiết kế | hiện thực hóa):
 | Trình diễn ≠ Đánh giá | Phần kiểm chứng phải phân biệt ảnh/demo với test và số liệu đánh giá, không bắt buộc tách thành chương riêng | — |
 | Vòng phản hồi được ghi nhận | Chỉ thay đổi quyết định kiến trúc quan trọng mới cần ADR mới/trạng thái thay thế | Mẫu ADR gọn |
 | Chọn đúng phương pháp đánh giá | Dùng kiểm thử, thực nghiệm hoặc phân tích theo từng mục tiêu; không bắt buộc mọi mục tiêu phải có đủ cả ba | Mẫu báo cáo thí nghiệm |
-| Nội dung AI viết ở mức lớp vấn đề | Ghi rõ pipeline logging–Drain–context–LLM và đánh giá trong phạm vi đã chọn; không tuyên bố huấn luyện mô hình | Mẫu ADR/thí nghiệm dùng chung |
+| Nội dung AI viết ở mức lớp vấn đề | Lớp giải thích là **bước cuối của cơ chế RCA**, đặc tả và đánh giá ở `docs/research-rca/`; không tuyên bố huấn luyện mô hình. Đường ống kỹ thuật cụ thể không chốt ở Tầng A | Mẫu ADR/thí nghiệm dùng chung |
 | Mobile là client của cùng nghiệp vụ | Không tạo nhánh nghiên cứu mobile riêng; vẫn đặc tả và kiểm thử use case check-in trực tuyến ở backend | Use case, sequence và test tương ứng |
 | Không tuyên bố quá mức về phương pháp | Mọi kỹ thuật áp dụng có điều chỉnh phải ghi rõ mức áp dụng | Quy ước diễn đạt: "tham chiếu cấu trúc của…", "áp dụng trong phạm vi nhóm" |
 

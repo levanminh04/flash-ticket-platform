@@ -30,9 +30,9 @@
 
 ## 0.2 Một hệ mã duy nhất
 
-Mã chính thức của sản phẩm công việc: **`A1–A9` · `B1–B19` · `C1–C8`**. Tài liệu chủ **không đặt mã riêng**, chỉ sắp thứ tự. Bỏ hẳn cách gọi "Pha 4 bước 4.5".
+Mã chính thức của sản phẩm công việc: **`A1–A9` · `B1–B16` · `C1–C8`**. Tài liệu chủ **không đặt mã riêng**, chỉ sắp thứ tự. Bỏ hẳn cách gọi "Pha 4 bước 4.5".
 
-**Đính chính so với bản trước:** bản trước tuyên bố dải mã là `B1–B15` nhưng lại dùng `B16`, còn `B17`/`B18` thì không xuất hiện ở giai đoạn nào — tức là nhánh trợ lý chẩn đoán sự cố bị xây mà không được đo. Đã sửa: Tầng B nay có **Nhóm 5** gồm `B16–B19`, và nhánh AI hiện diện ở **cả bảy giai đoạn** (Phần 3).
+**Đính chính 2026-08-27:** dải mã của Tầng B nay là **`B1–B16`**. Ba phiếu `B17`–`B19` — cấu hình gom mẫu log, gọi mô hình ngôn ngữ, đánh giá trợ lý — đã được **gỡ khỏi Tầng B** theo `RES-034`: chúng là các bước của **cơ chế RCA**, thuộc nhịp làm việc của `docs/research-rca/`. `B16` (chuẩn logging) ở lại vì đó là việc kiến trúc thật của hệ thống.
 
 ## 0.3 Đọc theo thứ tự nào
 
@@ -44,7 +44,7 @@ Một lần ở giai đoạn lập kế hoạch: tài liệu này → phần ch�
 
 **1. Báo cáo bắt đầu từ vấn đề và mô tả kiến trúc đích.** Mạch chính là *vấn đề → yêu cầu → phân tích miền → thiết kế → hiện thực → đánh giá*. Lịch sử repository, thao tác chuyển mã và quá trình refactor không được dùng làm bối cảnh, tính cấp thiết, khoảng trống nghiên cứu hoặc trục trình bày của báo cáo.
 
-**2. Mọi service đều phải có căn cứ trong phân tích đích; độ sâu phân tích không cần bằng nhau.** Trọng tâm phân rã và kiểm chứng chuyên sâu nằm ở vòng đời vé, đặc biệt các miền đang tập trung trong `core-service`. Các năng lực hồ sơ người dùng, chatbot và trợ lý chẩn đoán sự cố vẫn phải được xem xét trong dòng sự kiện, bản đồ context, quyền dữ liệu và mô hình quyền; B4/B5 mới xác định chúng nằm trong context ứng viên nào. Chúng có thể được phân tích gọn hơn vì là năng lực hỗ trợ.
+**2. Mọi service đều phải có căn cứ trong phân tích đích; độ sâu phân tích không cần bằng nhau.** Trọng tâm phân rã và kiểm chứng chuyên sâu nằm ở vòng đời vé, đặc biệt các miền đang tập trung trong `core-service`. Các năng lực hồ sơ người dùng và chatbot mua vé vẫn phải được xem xét trong dòng sự kiện, bản đồ context, quyền dữ liệu và mô hình quyền; B4/B5 mới xác định chúng nằm trong context ứng viên nào. Chúng có thể được phân tích gọn hơn vì là năng lực hỗ trợ.
 
 > **Cách trình bày trong báo cáo:** mô tả trách nhiệm, dữ liệu sở hữu và quan hệ của từng service trong kiến trúc cuối, rồi giải thích ranh giới bằng nghiệp vụ, bất biến và thuộc tính chất lượng. Không dùng lý do “service này đã tồn tại” hoặc “package này có sẵn”.
 >
@@ -78,11 +78,11 @@ Dù mẫu cuối có 3, 4 hay 5 chương, báo cáo cần giữ mạch sau:
 |---|---|---|
 | **Bối cảnh và vấn đề** | Vì sao bài toán đáng làm; giới hạn khảo sát là gì | A1–A2, B1 |
 | **Mục tiêu, phạm vi, phương pháp** | Làm đến đâu và lấy gì làm bằng chứng | A3–A7 |
-| **Cơ sở lựa chọn** | Khái niệm/mẫu nào thực sự dùng: microservices, nhất quán, Saga/Outbox, idempotency, logging, Drain/LLM | Tài liệu nghiên cứu gắn với ADR |
+| **Cơ sở lựa chọn** | Khái niệm/mẫu nào thực sự dùng: microservices, nhất quán, Saga/Outbox, idempotency, logging có cấu trúc | Tài liệu nghiên cứu gắn với ADR |
 | **Phân tích yêu cầu/nghiệp vụ** | Actor, use case, bất biến và mô hình miền | B2–B10 |
-| **Thiết kế** | Ranh giới service, schema độc lập, API/event, Saga, check-in trực tuyến, logging và trợ lý | B5, B7, B11–B18 |
+| **Thiết kế** | Ranh giới service, schema độc lập, API/event, Saga, check-in trực tuyến, chuẩn logging và điểm tích hợp cơ chế chẩn đoán | B5, B7, B11–B16 |
 | **Hiện thực** | Thành phần đã xây, cách hiện thực các quyết định đích và sai lệch có ý nghĩa so với thiết kế | Code, hợp đồng, schema, ADR |
-| **Kiểm thử và đánh giá** | Chức năng, bất biến, hiệu năng/khả năng phục hồi và mức hữu ích của trợ lý | B15, B17–B19 |
+| **Kiểm thử và đánh giá** | Chức năng, bất biến, hiệu năng và khả năng phục hồi | B15. Chất lượng xếp hạng và lời giải thích đo ở bộ RCA |
 | **Kết luận và hạn chế** | Mục tiêu nào đạt, không đạt, giới hạn suy rộng và hướng phát triển | A4, A8, kết quả |
 
 ### Cách viết theo trạng thái đích
@@ -101,25 +101,33 @@ Chỉ viết lý thuyết cần để hiểu quyết định và phép đánh gi
 
 # PHẦN 3 — BẢY GIAI ĐOẠN, HAI NHÁNH
 
-Hai nhánh chạy song song qua cùng bảy giai đoạn:
-- **Nhánh N — nghiệp vụ vé** (trục nghiên cứu chính)
-- **Nhánh T — trợ lý chẩn đoán sự cố** (nhánh AI)
+Đề tài là **chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc** (`DH-TEN`). Nguyên văn thư định hướng tại [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
 
-Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịch bản chất lượng và phần đánh giá riêng trong báo cáo; B4/B5 mới hình thành bounded context ứng viên từ bằng chứng miền.
+**Bảy giai đoạn dưới đây là nhịp của bộ tài liệu hệ thống** — nghiệp vụ bán vé và quản trị liên quan, tức hệ giao dịch được mô hình hóa ở `DH-MT1`. Bộ tài liệu RCA ở `docs/research-rca/` có nhịp làm việc và cổng kiểm soát riêng, **không** đi qua bảy giai đoạn này.
+
+Hai bộ gặp nhau ở đúng ba chỗ:
+
+| Gặp ở đâu | Nội dung |
+|---|---|
+| **Giai đoạn 3–4 — chuẩn logging** | Hệ thống sinh dữ liệu quan sát mà bộ RCA cần: log có cấu trúc, mã tương quan, khử/che dữ liệu nhạy cảm |
+| **Giai đoạn 4 — kiến trúc** | Nơi cơ chế RCA được tích hợp và chạy trong FlashTicket (`RES-023` mức 2, gate B11); quyền chỉ đọc; vị trí triển khai |
+| **Hai cửa nối** | `docs/research-rca/R0-boi-canh-va-rang-buoc.md` §3 và `docs/project/lien-ket-rca.md` |
+
+> **Cách chia "nhánh N / nhánh T" đã bị gỡ** (`RES-034`). Nó ra đời khi trợ lý chẩn đoán là một **tính năng phụ của sản phẩm bán vé**. Nay phần chẩn đoán **là đề tài** và có bộ tài liệu riêng, nên chia như cũ là tổ chức theo bản đồ đã lỗi thời. Ranh giới trách nhiệm giữa hai bộ ghi tại `AGENTS.md` mục 7.
 
 ---
 
 ## GIAI ĐOẠN 0 — Nền tảng làm việc
 
-| | Việc | Chi tiết ở |
-|---|---|---|
-| N+T | Lập `docs/`: `adr/`, `glossary.md`, `diagrams/src/`, `contracts/`, `experiments/` | Tầng C mục 3.5 |
-| N+T | Chốt mẫu ADR gọn; ADR-000 chỉ cần nếu nhóm muốn ghi quyết định dùng ADR | Tầng C mẫu C1 |
-| N+T | Chốt quy ước đặt tên và bảng phân vai ký hiệu | Tầng C mục 3.1, 3.3 |
-| N | Dùng repository `flash-ticket-platform` làm không gian hiện thực chính; mọi mã đưa vào phải phù hợp kiến trúc đích và qua kiểm thử của phiên bản ĐATN | — |
-| N | Xóa `.env` khỏi repo mới, xoay khóa nếu là khóa thật | — |
-| N+T | Hỏi cô Liên: đề cương/cấu trúc chương ĐATN? · xin file mẫu trình bày hiện hành của khoa | Tầng A, Tầng C |
-| N+T | Tạo khung báo cáo ngay từ đầu và ghi nội dung đã có bằng nguồn/ghi chú, chưa chốt số chương | Phần 2 |
+| Việc | Chi tiết ở |
+|---|---|
+| Lập `docs/`: `adr/`, `glossary.md`, `diagrams/src/`, `contracts/`, `experiments/` | Tầng C mục 3.5 |
+| Chốt mẫu ADR gọn; ADR-000 chỉ cần nếu nhóm muốn ghi quyết định dùng ADR | Tầng C mẫu C1 |
+| Chốt quy ước đặt tên và bảng phân vai ký hiệu | Tầng C mục 3.1, 3.3 |
+| Dùng repository `flash-ticket-platform` làm không gian hiện thực chính; mọi mã đưa vào phải phù hợp kiến trúc đích và qua kiểm thử của phiên bản ĐATN | — |
+| Xóa `.env` khỏi repo mới, xoay khóa nếu là khóa thật | — |
+| Hỏi cô Liên: đề cương/cấu trúc chương ĐATN? · xin file mẫu trình bày hiện hành của khoa | Tầng A, Tầng C |
+| Tạo khung báo cáo ngay từ đầu và ghi nội dung đã có bằng nguồn/ghi chú, chưa chốt số chương | Phần 2 |
 
 **Điều kiện sẵn sàng:** repo/tài liệu làm việc chung dùng được; đã có nơi ghi quyết định; câu hỏi về mẫu báo cáo được gửi cho cô Liên. Không để việc chờ mẫu trình bày chặn khảo sát và phân tích nội dung.
 
@@ -127,13 +135,12 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 
 ## GIAI ĐOẠN 1 — Vấn đề và bối cảnh
 
-| | Việc | Mã |
-|---|---|---|
-| N | Khảo sát các luồng công khai theo bảng công việc B1; ghi cả phần không quan sát được, không yêu cầu admin/organizer | B1 |
-| **T** | Ghi lại quy trình dò lỗi thủ công hiện tại có cấu trúc — bước, dữ liệu dùng, điểm nghẽn và thời gian nếu có thể ghi nhận | B1 |
-| N+T | Viết bối cảnh và tính cấp thiết — theo **bốn nước** dành cho đề tài không mới | A1 |
-| N+T | Chưng cất phát biểu vấn đề (≤150 từ, không tên công nghệ) | A2 |
-| N+T | **Nháp** câu hỏi nghiên cứu — chưa chốt | A4 |
+| Việc | Mã |
+|---|---|
+| Khảo sát các luồng công khai theo bảng công việc B1; ghi cả phần không quan sát được, không yêu cầu admin/organizer | B1 |
+| Viết bối cảnh và tính cấp thiết — theo **bốn nước** dành cho đề tài không mới | A1 |
+| Chưng cất phát biểu vấn đề (≤150 từ, không tên công nghệ) | A2 |
+| **Nháp** câu hỏi nghiên cứu — chưa chốt | A4 |
 
 **Điều kiện sẵn sàng:** bảng khảo sát có bằng chứng và giới hạn; quy trình dò lỗi thủ công đã được mô tả; phát biểu vấn đề không phụ thuộc tên công nghệ.
 
@@ -143,15 +150,13 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 
 > **Giai đoạn quan trọng nhất để tạo nền phân tích.** Đầu ra là thuật ngữ, quy trình, sự kiện, bounded context/aggregate ứng viên và bất biến. Giai đoạn này chưa quyết định service vật lý, Saga, schema đích hoặc ADR kiến trúc.
 
-| | Việc | Mã |
-|---|---|---|
-| N | Từ điển miền — phân biệt dứt khoát các cặp dễ nhầm | B2 |
-| N | Mô hình quy trình nghiệp vụ, mỗi quy trình có ít nhất một nhánh thất bại | B3 |
-| N | Lập dòng thời gian sự kiện miền gọn, tham khảo Event Storming | B4 |
-| N | Gom cụm → Bounded Context ứng viên → phân loại cốt lõi/hỗ trợ/chung | B5 |
-| N | Xác định aggregate và bất biến trong mỗi context | B7 |
-| **T** | **Định nghĩa "sự cố" là gì** và phân loại 4 lớp mục tiêu: lỗi âm thầm · lỗi ngoại lệ · lỗi CSDL · lỗi hạ tầng | B4, B5 |
-| **T** | Từ B4, phân tích chatbot và trợ lý chẩn đoán sự cố để hình thành context ứng viên; chốt ranh giới quyền chỉ đọc của trợ lý nhưng không tiền-chốt số context hoặc cách triển khai | B4–B5 |
+| Việc | Mã |
+|---|---|
+| Từ điển miền — phân biệt dứt khoát các cặp dễ nhầm | B2 |
+| Mô hình quy trình nghiệp vụ, mỗi quy trình có ít nhất một nhánh thất bại | B3 |
+| Lập dòng thời gian sự kiện miền gọn, tham khảo Event Storming | B4 |
+| Gom cụm → Bounded Context ứng viên → phân loại cốt lõi/hỗ trợ/chung | B5 |
+| Xác định aggregate và bất biến trong mỗi context | B7 |
 
 **Các câu nghiệp vụ tài chính từng để ngỏ đã được đóng:** nền tảng quy định chính sách hoàn tiền trong phạm vi đã chọn; không dùng khoản giữ lại; mỗi sự kiện chỉ chi trả một lần sau khi kết thúc, hết giao dịch/hoàn tiền đang xử lý và admin hoàn tất đối chiếu thủ công. Check-in offline đã bỏ; check-in trực tuyến phải chốt bất biến và phản hồi khi hai thiết bị quét gần đồng thời.
 
@@ -162,20 +167,19 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 - Mọi năng lực trong phạm vi sản phẩm đã ánh xạ được vào context ứng viên; bounded context không được tự động đổi thành service vật lý
 - Hai trần **≤ 8 service nghiệp vụ** và **≤ 3 Saga** đã được chuyển thành ràng buộc để đánh giá tại B10/B11, không phải số ô cần lấp ở Giai đoạn 2
 - Chưa chốt service vật lý, Saga, schema đích, hợp đồng xuyên service hoặc ADR kiến trúc
-- Trợ lý chẩn đoán sự cố đã có ranh giới quyền rõ ràng bằng văn bản; ranh giới context vẫn phải truy được từ B4/B5
+- Ràng buộc chỉ đọc cho mọi thành phần quan sát/chẩn đoán đã được ghi thành yêu cầu (`NFR-08`); ranh giới context vẫn phải truy được từ B4/B5
 
 ---
 
 ## GIAI ĐOẠN 3 — Yêu cầu và mục tiêu đo được
 
-| | Việc | Mã |
-|---|---|---|
-| N | Use case + đặc tả các ca cốt lõi; mobile dùng chung nghiệp vụ, gồm check-in trực tuyến | B6 |
-| N | Bảng yêu cầu FR/NFR | B8 |
-| N | Kịch bản chất lượng gọn; mỗi kịch bản có tiêu chí quan sát được phù hợp (số, bất biến hoặc tiêu chí chấm rõ) | B9 |
-| **T** | Kịch bản riêng cho trợ lý: chất lượng gom template/context và mức hữu ích trên ca lỗi đã biết; thời gian so với thủ công là phép đo cộng thêm | B9 |
-| N+T | Bảng ưu tiên phẳng, chốt danh sách ASR | B10 |
-| N+T | **Quay lại tái kiểm tra rồi CHỐT** A1/A2 và mục tiêu, đối tượng, phạm vi, câu hỏi nghiên cứu | A1–A6 |
+| Việc | Mã |
+|---|---|
+| Use case + đặc tả các ca cốt lõi; mobile dùng chung nghiệp vụ, gồm check-in trực tuyến | B6 |
+| Bảng yêu cầu FR/NFR | B8 |
+| Kịch bản chất lượng gọn; mỗi kịch bản có tiêu chí quan sát được phù hợp (số, bất biến hoặc tiêu chí chấm rõ) | B9 |
+| Bảng ưu tiên phẳng, chốt danh sách ASR | B10 |
+| **Quay lại tái kiểm tra rồi CHỐT** A1/A2 và mục tiêu, đối tượng, phạm vi, câu hỏi nghiên cứu | A1–A6 |
 
 > ⚠️ **Vì sao A3–A6 chốt ở đây chứ không ở Giai đoạn 1:** không thể viết *"mục tiêu: p95 ≤ X ms"* trước khi có kịch bản chất lượng và một vòng đo thử. Chốt sớm thì hoặc quá dễ hoặc bất khả thi. **Đây là chỗ Tầng A và Tầng B đan xen — không tầng nào xong trước tầng nào.**
 
@@ -187,18 +191,15 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 
 > Giai đoạn chốt **các quyết định xuyên service cần có trước khi hiện thực kiến trúc đích** — xem Phần 5. Các chi tiết nội bộ từng service tiếp tục được hoàn thiện theo lát dọc.
 
-| | Việc | Mã |
-|---|---|---|
-| N | **B11-A:** từ B5, B7 và B10 tạo, so sánh và ghi tập phương án kiến trúc độc lập tại `docs/architecture/B11-A-independent-alternatives.md`; người thật phải duyệt `APPROVED` trước khi mở B5.5 | B11 |
-| N | **B11-B:** tại `docs/architecture/B11-B-legacy-feasibility.md`, ghi đúng phiên bản B11-A được đối chiếu rồi mở B5.5 để kiểm tra tái sử dụng, di trú, ghép nối và tính khả thi; không sinh, bổ sung, xếp hạng hoặc sửa phương án kiến trúc | B11, B5.5 |
-| N | **B11-C:** chỉ sau khi B11-B được duyệt, chốt kiến trúc service và ghi ADR cho quyết định lớn; trước khi `Chấp nhận`, mỗi ADR phải kiểm tra tác động lên A1–A6 và đưa tạo tác bị ảnh hưởng về `REVIEW_READY` | B11 |
-| N | Bản đồ sở hữu dữ liệu; schema/CSDL và ERD đích riêng từng service; credential độc lập | B12 |
-| N | Hợp đồng API + lược đồ sự kiện | B13 |
-| N | Sequence diagram các Saga và luồng liên service cốt lõi, gồm luồng lỗi/idempotency | B14 |
-| N | So sánh các phương án bố trí 2 EC2; chỉ chốt bằng ADR sau sơ đồ và đo thử sơ bộ | B11 |
-| **T** | Chuẩn logging có cấu trúc, mã tương quan, masking và luồng thu thập | **B16** |
-| **T** | Thiết kế Anti-Corruption Layer cho trợ lý; tách nhóm công cụ đọc khỏi nhóm công cụ ghi mà không tiền-chốt đơn vị triển khai vật lý | B11 |
-| **T** | Thiết kế `Drain → context builder → LLM API`, đầu ra tư vấn chỉ đọc và ranh giới dữ liệu | B17, B18 |
+| Việc | Mã |
+|---|---|
+| **B11-A:** từ B5, B7 và B10 tạo, so sánh và ghi tập phương án kiến trúc độc lập tại `docs/architecture/B11-A-independent-alternatives.md`; người thật phải duyệt `APPROVED` trước khi mở B5.5 | B11 |
+| **B11-B:** tại `docs/architecture/B11-B-legacy-feasibility.md`, ghi đúng phiên bản B11-A được đối chiếu rồi mở B5.5 để kiểm tra tái sử dụng, di trú, ghép nối và tính khả thi; không sinh, bổ sung, xếp hạng hoặc sửa phương án kiến trúc | B11, B5.5 |
+| **B11-C:** chỉ sau khi B11-B được duyệt, chốt kiến trúc service và ghi ADR cho quyết định lớn; trước khi `Chấp nhận`, mỗi ADR phải kiểm tra tác động lên A1–A6 và đưa tạo tác bị ảnh hưởng về `REVIEW_READY` | B11 |
+| Bản đồ sở hữu dữ liệu; schema/CSDL và ERD đích riêng từng service; credential độc lập | B12 |
+| Hợp đồng API + lược đồ sự kiện | B13 |
+| Sequence diagram các Saga và luồng liên service cốt lõi, gồm luồng lỗi/idempotency | B14 |
+| So sánh các phương án bố trí 2 EC2; chỉ chốt bằng ADR sau sơ đồ và đo thử sơ bộ | B11 |
 
 **Điều kiện sẵn sàng:**
 - B11-A ở đúng đường dẫn canonical, được người thật duyệt `APPROVED`; B11-B ghi phiên bản B11-A đã dùng và cũng được duyệt trước B11-C
@@ -206,7 +207,7 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 - Mỗi ADR đã ghi kết quả kiểm tra tác động lên A1–A6. Nếu phát biểu vấn đề, mục tiêu, phạm vi, câu hỏi nghiên cứu hoặc cách đánh giá bị ảnh hưởng, các tạo tác liên quan đã được cập nhật, duyệt lại và các đầu vào phụ thuộc đã được kiểm tra lại trước khi ADR chuyển sang `Chấp nhận`
 - Các bản đồ/đặc tả xuyên service cốt lõi ở Phần 5 đã đủ để ba thành viên hiện thực nhất quán; không đặt chỉ tiêu đúng 8 hình
 - Mọi ADR có đủ hai trường *Phục vụ ASR nào* và *Kiểm chứng bằng cách nào*
-- Mỗi service sở hữu schema/CSDL và credential riêng; **không có khóa ngoại, JOIN, repository hoặc truy vấn trực tiếp xuyên schema**
+- **Kỷ luật dữ liệu — đã chốt:** thiết kế đích chia dữ liệu theo ranh giới; mỗi đơn vị sở hữu phần của mình và dùng credential chỉ có quyền trên phần đó; giữa các ranh giới **không có khóa ngoại, JOIN, repository hoặc truy vấn trực tiếp**; liên kết ngoài miền là ID mềm, dữ liệu cần dùng cục bộ lấy qua API hoặc bản sao đồng bộ bằng sự kiện. **Thứ B11-A và B12 quyết là *năng lực nào gộp vào ranh giới nào*** — số ranh giới và cách nhóm chúng — chứ không phải có áp kỷ luật trên hay không (`GOV-045`, siết `GOV-038`)
 - **Không có vòng lặp phụ thuộc đồng bộ** (A gọi B, B gọi A)
 - **B16 đã chốt** — đây là cổng cứng, xem Phần 6
 
@@ -214,16 +215,14 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 
 ## GIAI ĐOẠN 5 — Xây dựng
 
-| | Việc |
-|---|---|
-| N | **Bộ khung xuyên suốt** — lát cắt mỏng chạy xuyên hệ thống, triển khai lên EC2 thật |
-| N | Hiện thực theo lát dọc; mọi tài sản mã được dùng phải qua đối chiếu nội bộ và được điều chỉnh để khớp ranh giới, hợp đồng, schema và chuẩn logging đích |
-| N | Tách schema/CSDL, cấp credential riêng và thay mọi truy cập chéo bằng API/sự kiện/read model |
-| N | Cài đặt cơ chế nhất quán; chỉ thêm cấu hình đối chứng khi phép đánh giá cần so sánh |
-| **T** | Xây đường ống `structured log → collector → Drain → context builder → LLM API → tư vấn` |
-| **T** | Thu thập/gán nhãn một tập log phát triển nhỏ và một tập ca đánh giá trong phạm vi các luồng đã chọn | B17–B19 |
-| N+T | Khi đảo một quyết định kiến trúc đã chấp nhận: tạo ADR thay thế; chỉnh code nhỏ không cần ADR |
-| N+T | Cập nhật phần Hiện thực của báo cáo theo lát dọc đã hoàn thành; không để tới cuối mới viết |
+| Việc |
+|---|
+| **Bộ khung xuyên suốt** — lát cắt mỏng chạy xuyên hệ thống, triển khai lên EC2 thật |
+| Hiện thực theo lát dọc; mọi tài sản mã được dùng phải qua đối chiếu nội bộ và được điều chỉnh để khớp ranh giới, hợp đồng, schema và chuẩn logging đích |
+| Tách schema/CSDL, cấp credential riêng và thay mọi truy cập chéo bằng API/sự kiện/read model |
+| Cài đặt cơ chế nhất quán; chỉ thêm cấu hình đối chứng khi phép đánh giá cần so sánh |
+| Khi đảo một quyết định kiến trúc đã chấp nhận: tạo ADR thay thế; chỉnh code nhỏ không cần ADR |
+| Cập nhật phần Hiện thực của báo cáo theo lát dọc đã hoàn thành; không để tới cuối mới viết |
 
 **🚪 CỔNG 5 → 6:**
 - Mọi use case cốt lõi chạy đầu-cuối trên EC2
@@ -234,17 +233,14 @@ Nhánh T không phải phần phụ làm sau. Nó có ranh giới quyền, kịc
 
 ## GIAI ĐOẠN 6 — Kiểm chứng
 
-| | Việc | Mã |
-|---|---|---|
-| N | Kiểm thử chức năng, liên kết use case cốt lõi với test case | B15 |
-| N | Kịch bản trình diễn, gồm chủ đích làm hỏng một thành phần | B15 |
-| N | Thí nghiệm đo các bất biến và thuộc tính chất lượng; đối chứng chỉ cho câu hỏi thật sự cần so sánh | B15 |
-| N | Phân tích các rủi ro/đánh đổi quan trọng xuất hiện trong kết quả | B15 |
-| **T** | Kiểm tra mức gom template của Drain trên tập log nhỏ đã gán nhãn | **B17** |
-| **T** | Kiểm tra context có chứa đủ bằng chứng và đã loại dữ liệu nhạy cảm | **B18** |
-| **T** | Đánh giá tư vấn trên một số ca lỗi đã biết; đo thời gian có/không trợ lý nếu điều kiện cho phép | **B19** |
+| Việc | Mã |
+|---|---|
+| Kiểm thử chức năng, liên kết use case cốt lõi với test case | B15 |
+| Kịch bản trình diễn, gồm chủ đích làm hỏng một thành phần | B15 |
+| Thí nghiệm đo các bất biến và thuộc tính chất lượng; đối chứng chỉ cho câu hỏi thật sự cần so sánh | B15 |
+| Phân tích các rủi ro/đánh đổi quan trọng xuất hiện trong kết quả | B15 |
 
-**Điều kiện sẵn sàng:** mỗi ASR có kết quả hoặc giải thích trung thực vì sao chưa đo được; nhánh AI có kết quả từng ca, gồm cả ca sai/thất bại; giới hạn cỡ mẫu và môi trường được ghi rõ.
+**Điều kiện sẵn sàng:** mỗi ASR có kết quả hoặc giải thích trung thực vì sao chưa đo được; giới hạn cỡ mẫu và môi trường được ghi rõ. Kết quả từng ca của **cơ chế chẩn đoán**, gồm cả ca sai và ca thất bại, được đo ở bộ tài liệu RCA theo `A9`.
 
 ---
 
@@ -326,10 +322,10 @@ Nỗi lo *"tài liệu nền tảng sai từ đầu thì thảm họa"* **đúng
 | 1 | **Bản đồ bounded context ứng viên** | Lập ranh giới khái niệm từ quy trình/sự kiện; chưa phải đơn vị triển khai | B5 |
 | 2 | **Kiến trúc service + ADR phân rã** | Chốt đơn vị triển khai trong trần ≤8 service, ≤3 Saga theo B11-A/B/C | B11 |
 | 3 | **C4 System Context + Container** | Chốt trong/ngoài, đơn vị triển khai và quan hệ chính | B11 |
-| 4 | **Bản đồ sở hữu dữ liệu + schema đích** | Chốt schema/credential độc lập và dữ liệu lấy qua API/sự kiện | B12 |
+| 4 | **Bản đồ sở hữu dữ liệu + schema đích** | Chốt **năng lực nào gộp vào ranh giới nào**, quyền sở hữu tương ứng và credential riêng; dữ liệu nằm ngoài ranh giới lấy qua API/sự kiện. Kỷ luật dữ liệu đã chốt từ trước; thứ bước này quyết là **cách gộp và số ranh giới**, không phải có áp kỷ luật hay không (`GOV-045`) | B12 |
 | 5 | **Hợp đồng API + lược đồ sự kiện cốt lõi** | Cho phép các thành viên tích hợp độc lập | B13 |
 | 6 | **Sequence các Saga/luồng tranh chấp chính** | Chốt idempotency, lỗi, thử lại và bù trừ | B14 |
-| 7 | **Chuẩn logging + trace/context của trợ lý** | Chốt đầu vào cho Drain/LLM và bảo vệ dữ liệu | B16–B18 |
+| 7 | **Chuẩn logging và mã tương quan** | Chốt dữ liệu quan sát mà cơ chế chẩn đoán cần, và bảo vệ dữ liệu nhạy cảm | B16 |
 | 8 | **Các phương án deployment trên 2 EC2** | So sánh trước, chưa khóa service nào lên máy nào; chốt sau đo thử | B11 |
 
 Không bắt buộc mỗi dòng phải là một hình riêng; có thể là bảng, đặc tả hoặc ADR nếu biểu đạt rõ hơn. Cần đủ nội dung, không chạy theo đúng số lượng sơ đồ.
@@ -364,7 +360,7 @@ Không biến quy trình thành chuỗi cổng hình thức. Các giai đoạn c
 |---|---|---|
 | Tách/viết một service | Trách nhiệm, dữ liệu sở hữu, API/event chính | Tránh hai service cùng ghi bảng hoặc tích hợp theo giả định khác nhau |
 | Hiện thực một Saga | Trạng thái, idempotency, timeout/thử lại/bù trừ và test lỗi | Đây là phần tốn chi phí nhất và bị giới hạn ≤3 luồng |
-| Xây trợ lý chẩn đoán | Logging có cấu trúc, trace/correlation ID, masking và nguồn log | Drain/LLM không cứu được đầu vào thiếu ngữ cảnh hoặc lộ bí mật |
+| Tích hợp cơ chế chẩn đoán | Logging có cấu trúc, mã tương quan, masking và nguồn log | Không phương pháp chẩn đoán nào cứu được đầu vào thiếu ngữ cảnh hoặc lộ bí mật |
 | Benchmark | Cấu hình triển khai thực tế, workload, dữ liệu kiểm tra và tiêu chí | Kết quả chỉ có nghĩa khi điều kiện chạy được công bố |
 | Ba người hiện thực song song | Hợp đồng liên quan đủ ổn định và có người sở hữu thay đổi | Tránh sửa hai đầu không kiểm soát |
 
@@ -390,7 +386,7 @@ Khi theo dõi tiến độ, nhóm có thể dùng lịch tuần bình thường.
 | Cơ sở lý thuyết chi tiết | Viết song song từ các quyết định thực sự dùng, không đặt chỉ tiêu trang |
 | Quy trình hoàn tiền, đối soát thủ công và một lần chi trả | Giai đoạn 2, B3–B7; các quyết định nguồn nằm trong sổ quyết định |
 | Bất biến và điểm nóng về tồn kho vé | Giai đoạn 2 ghi ở B4/B7 dưới dạng nghiệp vụ; phương án vị trí/ownership chỉ được tạo và chốt theo B11-A/B/C |
-| Workflow chi tiết của context builder, prompt/đầu ra LLM và bảng AI cần lưu | Giai đoạn 4, phiếu B18; chỉ chốt schema sau khi workflow rõ |
+| Cách cơ chế chẩn đoán được khởi động, chọn dấu vết nào và lưu gì | Bộ RCA quyết phương pháp; hệ thống chỉ chốt điểm tích hợp và quyền chỉ đọc ở Giai đoạn 4 (`RES-039`) |
 | Bố trí 2 EC2 | Sau sơ đồ container/deployment ứng viên và một lần đo thử sơ bộ |
 
 ---
@@ -406,3 +402,4 @@ Khi theo dõi tiến độ, nhóm có thể dùng lịch tuần bình thường.
 | 2026-08-12 | Khóa tập phương án B11-A bằng duyệt của người thật; đặt đường dẫn canonical cho B11-A/B; cấm B11-B sinh hoặc sửa phương án; thêm impact check A1–A6 trước khi chấp nhận ADR | Làm cho cổng B11 kiểm chứng được và loại bỏ độ yếu do cụm “chỉ từ legacy” |
 | 2026-08-16 | Đóng các câu hỏi chính sách hoàn tiền/khoản giữ lại; loại tên service tiền-chốt khỏi hướng dẫn kiến trúc | Đồng bộ quyết định nghiệp vụ đã xác nhận và giữ Giai đoạn 2 độc lập với phân rã vật lý |
 | 2026-08-17 | Bỏ tiền-chốt chatbot/trợ lý thành các bounded context riêng; chuẩn hóa tên “trợ lý chẩn đoán sự cố” | Để B4/B5 hình thành ranh giới ứng viên từ sự kiện và quyền thay vì nhận kết luận có sẵn |
+| 2026-08-27 | **Gỡ cách chia “nhánh N / nhánh T”** khỏi Phần 3 cùng 12 dòng nhánh T và cột phân nhánh của bảy bảng giai đoạn; thu dải mã Tầng B về `B1–B16`; đổi các dòng nhắc đường ống `Drain → context → LLM` thành chuẩn logging và điểm tích hợp cơ chế chẩn đoán | `RES-034`: thiết kế trợ lý cũ bị gỡ khỏi bộ hệ thống. Cách chia hai nhánh ra đời khi trợ lý là tính năng phụ của sản phẩm bán vé; nay phần chẩn đoán là đề tài và có bộ tài liệu riêng |

@@ -191,4 +191,44 @@
 
 ---
 
+## 11. Đổi đề tài — ngày 2026-08-22
+
+> **Vì sao mục này tồn tại thay vì sửa các dòng ở trên.** Tài liệu này tự khai ở đầu: *"chỉ ghi những gì chủ đồ án đã nói hoặc đã viết"*. Sửa các dòng cũ sẽ làm giả bản ghi. Nên phần đổi đề tài được ghi thành một mục mới có ngày, còn các dòng trên giữ nguyên với tư cách **bản ghi của thời điểm trước 2026-08-22**.
+
+Ngày 2026-08-22, giảng viên hướng dẫn đặt tên đề tài chính thức:
+
+> **"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"**
+
+Nguyên văn thư và bảng mã `DH-TEN`, `DH-MT1`–`DH-MT4`, `DH-DATA`, `DH-DO`, `DH-MOC`, `DH-PB` tại [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
+
+### 11.1 Hai dòng ở trên nay là bản ghi lịch sử
+
+| Vị trí | Nội dung cũ | Cách đọc hiện hành |
+|---|---|---|
+| §1, dòng **Đề tài** | *"Hệ thống đặt vé sự kiện trực tuyến"* | Tên cũ, ghi theo file `ĐỊNH HƯỚNG ĐỒ ÁN TỐT NGHIỆP.pdf`. Tên chính thức nay là `DH-TEN` |
+| §3, **Trục nghiên cứu chính** | *"nghiên cứu các phương pháp bảo đảm tính nhất quán và độ tin cậy trong toàn bộ vòng đời của vé"* | Không còn là trục. Vòng đời vé nay là **hệ giao dịch được mô hình hóa** ở `DH-MT1` — vẫn phải làm đầy đủ, nhưng với vai đầu vào và sản phẩm đích chứ không phải trục nghiên cứu |
+
+### 11.2 Phần nào của tài liệu này **không** đổi
+
+`DH-MT1` gọi đích danh *"các dịch vụ đặt vé, thanh toán, xác thực, cơ sở dữ liệu, API đối tác"*. Vì vậy §2 (hiện trạng), §5 (mong muốn kiến trúc) và §8 (ràng buộc) **giữ nguyên hiệu lực**; §9 giữ hiệu lực **trừ dòng tính năng AI** — xem §11.3 — chúng mô tả chính hệ thống mà mục tiêu đầu tiên của đề tài yêu cầu mô hình hóa.
+
+Năm vấn đề chuyên sâu ở §3 cũng giữ nguyên: chúng nay là **tiêu chí nghiệm thu sản phẩm**, không phải câu hỏi nghiên cứu.
+
+### 11.3 Trợ lý chẩn đoán — đính chính ngày 2026-08-27
+
+> **Đoạn dưới đây thay thế những gì §11.2 từng nói về trợ lý.** Bản đính chính ngày 2026-08-26 ghi *"trợ lý chẩn đoán sự cố ở §4 và §9 vẫn còn trong phạm vi"* và *"§9 giữ nguyên hiệu lực"*. Câu đó **sai** và đã bị thu hồi (`GOV-030`): nó giữ nguyên cả **thiết kế cũ** trong khi `DH-MT4` chỉ yêu cầu **năng lực giải thích**.
+
+| Ở §4 và §9 | Tình trạng từ 2026-08-27 |
+|---|---|
+| Đường ống `log có cấu trúc → Drain gom mẫu → chọn ngữ cảnh → gọi LLM API` ghi ở §9 là **"đã chốt"** | **Không còn là quyết định đã chốt** (`RES-034`). Dòng đó giữ nguyên câu chữ vì đây là bản ghi lời chủ đồ án, nhưng **đọc như lịch sử**. Kỹ thuật gom mẫu log nay là **ứng viên chưa chốt** thuộc bộ tài liệu RCA (`RES-035`) |
+| **Trợ lý** như một thành phần độc lập tự thu thập dấu vết và tự đề xuất nguyên nhân | **Đã gỡ khỏi bộ tài liệu hệ thống.** Việc tìm nguyên nhân nay thuộc **cơ chế RCA** (`DH-MT1`–`DH-MT3`) |
+| Ranh giới **chỉ đọc** | **Còn nguyên hiệu lực**, nay là `NFR-08` viết trung tính cho mọi thành phần quan sát hoặc chẩn đoán |
+| Năng lực **diễn giải nguyên nhân và gợi ý bước kiểm tra** | **Còn nguyên**, là `DH-MT4` — bước cuối của cơ chế RCA, đặc tả ở `docs/research-rca/`, chạy trong FlashTicket |
+
+**§2, §5 và §8 vẫn giữ nguyên hiệu lực** như §11.2 đã ghi — chúng mô tả hệ giao dịch mà `DH-MT1` yêu cầu mô hình hóa. Chỉ phần trợ lý ở §4 và §9 bị đính chính.
+
+Quyết định liên quan: `RES-019`, `RES-020`, `RES-031`, `RES-034`, `RES-035`, `GOV-030`.
+
+---
+
 *Tài liệu này chỉ ghi bối cảnh và mong muốn. Mọi phân tích, đề xuất và quyết định thiết kế nằm ở bộ tài liệu ba tầng.*

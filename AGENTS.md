@@ -7,6 +7,60 @@
 - If a Flash Ticket task starts from another workspace, remain read-only and report the workspace mismatch before project mutation.
 - Use the repository skill `$govern-capstone-work` for every task involving project planning, research, surveys, requirements, business analysis, B3–B14, bounded contexts, microservices, ADRs, Sagas, database/schema ownership, AI-assistant design, report writing, legacy-source comparison, or multi-file changes under `docs/`.
 
+## Đề tài và ranh giới hai bộ tài liệu
+
+Đọc mục này trước khi kết luận bất kỳ điều gì về phạm vi, mục tiêu, hay vai trò của hệ thống đặt vé.
+
+1. **Đề tài chính thức do giảng viên hướng dẫn đặt ngày 2026-08-22:** *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"*. Nguyên văn thư và bảng mã `DH-TEN`, `DH-MT1`–`DH-MT4`, `DH-DATA`, `DH-DO`, `DH-MOC`, `DH-PB` nằm tại `docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`. **Mọi trích dẫn định hướng phải trỏ về tệp đó**, không trỏ về trí nhớ hay một bản tóm tắt trung gian. `DH-MT1` gọi đích danh *"các dịch vụ đặt vé, thanh toán, xác thực, cơ sở dữ liệu, API đối tác"* — hệ thống của nhóm nằm **trong** mục tiêu đầu tiên của đề tài, không phải một đề tài tách rời.
+
+2. **Hai bộ tài liệu, một đề tài.** Bộ hệ thống ở `docs/` và bộ nghiên cứu ở `docs/research-rca/` **độc lập về nhịp làm việc và cổng kiểm soát**. Chúng **không độc lập về đề tài**. Đề tài chính là RCA; bộ hệ thống cung cấp mô hình hệ giao dịch cho `DH-MT1`, bộ nghiên cứu cung cấp phương pháp, dữ liệu, độ đo và ràng buộc. Quyển báo cáo cuối được tổng hợp có chọn lọc từ cả hai nguồn.
+
+   FlashTicket là **sản phẩm đích** và là nơi cơ chế chẩn đoán được tích hợp, triển khai và chạy trực tiếp (`RES-023`). Bộ dữ liệu công khai chỉ dùng để thử nghiệm có đáp án và so sánh kết quả.
+
+   **Không được viết** rằng hai bộ là "hai đề tài", "hai trục", hay bộ này "không phụ thuộc" bộ kia. **Không được hiểu** việc tách bộ là hủy hoặc hạ vai trò bộ tài liệu hệ thống.
+
+3. **Quyền quyết định, không phải quyền đọc** (`RES-028`). Mỗi bộ **không được dùng tài liệu của bộ kia để tự quyết định phần thuộc trách nhiệm riêng của mình**.
+
+   - Bộ nghiên cứu **được nhận** mô hình hệ giao dịch — `B4`, `B5` §5.1, `B7` — qua cửa *Hệ thống → Nghiên cứu*, giữ nguyên nguồn và phiên bản khi trích. Đồ thị suy ra từ chúng là `CANDIDATE` cho tới khi được duyệt. Nó **không được** sửa một bất biến, ranh giới hay yêu cầu của bộ hệ thống.
+   - Bộ hệ thống **được nhận** yêu cầu quan sát qua cửa *Nghiên cứu → Hệ thống*. Nó **không được** để yêu cầu đó quyết định số service, cách gộp tiến trình hay mẫu kiến trúc — những thứ đó thuộc `B11`–`B14`.
+
+   > **Phạm vi của mục 3.** Nó chỉ áp cho ranh giới giữa **hai bộ tài liệu**. Nó **không nới lỏng bất cứ điều gì** trong mục *Legacy implementation quarantine* bên dưới: lệnh cấm đọc `B5.5` và repository cũ trong luồng `FORMATION` ở `B2`–`B10` và `B11-A` giữ nguyên hiệu lực.
+
+4. **Đúng hai cửa nối, không tạo cửa thứ ba.** Chiều nghiên cứu → hệ thống đi qua `docs/research-rca/R0-boi-canh-va-rang-buoc.md` §3; chiều hệ thống → nghiên cứu đi qua `docs/project/lien-ket-rca.md`. Nội dung đi qua cửa chỉ được ghi ở `CANDIDATE` hoặc `OPEN`, và **không được sinh ra hoặc sửa đổi** một kịch bản, yêu cầu, bất biến hay ranh giới của bên kia. Trước khi đóng một gate, chạy **Phép thử độc lập** tại `docs/project/lien-ket-rca.md`.
+
+5. **Không còn bảng quy đổi khi đọc.** `RES-031` thu hồi khung *"chỉ ngừng nhắc ở tài liệu mới"*. Mọi tài liệu đã được sửa thẳng để khớp `DH-TEN`; **đọc tài liệu nào cũng theo đúng nghĩa đen của nó**.
+
+   Hai ngoại lệ có chủ đích, đều tự khai rõ ngay trong tệp:
+
+   - `docs/boi-canh-va-mong-muon.md` là **bản ghi lời chủ đồ án**, nên các dòng cũ được giữ nguyên và §11 của chính tệp đó đính chính phần đổi đề tài.
+   - Nhật ký phiên bản và các dòng quyết định đã bị thay thế trong `decision-register.md` giữ nguyên câu chữ theo quy tắc 3 của sổ; cột *Thay thế quyết định* cho biết dòng nào còn hiệu lực.
+
+6. **Trợ lý cũ đã bị gỡ; năng lực giải thích thì không** (`RES-034`, `GOV-030`). Đây là chỗ đã gây hiểu sai nhiều lần, nên đọc kỹ ba dòng sau trước khi kết luận bất cứ điều gì về phần chẩn đoán.
+
+   | Tên | Là gì | Tình trạng |
+   |---|---|---|
+   | **Trợ lý cũ** | Thành phần độc lập tự thu thập dấu vết và tự đề xuất nguyên nhân, chạy đường ống cố định `log → Drain → context → LLM API`; có bounded context riêng và một "nhánh `T`" đan xen bảy giai đoạn | **Đã gỡ khỏi bộ hệ thống** |
+   | **Cơ chế RCA** | Dựng đồ thị phụ thuộc, ánh xạ log và trace, phát hiện bất thường, lan truyền và xếp hạng nguyên nhân (`DH-MT1`–`DH-MT3`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
+   | **Lớp giải thích** | Nhận kết quả đã xếp hạng, diễn giải nguyên nhân và gợi ý bước kiểm tra (`DH-MT4`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
+
+   > **"Trợ lý RCA"** là tên gọi tắt của **lớp giải thích** — đúng thứ `DH-MT4` gọi là *"trợ lý"*. Nó **không phải** nhánh `T`, **không phải** trợ lý cũ, và **không** chạy đường ống `log → Drain → context → LLM API`. Thân bài các tài liệu dùng chữ *"cơ chế chẩn đoán"* và *"lớp giải thích"*; câu này tồn tại để nối chữ *"trợ lý"* trong thư của giảng viên với thiết kế mới.
+
+   **Ba giới hạn còn nguyên hiệu lực** cho lớp giải thích, chép từ `PRJ-002` sang `RES-034`: không cam kết loại bỏ việc tái hiện lỗi · không tự kết luận nguyên nhân cuối cùng · không tự sửa hệ thống.
+
+7. **Ranh giới hai bộ viết theo trách nhiệm, không theo "thứ này thuộc bộ nào"** (`RES-033`).
+
+   | Bộ hệ thống (`docs/`) chịu trách nhiệm | Bộ RCA (`docs/research-rca/`) chịu trách nhiệm |
+   |---|---|
+   | FlashTicket phải sinh **dữ liệu quan sát** nào | Cách xử lý log và trace |
+   | FlashTicket **tích hợp và chạy** cơ chế RCA (`RES-023` mức 2, gate `B11`) | Cách dựng đồ thị và xếp hạng |
+   | Kết quả **đến được người có quyền sử dụng** | Có dùng kỹ thuật gom mẫu log hay không (`RES-035`) |
+   | Cơ chế **chỉ được đọc**, không tự sửa nghiệp vụ | Cách dùng mô hình ngôn ngữ |
+   | **Vị trí tích hợp** — quyết định ở `B11` | Cách đo chất lượng xếp hạng và lời giải thích |
+
+   **Không được** đọc mục 6 thành *"bộ hệ thống hết trách nhiệm với phần chẩn đoán"*. Bộ hệ thống vẫn phải ghi rõ FlashTicket là nơi cơ chế RCA được tích hợp, triển khai và chạy trực tiếp.
+
+   Chatbot hỗ trợ mua vé **thuộc bộ hệ thống** (`RES-036`) — nó là kênh bán vé, không phải công cụ chẩn đoán.
+
 ## Authority order
 
 Resolve project knowledge in this order, while preserving the higher system/developer/user instruction hierarchy:

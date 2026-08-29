@@ -10,11 +10,12 @@ Apply this workflow to prevent unsupported conclusions, phase-gate violations, a
 ## Load the minimum governing context
 
 1. Confirm that the canonical repository is `D:/Project/flash-ticket-platform` and inspect `git status`.
-2. Read the root `AGENTS.md` completely.
-3. Read [project-authority-and-gates.md](references/project-authority-and-gates.md) for any methodology, domain, architecture, database, ADR, Saga, or legacy comparison task.
-4. Classify the requested output as `FORMATION` or `COMPARISON` before selecting sources. Treat B11-B as the explicit `COMPARISON` exception inside B2–B14. Do not load B5.5, the legacy baseline, or the legacy repository for a `FORMATION` task in B2–B10 or B11-A.
-5. Read only the project documents that directly govern the requested decision, but read each selected document completely.
-6. Read [evaluation-cases.md](references/evaluation-cases.md) only when changing or testing this governance system.
+2. Read the root `AGENTS.md` completely, including the section **Đề tài và ranh giới hai bộ tài liệu**.
+3. Read `docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md` — the verbatim letter that defines the topic. Cite it by its `DH-*` codes, never from memory or from a summary. Any task touching scope, objectives, datasets, evaluation metrics, or the role of the ticketing system requires this file.
+4. Read [project-authority-and-gates.md](references/project-authority-and-gates.md) for any methodology, domain, architecture, database, ADR, Saga, or legacy comparison task.
+5. Classify the requested output as `FORMATION` or `COMPARISON` before selecting sources. Treat B11-B as the explicit `COMPARISON` exception inside B2–B14. Do not load B5.5, the legacy baseline, or the legacy repository for a `FORMATION` task in B2–B10 or B11-A.
+6. Read only the project documents that directly govern the requested decision, but read each selected document completely.
+7. Read [evaluation-cases.md](references/evaluation-cases.md) only when changing or testing this governance system.
 
 Remain read-only and report the mismatch if the active Flash Ticket workspace is not the canonical repository.
 

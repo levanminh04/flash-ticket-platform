@@ -21,8 +21,8 @@ skinparam ranksep 60
 hide methods
 hide circle
 
-package "Aggregate ứng viên: Chi trả" as AG_PAYOUT {
-  class Payout as "Chi trả" <<Aggregate Root>> {
+package "Aggregate ứng viên: Hồ sơ chi trả sự kiện" as AG_PAYOUT {
+  class Payout as "Hồ sơ chi trả sự kiện" <<Aggregate Root>> {
     sự kiện tham chiếu
     trạng thái đối soát
     thời điểm đánh dấu

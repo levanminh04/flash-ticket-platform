@@ -1,11 +1,11 @@
 # B4 — Bản đồ sự kiện miền
 
-- Phiên bản: `B4-v0.14`
+- Phiên bản: `B4-v0.15`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22, sau `B2-v0.10` và `B3-v0.10` (bản `B4-v0.13` cũng được duyệt ngày 2026-08-22)
+- Ngày duyệt: 2026-08-27, sau `B3-v0.11` (`GOV-033`) · `B4-v0.14` và `B4-v0.13` đã được duyệt ngày 2026-08-22
 - Baseline phê duyệt: `B4-v0.11` đã được duyệt trước `B5-v0.9`; `B4-v0.13` lan truyền các quyết định nghiệp vụ được Lê Văn Minh xác nhận ngày 2026-08-22 và đã được duyệt cùng ngày.
-- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B3-business-processes.md` — `B3-v0.10`, `APPROVED` ngày 2026-08-22; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng mục và đọc trạng thái riêng của mỗi dòng
+- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27; `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng mục và đọc trạng thái riêng của mỗi dòng
 - Phân lớp: `FORMATION`
 
 > **Vì sao có `B4-v0.14`:** bản này **không thêm, bớt hay đổi nghĩa sự kiện miền nào**. `A09`/`A10` đã mô tả đúng yêu cầu hủy sự kiện từ trước; `B2-v0.10` chỉ bổ sung mục từ cho khái niệm đó. Tài liệu đã quay lại `REVIEW_READY` theo quy tắc chuỗi phụ thuộc và được Lê Văn Minh duyệt lại đúng thứ tự `B2 → B3 → B4 → B5` ngày 2026-08-22.
@@ -221,7 +221,7 @@ Năm mã trên **không** tạo thêm bất biến mới và **không** thay đ�
 **Điều dòng E chưa quyết định:** kiểu dữ liệu/schema/hợp đồng của các trường, cách đồng bộ giữa ứng dụng và Keycloak, kho lưu vật lý, và nghĩa kỹ thuật của nơi tạo tài khoản admin đầu tiên. Các phần này vẫn nằm ở `B4-OPEN-01` hoặc gate B12/B13 và không được quyết định tại B4.
 
 
-Nguồn trực tiếp của mục này là B2-v0.9, bốn quy trình B3-v0.9, `PRJ-003`, `BIZ-109`, `BIZ-111`, `BIZ-114`, `BIZ-119`, `BIZ-124`, `BIZ-129` và `BIZ-131`–`BIZ-141`; đây chưa phải mô hình phân quyền kỹ thuật ở B8/B13.
+Nguồn trực tiếp của mục này là `B2` §1–§2 và bốn quy trình của `B3` — nội dung hai mục đó **không đổi** từ `B2-v0.9`/`B3-v0.9` tới `B2-v0.12`/`B3-v0.11` hiện hành — `PRJ-003`, `BIZ-109`, `BIZ-111`, `BIZ-114`, `BIZ-119`, `BIZ-124`, `BIZ-129` và `BIZ-131`–`BIZ-141`; đây chưa phải mô hình phân quyền kỹ thuật ở B8/B13.
 
 ### 8.2 Chatbot hỗ trợ mua vé
 
@@ -232,22 +232,7 @@ Nguồn trực tiếp của mục này là B2-v0.9, bốn quy trình B3-v0.9, `P
 
 Nguồn phạm vi là mục “Ranh giới quyền của AI” trong `docs/boi-canh-va-mong-muon.md` và baseline quyền ở B2-v0.9; B4 không suy ra thêm API hay quyền ghi.
 
-### 8.3 Trợ lý chẩn đoán sự cố
-
-Hướng `structured logging → Drain → context → LLM API` và ranh giới chỉ đọc đã được xác nhận, nhưng workflow chi tiết vẫn để B16–B18. B4 chỉ ghi chuỗi ứng viên để B5 nhìn thấy ngôn ngữ và quyền khác biệt:
-
-Ở B4/B5, **sự cố** là tình huống hệ thống không cung cấp hoặc có nguy cơ không cung cấp hành vi mong đợi và cần con người xác minh. Bốn lớp mục tiêu gồm: lỗi âm thầm, lỗi ngoại lệ ứng dụng, lỗi cơ sở dữ liệu và lỗi hạ tầng/tích hợp. Các thuật ngữ này đã được duyệt tại B2-v0.9; riêng T01–T04 vẫn là chuỗi sự kiện ứng viên vì workflow chẩn đoán cuối còn chờ B16–B19.
-
-| Mã | Nguồn kích hoạt/lệnh ứng viên | Sự kiện ứng viên | Trạng thái bằng chứng | Giới hạn |
-|---|---|---|---|---|
-| `T01` | Người vận hành yêu cầu chẩn đoán một sự cố | **Yêu cầu chẩn đoán đã được tạo** | `CANDIDATE` | Cách chọn sự cố/trace đầu vào còn `OPEN` |
-| `T02` | Chọn, liên kết, rút gọn và khử nhạy cảm dấu vết | **Context chẩn đoán đã được dựng** | `CANDIDATE` | Chưa chốt nguồn log, cửa sổ thời gian hoặc dữ liệu lưu |
-| `T03` | Gọi LLM bằng context đã kiểm soát | **Tư vấn chẩn đoán đã được tạo** | `CANDIDATE` | Chỉ gồm nguyên nhân khả dĩ, bằng chứng và bước kiểm tra; không tự sửa |
-| `T04` | Con người kiểm tra kết quả | **Tư vấn đã được xác minh hoặc bác bỏ** | `CANDIDATE` | Cách ghi phản hồi và bộ tiêu chí đánh giá chờ B19 |
-
-Các sự kiện nghiệp vụ ở dòng A–D có thể tạo log/dấu vết làm đầu vào chẩn đoán, nhưng điều này **không** biến trợ lý thành chủ sở hữu các sự kiện đó và không cho trợ lý đường ghi ngược vào nghiệp vụ.
-
-Nguồn trực tiếp là `PRJ-001`, `PRJ-002`, bối cảnh tính năng AI trong `docs/boi-canh-va-mong-muon.md` và phạm vi B16–B19 của Tầng B; T01–T04 vẫn là `CANDIDATE`, không phải quyết định kiến trúc hay hợp đồng.
+> **§8.3 đã bị gỡ ngày 2026-08-27** (`RES-034`). Nó mô tả workflow của trợ lý chẩn đoán cũ — bảng sự kiện ứng viên `T01`–`T04` và đường ống `log → Drain → context → mô hình ngôn ngữ`. **Giữ khoảng trống số hiệu, không đánh số lại**, để mọi tham chiếu `§8.4`/`§8.5` ở B5, B6, B7, B8 không bị lệch. Định nghĩa **sự cố** và **bốn lớp lỗi** mà §8.3 từng nhắc lại vẫn còn nguyên ở `glossary.md` §6 — chúng là từ vựng dùng chung, không phải thiết kế trợ lý.
 
 ### 8.4 Địa điểm, phân loại, tìm kiếm và theo dõi organizer
 
@@ -289,7 +274,7 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 | Hoàn tiền đã thành công | Cập nhật khoản thu/yêu cầu hoàn, liên kết kết quả với đơn và cập nhật sổ đối soát; hậu quả lên vé/tài nguyên vẫn theo nguyên nhân gốc | B, C, D | Không tạo trạng thái “đã hoàn” riêng cho vé hoặc làm mất hiệu lực vé hợp lệ khi chỉ hoàn khoản thu trùng |
 | Vé đã bị vô hiệu hóa | Giữ lịch sử nhưng ẩn QR thô và từ chối check-in | B, D | Không xóa dấu vết và không để quyền vào cửa còn hiệu lực |
 | Sự kiện đã kết thúc và không còn xử lý tiền treo | Mở điều kiện đối soát/chi trả | C | Chỉ một lần `PAID`, không có khoản giữ lại |
-| Dấu vết vận hành đã được tạo | Có thể được chọn vào context chẩn đoán sau khi khử nhạy cảm | T | Trợ lý chỉ đọc, không sở hữu/ghi nghiệp vụ |
+| Dấu vết vận hành đã được tạo | Là đầu ra quan sát được của quá trình xử lý; có thể được đọc và khử nhạy cảm để phục vụ việc lần ra nguyên nhân một sự cố | — | Mọi bên tiêu thụ dấu vết **chỉ được đọc**; không bên nào sở hữu hay ghi ngược vào dữ liệu nghiệp vụ |
 
 ## 10. Bất biến ứng viên và hotspot cho B7/B9–B10
 
@@ -309,7 +294,7 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 | `INV-10` | Một sự kiện có tối đa một lần được đánh dấu `PAID` sau khi đủ điều kiện | BIZ-037–BIZ-038, BIZ-050–BIZ-054 | B7 |
 | `INV-11` | Tỷ lệ phí dùng khi đối soát phải đúng giá trị đã được admin phê duyệt cho sự kiện và không bị đổi âm thầm sau phê duyệt | BIZ-034, BIZ-059, BIZ-142 | B7 xác định phạm vi aggregate và cách phát biểu bất biến; sở hữu dữ liệu chờ B12 |
 | `HOT-01` | Hủy một sự kiện có thể lan tới N đơn/giữ chỗ/vé/yêu cầu hoàn với lỗi từng phần | BIZ-014, BIZ-084–BIZ-086, BIZ-100–BIZ-102 | B7, B9, B10; xem `B4-OPEN-06`; B11 mới xét phương án kiến trúc |
-| `HOT-02` | Ranh giới bảo vệ đồng thời giữa nguồn cung, giữ chỗ và đơn chưa được xác định | `INV-01`, `INV-03`, `INV-06` | B7 làm rõ bất biến; B10 nêu ASR; xem `B4-OPEN-05`; B11-A mới tạo phương án |
+| `HOT-02` | Ranh giới bảo vệ đồng thời giữa nguồn cung, giữ chỗ và đơn chưa được xác định | `INV-01`, `INV-03`, `INV-06` | B7 làm rõ bất biến; **B9 viết kịch bản**; B10 nêu ASR; xem `B4-OPEN-05`; B11-A mới tạo phương án |
 | `HOT-03` | Thanh toán, phát hành vé và hoàn tiền có callback lặp/đến muộn/lỗi sau khi đã thu | BIZ-012–BIZ-013, BIZ-060–BIZ-065 | B7, B9, B10 |
 | `HOT-04` | Check-in cạnh tranh trên cùng vé cần một quyết định nguyên tử để bảo vệ bất biến | BIZ-087 | B7, B9, B10 |
 
@@ -318,7 +303,7 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 | ID | Vấn đề còn thiếu | Vì sao không tự chốt ở B4 | Chủ thể/gate cần xử lý | Có chặn B4 duyệt? |
 |---|---|---|---|---|
 | `B4-OPEN-01` | Cách đồng bộ/kho lưu kỹ thuật của hồ sơ nghiệp vụ và nghĩa cụ thể của nơi tạo admin đầu tiên | Vòng đời, tập trường tối thiểu, bộ role, điều kiện cấp role/công khai, từ chối và các trường hợp ngoài phạm vi đã được đóng bởi `BIZ-131`–`BIZ-141`, `BIZ-151`; chi tiết kỹ thuật chưa thuộc thẩm quyền B4 | Lê Văn Minh; đồng bộ/contract ở B11–B13 | Không; không được mở lại phần nghiệp vụ đã chốt hoặc dùng B4 để chốt schema |
-| `B4-OPEN-02` | Cách khởi tạo yêu cầu chẩn đoán, chọn trace/sự cố, lưu phản hồi và tập ca đánh giá | PRJ-002 chỉ chốt phạm vi hỗ trợ; workflow cuối vẫn `OPEN` | Minh/Nhật; B16–B19, với quyền sơ bộ được xét ở B5 | Không chặn B4; không được biến T01–T04 thành quyết định cuối |
+| `B4-OPEN-02` | **Chuyển giao 2026-08-27** sang bộ tài liệu RCA, mã kế nhiệm `R0-OPEN-07`. Câu hỏi — cơ chế chẩn đoán được khởi động thế nào, chọn dấu vết nào, lưu phản hồi ra sao, tập ca đánh giá gồm gì — **chưa được trả lời**, chỉ đổi nơi quản lý theo `RES-034`. B4 không còn mô hình hóa workflow chẩn đoán | `RES-034`; `T01`–`T04` đã bị gỡ cùng §8.3 | Bộ RCA, qua cửa `docs/project/lien-ket-rca.md` | Không chặn B4 |
 | `B4-OPEN-03` | Các mốc `saleStartAt`, `saleEndAt`, `eventStartAt`, `eventEndAt` được tính động hay phát thành sự kiện kỹ thuật | Đây là lựa chọn thiết kế/contract, không làm đổi quy tắc nghiệp vụ | Lê Văn Minh; B11/B13 | Không |
 | `B4-OPEN-04` | Dữ liệu audit chi tiết cho yêu cầu check-in bị từ chối và thao tác quản trị | B3 chỉ yêu cầu đủ dấu vết, chưa chốt trường/payload/lưu giữ | Lê Văn Minh; Phạm Văn Tuyến rà nhu cầu hiển thị mobile; B8/B13/B16 | Không |
 | `B4-OPEN-05` | Cách bảo vệ đồng thời `INV-01`, `INV-03`, `INV-06` khi có nhiều yêu cầu cạnh tranh | B4 chỉ xác định hotspot; chưa có aggregate/ASR và không được chọn vị trí triển khai | Lê Văn Minh; B7/B9/B10, sau đó B11-A | Không; đây là đầu vào bắt buộc cho B7/B10 |
@@ -337,12 +322,12 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 - [x] Hủy sự kiện được phân biệt với hủy nhiều sự kiện và với hoàn kỹ thuật của một đơn.
 - [x] Callback lặp được phân biệt với thanh toán trùng.
 - [x] Phát hành vé thất bại được phân biệt với gửi vé thất bại.
-- [x] Buyer/attendee, quyền QR và organizer check-in nhất quán với B2-v0.9.
-- [x] Cấu hình khuyến mãi và nhánh từ chối yêu cầu hủy nhất quán với B3-v0.9.
+- [x] Buyer/attendee, quyền QR và organizer check-in nhất quán với từ điển. Ba khái niệm này nằm ở `glossary` §1–§4 và **không đổi** qua `B2-v0.9` → `v0.10` → `v0.11` → `v0.12`; `v0.11` chỉ gỡ năm mục từ ở §6, `v0.12` chỉ thêm một mục từ ở §5.
+- [x] Cấu hình khuyến mãi và nhánh từ chối yêu cầu hủy nhất quán với `B3-v0.11`; `B3` không đổi nội dung nghiệp vụ từ `v0.9` tới nay.
 - [x] Chuỗi `C05 → C01` theo BIZ-100–BIZ-102 phân biệt khoản thu hợp lệ còn phải hoàn với giao dịch thu thừa và hội tụ kích hoạt lặp về một yêu cầu hoàn logic.
 - [x] Không suy rộng yêu cầu audit cho mọi từ chối buyer; quy tắc kích hoạt vô hiệu vé lặp dùng đúng `BIZ-147` và không mở rộng thành các biến thể kỹ thuật bị loại khỏi phạm vi bởi `BIZ-148`.
-- [x] Nhánh trợ lý dùng các thuật ngữ sự cố đã duyệt ở B2-v0.9; T01–T04 vẫn là sự kiện ứng viên và không tiền-chốt detector hay kiến trúc.
-- [x] Chatbot, tài khoản, địa điểm, phân loại, tìm kiếm, theo dõi organizer và trợ lý chẩn đoán không bị bỏ khỏi đầu vào B5.
+- [x] B4 **không còn** mô hình hóa workflow chẩn đoán: §8.3 và bảng `T01`–`T04` đã gỡ theo `RES-034`. Dấu vết vận hành ở §9 được phát biểu như đầu ra quan sát trung tính, không dẫn tới một thành phần tiêu thụ cụ thể nào.
+- [x] Chatbot mua vé, tài khoản, địa điểm, phân loại, tìm kiếm và theo dõi organizer không bị bỏ khỏi đầu vào B5.
 - [x] Không có service, schema, Saga, ADR, topic, API hoặc vị trí aggregate được chốt.
 - [x] Lê Văn Minh đã duyệt B2-v0.9 và B3-v0.9 theo đúng thứ tự phase gate ngày 2026-08-21.
 - [x] Lê Văn Minh đã rà và duyệt dòng `E01`–`E05` tại §8.1.1 cùng việc đồng bộ tham chiếu sang B2-v0.9/B3-v0.9; `B4-v0.11` là baseline đã được duyệt trước `B5-v0.9` (`GOV-021`).
@@ -350,11 +335,13 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 - [x] `B4-v0.13` chỉ lan truyền các quyết định trên, không thêm sự kiện, context, service, schema, API hoặc cơ chế kỹ thuật mới.
 - [x] `A09` và `A10` đã mô tả đủ vòng đời của yêu cầu hủy sự kiện, gồm trạng thái `REJECTED` của chính yêu cầu theo `BIZ-098`; `B2-v0.10` bổ sung mục từ tương ứng nên B4 không phải thêm sự kiện mới.
 - [x] Lê Văn Minh đã duyệt lại `B4-v0.14` ngày 2026-08-22, sau `B2-v0.10` và `B3-v0.10`.
+- [x] Lê Văn Minh đã duyệt `B4-v0.15` ngày 2026-08-27 (`GOV-033`), sau `B2-v0.12` và `B3-v0.11` đúng thứ tự chuỗi. Bản này gỡ §8.3 nên phải duyệt lại, và đã duyệt.
 
 ## 13. Nhật ký phiên bản
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B4-v0.15` | 2026-08-27 | **Sửa ô "Gate xử lý tiếp" của `HOT-02`** — bổ sung `B9` cho khớp `B4-OPEN-05` (*"B7/B9/B10"*) và `B7` §6 (*"còn `OPEN` cho B9–B11"*). Ba chỗ trong cùng tài liệu và tài liệu hạ nguồn từng nói khác nhau; đây là sửa cho nhất quán, không phải quyết định mới về phạm vi. **Gỡ trọn §8.3 "Trợ lý chẩn đoán sự cố"** — bảng sự kiện ứng viên `T01`–`T04` và câu khai đường ống `structured logging → Drain → context → LLM API` — theo `RES-034`. Viết lại một dòng ở §9 để dấu vết vận hành là đầu ra quan sát trung tính thay vì đầu vào của trợ lý; bỏ cột dòng `T`. Chuyển giao `B4-OPEN-02` sang bộ RCA. **Bốn dòng sự kiện chính A/B/C/D, §8.1, §8.2 chatbot, §8.4, §8.5, §9 phần còn lại và §10 không đổi một chữ** | Gỡ thiết kế trợ lý cũ |
 | `B4-v0.14` | 2026-08-22 | Không đổi nội dung. Chỉ đồng bộ khai đầu vào sang `B2-v0.10`/`B3-v0.10` sau khi B2 bổ sung mục từ **Yêu cầu hủy sự kiện**; tài liệu trở lại `REVIEW_READY` theo quy tắc chuỗi phụ thuộc | Lan truyền trạng thái |
 | `B4-v0.9` | 2026-08-21 | Baseline được Lê Văn Minh duyệt `APPROVED` tại commit `8270613` | Phê duyệt |
 | `B4-v0.10` | 2026-08-21 | Bổ sung dòng sự kiện hỗ trợ `E01`–`E04` cho vòng đời tài khoản và hồ sơ organizer tại §8.1.1 | Bổ sung nội dung |
@@ -371,4 +358,4 @@ Sau khi được duyệt, báo cáo có thể dùng:
 - các điểm nóng nhất quán như giữ chỗ/tồn kho, callback thanh toán, hoàn tiền khi hủy sự kiện và check-in đồng thời;
 - giải thích rằng bản đồ sự kiện là đầu vào lập luận ranh giới miền, không phải sơ đồ service.
 
-Không đưa nguyên trạng mã `A01`–`T04`, trạng thái governance, sổ `OPEN` hoặc toàn bộ bảng chi tiết vào báo cáo nếu chúng không giúp giải thích một quyết định. Tên sự kiện trong B4 không được trình bày như hợp đồng message đã hiện thực trước khi B13 chốt.
+Không đưa nguyên trạng mã `A01`–`E05`, trạng thái governance, sổ `OPEN` hoặc toàn bộ bảng chi tiết vào báo cáo nếu chúng không giúp giải thích một quyết định. Tên sự kiện trong B4 không được trình bày như hợp đồng message đã hiện thực trước khi B13 chốt.

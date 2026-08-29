@@ -36,10 +36,6 @@ package ĐốiSoát as "Đối soát và chi trả" <<Hỗ trợ>> #D8EAF8
 
 package GiaoNhận as "Giao nhận thông tin vé" <<Chung>> #E6E6E6
 
-package ChẩnĐoán as "Chẩn đoán sự cố (nhánh đánh giá riêng)" <<Hỗ trợ>> #D8EAF8
-
-rectangle "Dấu vết nghiệp vụ đã khử nhạy cảm\n[đầu vào chỉ đọc — không phải ngữ cảnh]" as TRACE #F5F5F5
-
 ' Các quan hệ ngữ nghĩa đã được truy vết tại B5 §5.1.
 TàiKhoản ..> SựKiện : định danh và quyền
 TàiKhoản ..> MuaVé : định danh và quyền
@@ -62,14 +58,11 @@ Vé ..> ThanhToán : lỗi phát hành
 Vé ..> MuaVé : trả tài nguyên
 Vé ..> GiaoNhận : giao vé
 
-TRACE ..> ChẩnĐoán : dữ liệu chỉ đọc
-
 ' Quan hệ ẩn chỉ điều khiển bố cục, không mang nghĩa miền.
 TàiKhoản -[hidden]down-> SựKiện
 MuaVé -[hidden]right-> ThanhToán
 ThanhToán -[hidden]right-> Vé
 ĐốiSoát -[hidden]right-> GiaoNhận
-GiaoNhận -[hidden]right-> ChẩnĐoán
 
 legend bottom
   |= Ký hiệu |= Vai trò ứng viên |

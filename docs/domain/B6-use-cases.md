@@ -1,12 +1,18 @@
 # B6 — Use case và đặc tả
 
-- Phiên bản: `B6-v0.12`
+- Phiên bản: `B6-v0.14`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22, sau chuỗi `B2-v0.10` → `B5-v0.12`
-- Đầu vào và phiên bản: `docs/domain/B3-business-processes.md` — `B3-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B4-domain-event-map.md` — `B4-v0.14`, `APPROVED` ngày 2026-08-22; `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22, dùng làm ràng buộc thuật ngữ; `docs/project/decision-register.md` — đọc riêng trạng thái của từng ID được dẫn
+- Ngày duyệt: 2026-08-27, sau `B5-v0.14` (`GOV-033`) · `B6-v0.12` đã được duyệt ngày 2026-08-22 sau chuỗi `B2-v0.10` → `B5-v0.12`
+- Đầu vào và phiên bản: `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; `docs/domain/B5-bounded-context-map.md` — `B5-v0.14`, `APPROVED` 2026-08-27; `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27, dùng làm ràng buộc thuật ngữ; `docs/project/decision-register.md` — đọc riêng trạng thái của từng ID được dẫn
 
-> **Cổng phê duyệt:** chuỗi `B2 → B3 → B4 → B5` đã được Lê Văn Minh duyệt lại đúng thứ tự ngày 2026-08-22 sau khi `B2-v0.10` bổ sung mục từ **Yêu cầu hủy sự kiện**; B6 được duyệt sau chuỗi đó.
+> **Cổng phê duyệt:** chuỗi `B2 → B3 → B4 → B5` đã được Lê Văn Minh duyệt lại đúng thứ tự ngày 2026-08-22 sau khi `B2-v0.10` bổ sung mục từ **Yêu cầu hủy sự kiện**; `B6-v0.12` được duyệt sau chuỗi đó.
+>
+> **Trạng thái hiện tại.** Chuỗi thượng nguồn đang ở `B2-v0.12` → `B3-v0.11` → `B4-v0.15` → `B5-v0.14`; sau vòng `RES-034` gỡ thiết kế trợ lý cũ, cả bốn đã được Lê Văn Minh duyệt lại đúng thứ tự ngày 2026-08-27 (`GOV-033`).
+>
+> **B6 không phải sửa một use case nào.** Thứ bị gỡ ở thượng nguồn — năm mục từ ở từ điển, `B4` §8.3, `BC-CAND-08` — đều là từ vựng và ranh giới của **trợ lý chẩn đoán cũ**, thứ chưa bao giờ có use case ở B6. Bảy context còn lại và toàn bộ quan hệ giữa chúng không đổi. **Bốn ghi chú về chatbot mua vé giữ nguyên** theo `RES-036`.
+>
+> `B6-v0.14` vì vậy chỉ khai lại phiên bản đầu vào. Theo Tầng B §3.3, **B6 không được `APPROVED` trước khi chuỗi trên được duyệt lại** — điều kiện này đã thỏa ngày 2026-08-27, và B6 được duyệt **sau** `B5-v0.14` trong cùng lượt (`GOV-033`).
 - Phân lớp: `FORMATION`
 
 > **Đường dẫn canonical:** `docs/domain/B6-use-cases.md`, được khai trong bảng đường dẫn của Tầng B.
@@ -23,7 +29,7 @@ B6 **không** quyết định:
 - aggregate, ranh giới giao dịch hoặc cơ chế nhất quán phân tán;
 - tên trạng thái kỹ thuật mới ngoài những tên đã được B2/B3 chốt.
 
-**Ràng buộc thuật ngữ.** Mọi khái niệm và danh từ nghiệp vụ dùng trong tài liệu này đều lấy từ B2-v0.10. **Tác nhân nghiệp vụ** — người mua, nhà tổ chức, quản trị viên — cũng lấy từ B2. **Tác nhân là hệ thống ngoài hoặc nguồn kích hoạt không phải người** truy về B3 hoặc B4, vì B2 là từ điển khái niệm nghiệp vụ chứ không phải danh mục hệ thống ngoài. Từ mô tả thông thường không cần đưa vào B2. Khi gặp một khái niệm nghiệp vụ chưa có tên chuẩn, B6 ghi `OPEN` và đề xuất cập nhật B2 chứ không tự khóa nghĩa mới.
+**Ràng buộc thuật ngữ.** Mọi khái niệm và danh từ nghiệp vụ dùng trong tài liệu này đều lấy từ `B2-v0.12`. **Tác nhân nghiệp vụ** — người mua, nhà tổ chức, quản trị viên — cũng lấy từ B2. **Tác nhân là hệ thống ngoài hoặc nguồn kích hoạt không phải người** truy về B3 hoặc B4, vì B2 là từ điển khái niệm nghiệp vụ chứ không phải danh mục hệ thống ngoài. Từ mô tả thông thường không cần đưa vào B2. Khi gặp một khái niệm nghiệp vụ chưa có tên chuẩn, B6 ghi `OPEN` và đề xuất cập nhật B2 chứ không tự khóa nghĩa mới.
 
 **Quan hệ với mobile.** Check-in trực tuyến trên mobile không tạo một bộ use case riêng. Nó là cùng một use case với tác nhân và điều kiện thiết bị tương ứng, theo đúng quy định của Tầng B và B3 §5.
 
@@ -45,7 +51,7 @@ Người xuất trình vé **không** phải tác nhân có hồ sơ: `BIZ-073` 
 
 ## 3. Danh mục use case và truy vết về B4
 
-Cột cuối là phép thử bắt buộc của B6: mọi use case phải truy được về ít nhất một sự kiện miền ở B4-v0.13. Không truy được thì hoặc use case thừa, hoặc B4 còn thiếu sự kiện.
+Cột cuối là phép thử bắt buộc của B6: mọi use case phải truy được về ít nhất một sự kiện miền ở `B4-v0.15`. Không truy được thì hoặc use case thừa, hoặc B4 còn thiếu sự kiện.
 
 ### 3.1 Quy trình 1 — Vòng đời sự kiện
 
@@ -95,7 +101,7 @@ Cột cuối là phép thử bắt buộc của B6: mọi use case phải truy �
 | `UC-22` | Nộp đơn đăng ký trở thành organizer | Buyer | `E02` | Liệt kê |
 | `UC-23` | Duyệt hoặc từ chối hồ sơ organizer | Admin | `E03`, `E04` | **Đầy đủ** |
 
-Ba ca trên nay truy vết bình thường về dòng sự kiện hỗ trợ của B4-v0.13. **Không còn ngoại lệ nào** đối với phép thử ở đầu §3.
+Ba ca trên nay truy vết bình thường về dòng sự kiện hỗ trợ của `B4` — dòng `E01`–`E05` xuất hiện từ `B4-v0.11` và **không đổi** tới `B4-v0.15` hiện hành. **Không còn ngoại lệ nào** đối với phép thử ở đầu §3.
 
 ### 3.6 Năng lực tối giản và truy vấn chỉ đọc
 
@@ -189,7 +195,7 @@ Mười một ca đầu được Lê Văn Minh chốt ngày 2026-08-21. `UC-23` 
 
 Mỗi đặc tả dưới đây mô tả hành vi nghiệp vụ. Không đặc tả nào chỉ định service, schema, API, aggregate hay cơ chế đồng bộ; những điều đó thuộc B7 và B11–B13.
 
-Cột **Bất biến chạm tới** dẫn mã của B4-v0.13 để B7 nhặt được; B6 không tự phát biểu bất biến mới.
+Cột **Bất biến chạm tới** dẫn mã `INV-*` của `B4` §10 để B7 nhặt được — bảng §10 **không đổi** từ `B4-v0.13` tới `B4-v0.15`, trừ ô định tuyến `HOT-02` được bổ sung `B9`; B6 không tự phát biểu bất biến mới.
 
 ### 6.1 `UC-02` — Cấu hình bán, loại vé, nguồn cung và khuyến mãi
 
@@ -655,11 +661,11 @@ Không mô tả cơ chế đồng bộ với nguồn danh tính, thứ tự ghi,
 
 ## 7. Phép tự kiểm và điều kiện chuyển trạng thái
 
-- [x] **Mọi** use case đặc tả hoặc liệt kê đều truy được về sự kiện miền B4-v0.13; không còn ngoại lệ nào. Đếm lại trên bản `v0.12`: 9 + 5 + 5 + 1 + 3 + 7 = 30 ca.
+- [x] **Mọi** use case đặc tả hoặc liệt kê đều truy được về sự kiện miền của `B4-v0.15`; không còn ngoại lệ nào. Đếm lại: 9 + 5 + 5 + 1 + 3 + 7 = 30 ca. `B4-v0.15` chỉ gỡ §8.3 về trợ lý cũ — **không sự kiện miền nào ở dòng A/B/C/D bị đụng tới**, nên phép truy vết không đổi.
 - [x] Mười hai đặc tả ở §6 dùng đúng mẫu C3 của Tầng C, gồm cả `Mức ưu tiên` và `Test case tương ứng`.
-- [x] Bốn quy trình của B3-v0.9 đều có use case tương ứng, gồm cả nhánh lỗi đáng chú ý.
+- [x] Bốn quy trình của `B3-v0.11` đều có use case tương ứng, gồm cả nhánh lỗi đáng chú ý; `B3` không đổi nội dung nghiệp vụ từ `v0.9` tới nay.
 - [x] Các năng lực hỗ trợ mà B4 §8.2, §8.4 và §8.5 chuyển tiếp — chatbot, địa điểm, phân loại, tìm kiếm, theo dõi, thống kê đọc — đều có chỗ trong B6, dưới dạng ghi chú kênh hoặc ca liệt kê.
-- [x] Ba tác nhân nghiệp vụ đều có mục từ trong B2-v0.9. Các tác nhân còn lại là hệ thống ngoài hoặc nguồn kích hoạt không phải người và truy về B3 hoặc B4; §2 liệt kê đủ cả bảy.
+- [x] Ba tác nhân nghiệp vụ đều có mục từ trong `B2-v0.12`; ba mục từ này nằm ở §1–§2, không bị vòng `RES-034` đụng tới. Các tác nhân còn lại là hệ thống ngoài hoặc nguồn kích hoạt không phải người và truy về B3 hoặc B4; §2 liệt kê đủ cả bảy.
 - [x] Không khái niệm nghiệp vụ nào được B6 tự đặt tên mới hoặc tự khóa nghĩa.
 - [x] Check-in mobile không tạo bộ use case riêng.
 - [x] Không use case nào được tuyên bố là service, schema, API, aggregate hoặc đơn vị triển khai.
@@ -679,9 +685,10 @@ Không mô tả cơ chế đồng bộ với nguồn danh tính, thứ tự ghi,
 - [x] Codex rà chéo vòng ba; sửa xong ở `B6-v0.6`.
 - [x] Codex đã rà lại nội dung B6-v0.10, bốn nguồn biểu đồ và phần lan truyền các quyết định ngày 2026-08-22; kết quả dựng hình được kiểm lại trong vòng hợp nhất.
 - [x] Số đếm ca liệt kê ở §5 khớp danh mục hiện tại: 30 use case − 12 ca đặc tả đầy đủ = 18 ca chỉ liệt kê. Con số “mười bảy” của `B6-v0.10` là số cũ từ lúc danh mục còn 29 ca, trước khi `UC-30` được thêm.
-- [x] Mọi tham chiếu phiên bản B4 trong thân bài đều là `B4-v0.13`; các câu nhắc `B4-v0.11` còn lại chỉ nằm trong phần kể lịch sử.
+- [x] Mọi tham chiếu phiên bản B4 **mô tả đầu vào hiện hành** đều là `B4-v0.15`, khớp dòng khai đầu vào; các câu **kể lịch sử** giữ nguyên phiên bản của thời điểm đó. Ô này từng sai hai lần: ở `B6-v0.12` thân bài nói `v0.13` trong khi header khai `v0.14`; ở `B6-v0.14` ô này còn khẳng định `v0.14` sau khi đầu vào đã lên `v0.15`.
 - [x] `UC-07` và `UC-08` nay dùng đúng mục từ **Yêu cầu hủy sự kiện** của `B2-v0.10`; B6 không phải thêm hay sửa use case nào vì hành vi đã được mô tả từ trước.
 - [x] Lê Văn Minh đã duyệt toàn bộ `B6-v0.12` thành `APPROVED` ngày 2026-08-22, sau chuỗi `B2 → B5`; AI không tự đánh dấu thay.
+- [x] Lê Văn Minh đã duyệt `B6-v0.14` ngày 2026-08-27 (`GOV-033`), sau `B5-v0.14` đúng quy tắc chuỗi. Bản này chỉ khai lại đầu vào sau vòng `RES-034`, không đổi use case nào.
 
 ## 8. Sơ đồ nguồn
 
@@ -736,6 +743,8 @@ Không đưa nguyên trạng mã `UC-*`, sổ `OPEN` hoặc trạng thái govern
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B6-v0.14` | 2026-08-27 | Chỉ khai lại phiên bản đầu vào theo `B2-v0.12`/`B3-v0.11`/`B4-v0.15`/`B5-v0.14` sau vòng `RES-034`. *(Dòng này trước 2026-08-29 ghi `B2-v0.11`, lệch với dòng khai đầu vào ở đầu tệp vốn ghi đúng `B2-v0.12` — `B2` lên `v0.12` khi bổ sung mục từ `Hồ sơ chi trả sự kiện` theo `RES-040`.)* **Không đổi use case, tác nhân, luồng, đặc tả hay sơ đồ nào**; bốn ghi chú kênh chatbot giữ nguyên | Lan truyền trạng thái |
+| `B6-v0.13` | 2026-08-26 | Sửa lỗi khai phiên bản: §3 và ô tự kiểm nói thân bài dùng `B4-v0.13` trong khi dòng khai đầu vào là `B4-v0.14`. Đồng bộ khai `B5-v0.13` sau tái baseline `A2`/`A4`. **Không đổi use case, tác nhân, luồng hay đặc tả nào** | Sửa lời khai và lan truyền |
 | `B6-v0.12` | 2026-08-22 | Không đổi nội dung use case. Chỉ đồng bộ khai đầu vào sang `B2-v0.10`/`B3-v0.10`/`B4-v0.14` sau khi B2 bổ sung mục từ **Yêu cầu hủy sự kiện** — khái niệm mà `UC-07`/`UC-08` vốn đã mô tả | Lan truyền trạng thái |
 | `B6-v0.11` | 2026-08-22 | Sửa hai điểm do vòng kiểm toán đọc toàn văn phát hiện: số ca chỉ liệt kê ở §5 từ “mười bảy” thành “mười tám” sau khi `UC-30` được thêm, và ba tham chiếu `B4-v0.11` còn sót trong thân bài §3, §3.5, §6 thành `B4-v0.13` | Sửa lỗi biên tập |
 | `B6-v0.10` | 2026-08-22 | Đồng bộ B4-v0.13; đóng phần nghĩa của trạng thái đơn, sức chứa địa điểm và trường hồ sơ organizer; giữ UC-23 ở mức đầy đủ; cắt các biến thể lỗi hủy sự kiện quá sâu; chuyển sang `REVIEW_READY` sau rà lại | Lan truyền quyết định và chuẩn bị duyệt |

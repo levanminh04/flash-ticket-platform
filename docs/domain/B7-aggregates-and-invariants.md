@@ -1,22 +1,22 @@
 # B7 — Mô hình miền theo context, aggregate ứng viên và bất biến
 
-- Phiên bản: `B7-v0.7`
+- Phiên bản: `B7-v0.11`
 - Trạng thái: `APPROVED`
 - Phân lớp: `FORMATION`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22, sau chuỗi `B2-v0.10` → `B5-v0.12`
-- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B5-bounded-context-map.md` — `B5-v0.12`, `APPROVED` ngày 2026-08-22
-- Nguồn truy vết hỗ trợ: `docs/domain/B3-business-processes.md` — `B3-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B4-domain-event-map.md` — `B4-v0.14`, `APPROVED` ngày 2026-08-22; và từng quyết định được dẫn trong `docs/project/decision-register.md`
+- Ngày duyệt: 2026-08-27, sau `B6-v0.14` (`GOV-033`) · `B7-v0.7` đã được duyệt ngày 2026-08-22 sau chuỗi `B2-v0.10` → `B5-v0.12` (`GOV-023`)
+- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27; `docs/domain/B5-bounded-context-map.md` — `B5-v0.14`, `APPROVED` 2026-08-27
+- Nguồn truy vết hỗ trợ: `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; và từng quyết định được dẫn trong `docs/project/decision-register.md`
 
-> **Cổng phê duyệt:** bốn tạo tác thượng nguồn đã được Lê Văn Minh duyệt lại đúng thứ tự `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` ngày 2026-08-22; B7-v0.7 được duyệt sau chúng.
+> **Cổng phê duyệt:** bốn tạo tác thượng nguồn đã được Lê Văn Minh duyệt đúng thứ tự ngày 2026-08-22 (`GOV-023`); B7 được duyệt sau chúng. `B7-v0.9` chỉ sửa **lời khai phiên bản đầu vào bị sai**; `B7-v0.10` khai lại đầu vào theo `B5-v0.13`; `B7-v0.11` gỡ §4.8 và sơ đồ `B7-08` — phần mô hình hóa trợ lý cũ (`RES-034`). **Mô hình miền của vòng đời vé, mọi aggregate và cả 11 bất biến không đổi một chữ.** Cả ba bản chờ Lê Văn Minh xác nhận lại chứ không tự giữ dấu `APPROVED`.
 
-B7-v0.7 dùng chuỗi đầu vào `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12`, kế thừa nội dung nghiệp vụ đã được duyệt ở `B2-v0.9 → B3-v0.9 → B4-v0.13 → B5-v0.11`. `E05` chỉ đặt tên cho quan hệ theo dõi organizer vốn đã có trong B2/B4/B5, không tạo aggregate, bất biến hay ranh giới context mới. Các quyết định ngày 2026-08-22 chỉ đóng nghĩa nghiệp vụ và sửa biểu diễn; aggregate vẫn là `CANDIDATE` chờ Lê Văn Minh duyệt toàn bộ B7.
+B7-v0.9 dùng chuỗi đầu vào `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12`, kế thừa nội dung nghiệp vụ đã được duyệt ở `B2-v0.9 → B3-v0.9 → B4-v0.13 → B5-v0.11`. `E05` chỉ đặt tên cho quan hệ theo dõi organizer vốn đã có trong B2/B4/B5, không tạo aggregate, bất biến hay ranh giới context mới. Các quyết định ngày 2026-08-22 chỉ đóng nghĩa nghiệp vụ và sửa biểu diễn; aggregate vẫn là `CANDIDATE` chờ Lê Văn Minh duyệt toàn bộ B7.
 
 `B7-v0.6` và `B7-v0.7` xử lý kết quả vòng kiểm toán ngày 2026-08-22. Vòng đó đọc lại toàn văn, mở cả tám nguồn sơ đồ và đối chiếu **nghĩa** của từng khái niệm với B2-v0.9 chứ không chỉ đối chiếu tên lớp. Phép kiểm từ vựng cũ chỉ so tên nên không bắt được các chỗ trùng tên lệch nghĩa, sai bội số và thiếu đối tượng nghiệp vụ; §7 và §8 nay tách hai phép kiểm này.
 
 ## 1. Mục tiêu và ranh giới của B7
 
-B7 kiểm tra tám bounded context ứng viên của B5 bằng hai câu hỏi:
+B7 kiểm tra bảy bounded context ứng viên của B5 bằng hai câu hỏi:
 
 1. Những đối tượng nghiệp vụ nào cần thay đổi cùng nhau để bảo vệ một bất biến?
 2. Phần thay đổi bên trong mỗi aggregate ứng viên có thể hoàn tất trong một giao dịch cục bộ hay không?
@@ -27,7 +27,7 @@ Các trạng thái bằng chứng trong tài liệu này được dùng như sau
 
 | Nội dung | Trạng thái |
 |---|---|
-| Quy tắc nghiệp vụ đã được Lê Văn Minh xác nhận và các `INV-01`–`INV-11` trong B4-v0.13 | Giữ nguyên trạng thái của từng nguồn; không diễn giải phê duyệt nghiệp vụ thành quyết định kiến trúc |
+| Quy tắc nghiệp vụ đã được Lê Văn Minh xác nhận và các `INV-01`–`INV-11` trong B4-v0.14 | Giữ nguyên trạng thái của từng nguồn; không diễn giải phê duyệt nghiệp vụ thành quyết định kiến trúc |
 | Tên aggregate root, thành phần nằm trong aggregate và ranh giới giao dịch | `CANDIDATE` |
 | Điểm chưa đủ dữ kiện hoặc còn chờ gate sau | `OPEN` |
 
@@ -69,12 +69,11 @@ Nếu một aggregate riêng lẻ không qua phép thử giao dịch, B7 phải 
 | Thanh toán và hoàn tiền | `Xác nhận thanh toán` | Lần thanh toán đang xử lý và đúng một kết quả thu hợp lệ của một đơn | Đạt với khóa nghiệp vụ là đơn hàng; lịch sử lần thử không nằm trong tập con tăng vô hạn của aggregate |
 | Thanh toán và hoàn tiền | `Yêu cầu hoàn tiền` | Một yêu cầu logic và kết quả thực hiện hiện tại cho một khoản thu | Đạt với khóa nghiệp vụ là khoản thu được hoàn; thử lại cập nhật cùng yêu cầu/kết quả logic |
 | Quyền tham dự và kiểm soát vào cửa | `Phát hành vé` | Tập vé được phép sinh từ một đơn đã thu tiền | Đạt về giao dịch cục bộ với khóa nghiệp vụ là đơn hàng; ranh giới vẫn là `CANDIDATE` vì các vé khác nhau trong cùng đơn có thể tranh chấp trên cùng root khi check-in |
-| Đối soát và chi trả | `Chi trả` | Trạng thái đối soát và dấu `Đã chi trả` duy nhất của một sự kiện; bản thân việc chuyển tiền diễn ra ngoài hệ thống | Đạt với khóa nghiệp vụ là sự kiện |
+| Đối soát và chi trả | `Hồ sơ chi trả sự kiện` | Trạng thái đối soát và dấu `Đã chi trả` duy nhất của một sự kiện; bản thân việc chuyển tiền diễn ra ngoài hệ thống | Đạt với khóa nghiệp vụ là sự kiện |
 | Giao nhận thông tin vé | `Gửi vé` | Tiến trình gửi/gửi lại thông tin của cùng tập vé đã phát hành | Đạt; không sở hữu hiệu lực của vé |
 | Hồ sơ tài khoản và quyền nghiệp vụ | `Hồ sơ nghiệp vụ ứng dụng` | Hồ sơ nghiệp vụ tối thiểu tách khỏi danh tính | Đạt với tên tổ chức và mô tả ngắn; kiểu dữ liệu/schema chờ B12/B13 |
 | Hồ sơ tài khoản và quyền nghiệp vụ | `Đăng ký organizer` | Vòng đời `PENDING`–`ACTIVE`–`REJECTED` của một hồ sơ đăng ký, kèm lý do từ chối khi có | Đạt cho chuyển trạng thái cục bộ; điều kiện `ACTIVE` phụ thuộc xác nhận cấp role từ nguồn danh tính theo `BIZ-140`, nên cửa sổ lỗi giữa hai phía vẫn là `OPEN` cho B9–B11/B13 |
 | Hồ sơ tài khoản và quyền nghiệp vụ | `Theo dõi organizer` | Quan hệ theo dõi giữa một buyer và một organizer | Đạt ở mức quan hệ tối giản của `E05`; không tự thêm điều kiện hồ sơ organizer phải `ACTIVE`, cách lưu/tính tổng người theo dõi chờ B12/B13 |
-| Chẩn đoán sự cố | `Sự cố` | Cụm context chẩn đoán, nguyên nhân khả dĩ và bước kiểm tra của một sự cố | `CANDIDATE` tạm thời; workflow vẫn `OPEN` tại B16–B19 |
 
 ## 4. Mô hình theo từng bounded context
 
@@ -144,7 +143,7 @@ Nguồn biểu đồ: `docs/diagrams/src/B7-02-order-and-availability-class-mode
 
 Theo đúng B2, `Khả dụng` được xét trên **bốn** nhóm đầu vào: trạng thái bán, tồn kho, giữ chỗ và giới hạn mua. Ba root trên chỉ cung cấp nhóm tồn kho; `Giữ chỗ` và `Giới hạn mua` cũng tham gia phép xét, còn điều kiện mở bán đến từ context vòng đời sự kiện. Hình `B7-02` vẽ đủ các đầu vào nằm trong context này và ghi chú phần đến từ context khác, để `Khả dụng` không bị thu hẹp thành đồng nghĩa của `Tồn kho vé còn lại` — hai mục từ mà B2 phân biệt dứt khoát.
 
-Đây là mô hình theo ngôn ngữ “có thể bán/đã cam kết” của context mua vé, khác với cấu hình cùng tên trong context sự kiện. `INV-01` được bảo vệ cục bộ ở từng root, giữ nguyên câu chữ B4-v0.13: ghế không nằm trong hai giữ chỗ/đơn còn hiệu lực và **số lượng khả dụng không được âm**. Giữ, chốt mua hoặc trả lại cùng một cam kết phải hội tụ về một kết quả; callback/hủy/hết hạn lặp không được trừ hoặc cộng nguồn cung lần hai (`INV-06`, `BIZ-062`, `BIZ-065`, `BIZ-066`, `BIZ-085`, `BIZ-086`, `BIZ-090`).
+Đây là mô hình theo ngôn ngữ “có thể bán/đã cam kết” của context mua vé, khác với cấu hình cùng tên trong context sự kiện. `INV-01` được bảo vệ cục bộ ở từng root, giữ nguyên câu chữ B4-v0.14: ghế không nằm trong hai giữ chỗ/đơn còn hiệu lực và **số lượng khả dụng không được âm**. Giữ, chốt mua hoặc trả lại cùng một cam kết phải hội tụ về một kết quả; callback/hủy/hết hạn lặp không được trừ hoặc cộng nguồn cung lần hai (`INV-06`, `BIZ-062`, `BIZ-065`, `BIZ-066`, `BIZ-085`, `BIZ-086`, `BIZ-090`).
 
 #### Aggregate `Giới hạn mua`
 
@@ -178,7 +177,7 @@ Nguồn biểu đồ: `docs/diagrams/src/B7-03-payment-and-refund-class-model.pu
 #### Aggregate `Yêu cầu hoàn tiền`
 
 - Khóa nghiệp vụ là khoản thu cần hoàn; cùng một khoản thu chỉ có một yêu cầu logic và một kết quả hoàn thành (`INV-08`, `BIZ-101`).
-- Yêu cầu hoàn phát sinh từ **bốn** nguyên nhân đã được B4-v0.13 `C01` chốt: thanh toán đến muộn (`B10`), thanh toán trùng (`B11`), phát hành vé thất bại sau thu tiền (`B12`) và hủy sự kiện (`C05`). Hình `B7-03` chỉ vẽ được hai nguyên nhân phát sinh trong context này; hai nguyên nhân còn lại đến từ context khác và được ghi bằng lời trong hình, không bị loại khỏi mô hình.
+- Yêu cầu hoàn phát sinh từ **bốn** nguyên nhân đã được `B4` `C01` chốt — bốn nguyên nhân này không đổi từ `B4-v0.14` tới `B4-v0.15`: thanh toán đến muộn (`B10`), thanh toán trùng (`B11`), phát hành vé thất bại sau thu tiền (`B12`) và hủy sự kiện (`C05`). Hình `B7-03` chỉ vẽ được hai nguyên nhân phát sinh trong context này; hai nguyên nhân còn lại đến từ context khác và được ghi bằng lời trong hình, không bị loại khỏi mô hình.
 - **Danh tính của “khoản thu” còn `OPEN`.** “Khoản thu” là cụm mô tả được B3 dùng xuyên suốt nhưng **không** phải mục từ riêng của B2-v0.9, đúng như B6 §4.6 đã ghi. Trong mô hình hiện tại, khoản thu hợp lệ của một đơn được `Xác nhận thanh toán` giữ, còn từng giao dịch thu thừa chỉ xuất hiện dưới dạng kết quả `Thanh toán trùng` chưa mang số tiền hay định danh riêng. Vì `BIZ-013` yêu cầu hoàn **từng** giao dịch thừa độc lập, cách định danh từng khoản thu phải được chốt ở B12/B13; B7 không tự đặt thêm mục từ.
 - Không hoàn một phần; số tiền hoàn bằng toàn bộ số tiền thực thu cần hoàn của khoản thu (`BIZ-011`–`BIZ-014`).
 - Yêu cầu hoàn đã hoàn thành không được tạo lại; yêu cầu đang xử lý hoặc còn thử lại được tiếp tục trên cùng yêu cầu và kết quả logic thay vì tích lũy danh sách lần hoàn không giới hạn.
@@ -218,15 +217,15 @@ Ranh giới này vì vậy tiếp tục là `CANDIDATE`, chưa phải kết lu�
 
 Nguồn biểu đồ: `docs/diagrams/src/B7-05-reconciliation-and-payout-class-model.puml`.
 
-#### Aggregate `Chi trả`
+#### Aggregate `Hồ sơ chi trả sự kiện`
 
-- **Phạm vi tên gọi.** B2 định nghĩa `Chi trả` là *một lần chuyển tiền cho organizer, thực hiện ngoài hệ thống*, và tách riêng `Đã chi trả` là *trạng thái admin đánh dấu thủ công*. Root ở đây giữ đúng phần nằm trong hệ thống: trạng thái đối soát và dấu `Đã chi trả` của một sự kiện. Nó **không** sở hữu việc chuyển tiền, vì hệ thống không quan sát được việc đó.
+- **Tên gọi khớp nghĩa từ `B2-v0.12`.** Root này từng mang tên `Chi trả` — tên mà B2 gán cho *một lần chuyển tiền cho organizer, thực hiện **ngoài** hệ thống*. Nó thực chất giữ phần nằm **trong** hệ thống: trạng thái đối soát, dấu `Đã chi trả` và số tiền chi trả của một sự kiện. Chỗ lệch đó đã được sửa bằng cách **đổi tên root** và **bổ sung mục từ `Hồ sơ chi trả sự kiện`** vào từ điển. Root **không** sở hữu việc chuyển tiền, vì hệ thống không quan sát được việc đó; `Chi trả` giữ nguyên nghĩa cũ ở B2 cho lần chuyển tiền thật.
 - Khóa nghiệp vụ là sự kiện; một sự kiện có tối đa một lần được đánh dấu `Đã chi trả` (`INV-10`, `BIZ-037`, `BIZ-038`).
 - Chỉ được mở sau khi sự kiện kết thúc, không còn `Lần thanh toán` đang chờ và không còn `Yêu cầu hoàn tiền` đang xử lý (`BIZ-050`–`BIZ-052`).
-- Admin phải hoàn tất `Đối soát thủ công` với báo cáo cổng thanh toán trước khi đánh dấu; sai lệch phát hiện sau đó xử lý ngoài hệ thống và không mở lại vòng đời (`BIZ-053`, `BIZ-054`). Theo đúng định nghĩa B2, chính `Đối soát thủ công` là nơi admin xác nhận không còn `Lần thanh toán` và `Yêu cầu hoàn tiền` đang xử lý, nên hình gắn hai điều kiện đó vào quy tắc này thay vì vào root `Chi trả`.
+- Admin phải hoàn tất `Đối soát thủ công` với báo cáo cổng thanh toán trước khi đánh dấu; sai lệch phát hiện sau đó xử lý ngoài hệ thống và không mở lại vòng đời (`BIZ-053`, `BIZ-054`). Theo đúng định nghĩa B2, chính `Đối soát thủ công` là nơi admin xác nhận không còn `Lần thanh toán` và `Yêu cầu hoàn tiền` đang xử lý, nên hình gắn hai điều kiện đó vào quy tắc này thay vì vào root `Hồ sơ chi trả sự kiện`.
 - `Số tiền chi trả = Doanh thu thực thu - Phí nền tảng`; doanh thu thực thu đã phản ánh khuyến mãi và hoàn tiền, còn phí dùng tỷ lệ đã cố định khi sự kiện được duyệt (`BIZ-036`, `BIZ-059`, `BIZ-142`).
 
-`Sổ cái đối soát chỉ đọc` là read model phục vụ đối chiếu, không phải aggregate ghi và không trở thành nguồn sự thật thay cho thanh toán/hoàn tiền. Nó tổng hợp từ **khoản thu hợp lệ** — tức `Xác nhận thanh toán` — và kết quả hoàn, chứ không tổng hợp từ `Lần thanh toán`: B2 định nghĩa `Doanh thu thực thu` là tổng tiền *giao dịch bán hợp lệ*, còn một lần thanh toán chỉ là một lần khởi tạo và có thể thất bại. `Lần thanh toán` chỉ được dùng làm điều kiện “không còn lần đang chờ” của `Chi trả` (`BIZ-051`). Chiều tính tiền cũng đi từ read model sang giá trị chi trả: `Số tiền chi trả` lấy `Doanh thu thực thu` rồi trừ `Phí nền tảng`. Nơi sở hữu dữ liệu vật lý của tỷ lệ phí vẫn `OPEN` tại `B5-OPEN-08`/`BIZ-123` và thuộc B12.
+`Sổ cái đối soát chỉ đọc` là read model phục vụ đối chiếu, không phải aggregate ghi và không trở thành nguồn sự thật thay cho thanh toán/hoàn tiền. Nó tổng hợp từ **khoản thu hợp lệ** — tức `Xác nhận thanh toán` — và kết quả hoàn, chứ không tổng hợp từ `Lần thanh toán`: B2 định nghĩa `Doanh thu thực thu` là tổng tiền *giao dịch bán hợp lệ*, còn một lần thanh toán chỉ là một lần khởi tạo và có thể thất bại. `Lần thanh toán` chỉ được dùng làm điều kiện “không còn lần đang chờ” của `Hồ sơ chi trả sự kiện` (`BIZ-051`). Chiều tính tiền cũng đi từ read model sang giá trị chi trả: `Số tiền chi trả` lấy `Doanh thu thực thu` rồi trừ `Phí nền tảng`. Nơi sở hữu dữ liệu vật lý của tỷ lệ phí vẫn `OPEN` tại `B5-OPEN-08`/`BIZ-123` và thuộc B12.
 
 ### 4.6. Giao nhận thông tin vé
 
@@ -262,7 +261,7 @@ Nguồn biểu đồ: `docs/diagrams/src/B7-07-account-and-business-rights-class
 
 **Điều kiện nhất quán ứng viên từ `BIZ-140`.** Root `Đăng ký organizer` chỉ được chuyển sang `ACTIVE` sau khi nhận xác nhận rằng đúng tài khoản đã được cấp role `ORGANIZER`. Đây là điều kiện nghiệp vụ đã được xác nhận, nhưng ranh giới aggregate ứng dụng không thể gộp thao tác cấp role ở Keycloak và thay đổi hồ sơ cục bộ thành một giao dịch. Trường hợp Keycloak đã cấp role nhưng việc ghi `ACTIVE` thất bại, hoặc kết quả cấp role chưa xác định khi thử lại, phải được B9/B10 mô tả như lỗi từng phần và được B11/B13 quyết định cách phối hợp/hợp đồng. B7 không tự chọn retry, bù trừ, Saga hay luồng thu hồi role; điều kiện và cách bảo vệ này giữ trạng thái `CANDIDATE`/`OPEN` tương ứng.
 
-Dòng `E01`–`E05` không tạo aggregate hoặc bất biến mới tại B7. `E01`–`E04` hoàn thiện truy vết vòng đời tài khoản/hồ sơ organizer; `E05` đặt tên cho việc ghi nhận quan hệ theo dõi đã có từ `BIZ-128`. Chúng không làm thay đổi kết luận về tám bounded context ứng viên.
+Dòng `E01`–`E05` không tạo aggregate hoặc bất biến mới tại B7. `E01`–`E04` hoàn thiện truy vết vòng đời tài khoản/hồ sơ organizer; `E05` đặt tên cho việc ghi nhận quan hệ theo dõi đã có từ `BIZ-128`. Chúng không làm thay đổi kết luận về bảy bounded context ứng viên.
 
 #### Aggregate `Theo dõi organizer` và quyền sở hữu
 
@@ -271,15 +270,11 @@ Dòng `E01`–`E05` không tạo aggregate hoặc bất biến mới tại B7. `
 - `Sở hữu sự kiện` giữ nghĩa một sự kiện thuộc đúng một **tài khoản organizer** và không có chuyển quyền trong phạm vi (`BIZ-114`, `BIZ-135`). Hồ sơ đăng ký organizer không phải chủ sở hữu sự kiện. Bất biến “đúng một owner” được bảo vệ trong aggregate `Sự kiện bán vé`; context tài khoản chỉ cung cấp tham chiếu tài khoản/role để kiểm quyền.
 - Biểu đồ dùng đúng tập trường nghiệp vụ đã chốt tại `BIZ-151`; kiểu dữ liệu, schema và hợp đồng vẫn chờ B12/B13.
 
-### 4.8. Chẩn đoán sự cố
-
-Nguồn biểu đồ: `docs/diagrams/src/B7-08-incident-diagnosis-class-model.puml`.
-
-`Sự cố` là aggregate root **ứng viên tạm thời** để gom `Context chẩn đoán`, `Nguyên nhân khả dĩ` và `Bước kiểm tra tiếp theo` cho cùng một sự cố. `Dấu vết vận hành`, `Log có cấu trúc`, `Mã tương quan` và `Mẫu log Drain` chỉ là đầu vào đọc; mô hình không ghi ngược vào hệ thống nguồn.
-
-`Trợ lý chẩn đoán sự cố` chỉ hỗ trợ liên kết dấu vết, đề xuất nguyên nhân khả dĩ và bước kiểm tra. Nó không tự kết luận nguyên nhân cuối cùng và không tự sửa hệ thống (`PRJ-001`, `PRJ-002`).
-
-Ranh giới này chưa qua phép thử cuối vì workflow T01–T04 và tập ca đánh giá còn `OPEN` (`B4-OPEN-02`, `B5-OPEN-05`). Không dùng aggregate tạm này để chốt dữ liệu, service hay API trước B16–B19.
+> **§4.8 đã bị gỡ ngày 2026-08-27** (`RES-034`). Nó mô hình hóa aggregate ứng viên tạm thời `Sự cố` cùng `Context chẩn đoán`, `Nguyên nhân khả dĩ`, `Bước kiểm tra tiếp theo` và `Trợ lý chẩn đoán sự cố` — toàn bộ là **thiết kế trợ lý cũ**. Sơ đồ `B7-08-incident-diagnosis-class-model.puml` bị xóa cùng.
+>
+> **Giữ khoảng trống số hiệu, không đánh số lại** §4.1–§4.7, để mọi tham chiếu ở B8, B9 và các tài liệu khác không bị lệch.
+>
+> Ba giới hạn của `PRJ-002` mà mục này từng nhắc — không cam kết loại bỏ tái hiện lỗi, không tự kết luận, không tự sửa hệ thống — **vẫn còn nguyên hiệu lực**, chép sang `RES-034` và giữ ở bảng yêu cầu dưới dạng ràng buộc chỉ đọc trung tính.
 
 ## 5. Truy vết `INV-01`–`INV-11`
 
@@ -294,19 +289,18 @@ Ranh giới này chưa qua phép thử cuối vì workflow T01–T04 và tập c
 | `INV-07` | `Phát hành vé`; `Gửi vé` chỉ tham chiếu | Một lần phát hành logic/đơn, đúng số quyền; gửi lại không sinh quyền | Thu tiền, trả tài nguyên và hoàn kỹ thuật đi qua context khác |
 | `INV-08` | `Yêu cầu hoàn tiền` | Một yêu cầu logic và một hoàn thành/khoản thu | Lô hoàn N đơn khi hủy sự kiện còn `B5-OPEN-03` |
 | `INV-09` | `Phát hành vé` | Một vé tối đa một check-in thành công | Cơ chế tranh chấp cụ thể ở B9–B11 |
-| `INV-10` | `Chi trả` | Một lần đánh dấu đã chi trả/sự kiện | Dữ liệu đọc từ thanh toán/hoàn tiền là xuyên context |
-| `INV-11` | `Sự kiện bán vé`; `Chi trả` tiêu thụ giá trị đã duyệt | Không sửa âm thầm tỷ lệ sau duyệt | Sở hữu dữ liệu vật lý chờ B12 |
+| `INV-10` | `Hồ sơ chi trả sự kiện` | Một lần đánh dấu đã chi trả/sự kiện | Dữ liệu đọc từ thanh toán/hoàn tiền là xuyên context |
+| `INV-11` | `Sự kiện bán vé`; `Hồ sơ chi trả sự kiện` tiêu thụ giá trị đã duyệt | Không sửa âm thầm tỷ lệ sau duyệt | Sở hữu dữ liệu vật lý chờ B12 |
 
 ## 6. Kết quả xử lý hotspot và điểm mở
 
-| Điểm mở/hotspot | Kết quả tại B7-v0.7 | Trạng thái và bước tiếp |
+| Điểm mở/hotspot | Kết quả tại `B7-v0.11` | Trạng thái và bước tiếp |
 |---|---|---|
 | `HOT-01`, `B4-OPEN-06`, `B5-OPEN-03` — hủy sự kiện kéo theo N đơn/hoàn tiền | B7 xác định các root tham gia nhưng không biến fan-out N đơn thành một giao dịch aggregate | Cơ chế phối hợp chờ B11; không mở một kịch bản chất lượng riêng về mạng chập chờn khi hủy sự kiện nếu không phục vụ trục nghiên cứu (`BIZ-148`) |
 | `HOT-02`, `B4-OPEN-05`, `B5-OPEN-02` — nguồn cung/giữ chỗ/đơn | Đã thu hẹp thành `Đơn hàng`; root nguồn cung `Ghế`/`Loại vé`/`Sector`; `Giới hạn mua`; `Khuyến mãi`; `Lượt dùng khuyến mãi`; không nhập thành aggregate lớn | Ranh giới aggregate là `CANDIDATE`; phối hợp nguyên tử/retry còn `OPEN` cho B9–B11 |
 | `HOT-03` — callback trùng/muộn, lỗi sau thu tiền | `Xác nhận thanh toán` và `Yêu cầu hoàn tiền` bảo vệ idempotency cục bộ; phát hành/trả tài nguyên là xuyên aggregate | Còn phân tích thất bại tại B9/B10 và phương án tại B11. Thêm một điểm `OPEN`: cách định danh từng “khoản thu” — khóa nghiệp vụ của `Yêu cầu hoàn tiền` — chưa có mục từ B2 và chưa có lớp biểu diễn, trong khi `BIZ-013` đòi hoàn từng giao dịch thừa độc lập; owner Lê Văn Minh, gate B12/B13 |
 | `HOT-04` — check-in cạnh tranh | Trạng thái sử dụng được bảo vệ qua root `Phát hành vé`; chỉ một chuyển đổi thành công cho mỗi vé; yêu cầu ngoài không sửa trực tiếp entity `Vé` | Ranh giới là `CANDIDATE`; B9/B10 kiểm cả tranh chấp cùng vé và tranh chấp giữa các vé khác nhau trong cùng đơn, rồi mới quyết định có cần mở lại ranh giới trước B11-A hay không; cách khóa/ghi cụ thể chờ B11–B13 |
 | `B4-OPEN-07`, `B5-OPEN-04` — vô hiệu hóa lặp | Chuyển trạng thái đơn điệu trong `Vé`; lần lặp không tạo thêm hậu quả | Đã đóng bởi `BIZ-147`; không mở rộng theo `BIZ-148` |
-| `B4-OPEN-02`, `B5-OPEN-05` — workflow chẩn đoán | Chỉ có aggregate `Sự cố` tạm thời, không chốt lưu trữ hay API | `OPEN`; B16–B19 |
 | `B4-OPEN-03`, `B5-OPEN-06` — mốc thời gian kỹ thuật | B7 chỉ giữ cửa sổ nghiệp vụ, không đặt timer/event kỹ thuật | `OPEN`; B11/B13 |
 | `B4-OPEN-04`, `B5-OPEN-07` — audit | Danh sách thao tác bắt buộc lưu dấu vết đã đóng tại `BIZ-152`; B7 không thêm lớp audit vào aggregate miền | Trường/payload/lưu giữ vẫn `OPEN` cho B13/B16 |
 | `B4-OPEN-08`, `B5-OPEN-08`, `BIZ-123` — nơi giữ tỷ lệ phí | B7 chỉ gán bất biến nghĩa nghiệp vụ cho `Sự kiện bán vé` | `OPEN`; B12 sau B11-C |
@@ -315,13 +309,14 @@ Ranh giới này chưa qua phép thử cuối vì workflow T01–T04 và tập c
 | `B5-OPEN-12` — trường hồ sơ organizer | Aggregate dùng tên tổ chức, mô tả ngắn và lý do từ chối khi có | Đã đóng phần nghiệp vụ bởi `BIZ-151`; kiểu dữ liệu/schema/hợp đồng chờ B12/B13 |
 | `B4-OPEN-01`, `E03`, `BIZ-140` — Keycloak cấp role và hồ sơ chuyển `ACTIVE` | Root `Đăng ký organizer` chặn chuyển `ACTIVE` khi chưa có xác nhận cấp role; việc cấp role bên ngoài và ghi hồ sơ cục bộ không nằm trong một giao dịch aggregate | Điều kiện cục bộ là `CANDIDATE`; lỗi từng phần/thử lại còn `OPEN` cho B9/B10, phương án phối hợp và hợp đồng chờ B11/B13; không tự thêm luồng thu hồi role |
 | `BIZ-130` — trạng thái đơn | B7 giữ nghĩa `BIZ-150`, không đặt enum trạng thái | Tên/chuyển trạng thái và cách biểu diễn còn `OPEN` cho B12/B13; không chặn B7/B8 |
+| ~~Tên root `Chi trả` không mang nghĩa B2 gán cho nó~~ | B2 định nghĩa `Chi trả` là *một lần chuyển tiền cho organizer, thực hiện ngoài hệ thống*, và tách riêng `Đã chi trả` là trạng thái admin đánh dấu. Root ở §4.5 thực chất giữ trạng thái đối soát cộng dấu `Đã chi trả` — tức phần nằm **trong** hệ thống | **ĐÃ ĐÓNG ngày 2026-08-27.** Lê Văn Minh chọn hướng **(a)**: đổi tên root thành **`Hồ sơ chi trả sự kiện`** và bổ sung mục từ tương ứng vào `B2-v0.12`. `Chi trả` giữ nguyên nghĩa cũ cho lần chuyển tiền thật ngoài hệ thống, nên ranh giới mà B2 cố ý tách vẫn còn. Sơ đồ `B7-05` đã đổi tên và dựng lại. Ghi tại `RES-040` |
 | `Yêu cầu hủy sự kiện` chưa có nơi bảo vệ — phát hiện tại vòng kiểm toán `B7-v0.6` | Lê Văn Minh chọn mô hình hóa và bổ sung mục từ B2. `B2-v0.10` thêm mục từ, `B7-v0.7` thêm aggregate ứng viên `Yêu cầu hủy sự kiện` tại §4.1 với bất biến truy về `BIZ-008`, `BIZ-009`, `BIZ-083`, `BIZ-097`–`BIZ-099` | Đã đóng phần ranh giới. Còn `OPEN`: có được gửi lại yêu cầu sau khi bị từ chối hay không. B6/B8 đã được duyệt khi điểm này còn mở nên hai tài liệu cố ý im lặng; chốt “có” cần một quyết định nghiệp vụ riêng và mở lại B6/B8. Chuỗi `B2 → B5` đã được duyệt lại ngày 2026-08-22 |
 
 ## 7. Kiểm tra từ vựng và giới hạn thiết kế
 
 Phép kiểm từ vựng gồm **hai phần tách biệt**. Gộp chúng làm một là nguyên nhân khiến vòng trước bỏ sót lỗi: một lớp có thể trùng tên mục từ B2 mà vẫn mang nghĩa khác.
 
-**Phần 1 — tên.** Tám biểu đồ dùng 57 tên lớp duy nhất; cả 57 đều là mục từ nguyên văn của B2-v0.10. B7 không thêm lớp có tên kỹ thuật như service, controller, repository, database, message, queue, API hoặc Saga.
+**Phần 1 — tên.** **Bảy** biểu đồ dùng **48** tên lớp duy nhất; cả 48 đều là mục từ nguyên văn của `B2-v0.12`. B7 không thêm lớp có tên kỹ thuật như service, controller, repository, database, message, queue, API hoặc Saga.
 
 **Phần 2 — nghĩa.** Từng lớp phải khớp cả định nghĩa lẫn cột “phân biệt dứt khoát với” của B2. Vòng `B7-v0.6` sửa bốn chỗ trước đây chỉ khớp tên:
 
@@ -329,7 +324,7 @@ Phép kiểm từ vựng gồm **hai phần tách biệt**. Gộp chúng làm m�
 |---|---|---|
 | `Khả dụng` | B2 xét trên trạng thái bán, tồn kho, giữ chỗ **và giới hạn mua**; hình chỉ vẽ tồn kho | Bổ sung giữ chỗ và giới hạn mua vào phép xét; ghi rõ điều kiện mở bán đến từ context khác |
 | `Tồn kho vé còn lại` | Bị dùng thay cho “số lượng khả dụng” khi phát biểu `INV-01`, dù B2 nói tồn kho “chỉ là một đầu vào” của khả dụng | Trả `INV-01` về đúng câu chữ B4-v0.13 |
-| `Chi trả` | B2 định nghĩa là lần chuyển tiền **ngoài hệ thống**; root lại giữ trạng thái đối soát trong hệ thống | Giữ tên nhưng nói rõ phạm vi root là trạng thái đối soát và dấu `Đã chi trả` |
+| ~~`Chi trả`~~ → `Hồ sơ chi trả sự kiện` | B2 định nghĩa `Chi trả` là lần chuyển tiền **ngoài hệ thống**; root lại giữ trạng thái đối soát trong hệ thống | **Đã giải quyết ở `B7-v0.11`.** Root được **đổi tên**, và `B2-v0.12` bổ sung mục từ `Hồ sơ chi trả sự kiện` cho vật thể trong hệ thống. `Chi trả` giữ nguyên nghĩa cũ cho lần chuyển tiền thật. Chỗ lệch nghĩa cuối cùng của B7 nay đã hết |
 | `Chính sách hoàn tiền` | B2 là quy tắc cố định cấp nền tảng; hình cho mỗi `Yêu cầu hoàn tiền` sở hữu một bản | Chuyển thành quy tắc được tham chiếu |
 
 Bốn khái niệm `Ghế`, `Loại vé`, `Sector` và `Khuyến mãi` cố ý mang hai mô hình ở hai context. Đây **không** phải lệch nghĩa: B5 §4 đã ghi ranh giới ngôn ngữ tương ứng, và §3/§4.2 nêu rõ mô hình nào thuộc context nào.
@@ -341,33 +336,44 @@ Những khái niệm chỉ dùng làm read model, yêu cầu, quy tắc, kết q
 - `Yêu cầu check-in` là yêu cầu tác động lên vé, không sở hữu trạng thái sử dụng;
 - `Danh tính và vòng đời tài khoản` là nguồn danh tính/role bên ngoài hồ sơ nghiệp vụ ứng dụng;
 - `Theo dõi organizer` và `Sở hữu sự kiện` tham chiếu tài khoản/vai trò tương ứng; chúng không lấy hồ sơ đăng ký organizer làm nguồn danh tính hay chủ sở hữu;
-- `Dấu vết vận hành`, `Log có cấu trúc`, `Mã tương quan` và `Mẫu log Drain` đều là đầu vào đọc của nhánh chẩn đoán và dùng chung một stereotype.
 
 ## 8. Điều kiện chuyển `REVIEW_READY`
 
-Mỗi ô dưới đây được suy lại theo **nội dung hiện tại của `B7-v0.7`**, không kế thừa kết quả của vòng trước:
+Mỗi ô dưới đây được suy lại theo **nội dung hiện tại của `B7-v0.11`**, không kế thừa kết quả của vòng trước:
 
-- [x] Tám nguồn biểu đồ lớp phân tích parse và render được.
-- [x] Mọi **tên lớp** đều truy được về B2-v0.10 — 57/57, đếm lại trên bản `v0.7`.
-- [x] Mọi **nghĩa** của lớp đều khớp định nghĩa B2-v0.10; bốn chỗ lệch nghĩa của `v0.5` đã được sửa và ghi lại tại §7.
+- [x] **Bảy** nguồn biểu đồ lớp phân tích parse và render được — `B7-08` đã bị xóa cùng §4.8 (`RES-034`). Bố cục cũng đạt: `B7-04` đã được sửa ở `B7-v0.11` và **mở ảnh ra nhìn** để xác nhận, không còn nhãn chồng.
+- [x] Mọi **tên lớp** đều truy được về `B2-v0.12` — **48/48**, đếm lại bằng script trên bản `v0.11` sau khi xóa sơ đồ `B7-08`.
+- [x] Phép kiểm **nghĩa** đã chạy cho cả 48 lớp và kết quả được ghi đúng tại §7: cả bốn chỗ lệch của `v0.5` **đã sửa xong**. Chỗ cuối — root `Chi trả` mang nghĩa mà B2 không gán cho nó — được xử lý ở `B7-v0.11` bằng cách đổi tên root thành `Hồ sơ chi trả sự kiện` và bổ sung mục từ tương ứng vào `B2-v0.12`. **Không còn chỗ nào tên khớp mà nghĩa lệch.**
 - [x] Mọi đối tượng nghiệp vụ có vòng đời riêng ở B3/B4 đều có nơi bảo vệ ở B7. `Yêu cầu hủy sự kiện` — chỗ bỏ sót của `v0.5` — đã có aggregate ứng viên tại §4.1.
-- [x] `INV-01`–`INV-11` không bị bỏ sót và được phát biểu đúng câu chữ B4-v0.13 §10.
-- [x] Bội số trong tám hình không phát biểu quy tắc nghiệp vụ nào chưa được duyệt; hai bội số sai của `v0.5` ở `B7-01` đã được sửa.
-- [x] Không có service/schema/Saga/ADR hoặc bằng chứng hiện thực tham khảo đi vào lập luận hình thành. Stereotype «Domain Service» của `Trợ lý chẩn đoán sự cố` là khái niệm chiến thuật mức phân tích, không phải đơn vị triển khai; nguồn danh tính được dẫn theo `PRJ-003` đã `USER_CONFIRMED`.
-- [x] Tám hình tuân Tầng C §3.2.1 và `GOV-020`: không dùng màu nền để mang nghĩa, phân nhóm bằng tiêu đề khung và stereotype nên vẫn đọc được khi in thang xám.
+- [x] `INV-01`–`INV-11` không bị bỏ sót và được phát biểu đúng câu chữ `B4-v0.15` §10. `B4-v0.15` **có sửa §10**, nhưng chỉ ở ô *Gate xử lý tiếp* của `HOT-02` — bổ sung `B9` cho khớp `B4-OPEN-05` và `B7` §6. **Không câu chữ bất biến nào đổi**, nên phép truy vết của B7 không bị ảnh hưởng.
+- [x] Bội số trong **bảy** hình không phát biểu quy tắc nghiệp vụ nào chưa được duyệt; hai bội số sai của `v0.5` ở `B7-01` đã được sửa.
+- [x] Không có service/schema/Saga/ADR hoặc bằng chứng hiện thực tham khảo đi vào lập luận hình thành. Lớp `Trợ lý chẩn đoán sự cố` từng mang stereotype «Domain Service» đã bị xóa cùng §4.8 và sơ đồ `B7-08`; nguồn danh tính được dẫn theo `PRJ-003` đã `USER_CONFIRMED`.
+- [x] **Bảy** hình tuân Tầng C §3.2.1 và `GOV-020`: không dùng màu nền để mang nghĩa, phân nhóm bằng tiêu đề khung và stereotype nên vẫn đọc được khi in thang xám.
 - [x] Tác giả B6 đã rà chéo B7; tác giả B7 đã xử lý các phát hiện về `Khả dụng`, ranh giới phát hành/check-in, tài khoản–hồ sơ organizer và tác động của `E05` mà không tự đóng điểm mở.
-- [x] Tác động của B4-v0.13/B5-v0.11 đã được đánh giá: các quyết định mới không đổi tập context hoặc ranh giới aggregate; `BIZ-147` chỉ khóa chuyển trạng thái vé đơn điệu.
-- [x] Chuỗi đầu vào được duyệt đúng thứ tự ở cả hai vòng: `B4-v0.13` trước `B5-v0.11`, rồi `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` ngày 2026-08-22.
+- [x] Tác động của B4-v0.14/B5-v0.12 đã được đánh giá: các quyết định mới không đổi tập context hoặc ranh giới aggregate; `BIZ-147` chỉ khóa chuyển trạng thái vé đơn điệu.
+- [x] Chuỗi đầu vào được duyệt đúng thứ tự ở cả hai vòng: `B4-v0.13` trước `B5-v0.11`, rồi `B2 → B3 → B4 → B5` ngày 2026-08-22.
 - [x] Lê Văn Minh đã đóng riêng `B5-OPEN-04`, `B5-OPEN-10` và phần nghiệp vụ của `B5-OPEN-12`.
 - [x] Lê Văn Minh đã quyết cách xử lý `Yêu cầu hủy sự kiện`: mô hình hóa tại B7 và bổ sung mục từ B2. Hệ quả là `B2-v0.10` → `B3-v0.10` → `B4-v0.14` → `B5-v0.12` cùng trở lại `REVIEW_READY`.
-- [x] Lê Văn Minh đã duyệt lại chuỗi `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` đúng thứ tự ngày 2026-08-22.
-- [x] Sau chuỗi trên, Lê Văn Minh đã duyệt toàn bộ `B7-v0.7` thành `APPROVED` ngày 2026-08-22; AI không tự đánh dấu thay.
+- [x] Lê Văn Minh đã duyệt lại chuỗi `B2 → B3 → B4 → B5` đúng thứ tự ngày 2026-08-22.
+- [x] Lê Văn Minh đã duyệt toàn bộ **`B7-v0.7`** thành `APPROVED` ngày 2026-08-22 (`GOV-023`); AI không tự đánh dấu thay.
+- [x] Lê Văn Minh đã duyệt `B7-v0.11` ngày 2026-08-27 (`GOV-033`), sau `B5-v0.14` và `B6-v0.14`. **Bản này CÓ đổi mô hình miền** — ghi rõ để người duyệt sau không tưởng nó chỉ sửa câu chữ:
+  - `v0.9` chỉ sửa lời khai phiên bản đầu vào bị sai ở tám chỗ — không đổi mô hình.
+  - `v0.10` chỉ khai lại đầu vào theo `B5-v0.13` — không đổi mô hình.
+  - `v0.11` **gỡ aggregate ứng viên `Sự cố`** cùng §4.8 và sơ đồ `B7-08` (`RES-034`), và **đổi tên root `Chi trả` → `Hồ sơ chi trả sự kiện`** (`RES-040`). Đây là **hai thay đổi thật lên tập aggregate**, không phải sửa câu chữ.
+  - Thứ **không** đổi ở `v0.11`: cả 11 bất biến `INV-01`–`INV-11`, mọi ranh giới aggregate của vòng đời vé, và mọi bội số trên bảy sơ đồ còn lại.
+  Cả ba bản đều cần Lê Văn Minh xác nhận lại.
 
-**Bằng chứng xác minh ngày 2026-08-22, đo lại trên `B7-v0.7`:** cả tám nguồn `B7-01`–`B7-08` parse (`-checkonly`) và render thành công bằng **PlantUML 1.2026.6**, mã thoát `0`; kích thước và tỷ lệ rộng/cao lần lượt là 1073×1464 (**0,73**), 1353×1025 (**1,32**), 688×1240 (**0,55**), 1103×735 (**1,50**), 1103×1079 (**1,02**), 601×360 (**1,67**), 1305×803 (**1,63**), 1286×698 (**1,84**) — đều nằm trong khoảng đọc được trên A4 dọc hoặc ngang, không hình nào còn nhãn chồng lên lớp khác. `B7-03` chuyển sang dạng dọc sau khi `Chính sách hoàn tiền` ra khỏi ranh giới aggregate và thêm liên kết với `Đơn hàng`. `B7-05` được bố cục lại sau khi đo: hai điều kiện “không còn tiền treo” chuyển từ cạnh của `Chi trả` sang `Đối soát thủ công` và mô tả bằng ghi chú, nên hết chồng nhãn và tỷ lệ về 1,02. `B7-01` tăng lên 1073×1464 sau khi nhận thêm aggregate `Yêu cầu hủy sự kiện`, tỷ lệ gần như không đổi. Phép kiểm từ vựng đếm lại bằng script được 57 tên lớp duy nhất, đủ 57/57 xuất hiện nguyên văn trong B2-v0.10; phép kiểm nghĩa được ghi riêng tại §7.
+**Bằng chứng xác minh ngày 2026-08-22, đo lại trên `B7-v0.8`:** cả tám nguồn `B7-01`–`B7-08` parse (`-checkonly`) và render thành công bằng **PlantUML 1.2026.6**, mã thoát `0`; kích thước và tỷ lệ rộng/cao lần lượt là 1073×1464 (**0,73**), 1353×1025 (**1,32**), 688×1240 (**0,55**), 1103×735 (**1,50**), 1103×1079 (**1,02**), 601×360 (**1,67**), 1305×803 (**1,63**), 1286×698 (**1,84**) — đều nằm trong khoảng đọc được trên A4 dọc hoặc ngang.
+
+**Cập nhật `B7-v0.11` (2026-08-27):** `B7-08` **đã bị xóa** cùng §4.8 theo `RES-034`, nên bộ hiện hành là **bảy** nguồn `B7-01`–`B7-07`. Năm dãy số `B7-01`, `B7-02`, `B7-03`, `B7-06`, `B7-07` vẫn đúng vì năm sơ đồ đó **không bị sửa** trong vòng này. Hai dãy đổi: `B7-04` bố cục lại còn **1396×728 (1,92)**, `B7-05` đổi tên root nhưng kích thước giữ nguyên 1103×1079 (1,02). Dãy cuối — 1286×698 (1,84) — thuộc `B7-08` đã xóa, không còn hiệu lực.
+
+> ✅ **Đã khắc phục ngày 2026-08-27.** Hai khiếm khuyết bố cục mà đính chính dưới đây ghi nhận đã được sửa ở `B7-v0.11`: `B7-08` bị xóa cùng §4.8 (`RES-034`), còn `B7-04` được bố cục lại — bốn nhãn cạnh chuyển thành một ghi chú, bỏ `left to right direction`, ghi chú đặt hai bên. Dựng lại bằng PlantUML 1.2026.6 rồi **mở ảnh ra nhìn**: không còn nhãn chồng, đường dẫn ghi chú không cắt tiêu đề khung, không còn cạnh dài cắt ngang hình. Kích thước 1396×728, tỷ lệ 1,92. `GOV-027` có thể đóng.
+>
+> ⚠️ **Đính chính ngày 2026-08-26 — giữ làm bản ghi lịch sử.** Câu *"không hình nào còn nhãn chồng lên lớp khác"* của vòng 2026-08-22 **không đúng**. Vòng dựng lại ngày 2026-08-26 bằng PlantUML 1.2026.6 rồi **mở ảnh ra nhìn** cho thấy: `B7-04` có hai nhãn *"kiểm tra quyền đọc"* và *"kiểm tra thời gian"* chồng nhau cạnh lớp `Vé`, cùng một cạnh dài cắt ngang hình với nhãn tách rời khỏi hai đầu; `B7-08` có khối chú thích che một phần tiêu đề package và nhãn *"liên kết bằng chứng"* chồng lên cạnh lớp. Tỷ lệ đo lại khớp dãy cũ, nên lỗi này **không phát hiện được bằng cách đo kích thước**. Ghi tại `GOV-027`; nội dung mô hình — bội số, quan hệ, quy tắc — không bị ảnh hưởng. `B7-03` chuyển sang dạng dọc sau khi `Chính sách hoàn tiền` ra khỏi ranh giới aggregate và thêm liên kết với `Đơn hàng`. `B7-05` được bố cục lại sau khi đo: hai điều kiện “không còn tiền treo” chuyển từ cạnh của `Chi trả` sang `Đối soát thủ công` và mô tả bằng ghi chú, nên hết chồng nhãn và tỷ lệ về 1,02. `B7-01` tăng lên 1073×1464 sau khi nhận thêm aggregate `Yêu cầu hủy sự kiện`, tỷ lệ gần như không đổi. Phép kiểm từ vựng đếm lại bằng script được 57 tên lớp duy nhất, đủ 57/57 xuất hiện nguyên văn trong B2-v0.10; phép kiểm nghĩa được ghi riêng tại §7.
 
 *Số đo của `B7-v0.5` — dãy 0,63 · 1,04 · 1,24 · 1,49 · 0,76 · 1,66 · 1,62 · 1,84 đo bằng PlantUML 1.2025.4 — được giữ trong nhật ký để so sánh, không còn là số hiện hành.*
 
-AI không tự chuyển B7 thành `APPROVED`. Lê Văn Minh là người duyệt nội dung và ngày duyệt; `B7-v0.7` được duyệt ngày 2026-08-22 sau khi chuỗi `B2 → B3 → B4 → B5` được duyệt lại.
+AI không tự chuyển B7 thành `APPROVED`. Lê Văn Minh là người duyệt nội dung và ngày duyệt; B7 được duyệt ngày 2026-08-22 sau khi chuỗi `B2 → B3 → B4 → B5` được duyệt lại.
 
 Chuỗi `B4-v0.11 → B5-v0.9` đã được Lê Văn Minh duyệt trực tiếp (`GOV-021`); `B4-v0.13 → B5-v0.11` lan truyền các lựa chọn nghiệp vụ ngày 2026-08-22 và cũng được ghi với Lê Văn Minh là người duyệt. Nếu một đầu vào thay đổi vật chất về sau, B7 phải trở lại vòng đánh giá tác động và đồng bộ.
 
@@ -375,6 +381,10 @@ Chuỗi `B4-v0.11 → B5-v0.9` đã được Lê Văn Minh duyệt trực tiếp
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B7-v0.11` | 2026-08-27 | **Đổi tên root `Chi trả` → `Hồ sơ chi trả sự kiện`** theo `RES-040`, khớp thứ nó thật sự giữ; `B2-v0.12` bổ sung mục từ tương ứng. Đây là **chỗ lệch nghĩa cuối cùng** của B7 và nay đã hết. Sơ đồ `B7-05` đổi tên và dựng lại, tỷ lệ giữ nguyên 1,02. **Sửa bố cục `B7-04`** theo `GOV-027`: bốn nhãn cạnh chuyển thành một ghi chú, bỏ `left to right direction`, ghi chú đặt hai bên; dựng lại và mở ảnh xác nhận hết nhãn chồng. **Gỡ trọn §4.8 "Chẩn đoán sự cố"** và aggregate ứng viên `Sự cố`; **xóa sơ đồ `B7-08-incident-diagnosis-class-model.puml`** → tám sơ đồ còn **bảy**, 57 tên lớp còn **48**, tất cả vẫn truy được về từ điển. Gỡ dòng `Sự cố` khỏi bảng aggregate §3 và dòng workflow chẩn đoán khỏi §6; khai lại đầu vào theo `B2-v0.11`/`B5-v0.14`. **Lý do:** toàn bộ mục đó mô hình hóa thiết kế trợ lý cũ (`RES-034`). **Bảy context, mọi aggregate và cả 11 bất biến của vòng đời vé không đổi một chữ** | Gỡ thiết kế trợ lý cũ |
+| `B7-v0.10` | 2026-08-26 | Đồng bộ khai `B5-v0.13` sau tái baseline `A2`/`A4`. **Không đổi aggregate, bất biến, bội số hay sơ đồ nào**; §4.8 về chẩn đoán sự cố giữ nguyên vì `DH-MT4` vẫn yêu cầu lớp AI giải thích | Lan truyền tái baseline |
+| `B7-v0.9` | 2026-08-26 | **Sửa lời khai phiên bản đầu vào bị sai.** `B7-v0.8` khai `B3-v0.11`, `B4-v0.15` và `B5-v0.13` ở **tám** chỗ; ba phiên bản đó **chưa từng tồn tại**. Ba nguồn độc lập bác bỏ: `glossary.md` §9 ghi chuỗi duyệt là `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12`; `B8-v0.8` và `implementation-status.md` khai đúng như vậy. Đã sửa cả tám chỗ về đúng phiên bản có thật. **Không đổi aggregate, bất biến, bội số hay sơ đồ nào.** Tài liệu chuyển `REVIEW_READY` vì lời khai chuỗi phê duyệt là khẳng định về hành vi con người, không phải lỗi chính tả — cần Lê Văn Minh xác nhận lại | Sửa lời khai sai |
+| `B7-v0.8` | 2026-08-22 | Sửa sau vòng rà soát ngoài: nói đúng rằng chỗ lệch nghĩa của root `Chi trả` **chưa** được giải quyết mà mới chỉ được mô tả, sửa ô tự kiểm tương ứng và nâng nó thành điểm `OPEN` tại §6; đồng bộ các tham chiếu `B4-v0.13`/`B5-v0.11` còn sót trong văn bản đang hiệu lực. Không đổi aggregate, bất biến hay sơ đồ; giữ nguyên phê duyệt `GOV-023` | Sửa lỗi biên tập và ghi đúng kết quả tự kiểm |
 | `B7-v0.7` | 2026-08-22 | Bổ sung aggregate ứng viên `Yêu cầu hủy sự kiện` vào context vòng đời sự kiện, sau khi Lê Văn Minh chọn mô hình hóa và `B2-v0.10` thêm mục từ; đóng điểm `OPEN` về ranh giới và giữ `OPEN` về việc gửi lại yêu cầu; đồng bộ khai đầu vào sang chuỗi `B2-v0.10 → B5-v0.12`; đếm lại 57 tên lớp | Leo thang lỗi thượng nguồn và lan truyền |
 | `B7-v0.6` | 2026-08-22 | Xử lý vòng kiểm toán đọc toàn văn: sửa note bốn nguyên nhân hoàn tiền ở `B7-03`; ghi `OPEN` cho `Yêu cầu hủy sự kiện` và cho tính duy nhất của quan hệ theo dõi; trả `INV-01` về câu chữ B4; bổ sung giữ chỗ/giới hạn mua vào phép xét `Khả dụng`; tách nơi giữ lý do từ chối; làm rõ phạm vi root `Chi trả`; sửa nguồn tổng hợp của sổ cái và chiều tính số tiền chi trả; sửa hai bội số ở `B7-01`; đưa `Chính sách hoàn tiền` ra ngoài ranh giới aggregate; bỏ màu nền phân nhóm theo Tầng C §3.2.1; tách §7 thành phép kiểm tên và phép kiểm nghĩa; đo lại tám hình | Sửa sau kiểm toán |
 | `B7-v0.5` | 2026-08-22 | Đồng bộ B4-v0.13/B5-v0.11; đóng các điểm vô hiệu vé lặp, sức chứa và trường hồ sơ; giới hạn lịch sử trong aggregate thanh toán/hoàn; sửa ký pháp/bội số/bố cục tám sơ đồ và chuyển sang `REVIEW_READY` | Lan truyền quyết định và sửa sau rà trực quan |

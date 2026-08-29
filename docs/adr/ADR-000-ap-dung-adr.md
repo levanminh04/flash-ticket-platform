@@ -6,7 +6,7 @@
 
 ## Bối cảnh
 
-Đồ án có nhiều quyết định liên quan đến ranh giới service, quyền sở hữu dữ liệu, nhất quán phân tán, logging và nhánh trợ lý chẩn đoán. Các quyết định có thể thay đổi sau khi phân tích hoặc đo thử. Nhóm cần lưu được lý do, phương án đã loại và bằng chứng dẫn đến thay đổi để phục vụ triển khai, báo cáo và bảo vệ cá nhân.
+Đồ án có nhiều quyết định liên quan đến ranh giới service, quyền sở hữu dữ liệu, nhất quán phân tán, logging và điểm tích hợp cơ chế chẩn đoán. Các quyết định có thể thay đổi sau khi phân tích hoặc đo thử. Nhóm cần lưu được lý do, phương án đã loại và bằng chứng dẫn đến thay đổi để phục vụ triển khai, báo cáo và bảo vệ cá nhân.
 
 ## Các phương án đã cân nhắc
 

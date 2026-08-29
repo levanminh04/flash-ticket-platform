@@ -275,8 +275,12 @@ Quy tắc này áp dụng cho cả bản nháp bằng mã và bản dựng lại
 | Điểm cuối API | danh từ số nhiều, phân cấp, chữ thường nối gạch | `/api/v1/<tài nguyên>/<id>/<tài nguyên con>` |
 | Tên sự kiện | `<Danh từ><ĐộngTừ quá khứ>`, không kèm tên service | `TicketIssued`, `HoldExpired` |
 | Phiên bản hợp đồng | tiền tố đường dẫn cho API; trường `version` trong lược đồ sự kiện | `/api/v1/…` |
-| Trường nhật ký (log) | chữ thường nối gạch dưới, cố định trên mọi service | `correlation_id`, `template_id`, `service_name`, `order_id` |
+| Trường nhật ký (log) | chữ thường nối gạch dưới, cố định trên mọi service | `correlation_id`, `service_name`, `order_id` |
 | Tệp nguồn sơ đồ dạng mã | cùng tên với ảnh xuất ra | `docs/diagrams/src/c3-c4l2-container.puml` |
+
+> ⛔ **Đã gỡ `template_id` khỏi danh sách trường nhật ký, 2026-08-28.** Đó là trường của **kỹ thuật gom mẫu log** thuộc thiết kế trợ lý cũ. `RES-035` chuyển kỹ thuật ấy thành **ứng viên chưa chốt** của bộ tài liệu RCA. Quy định nó là trường *"cố định trên mọi service"* ở đây là tiền-chốt một phương pháp mà bộ RCA còn đang cân nhắc, và vi phạm ranh giới trách nhiệm hai bộ ở `AGENTS.md` mục 7 — *"có dùng kỹ thuật gom mẫu log hay không"* thuộc bộ RCA.
+>
+> ✅ **`correlation_id` thì ngược lại — giữ, và nay là ràng buộc đã chốt.** `RES-042` ngày 2026-08-28 chốt mỗi giao dịch phải truy được qua **một mã tương quan duy nhất**; dòng này là **nguồn thứ tư** độc lập xác nhận điều đó, cùng với `NFR-06`, `B9` `QS-13` và `docs/quy-trinh-lam-viec.md` PHẦN 6. Định dạng và cách truyền vẫn chốt ở `B16`.
 
 **Quy tắc quan trọng nhất:** mã (`UC-05`, `QS-01`, `ADR-004`) phải nhất quán ở các tài liệu có liên kết. Không cần chèn mã tài liệu vào mọi lớp/dòng code; liên kết tới module/test chỉ dùng cho các mục cốt lõi trong bảng C7.
 
@@ -305,12 +309,22 @@ docs/
  ├─ glossary.md                        (từ điển miền — B2)
  ├─ adr/
  │   ├─ ADR-000-ap-dung-adr.md
- │   └─ ADR-XXX-….md
- ├─ quality-scenarios/QS-XX.md
- ├─ diagrams/                          (tệp nguồn Visual Paradigm + ảnh xuất)
+ │   └─ ADR-XXX-….md                   (ADR kiến trúc đích — cổng B11-C, xem adr/README.md)
+ ├─ domain/                            (B3–B8: quy trình, sự kiện, context, use case, aggregate, yêu cầu)
+ ├─ quality-scenarios/                 (B9 bộ kịch bản, B10 bảng ưu tiên và danh sách ASR)
+ ├─ architecture/                      (B11-A tập phương án độc lập, B11-B đối chiếu khả thi — CHƯA TẠO)
+ ├─ diagrams/src/                      (sơ đồ dạng mã: PlantUML, Structurizr DSL)
  ├─ contracts/                         (đặc tả API, lược đồ sự kiện)
  ├─ experiments/                       (kịch bản đo, script, kết quả thô)
+ ├─ research/                          (phiếu Tầng A của bộ tài liệu hệ thống: A1–A6)
+ ├─ research-rca/                      (bộ tài liệu nghiên cứu chẩn đoán — R0, A7–A10)
+ ├─ evidence/                          (khảo sát ngoài, baseline chẩn đoán, thư định hướng)
+ ├─ project/                           (sổ quyết định, trạng thái, phân vai, cửa nối hai bộ)
+ ├─ report/                            (khung báo cáo và bản nộp theo mốc)
+ └─ coordination/                      (nội dung cần xác nhận với giảng viên)
 ```
+
+> **Sửa 2026-08-28.** Cây trên trước đó ghi `quality-scenarios/QS-XX.md` — mỗi kịch bản một tệp — và thiếu hẳn `domain/`, `research/`, `research-rca/`, `project/`, `evidence/`, `report/`, `coordination/`. Cấu trúc thật là **một tệp cho cả bộ kịch bản** (`B9`) và **một tệp cho bảng ưu tiên** (`B10`). Thư mục `architecture/` được ghi sẵn vì `B11-A` và `B11-B` có đường dẫn canonical bắt buộc, dù chưa tạo.
 
 ---
 
@@ -321,8 +335,14 @@ docs/
 **Quy tắc dùng:**
 - Một quyết định một tệp. Số hiệu tuần tự, **không bao giờ tái sử dụng**
 - Không âm thầm đổi lý do/kết luận của ADR đã *Chấp nhận*; nếu đảo quyết định thì tạo ADR mới và đánh dấu bản cũ là *Bị thay thế bởi ADR-XXX*. Sửa trình bày nhỏ phải có ghi chú thay đổi.
-- Hai trường bắt buộc mà mẫu gốc không có: **Phục vụ ASR nào** và **Kiểm chứng bằng cách nào**
+- **Ba** trường bắt buộc mà mẫu gốc không có: **Phục vụ ASR nào**, **Kiểm chứng bằng cách nào**, và — với ADR kiến trúc đích — **Tác động lên A1–A6: Không | Có — \<tạo tác và lý do\>**
 - Ô "Hệ quả tiêu cực" để trống là dấu hiệu chưa suy nghĩ đủ — không được để trống
+
+> ⛔ **Trường thứ ba được bổ sung ngày 2026-08-28.** `docs/adr/README.md` đã bắt buộc nó từ trước — *"Trước khi chấp nhận, ADR phải có trường `Tác động lên A1–A6`"* — nhưng **mẫu này thì không có**, mà mẫu mới là thứ người viết ADR mở ra. Ai theo mẫu sẽ thiếu đúng trường bắt buộc, ngay tại `B11-C`. Đây là **cùng loại lỗi** với phiếu `B10` ở Tầng B (`GOV-039`) và phiếu `A3` ở Tầng A: tài liệu quy tắc đi trước, mẫu ở tầng sở hữu mẫu thì tụt lại.
+>
+> **Cách điền:** nếu có tác động tới phát biểu vấn đề, mục tiêu, đối tượng, phạm vi, câu hỏi nghiên cứu hoặc cách đánh giá, thì **cập nhật và duyệt lại** tạo tác liên quan cùng các đầu vào phụ thuộc **trước khi** chuyển ADR sang *Chấp nhận*.
+>
+> **Ngoại lệ:** `ADR-000` là quyết định phương pháp, không phải ADR kiến trúc đích, nên không chịu cổng `B11-C` và không cần trường này — `adr/README.md` đã ghi rõ.
 - Chỉ viết ADR cho quyết định có phương án cạnh tranh hoặc hệ quả kiến trúc đáng kể; không lập ADR cho mọi tham số và thư viện nhỏ.
 
 **Vì sao mình chọn đúng ADR này để điền mẫu:** nội dung của nó do chính Tầng C quyết định (dùng ADR hay không), nên điền sẵn được mà không lấn sang quyết định kiến trúc của bạn. Các ADR về kiến trúc thật (chống bán vượt, Saga, outbox…) mình cố tình để trống — đó là phần việc của bạn ở phiếu B11.
@@ -505,6 +525,8 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 |---|---|---|---|
 | Mẫu phiếu kịch bản chất lượng | A, B | C2 | ✅ |
 | Mẫu ADR có trạng thái và "thay thế bởi" | A, B | C1 | ✅ |
+| ADR kiến trúc đích phải ghi **Tác động lên A1–A6** trước khi *Chấp nhận* | A, B, `adr/README.md` | C1 — bổ sung 2026-08-28 | ✅ |
+| ADR kiến trúc đích chỉ *Chấp nhận* tại `B11-C`, sau khi `B11-A` và `B11-B` đều `APPROVED` | B | `adr/README.md`; C1 dẫn về đó | ✅ |
 | Mẫu báo cáo thí nghiệm ghi rõ cấu hình; hỗ trợ đối chứng khi có | A, B | C4 | ✅ |
 | Mẫu ADR dùng chung cho mọi loại quyết định (kể cả AI) | A | C1 — không có trường riêng theo lĩnh vực | ✅ |
 | Quy ước diễn đạt không tuyên bố quá mức | A, B | 3.4 | ✅ |
@@ -540,6 +562,7 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 | 2026-08-07 | Bản đầu | — |
 | 2026-08-08 | Bỏ cơ chế arc42/ISO/ma trận truy vết mang tính thủ tục; sửa quy ước C4/UML và mẫu thí nghiệm | Giữ mức tài liệu phù hợp ĐATN đại học |
 | 2026-08-21 | Bổ sung thứ tự ưu tiên cho sơ đồ báo cáo: đúng ký pháp UML/Visual Paradigm, tên nghiệp vụ dễ đọc, mã truy vết chỉ là thông tin phụ và hình thức cuối theo mẫu PTIT hiện hành | Ngăn sơ đồ nội bộ mang nguyên mã governance sang báo cáo và làm rõ nghĩa “gần phong cách PTIT/HUST” |
+| 2026-08-28 | **Bốn sửa sau vòng đọc toàn văn.** (1) Gỡ `template_id` khỏi danh sách trường nhật ký ở §3.3 — trường của kỹ thuật gom mẫu log thuộc thiết kế trợ lý cũ, nay là ứng viên chưa chốt của bộ RCA (`RES-035`); giữ `correlation_id` và ghi nó là ràng buộc đã chốt (`RES-042`). (2) Bổ sung trường bắt buộc thứ ba **Tác động lên A1–A6** vào mẫu `C1` — `adr/README.md` đã đòi nó từ trước mà mẫu thì không có, nên ai theo mẫu sẽ thiếu đúng trường bắt buộc ở `B11-C`. (3) Cập nhật cây thư mục ở §3.5, vốn còn ghi `quality-scenarios/QS-XX.md` và thiếu bảy thư mục có thật; thêm `architecture/` cho đường dẫn canonical của `B11-A`/`B11-B`. (4) Bổ sung hai dòng vào bảng kiểm tra chéo §5.1 | Tầng C tụt lại sau vòng gỡ trợ lý cũ và sau khi cổng `B11-C` được siết ở `adr/README.md` |
 
 ---
 

@@ -1,17 +1,25 @@
-# Hồ sơ báo cáo và tài liệu làm việc
+# Hồ sơ báo cáo
 
-Thư mục này chứa khung báo cáo và các bản Word dùng để trao đổi/soạn thảo. Các file Word không tự trở thành nguồn quyết định nghiệp vụ hoặc kiến trúc. Khi nội dung khác với sổ quyết định, tài liệu phương pháp hoặc tạo tác B2–B14 đã duyệt, phải cập nhật bản Word theo nguồn có thẩm quyền thay vì dùng bản Word để đổi ngược thiết kế.
+Thư mục này chứa khung nội dung của quyển báo cáo và các bản báo cáo nộp cho giảng viên.
 
-| Tạo tác | Phân lớp/vòng đời | Cách sử dụng |
+| Tạo tác | Vòng đời | Cách sử dụng |
 |---|---|---|
-| `report-outline.md` | Khung nội dung sống | Dẫn đường cho nội dung báo cáo; chưa khóa số chương trước khi có mẫu khoa |
-| `Bao-cao-tim-hieu-va-dinh-huong-chuc-nang-AI-FlashTicket-v2.docx` | `FORMATION` — bản làm việc hiện tại gửi/thảo luận với giảng viên | Phải đối chiếu với `PRJ-001`, `PRJ-002` và các tạo tác AI hiện hành trước mỗi lần sử dụng; không phải nguồn chốt kiến trúc |
-| `Bao-cao-tim-hieu-va-dinh-huong-chuc-nang-AI-FlashTicket.docx` | Bản lịch sử đã được `v2` thay thế | Chỉ dùng truy nguyên nội dung cũ; không cập nhật và không dùng làm source of truth |
-| `Noi-dung-bo-sung-DeepLog-cho-bao-cao-AI.docx` | `FORMATION` — đề xuất nghiên cứu `CANDIDATE` | DeepLog chưa thuộc phạm vi đã chốt; chỉ nhập vào báo cáo hoặc thiết kế sau khi có quyết định và kế hoạch đánh giá tương ứng |
+| `report-outline.md` | Khung nội dung sống | Dẫn đường cho nội dung quyển báo cáo cuối; chưa khóa số chương trước khi có mẫu ĐATN hiện hành |
+| `bao-cao-2-tuan-2026-09-05.md` | Bản nộp theo mốc `DH-MOC` | Sáu mục đúng thứ tự thư định hướng. Chuyển sang `.docx` khi nộp |
 
 ## Quy tắc sử dụng
 
-- Tên thống nhất của nhánh AI là **trợ lý chẩn đoán sự cố**.
-- Bản Word được phép diễn giải quyết định đã có nhưng không tự nâng một đề xuất thành `USER_CONFIRMED` hoặc `DECIDED`.
-- Không để file khóa Word `~$*.docx` vào Git.
-- Khi mẫu khoa được ban hành, chuẩn hóa style, chương/mục và trích dẫn trên bản làm việc hiện hành; không hồi sinh bản lịch sử.
+- **Đề tài chính thức** là *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"*; nguyên văn thư tại [`../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md). Mọi bản báo cáo phải dùng đúng tên này.
+- Bản báo cáo **không** tự trở thành nguồn quyết định nghiệp vụ hoặc kiến trúc. Khi nội dung khác với sổ quyết định, tài liệu phương pháp hoặc tạo tác `B2`–`B14` đã duyệt, phải sửa bản báo cáo theo nguồn có thẩm quyền chứ không dùng báo cáo để đổi ngược thiết kế.
+- Mỗi khẳng định trong báo cáo phải phân biệt được **phần nhóm tự làm** với **phần trích từ nguồn đã công bố**.
+- Không đưa mã truy vết nội bộ, sổ `OPEN` hay trạng thái governance vào quyển báo cáo nếu chúng không giúp giải thích một quyết định.
+- Không để tệp khóa Word `~$*.docx` vào Git.
+- Khi mẫu khoa được ban hành, chuẩn hóa style, chương mục và trích dẫn trên bản làm việc hiện hành.
+
+## Tạo tác đã loại bỏ
+
+Ba tệp Word `Bao-cao-tim-hieu-va-dinh-huong-chuc-nang-AI-FlashTicket-v2.docx`, `Bao-cao-tim-hieu-va-dinh-huong-chuc-nang-AI-FlashTicket.docx` và `Noi-dung-bo-sung-DeepLog-cho-bao-cao-AI.docx` đã được gỡ khỏi repository ngày 2026-08-26 theo `RES-027`.
+
+Lý do: chúng đặt độ tin cậy vòng đời vé làm trục chính và còn để ngỏ câu hỏi chẩn đoán nguyên nhân gốc có nên thành nội dung độc lập hay không — câu hỏi mà `DH-TEN` đã trả lời. Giữ chúng trong thư mục báo cáo tạo rủi ro dùng nhầm làm bản hiện hành.
+
+Lịch sử Git vẫn giữ nội dung ba tệp; chúng chỉ không còn trong bản làm việc.

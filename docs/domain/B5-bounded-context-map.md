@@ -1,11 +1,11 @@
 # B5 — Bản đồ Bounded Context ứng viên
 
-- Phiên bản: `B5-v0.12`
+- Phiên bản: `B5-v0.14`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22, sau `B2-v0.10` → `B3-v0.10` → `B4-v0.14` (bản `B5-v0.11` cũng được duyệt ngày 2026-08-22)
+- Ngày duyệt: 2026-08-27, sau `B4-v0.15` (`GOV-033`) · `B5-v0.12` đã được duyệt ngày 2026-08-22 sau `B2-v0.10` → `B3-v0.10` → `B4-v0.14`; bản `B5-v0.11` cũng được duyệt cùng ngày
 - Baseline phê duyệt: `B5-v0.9` đã được duyệt sau `B4-v0.11`; `B5-v0.11` lan truyền các quyết định nghiệp vụ được Lê Văn Minh xác nhận ngày 2026-08-22 và đã được duyệt cùng ngày.
-- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B3-business-processes.md` — `B3-v0.10`, `APPROVED` ngày 2026-08-22; `docs/domain/B4-domain-event-map.md` — `B4-v0.14`, `APPROVED` ngày 2026-08-22; `docs/research/A2-problem-statement.md` và `docs/research/A4-research-questions-draft.md` — baseline `APPROVED` ngày 2026-08-13, **chỉ** làm căn cứ cho tiêu chí phân loại cốt lõi/hỗ trợ/chung tại §2 và phải tái kiểm tra sau B10; `docs/project/decision-register.md` — đọc riêng trạng thái của từng dòng được dẫn, không gom dòng `OPEN` với quyết định đã xác nhận
+- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27; `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; `docs/research/A2-problem-statement.md` — `A2-v0.2` và `docs/research/A4-research-questions-draft.md` — `A4-v0.2`, cả hai `APPROVED` 2026-08-27 sau tái baseline theo `DH-TEN`; **chỉ** làm căn cứ cho tiêu chí phân loại cốt lõi/hỗ trợ/chung tại §2 và phải tái kiểm tra sau B10; `docs/project/decision-register.md` — đọc riêng trạng thái của từng dòng được dẫn, không gom dòng `OPEN` với quyết định đã xác nhận *(Rà 2026-08-29 — `GOV-052`: `A4` nay là `A4-v0.3`; `v0.3` chỉ sửa một câu khai sai về nơi chốt ngưỡng, **ba câu hỏi nghiên cứu không đổi một chữ**, nên đầu vào thực chất của tài liệu này không đổi.)*
 - Phân lớp: `FORMATION`
 
 ## 1. Mục đích và giới hạn
@@ -42,7 +42,7 @@ Các nhãn được dùng như sau:
 
 Phân loại **cốt lõi** chỉ áp dụng cho cụm trực tiếp phục vụ trục nhất quán và độ tin cậy trong vòng đời vé ở phạm vi nghiên cứu. **Hỗ trợ** là năng lực cần cho sản phẩm hoặc vận hành nhưng không phải nơi tập trung đo các bất biến chính. **Chung** là năng lực phổ biến, không tạo khác biệt nghiệp vụ riêng của vòng đời vé.
 
-Trục nghiên cứu này không do B5 tự đặt. A2 baseline `APPROVED` phát biểu bài toán là chuỗi *giữ chỗ → thanh toán → phát hành → kiểm soát vào cửa* cùng các bất biến cốt lõi của chuỗi đó; A4 baseline `APPROVED` ghi rõ nhánh trợ lý chẩn đoán là *nhánh hỗ trợ, không thay thế trục nhất quán vòng đời vé*.
+Tiêu chí phân loại này không do B5 tự đặt, và nó **không** phải trục nghiên cứu của đồ án. Đề tài là `DH-TEN` — chẩn đoán nguyên nhân gốc bằng đồ thị phụ thuộc — còn `DH-MT1` đặt hệ đặt vé vào vai **hệ giao dịch được mô hình hóa**. Trong phạm vi hệ đó, cụm nào trực tiếp phục vụ chuỗi *giữ chỗ → thanh toán → phát hành → kiểm soát vào cửa* và các bất biến của chuỗi thì được phân loại **cốt lõi**; `A2-v0.2` và `A4-v0.2` giữ nguyên chuỗi này ở vai bối cảnh và tiêu chí nghiệm thu sản phẩm.
 
 Bản thân tiêu chí phân loại vẫn là `CANDIDATE`. A2/A4 mới ở mức baseline và chính chúng phải tái kiểm tra sau B10; B9/B10 mới là nơi chốt thuộc tính chất lượng. Nếu B10 làm đổi trục, toàn bộ cột phân loại ở §3 phải được rà lại trước khi B5 giữ nguyên trạng thái.
 
@@ -57,9 +57,8 @@ Bản thân tiêu chí phân loại vẫn là `CANDIDATE`. A2/A4 mới ở mức
 | `BC-CAND-05` | **Đối soát và chi trả** | `CANDIDATE — Hỗ trợ` | `C07`–`C10` | Sổ cái đối soát, doanh thu thực thu, phí nền tảng, điều kiện chi trả, xác nhận đối soát và `PAID` | Không quyết định cách dựng read model, schema hoặc tích hợp báo cáo cổng thanh toán; chuyển tiền thật nằm ngoài hệ thống |
 | `BC-CAND-06` | **Giao nhận thông tin vé** | `CANDIDATE — Chung` | `B07`; phân biệt với `B06`/`B12` tại B4 §5.2 | Gửi thông tin vé, giao nhận thất bại và gửi/tải lại | Không tạo hoặc vô hiệu quyền tham dự; không khẳng định đây là service thông báo riêng |
 | `BC-CAND-07` | **Hồ sơ tài khoản và quyền nghiệp vụ** | `CANDIDATE — Hỗ trợ` | B4 §8.1 và §8.4 | Buyer mặc định, bộ role/đa vai trò, hồ sơ organizer `PENDING`/`ACTIVE`/`REJECTED`, quan hệ buyer theo dõi organizer, quyền sở hữu đơn/sự kiện và điều kiện được phép phát lệnh | Keycloak quản lý danh tính/vòng đời tài khoản; hồ sơ ứng dụng giữ tên tổ chức, mô tả ngắn và lý do từ chối khi có; B5 không chốt đồng bộ, API, schema hoặc đơn vị triển khai |
-| `BC-CAND-08` | **Chẩn đoán sự cố** | `CANDIDATE — Hỗ trợ, có nhánh đánh giá riêng` | B4 §8.3, `T01`–`T04` | Sự cố, dấu vết, context chẩn đoán, nguyên nhân khả dĩ, bước kiểm tra và phản hồi xác minh | `T01`–`T04` vẫn là sự kiện ứng viên; context chỉ đọc và chưa chốt workflow, dữ liệu lưu hoặc đơn vị triển khai |
 
-Số lượng tám context trong bảng **không** phải mục tiêu tám service. B10/B11 phải đánh giá cách gộp/tách vật lý từ B5, B7 và ASR; B5 không tạo ưu tiên triển khai nào.
+Số lượng bảy context trong bảng **không** phải mục tiêu bảy service. B10/B11 phải đánh giá cách gộp/tách vật lý từ B5, B7 và ASR; B5 không tạo ưu tiên triển khai nào.
 
 ## 4. Ranh giới ngôn ngữ cần giữ
 
@@ -82,7 +81,7 @@ Số lượng tám context trong bảng **không** phải mục tiêu tám servi
 
 Sơ đồ sau chỉ thể hiện **sự thật hoặc chính sách cần trao đổi về mặt ngữ nghĩa**. Mũi tên không phải API, topic, sự kiện tích hợp, quyền sở hữu dữ liệu hay hướng gọi đồng bộ.
 
-Nguồn biểu đồ gói UML của B5-v0.12: [`B5-01-bounded-context-map.puml`](../diagrams/src/B5-01-bounded-context-map.puml). Đây là biểu diễn trình bày của chính tám context và các cạnh đã được truy vết tại §5.1; khối chữ bên dưới được giữ làm bản thay thế đọc nhanh trong Markdown. Bản hiển thị dùng tên nghiệp vụ tiếng Việt làm nhãn chính và để mã `BC-CAND-*` ở bảng truy vết thay vì lặp trên hình, đúng giới hạn dành cho báo cáo tại §10. Biểu đồ không đổi trạng thái `CANDIDATE` của bounded context và không biến package thành service vật lý.
+Nguồn biểu đồ gói UML của B5-v0.14: [`B5-01-bounded-context-map.puml`](../diagrams/src/B5-01-bounded-context-map.puml). Đây là biểu diễn trình bày của chính bảy context và các cạnh đã được truy vết tại §5.1; khối chữ bên dưới được giữ làm bản thay thế đọc nhanh trong Markdown. Bản hiển thị dùng tên nghiệp vụ tiếng Việt làm nhãn chính và để mã `BC-CAND-*` ở bảng truy vết thay vì lặp trên hình, đúng giới hạn dành cho báo cáo tại §10. Biểu đồ không đổi trạng thái `CANDIDATE` của bounded context và không biến package thành service vật lý.
 
 ```text
 [BC-CAND-07 Hồ sơ tài khoản/quyền]
@@ -106,14 +105,11 @@ Nguồn biểu đồ gói UML của B5-v0.12: [`B5-01-bounded-context-map.puml`]
        ├─ phát hành lỗi sau khi đã thu ──────────→ [BC-CAND-03 Thanh toán/hoàn tiền]
        ├─ trả lượt khuyến mãi/tồn kho có điều kiện → [BC-CAND-02 Mua vé/cam kết nguồn cung]
        └─ vé đã phát hành cần giao nhận ─────────→ [BC-CAND-06 Giao nhận thông tin vé]
-
-[Dấu vết từ các context nghiệp vụ]
-       └─ đầu vào chỉ đọc đã khử nhạy cảm ───────→ [BC-CAND-08 Chẩn đoán sự cố]
 ```
 
 ### 5.1 Bằng chứng cho từng cạnh
 
-Mỗi cạnh trên sơ đồ phải truy được về một dòng cụ thể của B4-v0.14. Các quyết định bổ sung không tạo cạnh mới và không cạnh nào được vẽ từ suy đoán hoặc từ hình dung về cách triển khai.
+Mỗi cạnh trên sơ đồ phải truy được về một dòng cụ thể của B4-v0.15. Các quyết định bổ sung không tạo cạnh mới và không cạnh nào được vẽ từ suy đoán hoặc từ hình dung về cách triển khai.
 
 | Cạnh | Nội dung ngữ nghĩa được trao đổi | Bằng chứng B4 | Trạng thái |
 |---|---|---|---|
@@ -129,7 +125,6 @@ Mỗi cạnh trên sơ đồ phải truy được về một dòng cụ thể c�
 | `BC-CAND-04` → `BC-CAND-03` | Phát hành vé thất bại sau khi đã thu tiền làm phát sinh yêu cầu hoàn toàn bộ | `B12` → `C01` | `FACT` |
 | `BC-CAND-04` → `BC-CAND-02` | Phát hành thất bại trả lượt khuyến mãi đúng một lần, và chỉ trả tồn kho/giới hạn nếu sự kiện vẫn đủ điều kiện bán | `B12` | `FACT` |
 | `BC-CAND-04` → `BC-CAND-06` | Vé đã phát hành cần được gửi tới buyer | `B06` → `B07` | `FACT` |
-| Dấu vết nghiệp vụ → `BC-CAND-08` | Dấu vết đã khử nhạy cảm làm đầu vào chỉ đọc cho chẩn đoán | B4 §8.3; B4 §9 dòng "Dấu vết vận hành đã được tạo" | `FACT` |
 
 Chiều mũi tên chỉ nói *ai cần biết gì*, không nói ai gọi ai. Việc một cạnh được hiện thực bằng truy vấn đồng bộ, sự kiện tích hợp hay dữ liệu tham chiếu là quyết định của B11–B13.
 
@@ -143,7 +138,6 @@ Chiều mũi tên chỉ nói *ai cần biết gì*, không nói ai gọi ai. Vi�
 | Vé chỉ check-in thành công tối đa một lần | `D01`–`D03`, `INV-09`, `HOT-04` | Bất biến và kịch bản cạnh tranh nhiều thiết bị | Công nghệ hoặc vị trí quyết định nguyên tử |
 | Đối soát và đánh dấu `PAID` chỉ mở khi sự kiện đã kết thúc và không còn tiền treo | `A13`, `C07`–`C10`; `INV-10` | Nguồn sự thật của điều kiện "không còn xử lý tiền treo" và cách bảo vệ đúng một lần `PAID` | Cách dựng read model, vị trí sổ cái hoặc cơ chế kiểm tra điều kiện |
 | Tỷ lệ phí nền tảng phải giữ đúng giá trị admin đã phê duyệt và không được sửa âm thầm | `A04`, `C07`, `C08`; `INV-11`; `BIZ-142` | B7 xác định phạm vi bất biến và các thay đổi hợp lệ nếu sau này phát sinh yêu cầu mới | Nơi sở hữu dữ liệu, schema, cách khóa và cơ chế kỹ thuật; `BIZ-123` vẫn `OPEN` cho B12 |
-| Dấu vết nghiệp vụ được chọn làm context chẩn đoán | B4 §8.3 và §9 | Quyền đọc, masking, tiêu chí chọn context và đánh giá | Pipeline vật lý, nguồn log, bảng AI hoặc hợp đồng |
 
 ## 6. Ánh xạ đầy đủ sự kiện và năng lực B4
 
@@ -159,7 +153,6 @@ Chiều mũi tên chỉ nói *ai cần biết gì*, không nói ai gọi ai. Vi�
 | B4 §8.1 | `BC-CAND-07` | Keycloak, bộ role/đa vai trò, vòng đời organizer tối thiểu, không xác minh email/SĐT, không đăng nhập xã hội và các giới hạn phạm vi đã được làm rõ; tập trường hồ sơ theo `BIZ-151`, còn đồng bộ kỹ thuật chờ `B4-OPEN-01` |
 | B4 §8.4 — địa điểm, phân loại, tìm sự kiện đã công bố | `BC-CAND-01` | Các khái niệm mô tả/thể hiện sự kiện dùng cùng ngôn ngữ vòng đời công bố; không đồng nhất địa điểm với nguồn cung hoặc sơ đồ ghế |
 | B4 §8.4 — buyer theo dõi organizer | `BC-CAND-07` | Đây là quan hệ buyer–organizer, không phải lựa chọn vé/cam kết nguồn cung của `BC-CAND-02`; chi tiết đếm và thông báo chưa được chốt |
-| `T01`–`T04` | `BC-CAND-08` | Toàn bộ vẫn ở trạng thái `CANDIDATE` và chỉ đọc |
 
 Không có sự kiện B4 nào bị bỏ khỏi ánh xạ. Các trạng thái suy ra `A07`/`A08` được dùng làm điều kiện đầu vào chứ không bị biến thành sự kiện tích hợp.
 
@@ -171,13 +164,12 @@ Không có sự kiện B4 nào bị bỏ khỏi ánh xạ. Các trạng thái su
 | Web buyer/organizer/admin | Là kênh tương tác với các context theo quyền tương ứng; không chia context theo vai trò giao diện. Frontend hiện tại được tái sử dụng làm nền và phải thích nghi với mô hình đích; việc tái sử dụng không ràng buộc phương án tách service ở B11-A. B5 không suy ra API gateway hay một bề mặt API cụ thể | B3, B4 §8.1; `PRJ-004`, `PRJ-005` |
 | Mobile check-in | Là client của `BC-CAND-04`, không phải một miền nghiệp vụ riêng | B3 §5; B4 dòng D |
 | Cổng thanh toán | Hệ thống ngoài tham gia `BC-CAND-03`; không phải bounded context nội bộ được B5 phân rã | B3 §3–§4; B4 dòng B/C |
-| LLM API | Hệ thống ngoài được `BC-CAND-08` sử dụng theo ranh giới chỉ đọc; chưa chốt adapter hay hợp đồng | B4 §8.3 |
 
 ## 8. Sổ hotspot, nội dung đã làm rõ và vấn đề `OPEN`
 
 ### 8.1 Phần đã được xác nhận và chuyển đúng gate
 
-| ID lịch sử | Phần có bằng chứng | Phần vẫn thiếu | Kết quả tại B5-v0.12 |
+| ID lịch sử | Phần có bằng chứng | Phần vẫn thiếu | Kết quả tại B5-v0.13 |
 |---|---|---|---|
 | `B5-OPEN-01` | Keycloak, hồ sơ nghiệp vụ tối thiểu, buyer mặc định, bộ role, vòng đời organizer, điều kiện hoàn tất duyệt/công khai, không thu hồi role và quan hệ một organizer–một sự kiện đã được chốt (`PRJ-003`, `BIZ-109`, `BIZ-111`, `BIZ-114`, `BIZ-119`, `BIZ-124`, `BIZ-129`, `BIZ-131`–`BIZ-141`, `BIZ-151`) | Chi tiết đồng bộ/kho lưu kỹ thuật | Đóng phần nghiệp vụ; chi tiết kỹ thuật chờ B11–B13 |
 | `B5-OPEN-08` | Admin nhập tỷ lệ phí khi duyệt, phí tính trên doanh thu thực thu và tỷ lệ được cố định sau phê duyệt (`BIZ-034`, `BIZ-059`, `BIZ-142`) | Quyền sở hữu dữ liệu vật lý còn `OPEN` cho B12 (`BIZ-123`) | Đóng phần nghĩa nghiệp vụ; B7 được dùng `INV-11`, còn B12 mới quyết định sở hữu dữ liệu |
@@ -191,7 +183,7 @@ Không có sự kiện B4 nào bị bỏ khỏi ánh xạ. Các trạng thái su
 |---|---|---|---|---|
 | `B5-OPEN-02` | Ranh giới bảo vệ đồng thời giữa nguồn cung, giữ chỗ và đơn; chưa biết cách đặt aggregate hoặc ranh giới triển khai | `B4-OPEN-05`, `HOT-02`, `INV-01`, `INV-03`, `INV-06` | B7 làm rõ bất biến/aggregate; B9/B10 tạo ASR; B11-A mới tạo phương án | Không chặn bản đồ ứng viên; cấm ghi hướng đặt ưu tiên tại B5 |
 | `B5-OPEN-03` | Theo dõi, thử lại và kết thúc N yêu cầu hoàn khi hủy một sự kiện | `B4-OPEN-06`, `HOT-01` | B7/B9/B10; cơ chế kiến trúc chờ B11 | Không chặn; giữ quan hệ nhân quả, không chọn bộ điều phối |
-| `B5-OPEN-05` | Workflow cuối của yêu cầu chẩn đoán, chọn trace, lưu phản hồi và tập ca đánh giá | `B4-OPEN-02` | Minh/Nhật; B16–B19 | Không chặn; cấm chốt schema hoặc đơn vị triển khai trợ lý |
+| `B5-OPEN-05` | **Chuyển giao 2026-08-27** sang bộ tài liệu RCA, mã kế nhiệm `R0-OPEN-07`. Câu hỏi chưa được trả lời, chỉ đổi nơi quản lý theo `RES-034`; B5 không còn context chẩn đoán để đặt ranh giới cho nó | `B4-OPEN-02`, cùng chuyển giao | Bộ RCA, qua cửa `docs/project/lien-ket-rca.md` | Không chặn |
 | `B5-OPEN-06` | Các mốc thời gian được tính động hay phát thành sự kiện kỹ thuật | `B4-OPEN-03` | B11/B13 | Không chặn; không tạo contract ở B5 |
 | `B5-OPEN-07` | Trường audit/payload/lưu giữ cho check-in bị từ chối và thao tác quản trị | `B4-OPEN-04` | Minh/Tuyến; B8/B13/B16 | Không chặn; B5 chỉ giữ nhu cầu dấu vết theo luồng đã xác nhận |
 | `B5-OPEN-08` | Dữ liệu vật lý của tỷ lệ phí nền tảng do đâu sở hữu | `B4-OPEN-08`, `BIZ-123` (`OPEN`); nghĩa cố định đã đóng tại `BIZ-142` | B12 sau B11-C | Không chặn context; cấm trình bày schema hoặc vị trí dữ liệu như đã quyết định |
@@ -201,23 +193,23 @@ Không có sự kiện B4 nào bị bỏ khỏi ánh xạ. Các trạng thái su
 
 ## 9. Phép tự kiểm và điều kiện chuyển trạng thái
 
-- [x] Mỗi context ứng viên truy được về sự kiện, quyền hoặc hotspot cụ thể trong B4-v0.14; phần bổ sung mới không tạo context mới.
-- [x] Vòng đời vé, hồ sơ tài khoản, chatbot và trợ lý chẩn đoán sự cố đều được xem xét.
+- [x] Mỗi context ứng viên truy được về sự kiện, quyền hoặc hotspot cụ thể trong B4-v0.15; phần bổ sung mới không tạo context mới.
+- [x] Vòng đời vé, hồ sơ tài khoản và chatbot mua vé đều được xem xét.
 - [x] Khuyến mãi cấu hình được phân biệt với lượt dùng khuyến mãi; phát hành vé được phân biệt với giao nhận vé.
 - [x] Hoàn tiền được phân biệt với trạng thái quyền vào cửa của vé.
 - [x] Không có context nào được tuyên bố là service, schema, Saga, API, topic hoặc vị trí aggregate.
 - [x] Tập context hình thành từ bằng chứng miền của B2, B3 và B4 đã được duyệt tại thời điểm hình thành; các phiên bản sau chỉ đóng thêm nghĩa nghiệp vụ và truy vết, không dùng nguồn hiện thực để tạo context.
 - [x] Mọi cạnh trong bản đồ §5 đều có bằng chứng B4 trực tiếp tại §5.1; không cạnh nào được vẽ từ suy đoán.
 - [x] Bảng §5.1 và bảng §5.2 nhất quán với nhau: mọi quan hệ nêu trong §5.2 đều xuất hiện trên sơ đồ.
-- [x] Biểu đồ gói UML `B5-01-bounded-context-map.puml` phản ánh đúng tám context và các luồng trao đổi ngữ nghĩa ở §5/§5.1, dùng tên nghiệp vụ dễ đọc thay cho mã governance trên phần hiển thị, có chú giải và không biểu diễn ranh giới service hoặc cơ chế tích hợp.
+- [x] Biểu đồ gói UML `B5-01-bounded-context-map.puml` phản ánh đúng bảy context và các luồng trao đổi ngữ nghĩa ở §5/§5.1, dùng tên nghiệp vụ dễ đọc thay cho mã governance trên phần hiển thị, có chú giải và không biểu diễn ranh giới service hoặc cơ chế tích hợp.
 - [x] Mọi hotspot B4 (`HOT-01`–`HOT-04`), mọi vấn đề còn `OPEN` và kết quả đóng `B4-OPEN-07` được truyền sang B5 kèm mã truy vết, owner và gate; không bị tự lấp.
-- [x] Tiêu chí phân loại cốt lõi/hỗ trợ/chung được truy về A2/A4 baseline `APPROVED` và vẫn giữ trạng thái `CANDIDATE` chờ B10.
-- [x] Lê Văn Minh đồng ý giữ tám context ứng viên, phân loại cốt lõi/hỗ trợ/chung và bản đồ quan hệ ngữ nghĩa; B5-v0.11 không đổi tám context, phân loại hay bản đồ quan hệ so với bản đã đồng ý.
+- [x] Tiêu chí phân loại cốt lõi/hỗ trợ/chung được truy về `A2-v0.2`/`A4-v0.2` — cả hai đã `APPROVED` ngày 2026-08-27 (`GOV-033`) sau tái baseline — và vẫn giữ trạng thái `CANDIDATE` chờ B10.
+- [x] Lê Văn Minh đồng ý giữ tám context ứng viên, phân loại cốt lõi/hỗ trợ/chung và bản đồ quan hệ ngữ nghĩa; các bản tới `B5-v0.13` không đổi gì so với bản đã đồng ý. **`B5-v0.14` gỡ một context** — `BC-CAND-08` — theo `RES-034`, nên còn **bảy**; bảy context còn lại, phân loại và mọi cạnh giữa chúng vẫn không đổi một chữ. Việc gỡ này **đã được Lê Văn Minh duyệt lại** ngày 2026-08-27 (`GOV-033`).
 - [x] Lê Văn Minh đã đóng phần nghiệp vụ của `B5-OPEN-01` và `B5-OPEN-12`; chi tiết đồng bộ/dữ liệu chờ đúng gate sau.
 - [x] Lê Văn Minh xác nhận tỷ lệ phí cố định theo `BIZ-142`; quyền sở hữu dữ liệu tiếp tục chờ B12 tại `B5-OPEN-08`/`BIZ-123`.
 - [x] Lê Văn Minh xác nhận việc `BC-CAND-02` gom nguồn cung, giữ chỗ và đơn chỉ là luận điểm về **ngôn ngữ chung**, không phải ưu tiên đồng vị trí khi triển khai; `B5-OPEN-02` vẫn giữ nguyên.
-- [x] `B4-v0.13` đã được duyệt **trước** `B5-v0.11`; lịch sử phê duyệt `B4-v0.11 → B5-v0.9` cũng được xác nhận tại `GOV-021`. Vòng `B2-v0.10` đưa cả chuỗi về `REVIEW_READY`; `B5-v0.12` được duyệt sau `B4-v0.14` trong cùng ngày 2026-08-22.
-- [x] Mọi tham chiếu phiên bản B4 trong thân bài trỏ đúng phiên bản hiện hành; ba chỗ còn dẫn `B4-v0.11`/`B4-v0.9` ở `B5-v0.11` đã được sửa.
+- [x] `B4-v0.13` đã được duyệt **trước** `B5-v0.11`; lịch sử phê duyệt `B4-v0.11 → B5-v0.9` cũng được xác nhận tại `GOV-021`. Vòng `B2-v0.10` đưa cả chuỗi về `REVIEW_READY`; `B5-v0.12` được duyệt sau `B4-v0.14` trong cùng ngày 2026-08-22. **Vòng `RES-034` ngày 2026-08-27 đưa cả chuỗi về `REVIEW_READY` lần nữa; `B5-v0.14` đã được Lê Văn Minh duyệt lại trong cùng ngày, sau `B4-v0.15`, đúng thứ tự chuỗi (`GOV-033`).** *Sửa 2026-08-28: câu này trước đó còn ghi `B5-v0.14` **chưa** được duyệt — lời khai lỗi thời, tự mâu thuẫn với chính đầu tệp và bị ba nguồn độc lập bác: header của tài liệu này, `GOV-033` trong sổ quyết định, và lời khai đầu vào của `B7-v0.11` cùng `B8`.*
+- [x] Mọi tham chiếu phiên bản B4 **mô tả đầu vào hiện hành** trỏ về `B4-v0.15`; các câu **kể lịch sử phê duyệt** giữ nguyên phiên bản của thời điểm đó — đây là hai loại câu khác nhau, không được thay thế hàng loạt. Ô này từng sai ở `B5-v0.14` khi một phép thay thế hàng loạt đè `B4-v0.15` lên một câu lịch sử, tạo ra trình tự bất khả.
 - [x] `B5-OPEN-09` được ghi rõ là mã đã cấp nhưng mất phát biểu, không bị đếm nhầm vào danh sách `OPEN` hiện hành.
 - [x] Lê Văn Minh đóng `B5-OPEN-10`: hệ thống không biết/kiểm sức chứa vật lý và B5 không thêm bất biến sức chứa (`BIZ-149`).
 - [x] Lê Văn Minh xác nhận `B5-OPEN-11` được hoãn tới B12/B13; B5 chưa chọn cách tính/lưu số người theo dõi.
@@ -249,6 +241,8 @@ Không đưa nguyên trạng mã `BC-CAND-*`, sổ governance hoặc toàn bộ 
 | `B5-v0.9` | 2026-08-21 | Ánh xạ thêm `E05` — quan hệ theo dõi organizer — của B4-v0.11 vào `BC-CAND-07`; được Lê Văn Minh duyệt sau B4-v0.11. Không thêm, bớt, đổi tên hay đổi phân loại context nào | Lan truyền từ B4 và phê duyệt |
 | `B5-v0.10` | 2026-08-21 | Tạm trả trạng thái về `REVIEW_READY` sau khi chỉ đối chiếu commit `8270613`; kết luận này không có đủ bằng chứng hội thoại và được hiệu đính ở v0.11 sau xác nhận trực tiếp của người duyệt | Hiệu đính tạm thời, đã bị thay thế |
 | `B5-v0.11` | 2026-08-22 | Khôi phục đúng lịch sử `B5-v0.9` đã được duyệt; đóng `B5-OPEN-04`, `B5-OPEN-10`, `B5-OPEN-12` theo các quyết định đã xác nhận mà không đổi tám context hoặc bản đồ quan hệ | Phê duyệt và lan truyền quyết định |
+| `B5-v0.14` | 2026-08-27 | **Gỡ `BC-CAND-08` "Chẩn đoán sự cố"** → tám context còn **bảy**; gỡ cạnh *Dấu vết nghiệp vụ → BC-CAND-08* ở sơ đồ §5 và bảng bằng chứng §5.1, dòng §5.2 tương ứng, ánh xạ `T01`–`T04`, và dòng hệ ngoài `LLM API`. Chuyển giao `B5-OPEN-05` sang bộ RCA. Dựng lại `B5-01`. **Lý do:** ngôn ngữ của context này — *context chẩn đoán, nguyên nhân khả dĩ, bước kiểm tra, phản hồi xác minh* — là từ vựng workflow của trợ lý cũ, lấy nguồn từ `B4` §8.3 nay đã gỡ (`RES-034`). **Bảy context còn lại, phân loại cốt lõi/hỗ trợ/chung và mọi cạnh giữa chúng không đổi một chữ** | Gỡ thiết kế trợ lý cũ |
+| `B5-v0.13` | 2026-08-26 | Sửa đoạn §2 dẫn `A2`/`A4` sau khi hai phiếu được tái baseline theo `DH-TEN` (`RES-032`). Nói rõ tiêu chí phân loại cốt lõi/hỗ trợ/chung là tiêu chí **trong phạm vi hệ giao dịch được mô hình hóa**, không phải trục nghiên cứu của đồ án. **Tám context, phân loại và bản đồ quan hệ không đổi một chữ** | Lan truyền tái baseline |
 | `B5-v0.12` | 2026-08-22 | Sửa sau vòng kiểm toán: ba tham chiếu `B4-v0.11`/`B4-v0.9` còn sót trong thân bài trỏ về `B4-v0.14`; ghi rõ tình trạng của mã `B5-OPEN-09` bị mất phát biểu; đồng bộ khai đầu vào sang `B2-v0.10`/`B3-v0.10`/`B4-v0.14` và trở lại `REVIEW_READY` theo quy tắc chuỗi. Không đổi tám context, phân loại hay bản đồ quan hệ | Sửa sau kiểm toán và lan truyền trạng thái |
 
 Các phiên bản từ `B5-v0.6` tới `B5-v0.12` **không** thêm, bớt, đổi tên hoặc đổi phân loại bất kỳ context nào so với `B5-v0.5`, và không tạo hướng đặt aggregate, service, schema, API, Saga hay cơ chế đồng bộ. Quyết định tái sử dụng frontend chỉ là rào chắn phạm vi; nguồn hiện thực và luồng đối chiếu không làm nguồn hình thành mô hình đích ở B5.

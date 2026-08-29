@@ -4,9 +4,9 @@
 
 | Thành viên | Mã sinh viên | Trạng thái phân vai |
 |---|---|---|
-| Lê Văn Minh | B22DCCN533 | Đã xác nhận: kiến trúc tổng thể, backend, phân tích/thiết kế trợ lý chẩn đoán sự cố |
+| Lê Văn Minh | B22DCCN533 | Đã xác nhận: kiến trúc tổng thể, backend, nghiên cứu và thiết kế cơ chế chẩn đoán nguyên nhân gốc |
 | Phạm Văn Tuyến | B22DCCN773 | Đã xác nhận: phụ trách trọn gói mobile; có thể hỗ trợ một số chức năng backend sau khi chia workload |
-| Phạm Long Nhật | B22DCCN581 | Đã xác nhận: phụ trách trọn gói frontend ReactJS; hỗ trợ trợ lý chẩn đoán và phân tích nghiệp vụ |
+| Phạm Long Nhật | B22DCCN581 | Đã xác nhận: phụ trách trọn gói frontend ReactJS; hỗ trợ nghiên cứu chẩn đoán và phân tích nghiệp vụ |
 
 ## Ma trận phân công baseline
 
@@ -18,7 +18,7 @@ Hai cột `Người quyết định thiết kế` và `Người hiện thực h�
 | Backend, giao dịch đặt vé và kiểm thử độ tin cậy | Lê Văn Minh | Lê Văn Minh chính; Phạm Văn Tuyến có thể hỗ trợ phần sẽ chốt sau | Cả nhóm | Minh đã xác nhận; phần hỗ trợ của Tuyến còn `OPEN` |
 | Frontend web và trải nghiệm buyer/organizer | Phạm Long Nhật trong phạm vi FE; Lê Văn Minh duyệt hợp đồng/kiến trúc chung | Phạm Long Nhật | Lê Văn Minh và Phạm Văn Tuyến | Đã xác nhận |
 | Mobile và check-in trực tuyến | Phạm Văn Tuyến trong phạm vi mobile; Lê Văn Minh duyệt hợp đồng/kiến trúc chung | Phạm Văn Tuyến | Lê Văn Minh và Phạm Long Nhật | Đã xác nhận |
-| Trợ lý chẩn đoán sự cố | Lê Văn Minh | Lê Văn Minh chính; Phạm Long Nhật hỗ trợ | Cả nhóm | Đã xác nhận |
+| Cơ chế chẩn đoán nguyên nhân gốc | Lê Văn Minh | Lê Văn Minh chính; Phạm Long Nhật hỗ trợ | Cả nhóm | Đã xác nhận |
 | Phân tích nghiệp vụ | Lê Văn Minh | Lê Văn Minh chính; Phạm Long Nhật hỗ trợ | Cả nhóm | Đã xác nhận |
 | Tích hợp, thí nghiệm và báo cáo | Cả nhóm | Cả nhóm | Cả nhóm | Đã định hướng |
 

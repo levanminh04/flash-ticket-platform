@@ -1,13 +1,15 @@
 # B3 — Quy trình nghiệp vụ
 
-- Phiên bản: `B3-v0.10`
+- Phiên bản: `B3-v0.11`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22, sau `B2-v0.10` (bản `B3-v0.9` được duyệt ngày 2026-08-21)
-- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.10`, `APPROVED` ngày 2026-08-22; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng quy trình và đọc trạng thái riêng của mỗi dòng
+- Ngày duyệt: 2026-08-27, sau `B2-v0.12` (`GOV-033`) · `B3-v0.10` duyệt ngày 2026-08-22; `B3-v0.9` duyệt ngày 2026-08-21
+- Đầu vào và phiên bản: `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng quy trình và đọc trạng thái riêng của mỗi dòng
 - Phân lớp: `FORMATION`
 
 > **Vì sao có `B3-v0.10`:** bản này **không đổi nội dung nghiệp vụ** so với `B3-v0.9`. `B2-v0.10` chỉ bổ sung mục từ **Yêu cầu hủy sự kiện** cho khái niệm mà B3 §2 vốn đã mô tả, không sửa nghĩa nào đang dùng ở đây. Tài liệu đã trở lại `REVIEW_READY` vì quy tắc chuỗi `B2 → B3 → B4 → B5` không cho một tạo tác giữ `APPROVED` khi đầu vào bắt buộc chưa được duyệt lại, đúng như vòng bỏ `SUPER_ADMIN` ngày 2026-08-21, rồi được Lê Văn Minh duyệt lại ngày 2026-08-22.
+
+> **Vì sao có `B3-v0.11`:** **không đổi một chữ nội dung nghiệp vụ.** `B2-v0.12` gỡ năm mục từ ở §6 của từ điển — toàn bộ là từ vựng của thiết kế trợ lý cũ (`RES-034`) — và bổ sung một mục từ ở §5 là `Hồ sơ chi trả sự kiện` (`RES-040`). B3 **chưa từng dùng năm mục từ bị gỡ** (đã kiểm: 0 chỗ nhắc trợ lý, chẩn đoán, Drain hay mô hình ngôn ngữ), còn mục từ mới chỉ đặt tên cho vật thể mà B3 §5 vốn đã mô tả bằng lời. Tài liệu trở lại `REVIEW_READY` thuần theo quy tắc chuỗi, và đã được Lê Văn Minh duyệt lại ngày 2026-08-27 (`GOV-033`).
 
 ## 1. Mục đích và giới hạn
 
@@ -20,7 +22,7 @@ Phạm vi gồm bốn quy trình:
 3. Hoàn tiền, hủy một sự kiện, đối soát và chi trả.
 4. Organizer check-in trực tuyến cho sự kiện của mình.
 
-Các năng lực tài khoản, địa điểm, phân loại, tìm kiếm và theo dõi organizer được giữ ở mức hỗ trợ tối thiểu theo B2-v0.9. B3 không mở thêm một quy trình đầu-cuối chỉ để mô tả chi tiết các năng lực này; B4 phải chuyển tiếp chúng sang B5 mà không biến phần còn `OPEN` hoặc quyết định kỹ thuật chờ gate sau thành quy tắc đã chốt.
+Các năng lực tài khoản, địa điểm, phân loại, tìm kiếm và theo dõi organizer được giữ ở mức hỗ trợ tối thiểu theo `B2` §1–§2 — nội dung không đổi từ `B2-v0.9` tới `B2-v0.12` hiện hành. B3 không mở thêm một quy trình đầu-cuối chỉ để mô tả chi tiết các năng lực này; B4 phải chuyển tiếp chúng sang B5 mà không biến phần còn `OPEN` hoặc quyết định kỹ thuật chờ gate sau thành quy tắc đã chốt.
 
 ## 2. Quy trình 1 — Quản lý vòng đời sự kiện bán vé
 

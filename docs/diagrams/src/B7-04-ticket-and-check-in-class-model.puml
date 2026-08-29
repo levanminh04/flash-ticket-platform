@@ -3,7 +3,6 @@ title Mô hình lớp phân tích — Quyền tham dự và kiểm soát vào c�
 
 ' FORMATION: mô hình miền B7; không biểu diễn API quét, khóa hay kho dữ liệu.
 
-left to right direction
 skinparam backgroundColor white
 skinparam shadowing false
 skinparam linetype ortho
@@ -54,17 +53,25 @@ package "Yêu cầu và quy tắc tham chiếu" as REFERENCES {
   class EventOwnership as "Sở hữu sự kiện" <<Tham chiếu quyền>>
 }
 
-CheckinRequest "0..*" --> "1" Issuance : yêu cầu root chuyển trạng thái một vé
-Ticket "0..*" --> "1" CheckinWindow : kiểm tra thời gian
-Ticket "0..*" --> "1" QRAccess : kiểm tra quyền đọc
-CheckinRequest "0..*" --> "1" EventOwnership : kiểm tra organizer
+CheckinRequest "0..*" --> "1" Issuance
+Ticket "0..*" --> "1" CheckinWindow
+Ticket "0..*" --> "1" QRAccess
+CheckinRequest "0..*" --> "1" EventOwnership
 
-note bottom of Ticket
+note top of REFERENCES
+  Ý nghĩa bốn liên kết, tách khỏi cạnh để nhãn không chồng nhau:
+  · Yêu cầu check-in → Phát hành vé: yêu cầu root chuyển trạng thái một vé
+  · Yêu cầu check-in → Sở hữu sự kiện: kiểm tra organizer đúng chủ sự kiện
+  · Vé → Cửa sổ check-in: kiểm tra thời gian
+  · Vé → Quyền truy cập QR: kiểm tra quyền đọc
+end note
+
+note right of Ticket
   Mỗi vé có tối đa một check-in thành công,
   kể cả khi nhiều thiết bị quét đồng thời.
 end note
 
-note bottom of Issuance
+note left of Issuance
   Thử lại không tạo nhiều quyền tham dự hơn số đã mua.
   Hoàn tiền không tự trở thành trạng thái của vé.
   Mọi thay đổi trạng thái vé đi qua root này.

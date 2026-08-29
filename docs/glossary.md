@@ -1,10 +1,10 @@
 # B2 — Từ điển miền
 
-- Phiên bản: `B2-v0.10`
+- Phiên bản: `B2-v0.12`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-22 (bản `B2-v0.9` được duyệt ngày 2026-08-21)
-- Đầu vào và phiên bản: B1 khảo sát công khai `APPROVED` ngày 2026-08-13; B1 chẩn đoán `APPROVED` ngày 2026-08-13; A1/A2/A4 baseline `APPROVED` ngày 2026-08-13; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng định nghĩa và đọc trạng thái riêng của mỗi dòng
+- Ngày duyệt: 2026-08-27, sau `A4-v0.2` (`GOV-033`) · `B2-v0.10` duyệt ngày 2026-08-22, `B2-v0.9` duyệt ngày 2026-08-21
+- Đầu vào và phiên bản: B1 khảo sát công khai `APPROVED` ngày 2026-08-13; B1 chẩn đoán `APPROVED` ngày 2026-08-13; `A1-v0.2`, `A2-v0.2`, `A4-v0.2` — `APPROVED` 2026-08-27 sau tái baseline theo `DH-TEN`; `docs/project/decision-register.md` — dùng đúng các ID được dẫn tại từng định nghĩa và đọc trạng thái riêng của mỗi dòng *(Rà 2026-08-29 — `GOV-052`: `A4` nay là `A4-v0.3`; `v0.3` chỉ sửa một câu khai sai về nơi chốt ngưỡng, **ba câu hỏi nghiên cứu không đổi một chữ**, nên đầu vào thực chất của tài liệu này không đổi.)*
 - Phân lớp: `FORMATION` — chỉ dùng yêu cầu, bằng chứng nghiệp vụ và quyết định đã xác nhận để định nghĩa miền đích
 
 ## 1. Mục đích và quy tắc sử dụng
@@ -117,9 +117,12 @@ Các trường cụ thể của hồ sơ nghiệp vụ, cách đồng bộ kỹ 
 | **Đối soát thủ công** | Admin kiểm tra báo cáo cổng thanh toán và xác nhận không còn thanh toán hoặc hoàn tiền đang xử lý sau khi sự kiện kết thúc. | **Chi trả:** chuyển tiền ngoài hệ thống. | `USER_CONFIRMED` |
 | **Số tiền chi trả** | Doanh thu thực thu trừ phí nền tảng; không có khoản giữ lại phòng hoàn tiền. | **Doanh thu thực thu:** giá trị trước phí. | `USER_CONFIRMED` |
 | **Chi trả** | Một lần chuyển tiền cho organizer sau khi đủ điều kiện đối soát, thực hiện ngoài hệ thống. | **Đánh dấu đã chi trả:** ghi nhận kết quả. | `USER_CONFIRMED` |
+| **Hồ sơ chi trả sự kiện** | Bản ghi **trong hệ thống** của một sự kiện: trạng thái đối soát, dấu `Đã chi trả` và số tiền chi trả được tính. Nó **không** sở hữu việc chuyển tiền, vì hệ thống không quan sát được việc đó. | **Chi trả:** lần chuyển tiền thật, thực hiện ngoài hệ thống. | `USER_CONFIRMED` |
 | **Đã chi trả** (`PAID`) | Trạng thái admin đánh dấu thủ công đúng một lần; sai lệch phát hiện sau đó xử lý ngoài hệ thống và không mở lại vòng đời. | **Đã đối soát:** đủ điều kiện nhưng chưa chắc đã chuyển tiền. | `USER_CONFIRMED` |
 
-## 6. Sự cố và trợ lý chẩn đoán
+## 6. Sự cố và dấu vết vận hành
+
+> **Từ vựng dùng chung cho cả hai bộ tài liệu.** Bộ hệ thống dùng để phát biểu yêu cầu quan sát; bộ RCA ở `docs/research-rca/` dùng làm nền khi mô tả dữ liệu đầu vào. Năm mục từ đặc trưng của **thiết kế trợ lý cũ** — `Mẫu log Drain`, `Context chẩn đoán`, `Nguyên nhân khả dĩ`, `Bước kiểm tra tiếp theo`, `Trợ lý chẩn đoán sự cố` — đã được gỡ ngày 2026-08-27 theo `RES-034`. Từ vựng của **phương pháp** chẩn đoán — đồ thị, nút, cạnh, độ đo xếp hạng — thuộc bộ RCA, không đưa vào từ điển miền.
 
 | Thuật ngữ | Định nghĩa thống nhất | Phân biệt dứt khoát với | Trạng thái |
 |---|---|---|---|
@@ -131,11 +134,6 @@ Các trường cụ thể của hồ sơ nghiệp vụ, cách đồng bộ kỹ 
 | **Dấu vết vận hành** | Log, trace, exception và metadata dùng để dựng lại diễn biến. | **Nguyên nhân gốc:** dấu vết là bằng chứng đầu vào. | `USER_CONFIRMED` |
 | **Log có cấu trúc** | Bản ghi có trường và định dạng nhất quán để máy xử lý. | **Thông điệp log:** chỉ là phần văn bản. | `USER_CONFIRMED` |
 | **Mã tương quan** | Định danh liên kết bản ghi thuộc cùng yêu cầu hoặc luồng nghiệp vụ. | **Mã nghiệp vụ:** định danh đơn, vé, thanh toán. | `USER_CONFIRMED` |
-| **Mẫu log Drain** | Cấu trúc ổn định rút ra sau khi tách phần biến đổi của các thông điệp tương tự. | **Nguyên nhân:** mẫu log không tự kết luận nguyên nhân. | `USER_CONFIRMED` |
-| **Context chẩn đoán** | Dấu vết đã chọn, liên kết, rút gọn và khử nhạy cảm cho một sự cố. | **Toàn bộ log:** context chỉ giữ phần liên quan. | `USER_CONFIRMED` |
-| **Nguyên nhân khả dĩ** | Giả thuyết phù hợp bằng chứng nhưng chưa được con người xác minh. | **Nguyên nhân gốc đã xác nhận:** kết luận cuối. | `USER_CONFIRMED` |
-| **Bước kiểm tra tiếp theo** | Hành động đọc/xác minh để củng cố hoặc loại trừ giả thuyết. | **Tự sửa:** trợ lý không chạy lệnh hoặc ghi nghiệp vụ. | `USER_CONFIRMED` |
-| **Trợ lý chẩn đoán sự cố** | Công cụ chỉ đọc liên kết dấu vết, đề xuất nguyên nhân khả dĩ và bước kiểm tra; không tự kết luận hay tự sửa. | **Chatbot mua vé:** hỗ trợ hành trình mua. | `USER_CONFIRMED` |
 
 ## 7. Thuật ngữ phương pháp
 
@@ -177,6 +175,10 @@ Các ID được giữ để bảo toàn dấu vết. `CLOSED` là tình trạng
 Các tiêu chí trên được Lê Văn Minh xác nhận đạt khi duyệt `B2-v0.8` và được xác nhận lại cho `B2-v0.9` ngày 2026-08-21. Các trường dữ liệu và quyết định kỹ thuật được chuyển đúng gate sau, không được xem là khoảng trống chặn B2.
 
 `B2-v0.10` (2026-08-22) chỉ **bổ sung** mục từ **Yêu cầu hủy sự kiện**; không định nghĩa lại, đổi nghĩa hay gỡ bất kỳ mục từ nào đã duyệt. Vì B2 là đầu vào bắt buộc của cả chuỗi, tài liệu và các tạo tác hạ nguồn B3 → B4 → B5 cùng trở lại `REVIEW_READY`, theo đúng cách đã xử lý vòng bỏ `SUPER_ADMIN` ngày 2026-08-21. Lê Văn Minh đã duyệt lại toàn chuỗi `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` trong cùng ngày 2026-08-22.
+
+`B2-v0.11` (2026-08-27) **gỡ năm mục từ** ở §6 — `Mẫu log Drain`, `Context chẩn đoán`, `Nguyên nhân khả dĩ`, `Bước kiểm tra tiếp theo`, `Trợ lý chẩn đoán sự cố` — theo `RES-034`. Chúng là từ vựng của **thiết kế trợ lý cũ**, thứ đã bị gỡ khỏi bộ tài liệu hệ thống. **Tám mục từ còn lại của §6 không đổi một chữ**, gồm cả bốn lớp lỗi mục tiêu — chúng là từ vựng dùng chung mà kịch bản chất lượng và bộ RCA đều cần. Không mục từ nào của §1–§5 và §7 bị đụng tới. Vì B2 là đầu vào bắt buộc của cả chuỗi, `B3` → `B8` cùng trở lại `REVIEW_READY` theo đúng cách đã xử lý hai vòng trước.
+
+`B2-v0.12` (2026-08-27) **bổ sung một mục từ** ở §5: **Hồ sơ chi trả sự kiện** — bản ghi trong hệ thống gồm trạng thái đối soát, dấu `Đã chi trả` và số tiền chi trả (`RES-040`). Mục từ **Chi trả** giữ nguyên nghĩa cũ: lần chuyển tiền thật cho organizer, thực hiện **ngoài** hệ thống. Việc bổ sung này khép chỗ lệch nghĩa cuối cùng của `B7`: aggregate root ở đó từng mang tên `Chi trả` trong khi giữ phần nằm **trong** hệ thống, nay đổi tên cho khớp. **Không định nghĩa lại, đổi nghĩa hay gỡ mục từ nào đang dùng.**
 
 ## 10. Phần dùng cho báo cáo
 
