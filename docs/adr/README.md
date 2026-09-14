@@ -16,3 +16,14 @@ Với ADR kiến trúc đích:
 2. Chỉ chuyển trạng thái sang `Chấp nhận` tại B11-C khi `docs/architecture/B11-A-independent-alternatives.md` và `docs/architecture/B11-B-legacy-feasibility.md` đều đã được người thật duyệt `APPROVED`.
 3. ADR phải liên kết đúng phương án B11-A, phiên bản B11-A mà B11-B đã đối chiếu và kết quả khả thi tương ứng. B5.5 không được ghi như nguồn sinh phương án kiến trúc.
 4. Trước khi chấp nhận, ADR phải có trường `Tác động lên A1–A6: Không | Có — <tạo tác và lý do>`. Nếu có tác động đến phát biểu vấn đề, mục tiêu, phạm vi, câu hỏi nghiên cứu hoặc cách đánh giá, cập nhật và duyệt lại tạo tác liên quan cùng các đầu vào phụ thuộc trước khi chấp nhận ADR.
+
+## ADR kiến trúc đích hiện hành
+
+| ADR | Nội dung | Trạng thái |
+|---|---|---|
+| [`ADR-001`](ADR-001-chon-pa6-va-nam-service-nghiep-vu.md) | Chọn `PA-6` và năm service nghiệp vụ | `Chấp nhận` |
+| [`ADR-002`](ADR-002-mot-saga-thu-tien-phat-hanh-bu-tru.md) | Một Saga thu tiền–phát hành–bù trừ | `Chấp nhận` |
+| [`ADR-003`](ADR-003-rca-rieng-chi-doc-kho-quan-sat.md) | RCA riêng, chỉ đọc kho quan sát; lớp giải thích dùng Gemini API | `Chấp nhận` |
+| [`ADR-004`](ADR-004-bo-tri-hai-may.md) | Bố trí mục tiêu trên hai máy, không HA | `Chấp nhận` |
+
+`GOV-097` đã thay điều kiện benchmark tải của `GOV-092` bằng ngân sách tài nguyên và công bố heap/container limit; thử tải thật chuyển sang Giai đoạn 5–6. Phần tác động B11 trong `A6-v0.6` đã được duyệt lại, phép thử độc lập RCA đã đạt, và Lê Văn Minh chấp nhận cả bốn ADR ngày 2026-09-04 (`GOV-099`).

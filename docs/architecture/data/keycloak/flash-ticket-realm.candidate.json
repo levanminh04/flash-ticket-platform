@@ -1,0 +1,115 @@
+{
+  "realm": "flash-ticket",
+  "enabled": true,
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "verifyEmail": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      { "name": "BUYER", "composite": false, "clientRole": false },
+      { "name": "ORGANIZER", "composite": false, "clientRole": false },
+      { "name": "ADMIN", "composite": false, "clientRole": false }
+    ]
+  },
+  "defaultRoles": [],
+  "clientScopes": [
+    {
+      "name": "flash-ticket-human",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "business-realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "flash-ticket-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "flash-ticket-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "scopeMappings": [
+    { "clientScope": "flash-ticket-human", "roles": ["BUYER", "ORGANIZER", "ADMIN"] }
+  ],
+  "clients": [
+    {
+      "clientId": "flash-ticket-web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["https://web.example.invalid/oidc/callback"],
+      "webOrigins": ["https://web.example.invalid"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "defaultClientScopes": ["flash-ticket-human"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "flash-ticket-android",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["https://app.example.invalid/oidc/callback"],
+      "webOrigins": [],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "defaultClientScopes": ["flash-ticket-human"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "flash-ticket-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "flash-ticket-user-management",
+      "enabled": false,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    }
+  ]
+}

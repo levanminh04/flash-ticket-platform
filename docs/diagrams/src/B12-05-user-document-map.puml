@@ -1,0 +1,95 @@
+@startuml B12-05-user-document-map
+' Source: docs/architecture/B12-data-ownership-and-schema.md B12-v0.2, sections 4.5/13.
+' FORMATION / DRAFT. This document map does not close any B12 OPEN decision.
+title B12-05 — Bản đồ document: hồ sơ và quyền nghiệp vụ\nuser-service · MongoDB / user_db · CANDIDATE
+top to bottom direction
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 65
+hide methods
+hide circle
+
+entity "Hồ sơ người dùng\nusers" as users <<document>> {
+  _id : UUID string <<PK>>
+  identitySubject : string <<UK>>
+  --
+  displayName : string [0..1]
+  createdAt, updatedAt : date
+  version : integer
+}
+
+entity "Đăng ký organizer\norganizer_applications" as applications <<document>> {
+  _id : UUID string <<PK>>
+  identitySubject : string <<UK>>
+  --
+  organizationName, shortDescription : string
+  status : PENDING / ACTIVE / REJECTED
+  rejectionReason : string [0..1]
+  decidedBySubject, decidedAt : optional
+  roleGrant : embedded object [0..1]
+  createdAt, updatedAt : date
+  version : integer
+}
+
+entity "Kết quả cấp quyền\nroleGrant" as roleGrant <<embedded>> {
+  operationId : UUID string
+  status : REQUESTED / CONFIRMED / FAILED / UNKNOWN
+  attemptedAt : date
+  confirmedAt : date [0..1]
+}
+
+entity "Hồ sơ organizer công khai\norganizer_profiles" as profiles <<projection>> {
+  _id : UUID string <<PK>>
+  identitySubject : string <<UK>>
+  sourceApplicationId : UUID string <<UK, REF>>
+  --
+  sourceVersion : integer
+  organizationName, shortDescription : string
+  logoUrl, bannerUrl : string [0..1]
+  status : ACTIVE
+  refreshedAt : date
+}
+
+entity "Theo dõi organizer\nuser_follows" as follows <<document>> {
+  _id : UUID string <<PK>>
+  --
+  buyerSubject : string <<external ID>>
+  organizerSubject : string <<external ID>>
+  createdAt : date
+}
+
+applications *-- roleGrant : nhúng trong cùng document
+applications ..> profiles : dẫn xuất theo ID + version
+users -[hidden]down- applications
+profiles -[hidden]right- follows
+
+note top of users
+  identitySubject là sub của Keycloak theo issuer môi trường.
+  Keycloak giữ danh tính/role; không FK hoặc JOIN vào kho Keycloak.
+  Không lưu password, refresh token hoặc role làm nguồn thứ hai.
+end note
+
+note bottom of applications
+  REJECTED cần lý do; không gửi lại theo FR-54.
+  ACTIVE cần roleGrant CONFIRMED trong document.
+  Xác nhận thật từ Keycloak và retry lỗi từng phần thuộc B13.
+  Validator không chứng minh role đã được cấp ở hệ thống ngoài.
+end note
+
+note bottom of follows
+  UNIQUE buyerSubject + organizerSubject; index organizerSubject để count.
+  Follow/unfollow idempotent; chỉ quan hệ follow có quyền remove.
+  Không suy điều kiện organizer ACTIVE cho follow.
+end note
+
+legend bottom
+  PK: khóa document; UK: unique index; REF: tham chiếu ứng dụng, không FK.
+  Nét liền hình thoi: nhúng vật lý; nét đứt: dẫn xuất, không bảo đảm nguyên tử xuyên document.
+  Validator kín; standalone MongoDB không cung cấp transaction xuyên document/collection.
+  Hình chỉ liệt kê trường chính; validator/index là biểu diễn đầy đủ của baseline ứng viên.
+endlegend
+@enduml

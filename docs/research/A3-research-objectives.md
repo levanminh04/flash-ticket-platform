@@ -3,9 +3,9 @@
 - **Phiên bản:** `A3-v0.6`
 - **Phê duyệt từng phần, 2026-08-29** (`GOV-054`): **§4 — phần cố ý không đặt thành mục tiêu — đã được Lê Văn Minh duyệt**, cùng quyết định `RES-048` ghi trong đó. §2.1, §3.1 và §5.1 **chưa duyệt**: Lê Văn Minh nêu rõ chưa hiểu ngữ cảnh vì ba mục viết bằng mã hiệu. Cần diễn giải lại bằng lời thường trước khi đưa ra duyệt.
 - **Trạng thái:** `DRAFT` — **chưa được duyệt.** Mọi mục tiêu của cả hai vòng nay đã được Lê Văn Minh xác nhận ở mức định tính; còn lại hai việc trước khi chốt được tài liệu: `A3-OPEN-07` (`ASR-14` không có mục tiêu nào phủ) và ngưỡng số, vốn là đầu ra của vòng đo thử
-- **Người duyệt:** — (chờ Lê Văn Minh duyệt `A3` cùng `A5`, `A6`). **Phần đã được xác nhận riêng:** `MT-1`–`MT-4` ở mức định tính (`RES-002`); câu chữ mới của `MT-5` (`RES-041`); vai của `MT-1`–`MT-3` (`RES-046`); vòng của `MT-4`/`MT-5` (`RES-045`); `MT-R1`–`MT-R4` (`RES-047`). **Giảng viên chưa xác nhận `MT-R1`–`MT-R4`**
+- **Người duyệt:** — (chờ Lê Văn Minh duyệt `A3` và duyệt lại `A6`; `A5-v0.3` đã `APPROVED`). **Phần đã được xác nhận riêng:** `MT-1`–`MT-4` ở mức định tính (`RES-002`); câu chữ mới của `MT-5` (`RES-041`); vai của `MT-1`–`MT-3` (`RES-046`); vòng của `MT-4`/`MT-5` (`RES-045`); `MT-R1`–`MT-R4` (`RES-047`). **Giảng viên chưa xác nhận `MT-R1`–`MT-R4`**
 - **Ngày duyệt:** —
-- **Đầu vào:** `A1-context-and-urgency.md` (`A1-v0.2`), `A2-problem-statement.md` (`A2-v0.2`) và `A4-research-questions-draft.md` (`A4-v0.3`) — cả ba `APPROVED` ngày 2026-08-27 (`GOV-033`) sau tái baseline theo `DH-TEN`; `A5-doi-tuong-nghien-cuu.md` (`A5-v0.3`) và `A6-pham-vi.md` (`A6-v0.4`)
+- **Đầu vào:** `A1-context-and-urgency.md` (`A1-v0.2`), `A2-problem-statement.md` (`A2-v0.2`) và `A4-research-questions-draft.md` (`A4-v0.3`) — cả ba `APPROVED` ngày 2026-08-27 (`GOV-033`) sau tái baseline theo `DH-TEN`; `A5-doi-tuong-nghien-cuu.md` (`A5-v0.3`) và `A6-pham-vi.md` (`A6-v0.6`). **`A6-v0.6` chỉ đồng bộ quyết định vận hành của B11-C và làm rõ rủi ro nạp `RE2`; không đổi mục tiêu nào của A3.**
 - **Đi vào báo cáo:** phần Mục tiêu nghiên cứu · **ràng buộc lên phần Đánh giá**
 - **Ràng buộc:** không nhắc tên công nghệ, framework, thuật toán hay nhà cung cấp; không đặt mục tiêu cần điều kiện nhóm không có như người dùng thật hoặc hạ tầng lớn
 

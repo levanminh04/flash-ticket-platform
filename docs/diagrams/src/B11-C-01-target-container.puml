@@ -1,0 +1,88 @@
+@startuml B11-C-01-target-container
+' B11-C / kiến trúc đích PA-6 — APPROVED, ADR-001..004 Chấp nhận
+' Nguồn: B11-C-v0.3; GOV-086..GOV-098
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 180
+skinparam nodesep 45
+skinparam ranksep 55
+
+title B11-C — Kiến trúc đích PA-6 · 5 service nghiệp vụ
+
+rectangle "Kênh web · mobile · chatbot" <<Kênh>> as CH
+rectangle "API Gateway" <<Hạ tầng>> as GW
+
+package "Năm service nghiệp vụ" {
+  rectangle "event-service\nSự kiện và cấu hình bán" as EVT
+  rectangle "booking-service\nMua vé và cam kết nguồn cung" as BKG
+  rectangle "payment-service\nThanh toán · hoàn tiền · đối soát · chi trả" as PAY
+  rectangle "ticket-service\nPhát hành · giao nhận · vào cửa" as TKT
+  rectangle "user-service\nTài khoản và quyền nghiệp vụ" as ACC
+}
+
+package "Quan sát và chẩn đoán" {
+  rectangle "Collector / pipeline quan sát\n(chuẩn trường chờ B16)" as COL
+  database "Kho dữ liệu quan sát" as OBS
+  rectangle "RCA + lớp giải thích\nĐƠN VỊ RIÊNG · CHỈ ĐỌC" <<RCA>> as RCA
+}
+
+package "Hệ thống ngoài" {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Keycloak / nguồn danh tính" as IDP
+  rectangle "Gemini API\nGiải thích sau xếp hạng" as GEM
+}
+
+CH --> GW
+GW --> EVT
+GW --> BKG
+GW --> TKT
+GW --> ACC
+
+ACC --> IDP : xác thực / quyền
+EVT --> BKG : cấu hình bán có phiên bản
+EVT --> PAY : mốc kết thúc / tỷ lệ phí
+BKG --> PAY : nghĩa vụ thanh toán
+PAY --> PG : thu / hoàn
+PG ..> PAY : callback
+PAY ..> TKT : xác nhận thu → phát hành\nSaga duy nhất
+TKT ..> PAY : phát hành lỗi → hoàn
+TKT ..> BKG : trả tài nguyên / lượt dùng
+
+EVT ..> COL
+BKG ..> COL
+PAY ..> COL
+TKT ..> COL
+ACC ..> COL
+GW ..> COL
+COL --> OBS
+RCA --> OBS : chỉ đọc · credential riêng
+RCA ..> GEM : bằng chứng đã lọc\nkhông đổi thứ hạng
+
+note right of BKG
+  Giữ trọn BC-02:
+  INV-01, INV-02, INV-03,
+  INV-04, INV-06 cục bộ.
+end note
+
+note bottom of RCA
+  Không truy cập trực tiếp schema nghiệp vụ.
+  Không gọi API ghi. Không tự sửa hệ thống.
+  Gemini lỗi vẫn giữ kết quả xếp hạng RCA.
+  Hình thức trả kết quả còn OPEN (RES-039).
+end note
+
+note bottom of PAY
+  B11-C chỉ chốt phạm vi và trách nhiệm Saga.
+  Payload / topic / state / sequence chờ B13-B14.
+end note
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | gọi/đọc đồng bộ ở mức kiến trúc |
+  | nét đứt | sự kiện hoặc dữ liệu quan sát; hợp đồng chờ B13/B16 |
+  | database nghiệp vụ | không vẽ — quyền sở hữu và schema chờ B12 |
+endlegend
+
+@enduml

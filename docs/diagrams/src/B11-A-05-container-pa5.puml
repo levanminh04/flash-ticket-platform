@@ -1,0 +1,126 @@
+@startuml B11-A-05-container-pa5
+' B11-A / PA-5 - Giu cho tach khoi don, tien gop ca doi soat, 7 ranh gioi (C4 muc 2)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md muc 4.5
+' Day la phuong an dung tu hai rang buoc USER_CONFIRMED R14 (RES-050) va R15 (RES-051).
+' Luu y ky thuat: khong de cap bold ** ** bac qua mot \n tuong minh.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 165
+skinparam nodesep 45
+skinparam ranksep 40
+
+title PA-5 — Giữ chỗ tách khỏi đơn, tiền gộp cả đối soát · 7 ranh giới (C4 mức 2)\nPhương án ứng viên — chưa được chọn
+
+rectangle "Kênh: web · ứng dụng di động · chatbot mua vé" <<Kênh>> as Ch
+
+package "Ranh giới nghiệp vụ" as BIZ {
+  rectangle "**Sự kiện và cấu hình bán** <<RG-1>>\nSự kiện bán vé · Yêu cầu hủy · Địa điểm · Phân loại\nSector, Loại vé, Khuyến mãi theo nghĩa cấu hình" as R1
+  rectangle "**Giữ chỗ, nguồn cung và giới hạn mua** <<RG-2>>\nGiữ chỗ · Ghế, Loại vé, Sector theo nghĩa nguồn cung\nGiới hạn mua · Khuyến mãi tổng lượt · Lượt dùng khuyến mãi\n//INV-01, INV-04 cục bộ//" as R2
+  rectangle "**Đơn hàng** <<RG-3>>\nDòng đơn · Số tiền phải thanh toán\n//INV-02 cục bộ//" as R3
+  rectangle "**Tiền: thanh toán, hoàn tiền, đối soát và chi trả** <<RG-4>>\n//INV-05, INV-08, INV-10 cục bộ//" as R4
+  rectangle "**Quyền tham dự và kiểm soát vào cửa** <<RG-5>>\n//INV-07, INV-09 cục bộ//" as R5
+  rectangle "**Giao nhận thông tin vé** <<RG-6>>" as R6
+  rectangle "**Tài khoản và quyền nghiệp vụ** <<RG-7>>" as R7
+}
+
+package "Quan sát và chẩn đoán" as Obs {
+  rectangle "Kho dữ liệu quan sát" <<Dữ liệu quan sát>> as OBS
+  rectangle "Cơ chế chẩn đoán nguyên nhân gốc" <<Đơn vị riêng · CHỈ ĐỌC>> as RCA
+}
+
+package "Hệ thống ngoài" as Ext {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Nguồn danh tính" as IDP
+}
+
+Ch --> R1
+Ch --> R2
+Ch --> R3
+Ch --> R5
+
+R1 --> R2 : E2 điều kiện bán [N2]
+R1 --> R3 : E2 cấu hình thương mại [N2]
+R1 --> R5 : E3 [N2]
+R1 --> R4 : E4 [N2]
+R1 ..> R2 : E5 [N3]
+R1 ..> R3 : E5 [N3]
+R1 ..> R4 : E5 [N3]
+R1 ..> R5 : E5 [N3]
+
+R3 --> R2 : tạo / hủy giữ chỗ [N3]
+R2 ..> R3 : giữ chỗ hết hạn [N3]
+R3 --> R4 : E6 [N2]
+R4 ..> R2 : E7 chốt tài nguyên [N3]
+R4 ..> R3 : E7 đơn chuyển trạng thái [N3]
+R4 --> R5 : E8 [**N4**]
+R5 ..> R4 : E10 [**N4**]
+R5 ..> R2 : E11 [**N4**]
+R5 ..> R6 : E12 [N3]
+
+R7 --> R1 : E1 [N2]
+R7 --> R2 : E1 [N2]
+R7 --> R3 : E1 [N2]
+R7 --> R4 : E1 [N2]
+R7 --> R5 : E1 [N2]
+
+R4 --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG ..> R4 : callback kết quả thu,\nkết quả hoàn
+R7 --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+BIZ ..> OBS : dữ liệu quan sát — cả 7 ranh giới đều sinh
+RCA -> OBS : chỉ đọc, credential riêng
+
+note right of R2
+  **Ba vế của ASR-01 đều nằm trong RG-2**
+  Ghế không thuộc hai giữ chỗ còn hiệu lực;
+  số lượng khả dụng không âm; tổng đang giữ
+  cộng đã mua không vượt giới hạn.
+  Không buộc phối hợp xuyên ranh giới.
+  KHÔNG khẳng định atomicity: ba vế trải trên
+  ít nhất ba nhóm root, cơ chế phối hợp thuộc B11-C/B13.
+  ----
+  Đây là hệ quả của R14 (RES-050).
+end note
+
+note bottom of R3
+  **Ứng viên Saga: 1 hoặc 2 — chưa chốt.**
+  Chắc chắn: chuỗi thu tiền → phát hành → bù trừ.
+  Có điều kiện: luồng vòng đời giữ chỗ chỉ là N3 nếu
+  giữ chỗ tự hết hiệu lực theo mốc hết hạn của chính nó.
+  Mô hình miền đã duyệt neo mốc đó vào ĐƠN (B2, B7 §4.2),
+  nên điều kiện chưa giữ được — B11-A-OPEN-02, gate B11-C.
+  ----
+  **Ba bất biến xuyên ranh giới**
+  INV-03, INV-06 (RG-2 ↔ RG-3) và INV-11 (RG-1 ↔ RG-4).
+end note
+
+note bottom of Obs
+  ASR-12 / NFR-08: không có đường ghi vào dữ liệu nghiệp vụ,
+  không truy cập trực tiếp schema nghiệp vụ.
+  Kết quả ra được tới một chủ thể có quyền;
+  **hình thức cung cấp còn hoãn** (RES-044).
+  ----
+  Phải tương quan tín hiệu của 7 nguồn; một giao dịch
+  mua vé thành công đi qua 5 ranh giới → ASR-08 gắt nhất ở đây.
+end note
+
+note bottom of Ch
+  Hộp //Kênh// gộp web, ứng dụng di động và chatbot mua vé, nên nó
+  nối tới mọi ranh giới có bề mặt người dùng. Số ranh giới mà
+  riêng //chatbot mua vé// chạm được ghi ở mục (9) của từng phương án.
+end note
+
+Ext -[hidden]- Obs
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | Quan hệ ĐỒNG BỘ ứng viên — gọi hoặc đọc trực tiếp |
+  | nét đứt | Quan hệ bằng SỰ KIỆN MIỀN ứng viên (B2 §1) |
+  | E1…E12 | Mã quan hệ xuyên context — nội dung đầy đủ ở B11-A §3.2 |
+  | N2 · N3 · N4 | Nhóm phân loại luồng — định nghĩa ở B11-A §3.4 |
+  | RG-* | Mã ranh giới triển khai, chỉ để truy vết |
+endlegend
+
+@enduml

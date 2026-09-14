@@ -1,0 +1,103 @@
+@startuml
+' B12-v0.2 derived; full column dictionary is in B12 §12.
+hide circle
+skinparam monochrome true
+skinparam linetype ortho
+skinparam entityFontSize 11
+title payment-service — dữ liệu cục bộ B12-v0.2
+entity "payment\nevent_finance_snapshots" as event_finance_snapshots {
+  event_id : uuid
+  source_fee_version : bigint
+  cancellation_id : uuid
+}
+entity "payment\norder_payment_snapshots" as order_payment_snapshots {
+  order_id : uuid
+  event_id : uuid
+  expected_amount : money_amount
+  source_order_version : bigint
+}
+entity "payment\npayment_attempts" as payment_attempts {
+  id : uuid
+  order_id : uuid
+  expected_amount : money_amount
+  state : text
+  row_version : bigint
+}
+entity "payment\ncharges" as charges {
+  id : uuid
+  attempt_id : uuid
+  order_id : uuid
+  provider_charge_id : nonempty_text
+  amount : money_amount
+}
+entity "payment\npayment_confirmations" as payment_confirmations {
+  order_id : uuid
+  charge_id : uuid
+  amount : money_amount
+}
+entity "payment\nrefunds" as refunds {
+  id : uuid
+  charge_id : uuid
+  order_id : uuid
+  amount : money_amount
+  state : text
+  row_version : bigint
+}
+entity "payment\nrefund_attempts" as refund_attempts {
+  id : uuid
+  refund_id : uuid
+  provider_refund_id : nonempty_text
+}
+entity "payment\nevent_refund_runs" as event_refund_runs {
+  id : uuid
+  event_id : uuid
+  source_cancellation_id : uuid
+  row_version : bigint
+}
+entity "payment\nevent_refund_items" as event_refund_items {
+  run_id : uuid
+  order_id : uuid
+  event_id : uuid
+  confirmed_charge_id : uuid
+  refund_id : uuid
+  state : text
+}
+entity "payment\nevent_payouts" as event_payouts {
+  event_id : uuid
+  fee_amount : money_amount
+  net_amount : money_amount
+  source_fee_version : bigint
+  row_version : bigint
+}
+entity "payment\npayment_sagas" as payment_sagas {
+  order_id : uuid
+  charge_id : uuid
+  state : text
+  command_id : uuid
+  row_version : bigint
+}
+entity "payment\noutbox_messages" as outbox_messages {
+  message_id : uuid
+  aggregate_id : uuid
+  aggregate_version : bigint
+  schema_version : integer
+  correlation_id : uuid
+  causation_id : uuid
+}
+entity "payment\ninbox_messages" as inbox_messages {
+  message_id : uuid
+}
+order_payment_snapshots -- payment_attempts
+payment_attempts -- charges
+order_payment_snapshots -- payment_confirmations
+charges -- payment_confirmations
+charges -- refunds
+refunds -- refund_attempts
+event_refund_runs -- event_refund_items
+order_payment_snapshots -- event_refund_items
+payment_confirmations -- event_refund_items
+refunds -- event_refund_items
+order_payment_snapshots -- payment_sagas
+charges -- payment_sagas
+note "Chỉ FK nội bộ; ID owner khác là tham chiếu mềm.\nHình chọn cột chính; toàn bộ NULL/default/CHECK/index ở B12 §12 và SQL.\nCác cạnh biểu diễn tham chiếu FK, không khẳng định bội số nghiệp vụ bắt buộc." as legend
+@enduml

@@ -16,7 +16,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Phương pháp nghiên cứu, mục tiêu và bằng chứng | `tang-a-phuong-phap-nghien-cuu.md` |
 | Quy trình phân tích, thiết kế, xây dựng và kiểm chứng | `tang-b-quy-trinh-ky-thuat.md` |
 | Ký hiệu, đặt tên và mẫu biểu | `tang-c-quy-uoc-trinh-bay.md` |
-| Sổ đối chiếu hiện thực nội bộ; chỉ mở cho thiết kế ở B11-B sau khi tập phương án độc lập B11-A tại đường dẫn canonical đã được người thật duyệt `APPROVED` | `b5.5-doi-chieu-ma-nguon-va-ba-tang.md` |
+| Sổ đối chiếu hiện thực nội bộ; chỉ mở cho thiết kế ở B11-B sau khi tập phương án độc lập B11-A tại đường dẫn canonical đã được người thật duyệt `APPROVED` — **đã mở ngày 2026-08-31** (`GOV-073`). Theo `GOV-074`, **nguyên văn khảo sát cũ được giữ nguyên**; các chú thích đính chính đã được chèn tại gạch đầu dòng cuối §3.5, đầu PHẦN 4 và ô kiểm cuối PHẦN 5 để gỡ hiệu lực của thiết kế trợ lý cũ. Nội dung kiểm kê dùng cho B11-B không đổi | `b5.5-doi-chieu-ma-nguon-va-ba-tang.md` |
 | Thuật ngữ miền | `glossary.md` |
 | Quy trình nghiệp vụ B3 | `domain/B3-business-processes.md` |
 | Bản đồ sự kiện miền B4 | `domain/B4-domain-event-map.md` |
@@ -24,7 +24,9 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Use case và đặc tả B6 | `domain/B6-use-cases.md` |
 | Aggregate ứng viên và bất biến B7 | `domain/B7-aggregates-and-invariants.md` |
 | Yêu cầu chức năng và phi chức năng B8 | `domain/B8-requirements.md` |
-| **Tập phương án kiến trúc độc lập B11-A và đối chiếu khả thi B11-B** — đường dẫn canonical, **chưa tạo**; B11-A phải được người thật duyệt `APPROVED` trước khi mở B5.5 | `architecture/B11-A-independent-alternatives.md`, `architecture/B11-B-legacy-feasibility.md` |
+| **Chuỗi kiến trúc B11-A → B11-B → B11-C** — đường dẫn canonical. Cả ba cổng đều `APPROVED`. **`B11-C-v0.3` đã chốt `PA-6`**, năm service `event`/`booking`/`payment`/`ticket`/`user`, một Saga do `payment-service` điều phối, RCA riêng chỉ đọc với lớp giải thích dùng Gemini API, và bố trí hai máy không HA (`GOV-086`–`GOV-099`). `ADR-001`–`ADR-004` đều `Chấp nhận`; thử tải thật thuộc Giai đoạn 5–6, có quyền nâng instance AWS tạm thời nếu cần | `architecture/B11-A-independent-alternatives.md`, `architecture/B11-B-legacy-feasibility.md`, `architecture/B11-C-target-architecture.md` |
+| **B12 — Quyền sở hữu dữ liệu và schema đích** — `B12-v0.2` `APPROVED`; 47 bảng SQL/467 cột và 4 collection, init mới; chưa triển khai AWS. Năm ERD, baseline SQL/Mongo/Keycloak và kết quả kiểm dẫn từ tài liệu nguồn; đối chiếu legacy/configuration tách `COMPARISON` | [Thiết kế](architecture/B12-data-ownership-and-schema.md), [baseline](architecture/data/README.md), [kiểm chứng](architecture/B12-validation.md), [đối chiếu cấu hình](architecture/B12-legacy-configuration-comparison.md) |
+| **B13/B14/B15** — hợp đồng, sequence và kế hoạch kiểm; **B16/readiness** — tất cả được Minh duyệt `APPROVED` ngày 2026-09-14 (GOV-144). Kết quả runtime chưa chạy vẫn NOT RUN | [B13](architecture/B13-api-and-event-contracts.md), [B14](architecture/B14-main-flow-sequences.md), [B15](architecture/B15-verification-plan.md), [B16](architecture/B16-observability-baseline.md), [Bắt đầu code](architecture/implementation-readiness.md), [Bản giải thích](architecture/B12-B14-review-pack.md) |
 | Quyết định kiến trúc | `adr/` |
 | Sơ đồ và tệp nguồn | `diagrams/` |
 | API và lược đồ sự kiện | `contracts/` |
@@ -32,9 +34,9 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Kịch bản đo và kết quả thô | `experiments/` |
 | Bằng chứng khảo sát và quy trình dò lỗi | `evidence/` |
 | Phiếu nghiên cứu Tầng A của bộ tài liệu hệ thống | `research/` |
-| Bộ tài liệu nghiên cứu chẩn đoán nguyên nhân gốc — độc lập; **ràng buộc gửi tới B9–B16 nằm ở `research-rca/R0-boi-canh-va-rang-buoc.md` §3** | `research-rca/` |
+| Bộ tài liệu nghiên cứu chẩn đoán nguyên nhân gốc — độc lập về nhịp/cổng; **ràng buộc gửi tới B9–B16 nằm ở `research-rca/R0-boi-canh-va-rang-buoc.md` §3**; kiểm định 990 ca và thiết kế MyRCA `CANDIDATE` nằm ở `research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` | `research-rca/` |
 | Sổ nguồn dùng chung cho cả hai bộ tài liệu | `research/source-register.md` |
-| Khung báo cáo và bản nộp theo mốc | `report/README.md`, `report/report-outline.md`, `report/bao-cao-2-tuan-2026-09-05.md` |
+| Khung báo cáo và bản nộp theo mốc | `report/README.md`, `report/report-outline.md`; `report/bao-cao-2-tuan-2026-09-05.md` là `HISTORICAL_SUPERSEDED`, kết luận hiện hành ở `research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` và bản Word `_v2` |
 | Baseline, phân vai và trạng thái thực hiện | `project/` |
 
 ## Quy tắc cập nhật

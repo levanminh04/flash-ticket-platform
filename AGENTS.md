@@ -1,5 +1,17 @@
 # Flash Ticket Platform — Project Constitution
 
+## BẮT BUỘC ĐỌC TRƯỚC — ưu tiên đồ án khi ra quyết định
+
+**Luồng giao dịch chính chạy đúng → dữ liệu quan sát dùng được → thử tải/mô phỏng lỗi và RCA. Không tối ưu nghiệp vụ phụ bằng cách làm chậm các mục tiêu này.** Đây là rule người dùng đã chốt, không phải lời khuyên tùy chọn (sổ quyết định `PRJ-016`–`PRJ-021`, ngày 2026-09-13).
+
+- Với phần chưa chốt, ưu tiên phương án đơn giản và tận dụng chức năng cũ phù hợp. Không viết lại renderer, gộp/tách dữ liệu hoặc mở rộng nghiệp vụ chỉ để mô hình đẹp/đầy đủ hơn. Việc tái sử dụng vẫn phải đúng gate và ranh giới đích; **không** nới lỏng Legacy implementation quarantine.
+- Không cắt tính đúng đắn của tiền, giữ chỗ, phát vé, xử lý lặp hoặc các yêu cầu bảo mật đã duyệt để gọi là “ưu tiên RCA”. Không thêm service/Saga/nghiệp vụ chỉ để tạo nhiều tình huống nghiên cứu.
+- Agent được chọn chi tiết triển khai đơn giản trong phạm vi đã chốt và công việc được giao. **Phải hỏi Minh trước khi bỏ/hoãn chức năng đã duyệt hoặc mở rộng phạm vi**; không đánh đồng “ít ưu tiên” với “được xóa”. Các gate và kiểm soát thay đổi bên dưới vẫn áp dụng.
+- Điều kiểm được an toàn từ nguồn sẵn có thì **kiểm ngay trong lượt và đưa ra kết quả cùng đề xuất**. Không dùng “để kiểm”, “sau này cần kiểm” để thay công việc hiện làm được; không hỏi người dùng điều có thể xác minh từ code. Nếu thật sự không thể kiểm, nói rõ thiếu đầu vào/quyền gì và giới hạn kết luận, tuyệt đối không bịa kết quả.
+- Khi đưa ra lựa chọn, nói trực diện **dùng lại gì / sửa gì / bỏ gì / thêm gì**, lý do liên quan luồng chính và công sức triển khai. Không mở lại lựa chọn đã chốt; chỉ trình những quyết định còn ảnh hưởng hành vi, phạm vi hoặc chi phí mà người dùng cần chọn.
+
+Rule này không thay đề tài chính thức, quyền quyết định giữa hai bộ tài liệu, lịch ưu tiên “luồng chính trước, công cụ tải/chèn lỗi về sau” (`PRJ-013/014`), hoặc quyền phê duyệt của con người. Đọc tiếp toàn bộ hiến pháp và nguồn `DH-*` trước khi diễn giải mục tiêu.
+
 ## Scope and required workflow
 
 - Treat `D:/Project/flash-ticket-platform` as the only canonical workspace for the graduation project.

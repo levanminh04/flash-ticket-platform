@@ -1,0 +1,35 @@
+@startuml
+skinparam monochrome true
+title B14 — Hết hạn, hủy và hoàn hội tụ
+participant Event
+participant Booking
+participant Payment
+participant Ticket
+participant Gateway
+alt hết hạn hoặc buyer hủy trước chấp nhận tiền
+  Booking -> Booking : TX: khóa đơn + kiểm deadline + release đúng generation
+  Payment -> Booking : Khoản thu tới trễ
+  Booking --> Payment : LATE, không hồi sinh
+else event bị hủy trước start
+  Event -> Event : TX: CANCELLED + full cancellation outbox
+  Event -> Booking : cancellation snapshot
+  Booking -> Booking : TX: inbox + cổng hủy; batch hủy đơn
+  Event -> Ticket : cancellation snapshot
+  Ticket -> Ticket : TX: cổng chặn check-in; batch VOID
+  Event -> Payment : cancellationId
+  Payment -> Payment : TX: marker + run/items; tiếp tục sau restart
+end
+Payment -> Payment : TX: refund unique(charge) + attempt key
+Payment -> Gateway : Hoàn toàn bộ khoản thu, ngoài TX
+alt timeout chưa rõ
+  Payment -> Gateway : Query cùng request key
+  Payment -> Payment : Giữ PROCESSING, không tạo hoàn khác
+else kết quả xác định
+  Gateway --> Payment : Thành công hoặc thất bại đã xác định
+  Payment -> Payment : TX: SUCCEEDED hoặc FAILED còn retry
+end
+note over Booking,Ticket
+  Hủy lan truyền có độ trễ; không mở lại nguồn cung.
+  Refund không tự đổi hiệu lực vé. Q-07 ngoài phạm vi.
+end note
+@enduml

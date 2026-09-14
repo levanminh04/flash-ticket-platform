@@ -1,7 +1,7 @@
 # A6 — Phạm vi
 
-- **Phiên bản:** `A6-v0.4`
-- **Phê duyệt từng phần, 2026-08-29** (`GOV-054`): **§1.3 và §2.1 đã được Lê Văn Minh duyệt.** Phần còn lại của tài liệu **chưa** duyệt. `A6-OPEN-07` đóng tại `RES-049`; bốn dòng `OPEN` còn lại ở §5 **không dòng nào chặn `B11`** — xem cột *Gate xử lý* của từng dòng.
+- **Phiên bản:** `A6-v0.6`
+- **Phê duyệt từng phần:** §1.3 và §2.1 được Lê Văn Minh duyệt ngày 2026-08-29 (`GOV-054`); phần cập nhật §4 do B11-C được duyệt lại ngày 2026-09-04. Phần còn lại của tài liệu **chưa** duyệt. `A6-OPEN-07` đóng tại `RES-049`; bốn dòng `OPEN` còn lại ở §5 **không dòng nào chặn `B11`** — xem cột *Gate xử lý* của từng dòng.
 - **Trạng thái:** `DRAFT` — viết lại theo thư định hướng nguyên văn; chưa được duyệt
 - **Người duyệt:** — (chờ Lê Văn Minh)
 - **Ngày duyệt:** —
@@ -133,9 +133,9 @@ Các số này vào chương Kiểm thử với tư cách **tiêu chí nghiệm 
 
 | Loại | Nội dung |
 |---|---|
-| Hạ tầng sản phẩm | 2 máy EC2 `m7i-flex.large` — 2 vCPU / 8 GiB **mỗi máy**, hai tài khoản AWS rời. Bố trí chưa chốt, chờ `B11` |
+| Hạ tầng sản phẩm | 2 máy EC2 `m7i-flex.large` — 2 vCPU / 8 GiB **mỗi máy**, hai tài khoản AWS rời. `B11-C-v0.3` đã chốt bố trí mục tiêu: máy 1 là transaction plane; máy 2 là control/diagnosis plane (`GOV-090`). Ngân sách mục tiêu khoảng **6 GiB cho tiến trình/container trên mỗi máy**, công bố heap/memory limit; thử tải thật ở Giai đoạn 5–6 (`GOV-097`). Không làm HA cho phạm vi đồ án/demo (`GOV-096`). Nếu thiếu tài nguyên trong lượt chạy hữu hạn, nhóm nâng instance AWS tạm thời thay vì mở lại `PA-6` (`GOV-098`) |
 | Máy chạy thực nghiệm | i5-1240P 12 nhân/16 luồng, 15,7 GB RAM, ổ D còn 73,3 GB. Cần thêm distro Ubuntu trên WSL2 và Python 3.12 (hiện 3.9.13) |
-| Rủi ro dữ liệu | `RE2` có log và trace nên nặng hơn `RE1` nhiều. Thư viện yêu cầu dữ liệu ở dạng `pandas.DataFrame`; nạp trace cỡ chục triệu span vào 15,7 GB RAM là rủi ro thật. **Phải đo trước khi cam kết** — `A8-OPEN-05` |
+| Rủi ro dữ liệu nghiên cứu — **không phải ngân sách hai EC2 của sản phẩm** | `RE2` là bộ dữ liệu chính để thử baseline/MyRCA; mốc hai tuần chỉ là vòng thực nghiệm đầu. `RE2` có log và trace nên nặng hơn `RE1` nhiều. Thư viện yêu cầu dữ liệu ở dạng `pandas.DataFrame`; nạp trace cỡ chục triệu span vào **máy nghiên cứu 15,7 GB RAM ở dòng trên** là rủi ro thật. **Phải đo trước khi cam kết** — `A8-OPEN-05` |
 | Trần kiến trúc | ≤ 8 service nghiệp vụ, ≤ 3 luồng Saga; đánh giá tại `B10`/`B11` |
 | Thời gian | Hạn nộp 14/12/2026. Mốc gần: `DH-MOC` — báo cáo sau 2 tuần rồi cô hướng dẫn tiếp |
 
@@ -181,6 +181,8 @@ Các số này vào chương Kiểm thử với tư cách **tiêu chí nghiệm 
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `A6-v0.6` | 2026-09-04 | Đồng bộ `B11-C-v0.3`: thay benchmark chặn ADR bằng ngân sách tài nguyên và phép thử thật ở Giai đoạn 5–6; ghi không HA và quyền nâng instance tạm thời; làm rõ rủi ro nạp `RE2` thuộc máy nghiên cứu/MyRCA, không phải hai EC2 sản phẩm. Ba vòng phạm vi, sáu mục Vòng 1 và các điểm `OPEN` nghiên cứu không đổi; phần cập nhật §4 đã được Lê Văn Minh duyệt lại | Lan truyền và duyệt lại tác động B11-C |
+| `A6-v0.5` | 2026-09-04 | Đồng bộ đúng một dòng giới hạn hạ tầng sau lựa chọn `B11-C`: ghi bố trí mục tiêu hai máy và giữ rõ điều kiện benchmark trước khi chấp nhận ADR. Ba vòng phạm vi, sáu mục Vòng 1 và mọi mục `OPEN` không đổi; tài liệu vẫn `DRAFT`, chờ Lê Văn Minh duyệt | Lan truyền tác động B11-C |
 | `A6-v0.4` | 2026-08-27 | Nói rõ lớp giải thích của `DH-MT4` được đặc tả ở bộ RCA và chạy trong FlashTicket, sau khi thiết kế trợ lý cũ bị gỡ khỏi bộ hệ thống (`RES-034`); đổi bộ tiêu chí ở mục 4 Vòng 1 sang ba tiêu chí của `A9` §6. **Ba vòng phạm vi và sáu mục Vòng 1 không đổi** | Lan truyền `RES-034` |
 | `A6-v0.3` | 2026-08-26 | §2 sửa câu mở đầu: ranh giới hai vòng là **mức kiểm chứng**, không phải *"không phục vụ trực tiếp §1"* — cách nói cũ mâu thuẫn với §1 mục 1; đồng bộ trạng thái `B5`–`B8` sang `REVIEW_READY` theo `RES-032`; thêm một ô tự kiểm | Sửa mâu thuẫn nội tại |
 | `A6-v0.2` | 2026-08-25 | Viết lại theo thư nguyên văn. **Bỏ khung "hai khối song song"**; Vòng 1 nay là đúng sáu mục của cô, mỗi mục dẫn về mã `DH-*`; thêm ràng buộc loại trừ bộ chỉ có metric; thêm hai lớp lỗi `RE2`/`RE3`; thêm lộ trình ba mức; đóng `A6-OPEN-02` và `A6-OPEN-05`, mở `A6-OPEN-06` | Sửa sau khi có bằng chứng gốc |

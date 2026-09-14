@@ -1,8 +1,8 @@
 # Liên kết giữa bộ tài liệu hệ thống và bộ tài liệu chẩn đoán
 
-- **Phiên bản:** `LK-v0.3`
+- **Phiên bản:** `LK-v0.6`
 - **Trạng thái:** `DRAFT`
-- **Ngày tạo:** 2026-08-25 · **Sửa:** 2026-08-29 sau đối chiếu `B9-v0.7`/`B10-v0.7` (`GOV-053`) · *lần sửa trước 2026-08-28 sau đối chiếu `B9-v0.5`/`B10-v0.3`*
+- **Ngày tạo:** 2026-08-25 · **Sửa:** 2026-09-04, chạy lại phép thử độc lập trên `B11-C-v0.3` và đóng gate B11
 - **Thuộc bộ:** tài liệu hệ thống (`docs/`)
 - **Cửa đối ứng:** [`docs/research-rca/R0-boi-canh-va-rang-buoc.md`](../research-rca/R0-boi-canh-va-rang-buoc.md) §3
 
@@ -21,8 +21,8 @@
 | Danh sách nút mức năng lực | `docs/domain/B5-bounded-context-map.md` §3 — **bảy** bounded context ứng viên | `B5-v0.14` `APPROVED` 2026-08-27 (`GOV-033`); `BC-CAND-08` đã gỡ theo `RES-034` |
 | Bằng chứng cho từng cạnh | `B5` §5.1 — mỗi cạnh truy về một dòng `B4` | Như trên |
 | Các tương tác và sự kiện miền | `docs/domain/B4-domain-event-map.md` | `B4-v0.15` `APPROVED` 2026-08-27 (`GOV-033`); §8.3 về trợ lý cũ đã gỡ, bốn dòng sự kiện A/B/C/D không đổi |
-| Bất biến cần được bảo vệ, dùng cho lớp lỗi nghiệp vụ | `docs/domain/B7-aggregates-and-invariants.md` | `B7-v0.11` `APPROVED` 2026-08-27 (`GOV-033`); §4.8 về trợ lý cũ đã gỡ, cả 11 bất biến không đổi |
-| Nút hạ tầng và hệ ngoài — cơ sở dữ liệu, cổng thanh toán, Keycloak | Chưa có; `B12` chốt quyền sở hữu dữ liệu, `B11` chốt hệ ngoài | Chưa mở |
+| Bất biến cần được bảo vệ, dùng cho lớp lỗi nghiệp vụ | `docs/domain/B7-aggregates-and-invariants.md` | `B7-v0.12` `APPROVED` 2026-08-29 (`GOV-058`). §4.8 về trợ lý cũ đã gỡ từ `v0.11`. **`v0.12` thêm một aggregate root — `Giữ chỗ` — và chuyển `INV-03` thành bất biến xuyên `Đơn hàng`–`Giữ chỗ`; câu chữ cả 11 bất biến không đổi.** Bộ RCA nhận thêm một nút ứng viên ở mức aggregate; đồ thị suy ra vẫn giữ `CANDIDATE` |
+| Nút hạ tầng và hệ ngoài — cơ sở dữ liệu, cổng thanh toán, Keycloak, Gemini API | `B11-C-v0.3` đã chốt hình dạng triển khai và hệ ngoài; datastore/schema vẫn chờ `B12` | **Một phần đã có** — không suy quyền sở hữu dữ liệu từ sơ đồ B11-C |
 
 > **Trạng thái duyệt, đọc kèm bảng trên.** Toàn chuỗi `B2`–`B9` từng trở lại `REVIEW_READY` ngày 2026-08-27 sau vòng `RES-034` — gỡ thiết kế trợ lý cũ khỏi bộ hệ thống — rồi được Lê Văn Minh duyệt lại đúng thứ tự trong cùng ngày (`GOV-033`).
 >
@@ -42,7 +42,7 @@ Mười hai ràng buộc gốc ở `R0` §3. Bảng này chỉ **định tuyến
 |---|---|---|---|---|
 | `B9` — kịch bản chất lượng | 11 | ☑ | **2026-08-29** | **Đã đóng phần từng `OPEN`.** `QS-12`, `QS-13` phủ **khả năng quan sát**. Phần **khả năng chèn lỗi** không thành kịch bản riêng theo đúng quyết định `RES-043` — nó vào `B10` làm **ràng buộc phủ định `ASR-15`**, không làm `QS`. *(Ô này ghi ngày 2026-08-27 và kết quả `OPEN` cho tới `GOV-053`; đối chiếu lại trên `B9-v0.7`.)* |
 | `B10` — ưu tiên và ASR | 11 | ☑ | **2026-08-29** | **Đã đóng.** Khả năng quan sát vào được ASR — `ASR-07`, `ASR-08`, `ASR-09`. **Khả năng chèn lỗi nay có `ASR-15`** (`RES-043`, 2026-08-28), nên `B10-OPEN-06` không còn đối tượng. ⚠️ **`ASR-15` truy về `RES-023` mức 3 và nghĩa vụ của `B15`, KHÔNG truy về `R0`** — đây là **trùng khớp về che phủ**, không phải `R0` sinh ra một ASR. Ghi như vậy để không biến ô này thành cửa thứ ba. *(Ô này ghi *“không có ASR nào bảo vệ”* cho tới `GOV-053`; đối chiếu lại trên `B10-v0.7`.)* |
-| `B11` — kiến trúc và triển khai | **1**, 3 | ☐ |  |  |
+| `B11` — kiến trúc và triển khai | **1**, 3 | ☑ | **2026-09-04** | `PA-6` cho **5 service nghiệp vụ** và định danh riêng cho các node vận hành; RCA chạy đơn vị riêng, chỉ đọc kho quan sát; lớp giải thích gọi Gemini API sau xếp hạng. Tập node RCA được xếp hạng và số chỉ số **không mặc định bằng 5**, vẫn `OPEN` tại `R0-OPEN-06`/`B16`. Phép thử độc lập trên `B11-C-v0.3` đạt: nguồn RCA chỉ nằm trong phụ lục đối chiếu và không sinh service, Saga, ranh giới hay bố trí. |
 | `B12` — sở hữu dữ liệu và schema | **6** | ☐ |  |  |
 | `B13` — hợp đồng API và sự kiện | **4**, 5, **6** | ☐ |  |  |
 | `B14` — sequence các luồng | 10 | ☐ |  |  |
@@ -108,8 +108,10 @@ Theo `GOV-019`, ràng buộc nào làm phát sinh hoặc thay đổi mã, hợp 
 
 - [x] Chỉ định tuyến ràng buộc về gate; không chép lại nội dung của `R0` §3.
 - [x] Gate ở bảng §2 khớp cột **Gate** hiện tại của `R0` §3, kể cả ba dòng đã đổi gate ở `R0-v0.3`. `R0-v0.4` chỉ thêm `R0-OPEN-07`, không đổi gate nào.
-- [x] Nêu rõ nguồn dựng đồ thị đã có, **và ghi đúng trạng thái duyệt hiện tại của từng nguồn** — cả `B4-v0.15`, `B5-v0.14`, `B7-v0.11` đã `APPROVED` ngày 2026-08-27 (`GOV-033`). **Việc đó không nâng cấp đồ thị.** `AGENTS.md` mục 3 buộc đồ thị suy ra giữ `CANDIDATE` **cho tới khi chính đồ thị được duyệt**, không phải cho tới khi nguồn của nó được duyệt. Nguồn đã duyệt chỉ bỏ đi một cảnh báo về tính ổn định của đầu vào; đồ thị vẫn `CANDIDATE`.
+- [x] Nêu rõ nguồn dựng đồ thị đã có, **và ghi đúng trạng thái duyệt hiện tại của từng nguồn** — `B4-v0.15` và `B5-v0.14` đã `APPROVED` ngày 2026-08-27 (`GOV-033`), `B7-v0.12` đã `APPROVED` ngày 2026-08-29 (`GOV-058`). **Việc đó không nâng cấp đồ thị.** `AGENTS.md` mục 3 buộc đồ thị suy ra giữ `CANDIDATE` **cho tới khi chính đồ thị được duyệt**, không phải cho tới khi nguồn của nó được duyệt. Nguồn đã duyệt chỉ bỏ đi một cảnh báo về tính ổn định của đầu vào; đồ thị vẫn `CANDIDATE`.
 - [x] Cảnh báo `B5` là đồ thị ngữ nghĩa, không phải đồ thị vận hành.
 - [x] Xung đột `LK-v0.1` nêu đã đóng ở nguồn — `R0` §3 sửa cách viết ràng buộc — chứ không đóng bằng một phán quyết ở tệp này; phần chưa biết được giữ mở tại `R0-OPEN-06`.
 - [x] Ghi rõ ràng buộc còn ở `CANDIDATE`, chưa phải yêu cầu hệ thống.
+- [x] B11-C chỉ dùng `R0` trong phụ lục đối chiếu; `R0` không sinh `PA-6`, năm service, Saga hay bố trí hai máy.
+- [x] Phép thử độc lập đã chạy lại trên `B11-C-v0.3`: tạo tác thuộc bộ hệ thống; nguồn hình thành là B11-A/B11-B cùng quyết định người thật; nguồn RCA chỉ nằm trong phụ lục ở mức `CANDIDATE`/`OPEN`; không có nội dung nào của RCA sinh yêu cầu, bất biến hoặc ranh giới. Gate `B11` đã hoàn tất.
 - [ ] Lê Văn Minh xác nhận `R0` §3.

@@ -1,0 +1,60 @@
+@startuml
+' B12-v0.2 derived; full column dictionary is in B12 §12.
+hide circle
+skinparam monochrome true
+skinparam linetype ortho
+skinparam entityFontSize 11
+title ticket-service — dữ liệu cục bộ B12-v0.2
+entity "ticket\nevent_access_snapshots" as event_access_snapshots {
+  event_id : uuid
+  event_status : nonempty_text
+  source_config_version : bigint
+}
+entity "ticket\nissuances" as issuances {
+  id : uuid
+  order_id : uuid
+  event_id : uuid
+  payment_confirmation_id : nonempty_text
+  customer_email : nonempty_text
+  state : text
+  row_version : bigint
+}
+entity "ticket\ntickets" as tickets {
+  id : uuid
+  issuance_id : uuid
+  event_id : uuid
+  order_item_id : uuid
+  ticket_type_id : uuid
+  sector_id : uuid
+  seat_id : uuid
+  state : text
+}
+entity "ticket\nticket_deliveries" as ticket_deliveries {
+  id : uuid
+  issuance_id : uuid
+  recipient_email : nonempty_text
+}
+entity "ticket\ncheckin_attempts" as checkin_attempts {
+  id : uuid
+  ticket_id : uuid
+  requested_event_id : uuid
+  correlation_id : nonempty_text
+}
+entity "ticket\noutbox_messages" as outbox_messages {
+  message_id : uuid
+  aggregate_id : uuid
+  aggregate_version : bigint
+  schema_version : integer
+  correlation_id : uuid
+  causation_id : uuid
+}
+entity "ticket\ninbox_messages" as inbox_messages {
+  message_id : uuid
+}
+event_access_snapshots -- issuances
+issuances -- tickets
+issuances -- ticket_deliveries
+tickets -- checkin_attempts
+checkin_attempts -- checkin_attempts
+note "Chỉ FK nội bộ; ID owner khác là tham chiếu mềm.\nHình chọn cột chính; toàn bộ NULL/default/CHECK/index ở B12 §12 và SQL.\nCác cạnh biểu diễn tham chiếu FK, không khẳng định bội số nghiệp vụ bắt buộc." as legend
+@enduml

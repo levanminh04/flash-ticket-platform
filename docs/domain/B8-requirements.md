@@ -1,16 +1,21 @@
 # B8 — Bảng yêu cầu chức năng và phi chức năng
 
-- Phiên bản: `B8-v0.12`
+- Phiên bản: `B8-v0.13`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-28, **đầu chuỗi `B8-v0.12` → `B9-v0.6` → `B10-v0.5`** (`GOV-043`). Bản này đổi `NFR-06` theo `RES-042`; `B9` và `B10` được duyệt sau nó, đúng thứ tự · **Lịch sử:** `B8-v0.11` được duyệt 2026-08-27, sau `B7-v0.11` (`GOV-033`); `B8-v0.8` được duyệt 2026-08-22, sau `B6-v0.12`
-- Đầu vào và phiên bản: `docs/domain/B6-use-cases.md` — `B6-v0.14`, `APPROVED` 2026-08-27; nội dung 30 use case **không đổi** so với `B6-v0.12` đã được duyệt ngày 2026-08-22; `docs/evidence/external-survey/B1-public-ticketing-survey-2026-08-09.md` — `APPROVED` ngày 2026-08-13; `docs/evidence/incident-diagnosis/B1-current-diagnosis-baseline.md` — `APPROVED` ngày 2026-08-13; `docs/research/A2-problem-statement.md` — `A2-v0.2` và `docs/research/A4-research-questions-draft.md` — `A4-v0.2`, cả hai `APPROVED` 2026-08-27 sau tái baseline theo `DH-TEN`; `docs/research/A3-research-objectives.md` — `A3-v0.5`, `DRAFT`; **B8 chỉ truy về `MT-1`–`MT-4`** ở cột `Nguồn gốc` của `NFR-01`, `NFR-03`, `NFR-04`, `NFR-05` — đã kiểm: không yêu cầu nào dẫn `MT-5`, nên việc `RES-041` sửa câu chữ `MT-5` không đụng một yêu cầu nào; nội dung `MT-1`–`MT-4` được B8 dẫn **không đổi** so với `A3-v0.3` *(Rà 2026-08-29 — `GOV-052`: `A4` nay là `A4-v0.3`; `v0.3` chỉ sửa một câu khai sai về nơi chốt ngưỡng, **ba câu hỏi nghiên cứu không đổi một chữ**, nên đầu vào thực chất của tài liệu này không đổi.)* *(Rà 2026-08-29 — `GOV-052`: `A3` nay là `A3-v0.6`; `v0.6` chuyển `MT-5` sang Vòng 1 (`RES-045`) và đổi **vai** của `MT-1`–`MT-3` (`RES-046`) mà **không đổi một chữ câu chữ nào của `MT-1`–`MT-4`**, nên phần được tài liệu này dẫn không đổi.)*
+- Ngày duyệt: 2026-09-14 (GOV-144); các mốc trước ở nhật ký phiên bản.
+- Đầu vào và phiên bản: `docs/domain/B6-use-cases.md` — `B6-v0.15`, `APPROVED` 2026-09-14 (GOV-144); `docs/domain/B7-aggregates-and-invariants.md` — `B7-v0.13`, `APPROVED` cùng ngày; giữ 30 use case, đã đồng bộ quyết định tại phiên bản mới; `docs/evidence/external-survey/B1-public-ticketing-survey-2026-08-09.md` — `APPROVED` ngày 2026-08-13; `docs/evidence/incident-diagnosis/B1-current-diagnosis-baseline.md` — `APPROVED` ngày 2026-08-13; `docs/research/A2-problem-statement.md` — `A2-v0.2` và `docs/research/A4-research-questions-draft.md` — `A4-v0.2`, cả hai `APPROVED` 2026-08-27 sau tái baseline theo `DH-TEN`; `docs/research/A3-research-objectives.md` — `A3-v0.5`, `DRAFT`; **B8 chỉ truy về `MT-1`–`MT-4`** ở cột `Nguồn gốc` của `NFR-01`, `NFR-03`, `NFR-04`, `NFR-05` — đã kiểm: không yêu cầu nào dẫn `MT-5`, nên việc `RES-041` sửa câu chữ `MT-5` không đụng một yêu cầu nào; nội dung `MT-1`–`MT-4` được B8 dẫn **không đổi** so với `A3-v0.3` *(Rà 2026-08-29 — `GOV-052`: `A4` nay là `A4-v0.3`; `v0.3` chỉ sửa một câu khai sai về nơi chốt ngưỡng, **ba câu hỏi nghiên cứu không đổi một chữ**, nên đầu vào thực chất của tài liệu này không đổi.)* *(Rà 2026-08-29 — `GOV-052`: `A3` nay là `A3-v0.6`; `v0.6` chuyển `MT-5` sang Vòng 1 (`RES-045`) và đổi **vai** của `MT-1`–`MT-3` (`RES-046`) mà **không đổi một chữ câu chữ nào của `MT-1`–`MT-4`**, nên phần được tài liệu này dẫn không đổi.)*
 - Nguồn truy vết hỗ trợ: `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27; `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; `docs/domain/B5-bounded-context-map.md` — `B5-v0.14`, `APPROVED` 2026-08-27, nguồn của `B5-OPEN-07`; `BC-CAND-08` đã bị gỡ theo `RES-034` nên còn **bảy** context, **bảy context còn lại và bản đồ quan hệ không đổi**; và từng quyết định được dẫn trong `docs/project/decision-register.md`
 - Phân lớp: `FORMATION`
 
 > **Đường dẫn canonical:** `docs/domain/B8-requirements.md`, được khai trong bảng đường dẫn của Tầng B.
 
 > **Cổng phê duyệt:** cả chuỗi `B2-v0.10 → B3-v0.10 → B4-v0.14 → B5-v0.12` và `B6-v0.12` đã được duyệt ngày 2026-08-22; B8-v0.8 được duyệt sau chúng, đúng thứ tự cổng.
+
+> **Lịch sử lúc trình ngày 2026-09-14, trước GOV-144:** v0.13 nhận B6-v0.15 và B7-v0.13 (`REVIEW_READY`) cùng BIZ-153–158, GOV-127–142, PRJ-024. Khai đầu vào/duyệt ở phía trên ghi nền lịch sử v0.12; bản mới chưa APPROVED. Chỉ lan truyền quyết định đã xác nhận, không đổi NFR hoặc sinh kiến trúc từ yêu cầu quan sát. Mã FR được giữ ổn định.
+
+
+> Phê duyệt hiện hành: Lê Văn Minh, ngày 2026-09-14, GOV-144 — “duyệt toàn bộ sau đó push lên giúp tôi”. Các dòng kể lần soạn/duyệt trước giữ vai trò lịch sử; phiên bản này đã APPROVED. Phê duyệt tài liệu không đổi kết quả NOT RUN thành PASS.
 
 ## 1. Mục đích và giới hạn
 
@@ -33,7 +38,7 @@ Theo Tầng B, không cần duy trì ma trận truy vết đầy đủ cho mọi
 | Mã | Nội dung | Nguồn gốc |
 |---|---|---|
 | `FR-01` | Organizer tạo được bản nháp sự kiện với nội dung, thời gian, địa điểm, cửa sổ mở bán, giới hạn mua và `salesMode` | `UC-01`; `A01` |
-| `FR-02` | Organizer cấu hình được loại vé, nguồn cung và khuyến mãi khi sự kiện còn `DRAFT` | `UC-02`; `A02` |
+| `FR-02` | Organizer cấu hình được loại vé, nguồn cung và khuyến mãi khi sự kiện còn `DRAFT`; lưu cấu hình trọn vẹn hoặc không đổi. Ghế ẩn được lưu bền, không bán; tải lại phục hồi đúng, ẩn/hiện không tự mất gán loại vé | `UC-02`; `A02`; GOV-126–130 |
 | `FR-03` | Hệ thống bắt buộc mỗi sự kiện có đúng một `salesMode`, và từ chối cấu hình không tương thích với mode đang chọn | `UC-02`; `BIZ-001`–`BIZ-003` |
 | `FR-04` | Khi organizer đổi `salesMode`, hệ thống yêu cầu xác nhận xóa phần cấu hình không tương thích và không tự chuyển đổi | `UC-02`; `BIZ-019` |
 | `FR-05` | Hệ thống từ chối lưu cấu hình có giá loại vé không lớn hơn 0 hoặc thiếu giới hạn mua | `UC-02`; `BIZ-025` |
@@ -42,27 +47,27 @@ Theo Tầng B, không cần duy trì ma trận truy vết đầy đủ cho mọi
 | `FR-08` | Admin duyệt được sự kiện và nhập tỷ lệ phí nền tảng; tỷ lệ được cố định cho sự kiện đó | `UC-04`; `A04`; `BIZ-142` |
 | `FR-09` | Admin trả được sự kiện về `DRAFT`; hệ thống không tạo trạng thái sự kiện bền vững `REJECTED` | `UC-05`; `A05`; `BIZ-145` |
 | `FR-10` | Organizer công bố được sự kiện đã duyệt; yêu cầu công bố lặp không tạo thêm tác dụng phụ | `UC-06`; `A06`; `BIZ-088` |
-| `FR-11` | Organizer gửi được yêu cầu hủy khi sự kiện đã có đơn thu tiền, và hủy trực tiếp khi chưa có đơn thu tiền | `UC-07`, `UC-09`; `A09`, `A11` |
+| `FR-11` | Organizer gửi được yêu cầu hủy khi sự kiện đã có đơn thu tiền, và hủy trực tiếp khi chưa có đơn thu tiền. Giữ lịch sử yêu cầu; tối đa một yêu cầu chờ xét/sự kiện; được gửi lại sau từ chối, không gửi mới cho sự kiện đã hủy | `UC-07`, `UC-09`; `A09`, `A11`; BIZ-153–156 |
 | `FR-12` | Admin xác nhận hoặc từ chối được yêu cầu hủy, và chủ động hủy được sự kiện | `UC-08`; `A10`, `A11` |
 | `FR-13` | Khi từ chối yêu cầu hủy, hệ thống giữ nguyên trạng thái sự kiện và không khởi động bất kỳ xử lý hoàn nào | `UC-08`; `BIZ-097`–`BIZ-099` |
 | `FR-14` | Hệ thống chỉ chấp nhận hủy sự kiện khi `now < eventStartAt` | `UC-08`; `BIZ-083` |
-| `FR-15` | Khi hủy được xác nhận, hệ thống đóng bán, vô hiệu hóa toàn bộ vé và không đưa nguồn cung trở lại khả dụng; kích hoạt lặp của cùng nguyên nhân không tạo thêm hậu quả | `UC-08`; `B13`, `B14`; `BIZ-147` |
+| `FR-15` | Khi hủy được xác nhận, hệ thống đóng bán, vô hiệu hóa toàn bộ vé và không đưa nguồn cung trở lại khả dụng; kích hoạt lặp không tạo thêm hậu quả. Chấp nhận độ trễ lan truyền; giao dịch lọt trong khoảng trễ phải hội tụ theo hủy/hoàn, không cam kết dừng tức thời toàn hệ thống | `UC-08`; `B13`, `B14`; `BIZ-147`; GOV-134/135 |
 
 ### 2.2 Mua vé
 
 | Mã | Nội dung | Nguồn gốc |
 |---|---|---|
-| `FR-16` | Buyer chọn được vé và tạo đơn; hệ thống tạo đúng một giữ chỗ và một thời hạn chung cho toàn đơn | `UC-10`; `B01`; `INV-03` |
+| `FR-16` | Buyer chọn được vé và tạo đơn; hệ thống tạo đúng một giữ chỗ và một thời hạn chung cho toàn đơn. Email nhận vé điền sẵn từ tài khoản, cho sửa trước tạo đơn và lưu theo lần mua, không đổi chủ sở hữu | `UC-10`; `B01`; `INV-03`; GOV-141/142 |
 | `FR-17` | Với `SEAT_MAP`, hệ thống từ chối đơn chứa lựa chọn thuộc nhiều sector | `UC-10`; `INV-02`; `BIZ-080` |
 | `FR-18` | Hệ thống từ chối tạo giữ chỗ khi ghế hoặc số lượng không còn khả dụng | `UC-10`; `INV-01` |
 | `FR-19` | Hệ thống từ chối tạo giữ chỗ khi tổng vé đang giữ cộng vé đã mua của tài khoản vượt giới hạn mua của sự kiện | `UC-10`; `INV-04`; `BIZ-075` |
 | `FR-20` | Hệ thống không cho đổi lựa chọn trong đơn đã tạo | `UC-10`; `BIZ-030` |
 | `FR-21` | Buyer áp dụng được tối đa một mã khuyến mãi cho một đơn, và hệ thống giữ một lượt dùng theo đúng thời hạn đơn | `UC-11`; `B02` |
 | `FR-22` | Hệ thống phân biệt và trả riêng từng lý do từ chối mã: không tồn tại, ngoài hiệu lực, hết tổng lượt, tài khoản đã dùng mã, đơn đã có mã, số tiền cuối không lớn hơn 0 | `UC-11`; `BIZ-039`–`BIZ-048` |
-| `FR-23` | Buyer khởi tạo được lần thanh toán; hệ thống không cho tạo lần thử song song khi lần hiện tại chưa kết thúc | `UC-12`; `B03`; `BIZ-031` |
+| `FR-23` | Buyer khởi tạo được lần thanh toán; không cho tạo lần thử song song khi lần hiện tại chưa kết thúc. Tiền đóng băng từ lần bắt đầu thanh toán đầu tiên, retry cùng đơn giữ nguyên giá/giảm giá/số tiền | `UC-12`; `B03`; `BIZ-031`; GOV-132/133 |
 | `FR-24` | Hệ thống xác minh kết quả thanh toán thuộc đúng đơn, đúng lần thử và đúng số tiền, rồi chỉ giữ một kết quả thu hợp lệ cho mỗi đơn | `UC-12`; `INV-05`; `BIZ-032` |
 | `FR-25` | Kết quả thanh toán lặp không tạo tác dụng phụ lặp và không phát hành vé lần thứ hai | `UC-12`; `INV-07`; `HOT-03` |
-| `FR-26` | Hệ thống nhận diện thanh toán đến muộn và tạo yêu cầu hoàn toàn bộ mà không giải phóng tài nguyên lần thứ hai | `UC-12`; `B10`; `BIZ-106` |
+| `FR-26` | Hệ thống xét hạn giữ chỗ tại thời điểm kiểm/chấp nhận thanh toán; đã hết hạn hoặc hủy thì không hồi sinh đơn. Khoản thu hợp lệ đến muộn được hoàn toàn bộ mà không trả tài nguyên lần thứ hai; không dựa riêng vào trạng thái do worker cập nhật | `UC-12`; `B10`; `BIZ-106`; GOV-138 |
 | `FR-27` | Hệ thống nhận diện thanh toán trùng, giữ một giao dịch hợp lệ và hoàn từng giao dịch thừa độc lập; việc hoàn không tạo trạng thái nghiệp vụ riêng cho đơn hợp lệ | `UC-12`; `B11`; `BIZ-013`, `BIZ-032`, `BIZ-102`, `BIZ-105`, `BIZ-150` |
 | `FR-28` | Buyer hủy được đơn của chính mình khi đơn còn giữ chỗ và chưa có thanh toán thành công; thao tác lặp là idempotent | `UC-13`; `B08`; `BIZ-071` |
 | `FR-29` | Khi đơn hết hạn hoặc bị hủy, hệ thống trả giữ chỗ, nguồn cung, phần giới hạn mua và lượt khuyến mãi **đúng một lần** | `UC-13`; `INV-06`; `BIZ-090`, `BIZ-091` |
@@ -82,7 +87,7 @@ Theo Tầng B, không cần duy trì ma trận truy vết đầy đủ cho mọi
 | `FR-38` | Khi hủy sự kiện, hệ thống xác định khoản thu còn phải hoàn theo từng đơn; giao dịch thu thừa đi theo nhánh hoàn riêng và không nằm trong lô hoàn do hủy | `UC-08`, `UC-16`; `BIZ-100`–`BIZ-102` |
 | `FR-39` | Admin theo dõi được tiến độ hoàn của một sự kiện bị hủy gồm số đơn chờ, thành công và thất bại | `UC-16`; `C06` |
 | `FR-40` | Hệ thống tổng hợp sổ cái đối soát chỉ đọc; admin không sửa trực tiếp giá trị tiền | `UC-17`; `C07`; B3 §4.5 bước 1 |
-| `FR-41` | Hệ thống tính doanh thu thực thu và phí nền tảng theo đúng tỷ lệ đã cố định khi phê duyệt sự kiện | `UC-17`; `INV-11`; `BIZ-142` |
+| `FR-41` | Hệ thống tính doanh thu thực thu và phí theo tỷ lệ đã cố định khi duyệt; phí tính một lần trên doanh thu hợp lệ của toàn sự kiện sau giảm giá/hoàn, làm tròn HALF_UP về nguyên đồng, không cộng phí làm tròn từng đơn hoặc tính trên khoản thu thừa | `UC-17`; `INV-11`; `BIZ-142`; GOV-140 |
 | `FR-42` | Hệ thống chỉ mở điều kiện chi trả khi sự kiện đã kết thúc, không còn lần thanh toán đang chờ và không còn yêu cầu hoàn đang xử lý | `UC-18`; `C08`; `BIZ-050`–`BIZ-053` |
 | `FR-43` | Admin đánh dấu được sự kiện đã chi trả **đúng một lần**, kèm dấu vết người thao tác | `UC-19`; `INV-10`; `BIZ-037`, `BIZ-038` |
 
@@ -129,13 +134,19 @@ Bảy ca chỉ liệt kê ở B6 §3.6 (`UC-24`–`UC-30`) nhận một yêu c�
 |---|---|---|
 | `FR-57` | Buyer tìm được sự kiện đã công bố | `UC-24`; `BIZ-127` |
 | `FR-58` | Buyer xem được chi tiết một sự kiện đã công bố | `UC-25` |
-| `FR-59` | Buyer theo dõi được một organizer | `UC-26`; `BIZ-128` |
+| `FR-59` | Buyer theo dõi/bỏ theo dõi được organizer ở mức đơn giản; một cặp có tối đa một quan hệ hiện hành, thao tác lặp không nhân bản | `UC-26`; `BIZ-128`, BIZ-157; GOV-101 |
 | `FR-60` | Buyer xem được hồ sơ organizer công khai | `UC-27`; `BIZ-141` |
 | `FR-61` | Buyer xem được danh sách đơn và vé của chính mình | `UC-28`; `BIZ-072` |
 | `FR-62` | Organizer xem được danh sách sự kiện thuộc chính mình và báo cáo đối soát của các sự kiện đó | `UC-29`, `UC-17` |
 | `FR-70` | Organizer xem được thống kê đọc của sự kiện thuộc chính mình, gồm số vé đã bán và số liệu tài chính đã tổng hợp | `UC-30`; B4 §8.5 |
 | `FR-63` | Organizer chọn được một địa điểm đã có để dùng cho sự kiện của mình; một địa điểm dùng lại được cho nhiều sự kiện. Hệ thống không biết hoặc kiểm sức chứa vật lý; nguồn cung do organizer quyết định | `UC-01`, `UC-02`; `BIZ-125`, `BIZ-149` |
 | `FR-64` | Organizer gắn được nhãn phân loại cho sự kiện của mình | `UC-01`; `BIZ-126` |
+
+### 2.8 Quy ước chung đã xác nhận cho yêu cầu trên
+
+- BIZ-158/GOV-137/GOV-139: chỉ VND; đầu vào giá vé/giảm giá nguyên, không lẻ thập phân; giảm phần trăm tính một lần trên tổng đơn và HALF_UP về nguyên đồng. Ràng buộc tiền không áp lên tọa độ hình học.
+- PRJ-024: không hiện thực bảng/workflow/dashboard cho Q-07 (thu sai số tiền hoặc không xác định được liên kết). FR-24 vẫn bắt buộc kiểm chữ ký, đơn, lần thử, số tiền; dữ liệu sai không tạo vé. FR-26/27/34/35 về thu muộn/trùng đã liên kết vẫn giữ nguyên. Báo cáo phải công bố giới hạn, không nhận là đã xử lý trọn mọi ngoại lệ của cổng.
+- Tên/chuyển trạng thái đơn–tiền–vé đã được chọn theo GOV-131/136 tại phiếu B12/B13; B8 không tự đặt enum mới.
 
 ## 3. Yêu cầu phi chức năng
 
@@ -232,6 +243,7 @@ Không đưa nguyên trạng mã `FR-*`, `NFR-*`, sổ `OPEN` hoặc trạng th�
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B8-v0.13` | 2026-09-14 | Đồng bộ FR theo B6-v0.15/B7-v0.13 và quyết định tiền, email, ghế ẩn, yêu cầu hủy, follow, phạm vi Q-07; NFR giữ nguyên; REVIEW_READY | GOV-143 |
 | `B8-v0.12` | 2026-08-28 | **Sửa `NFR-06` theo `RES-042`.** Việc phải có **một mã tương quan duy nhất** cho mỗi giao dịch, đi qua được mọi bước chuyển kể cả bước bất đồng bộ, chuyển từ *"một trong các cách đạt được"* thành **ràng buộc đã chốt**; định dạng, cách sinh, cách truyền và cách ghi vào log vẫn thuộc B16. **Lý do:** ba nguồn đang nói khác nhau — `NFR-06` để mở, `B9-v0.5` `QS-13` đã chốt trong ô bất biến, và tài liệu quy trình chủ (thẩm quyền cấp 3) liệt kê nó là điều kiện tối thiểu; `B10-v0.3` tự phân xử theo `NFR-06` mà không ghi lại xung đột. **Toàn bộ `FR-01`–`FR-70` và mọi `NFR` khác không đổi một chữ.** Tài liệu chuyển `REVIEW_READY`: đây là thay đổi vật chất lên một yêu cầu, không phải sửa câu chữ. **Sửa kèm một lỗi lời khai của `v0.11`:** nhật ký ghi câu chữ `NFR-12` là `CANDIDATE`, trong khi `RES-038` và chính §3 của tài liệu này đều ghi `USER_CONFIRMED` | Phân xử xung đột nguồn |
 | `B8-v0.11` | 2026-08-27 | **Gỡ `NFR-07`** (mức hữu ích của hỗ trợ chẩn đoán) — chuyển sang bộ RCA, giữ khoảng trống số hiệu. **Viết trung tính `NFR-08`** thành ràng buộc chỉ-đọc cho mọi thành phần quan sát/chẩn đoán. **Sửa khái niệm `NFR-09`**: thứ bị lọc là *dấu vết đã chọn và liên kết*, không phải *Context chẩn đoán* — mục từ đó định nghĩa sẵn là đã khử nhạy cảm nên câu cũ ngược nghĩa chính nó. **Thêm `NFR-12`** neo nghĩa vụ tích hợp cơ chế RCA vào FlashTicket, câu chữ `USER_CONFIRMED` tại `RES-038` — dòng nhật ký này trước 2026-08-28 ghi nhầm là `CANDIDATE`, ngược với chính §3 của tài liệu và với sổ quyết định. Khai lại đầu vào theo chuỗi mới. **Toàn bộ `FR-01`–`FR-70` và `NFR-01`–`NFR-06`, `NFR-10`, `NFR-11` không đổi một chữ** | Gỡ thiết kế trợ lý cũ |
 | `B8-v0.10` | 2026-08-26 | Đồng bộ khai `A2-v0.2`/`A4-v0.2` sau tái baseline theo `DH-TEN` (`RES-032`). Hai phiếu này chỉ được B8 dẫn ở phần nguồn gốc của các yêu cầu phi chức năng; **nội dung `FR`/`NFR` không đổi**. `NFR-07`/`NFR-08` giữ nguyên vì `DH-MT4` vẫn yêu cầu lớp AI giải thích | Lan truyền tái baseline |

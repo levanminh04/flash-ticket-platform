@@ -1,0 +1,84 @@
+@startuml B11-C-02-deployment-two-machines
+' B11-C / bố trí mục tiêu hai máy — ADR-004 Chấp nhận, không HA
+' Nguồn: B11-C-v0.3; GOV-090; GOV-093..GOV-098
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 180
+skinparam nodesep 45
+skinparam ranksep 55
+
+title B11-C — Bố trí mục tiêu trên 2 máy · mỗi máy 2 vCPU / 8 GiB
+
+cloud "Người dùng / hệ thống ngoài" as EXT
+cloud "Gemini API" as GEM
+
+node "Máy 1 — Transaction plane\n2 vCPU / 8 GiB" as M1 {
+  component "API Gateway" as GW
+  component "booking-service" as BKG
+  component "payment-service" as PAY
+  component "ticket-service" as TKT
+  queue "Broker" as MQ
+  database "Cache" as CACHE
+  folder "Datastore placeholder\nquyền/vị trí chờ B12" as DS1
+}
+
+node "Máy 2 — Control / diagnosis plane\n2 vCPU / 8 GiB" as M2 {
+  component "event-service" as EVT
+  component "user-service" as ACC
+  component "Keycloak" as KC
+  component "Config / Discovery" as CFG
+  component "Chatbot adapter\n(kênh, không phải service nghiệp vụ)" as BOT
+  component "Telemetry collector" as COL
+  database "Kho dữ liệu quan sát" as OBS
+  component "RCA + lớp giải thích\nđơn vị riêng · chỉ đọc" as RCA
+  folder "Datastore placeholder\nquyền/vị trí chờ B12" as DS2
+}
+
+EXT --> GW
+EXT --> BOT
+BOT --> GW : qua bề mặt công bố
+GW --> BKG
+GW --> TKT
+GW --> ACC
+BKG --> PAY
+PAY ..> TKT : Saga duy nhất
+BKG --> CACHE
+PAY --> MQ
+TKT --> MQ
+
+EVT --> BKG : cấu hình có phiên bản
+ACC --> KC
+GW --> KC : xác minh token
+CFG ..> GW
+CFG ..> BKG
+CFG ..> PAY
+CFG ..> TKT
+
+GW ..> COL
+BKG ..> COL
+PAY ..> COL
+TKT ..> COL
+EVT ..> COL
+ACC ..> COL
+COL --> OBS
+RCA --> OBS : chỉ đọc · credential riêng
+RCA ..> GEM : bằng chứng đã lọc\ngiải thích sau xếp hạng
+
+note bottom of M1
+  Ngân sách mục tiêu: khoảng 6 GiB cho
+  tiến trình/container; công bố heap/memory limit.
+end note
+
+note bottom of M2
+  Không chạy LLM lớn cục bộ; lớp giải thích gọi Gemini API.
+  Nếu thiếu tài nguyên khi test/demo, nâng instance tạm thời.
+end note
+
+legend bottom
+  Sơ đồ chốt bố trí thành phần, không chốt datastore/schema.
+  Không có HA: mỗi máy vẫn là một miền sự cố được chấp nhận.
+endlegend
+
+@enduml

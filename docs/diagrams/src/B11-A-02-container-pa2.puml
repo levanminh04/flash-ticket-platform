@@ -1,0 +1,93 @@
+@startuml B11-A-02-container-pa2
+' B11-A / PA-2 - Tach tien khoi ve, 4 ranh gioi trien khai (C4 muc 2)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md muc 4.2
+' PHUONG AN UNG VIEN, khong phai kien truc da chot. B11-C moi chon.
+' Luu y ky thuat: khong de cap bold ** ** bac qua mot \n tuong minh.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 175
+skinparam nodesep 45
+skinparam ranksep 55
+
+title PA-2 — Tách tiền khỏi vé · 4 ranh giới triển khai (C4 mức 2)\nPhương án ứng viên — chưa được chọn
+
+rectangle "Kênh: web · ứng dụng di động · chatbot mua vé" <<Kênh>> as Ch
+
+package "Ranh giới nghiệp vụ" {
+  rectangle "**Bán vé** <<RG-1>>\nVòng đời sự kiện và cấu hình bán · Mua vé và cam kết nguồn cung\n//INV-01…INV-04, INV-06 cục bộ//" as RG1
+  rectangle "**Tiền** <<RG-2>>\nThanh toán và hoàn tiền · Đối soát và chi trả\n//INV-05, INV-08, INV-10 cục bộ//" as RG2
+  rectangle "**Quyền tham dự, vào cửa và giao nhận vé** <<RG-3>>\n//INV-07, INV-09 cục bộ//" as RG3
+  rectangle "**Tài khoản và quyền nghiệp vụ** <<RG-4>>" as RG4
+}
+
+package "Quan sát và chẩn đoán" as Obs {
+  rectangle "Kho dữ liệu quan sát" <<Dữ liệu quan sát>> as OBS
+  rectangle "Cơ chế chẩn đoán nguyên nhân gốc" <<Đơn vị riêng · CHỈ ĐỌC>> as RCA
+}
+
+package "Hệ thống ngoài" as Ext {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Nguồn danh tính" as IDP
+}
+
+Ch --> RG1
+Ch --> RG3
+Ch --> RG4
+
+RG1 --> RG2 : E4, E6 tỷ lệ phí,\nnghĩa vụ thanh toán [N2]
+RG2 ..> RG1 : E7 chốt tài nguyên [N3]
+RG1 --> RG3 : E3 cửa sổ, sở hữu sự kiện [N2]
+RG1 ..> RG2 : E5 sự kiện bị hủy [N3]
+RG1 ..> RG3 : E5 sự kiện bị hủy [N3]
+RG2 --> RG3 : E8 xác nhận thu → phát hành [**N4**]
+RG3 ..> RG2 : E10 phát hành lỗi → hoàn [**N4**]
+RG3 ..> RG1 : E11 trả lượt khuyến mãi [**N4**]
+RG4 --> RG1 : E1 [N2]
+RG4 --> RG2 : E1 [N2]
+RG4 --> RG3 : E1 [N2]
+
+RG2 --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG ..> RG2 : callback kết quả thu,\nkết quả hoàn
+RG4 --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+RG1 ..> OBS
+RG2 ..> OBS
+RG3 ..> OBS
+RG4 ..> OBS
+RCA -> OBS : chỉ đọc, credential riêng
+
+note right of RG3
+  **Ứng viên Saga: 1** — chuỗi E8+E10+E11,
+  xuyên RG-2 → RG-3 → RG-2, RG-1.
+  Ba cặp hai chiều RG-1↔RG-2, RG-1↔RG-3,
+  RG-2↔RG-3: mỗi cặp cần một chiều bằng sự kiện
+  thì mới không thành vòng — điều kiện kiểm ở B13.
+end note
+
+note bottom of Obs
+  ASR-12 / NFR-08: không có đường ghi vào dữ liệu nghiệp vụ,
+  không truy cập trực tiếp schema nghiệp vụ.
+  Kết quả ra được tới một chủ thể có quyền;
+  **hình thức cung cấp còn hoãn** (RES-044).
+end note
+
+note bottom of Ch
+  Hộp //Kênh// gộp web, ứng dụng di động và chatbot mua vé, nên nó
+  nối tới mọi ranh giới có bề mặt người dùng. Số ranh giới mà
+  riêng //chatbot mua vé// chạm được ghi ở mục (9) của từng phương án.
+end note
+
+Ext -[hidden]- Obs
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | Quan hệ ĐỒNG BỘ ứng viên — gọi hoặc đọc trực tiếp |
+  | nét đứt | Quan hệ bằng SỰ KIỆN MIỀN ứng viên (B2 §1) |
+  | E1…E12 | Mã quan hệ xuyên context — nội dung đầy đủ ở B11-A §3.2 |
+  | N2 · N3 · N4 | Nhóm phân loại luồng — định nghĩa ở B11-A §3.4 |
+  | RG-* | Mã ranh giới triển khai, chỉ để truy vết |
+endlegend
+
+@enduml

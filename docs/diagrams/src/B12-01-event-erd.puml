@@ -1,0 +1,79 @@
+@startuml
+' B12-v0.2 derived; full column dictionary is in B12 §12.
+hide circle
+skinparam monochrome true
+skinparam linetype ortho
+skinparam entityFontSize 11
+title event-service — dữ liệu cục bộ B12-v0.2
+entity "event\ncategories" as categories {
+  id : uuid
+}
+entity "event\nvenues" as venues {
+  id : uuid
+}
+entity "event\nevents" as events {
+  id : uuid
+  category_id : uuid
+  venue_id : uuid
+  status : text
+  source_config_version : bigint
+  row_version : bigint
+}
+entity "event\nevent_images" as event_images {
+  id : uuid
+  event_id : uuid
+}
+entity "event\nevent_layouts" as event_layouts {
+  id : uuid
+  event_id : uuid
+}
+entity "event\nevent_sectors" as event_sectors {
+  id : uuid
+  event_id : uuid
+  layout_id : uuid
+}
+entity "event\nevent_seats" as event_seats {
+  id : uuid
+  event_id : uuid
+  sector_id : uuid
+  ticket_type_id : uuid
+  is_hidden : boolean
+}
+entity "event\nticket_types" as ticket_types {
+  id : uuid
+  event_id : uuid
+  sector_id : uuid
+}
+entity "event\npromotions" as promotions {
+  id : uuid
+  event_id : uuid
+}
+entity "event\nevent_cancellation_requests" as event_cancellation_requests {
+  id : uuid
+  event_id : uuid
+  status : text
+}
+entity "event\noutbox_messages" as outbox_messages {
+  message_id : uuid
+  aggregate_id : uuid
+  aggregate_version : bigint
+  schema_version : integer
+  correlation_id : uuid
+  causation_id : uuid
+}
+entity "event\ninbox_messages" as inbox_messages {
+  message_id : uuid
+}
+categories -- events
+venues -- events
+events -- event_images
+events -- event_layouts
+event_layouts -- event_sectors
+event_sectors -- event_seats
+events -- ticket_types
+event_sectors -- ticket_types
+events -- promotions
+events -- event_cancellation_requests
+ticket_types -- event_seats
+note "Chỉ FK nội bộ; ID owner khác là tham chiếu mềm.\nHình chọn cột chính; toàn bộ NULL/default/CHECK/index ở B12 §12 và SQL.\nCác cạnh biểu diễn tham chiếu FK, không khẳng định bội số nghiệp vụ bắt buộc." as legend
+@enduml

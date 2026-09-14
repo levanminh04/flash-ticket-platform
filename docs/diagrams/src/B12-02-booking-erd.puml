@@ -1,0 +1,131 @@
+@startuml
+' B12-v0.2 derived; full column dictionary is in B12 §12.
+hide circle
+skinparam monochrome true
+skinparam linetype ortho
+skinparam entityFontSize 11
+title booking-service — dữ liệu cục bộ B12-v0.2
+entity "booking\nevent_sales_snapshots" as event_sales_snapshots {
+  event_id : uuid
+  event_status : nonempty_text
+  source_config_version : bigint
+}
+entity "booking\norders" as orders {
+  id : uuid
+  event_id : uuid
+  sector_id : uuid
+  lifecycle_state : text
+  customer_email : nonempty_text
+  payment_snapshot_version : bigint
+  accepted_charge_id : uuid
+  source_config_version : bigint
+}
+entity "booking\norder_items" as order_items {
+  id : uuid
+  order_id : uuid
+  event_id : uuid
+  ticket_type_id : uuid
+  sector_id : uuid
+}
+entity "booking\nreservations" as reservations {
+  id : uuid
+  order_id : uuid
+  event_id : uuid
+  state : text
+  row_version : bigint
+}
+entity "booking\nticket_type_inventory" as ticket_type_inventory {
+  ticket_type_id : uuid
+  event_id : uuid
+  source_config_version : bigint
+  row_version : bigint
+}
+entity "booking\nsector_inventory" as sector_inventory {
+  sector_id : uuid
+  event_id : uuid
+  source_config_version : bigint
+  row_version : bigint
+}
+entity "booking\nseat_inventory" as seat_inventory {
+  seat_id : uuid
+  event_id : uuid
+  sector_id : uuid
+  ticket_type_id : uuid
+  is_hidden : boolean
+  state : text
+  current_reservation_id : uuid
+  source_config_version : bigint
+}
+entity "booking\norder_item_seats" as order_item_seats {
+  order_item_id : uuid
+  order_id : uuid
+  event_id : uuid
+  sector_id : uuid
+  seat_id : uuid
+}
+entity "booking\nreservation_allocations" as reservation_allocations {
+  id : uuid
+  reservation_id : uuid
+  order_id : uuid
+  order_item_id : uuid
+  event_id : uuid
+  ticket_type_id : uuid
+  sector_id : uuid
+  seat_id : uuid
+}
+entity "booking\npurchase_limits" as purchase_limits {
+  event_id : uuid
+  source_config_version : bigint
+  row_version : bigint
+}
+entity "booking\npromotion_inventory" as promotion_inventory {
+  promotion_id : uuid
+  event_id : uuid
+  source_config_version : bigint
+  row_version : bigint
+}
+entity "booking\npromotion_usages" as promotion_usages {
+  id : uuid
+  promotion_id : uuid
+  event_id : uuid
+  reservation_id : uuid
+  state : text
+  row_version : bigint
+}
+entity "booking\nidempotency_requests" as idempotency_requests {
+  resource_id : uuid
+  response_status : integer
+}
+entity "booking\noutbox_messages" as outbox_messages {
+  message_id : uuid
+  aggregate_id : uuid
+  aggregate_version : bigint
+  schema_version : integer
+  correlation_id : uuid
+  causation_id : uuid
+}
+entity "booking\ninbox_messages" as inbox_messages {
+  message_id : uuid
+}
+event_sales_snapshots -- orders
+orders -- order_items
+orders -- reservations
+event_sales_snapshots -- ticket_type_inventory
+event_sales_snapshots -- sector_inventory
+sector_inventory -- seat_inventory
+reservations -- seat_inventory
+order_items -- order_item_seats
+orders -- order_item_seats
+seat_inventory -- order_item_seats
+reservations -- reservation_allocations
+order_items -- reservation_allocations
+ticket_type_inventory -- reservation_allocations
+sector_inventory -- reservation_allocations
+seat_inventory -- reservation_allocations
+event_sales_snapshots -- purchase_limits
+event_sales_snapshots -- promotion_inventory
+promotion_inventory -- promotion_usages
+reservations -- promotion_usages
+sector_inventory -- orders
+note "Chỉ FK nội bộ; ID owner khác là tham chiếu mềm.\nHình chọn cột chính; toàn bộ NULL/default/CHECK/index ở B12 §12 và SQL.\nCác cạnh biểu diễn tham chiếu FK, không khẳng định bội số nghiệp vụ bắt buộc." as legend
+@enduml

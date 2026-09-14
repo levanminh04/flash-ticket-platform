@@ -16,8 +16,8 @@ skinparam PackageBackgroundColor white
 skinparam ClassBorderColor #46535F
 skinparam ClassBackgroundColor white
 skinparam ArrowColor #4F5B66
-skinparam nodesep 35
-skinparam ranksep 45
+skinparam nodesep 130
+skinparam ranksep 70
 hide methods
 hide circle
 
@@ -33,10 +33,6 @@ package "Aggregate ứng viên: Đơn hàng" as AG_ORDER {
     số lượng
     đơn giá
   }
-  class Hold as "Giữ chỗ" <<Entity>> {
-    thời điểm hết hạn chung
-    kết quả giữ
-  }
   class AmountDue as "Số tiền phải thanh toán" <<Value Object>> {
     số tiền
   }
@@ -45,9 +41,24 @@ package "Aggregate ứng viên: Đơn hàng" as AG_ORDER {
   }
 
   Order "1" *-- "1..*" OrderLine
-  Order "1" *-- "1" Hold
   Order "1" *-- "1" AmountDue
   DiscountedPrice "1" ..> "1" AmountDue : xác định giá trị
+}
+
+package "Aggregate ứng viên: Giữ chỗ" as AG_HOLD {
+  class Hold as "Giữ chỗ" <<Aggregate Root>> {
+    đơn hàng tham chiếu
+    thời điểm hết hạn chung
+    kết quả giữ
+  }
+
+  note bottom of Hold
+    Giữ chỗ là ranh giới nhất quán riêng, không nằm trong đơn.
+    Quy tắc một đơn có đúng một giữ chỗ và một hạn chung
+    vì vậy là bất biến xuyên hai ranh giới.
+    Hết hạn hoặc hủy thì trả lại nguồn cung, hạn mức
+    và lượt khuyến mãi đúng một lần.
+  end note
 }
 
 package "Aggregate ứng viên: Ghế" as AG_SEAT {
@@ -118,8 +129,16 @@ package "Kết quả xét" as RESULT {
     có thể chọn hay không
     số lượng có thể chọn
   }
+
+  note bottom of Availability
+    Khả dụng là kết quả xét, không phải aggregate root.
+    Xét trên tồn kho, giữ chỗ và giới hạn mua;
+    điều kiện mở bán đến từ context vòng đời sự kiện.
+    Cách phối hợp xuyên aggregate chờ B9–B11.
+  end note
 }
 
+Order "1" --> "1" Hold : đúng một giữ chỗ
 OrderLine "0..*" --> "0..1" Seat : nguồn SEATED
 OrderLine "0..*" --> "0..1" TicketType : nguồn QUANTITY
 OrderLine "0..*" --> "0..1" Sector : nguồn STANDING
@@ -135,14 +154,6 @@ PromotionUsage "0..*" --> "1" Promotion : tính vào trần tổng
 note bottom of Order
   Một đơn thuộc một sự kiện.
   Đơn SEAT_MAP chỉ chứa một sector.
-  Một đơn có đúng một giữ chỗ và một hạn chung.
-end note
-
-note bottom of Availability
-  Khả dụng là kết quả xét, không phải aggregate root.
-  Xét trên tồn kho, giữ chỗ và giới hạn mua;
-  điều kiện mở bán đến từ context vòng đời sự kiện.
-  Cách phối hợp xuyên aggregate chờ B9–B11.
 end note
 
 legend bottom

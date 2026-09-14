@@ -1,9 +1,9 @@
 # B6 — Use case và đặc tả
 
-- Phiên bản: `B6-v0.14`
+- Phiên bản: `B6-v0.15`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-27, sau `B5-v0.14` (`GOV-033`) · `B6-v0.12` đã được duyệt ngày 2026-08-22 sau chuỗi `B2-v0.10` → `B5-v0.12`
+- Ngày duyệt: 2026-09-14 (GOV-144); các mốc trước ở nhật ký phiên bản.
 - Đầu vào và phiên bản: `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; `docs/domain/B5-bounded-context-map.md` — `B5-v0.14`, `APPROVED` 2026-08-27; `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27, dùng làm ràng buộc thuật ngữ; `docs/project/decision-register.md` — đọc riêng trạng thái của từng ID được dẫn
 
 > **Cổng phê duyệt:** chuỗi `B2 → B3 → B4 → B5` đã được Lê Văn Minh duyệt lại đúng thứ tự ngày 2026-08-22 sau khi `B2-v0.10` bổ sung mục từ **Yêu cầu hủy sự kiện**; `B6-v0.12` được duyệt sau chuỗi đó.
@@ -16,6 +16,11 @@
 - Phân lớp: `FORMATION`
 
 > **Đường dẫn canonical:** `docs/domain/B6-use-cases.md`, được khai trong bảng đường dẫn của Tầng B.
+
+> **Lịch sử lúc trình ngày 2026-09-14, trước GOV-144:** bản v0.15 đồng bộ BIZ-153–158, GOV-127–142 và PRJ-024 theo phạm vi GOV-143; chưa được duyệt toàn văn. Dòng ngày duyệt phía trên là lịch sử v0.14, không phải phê duyệt v0.15. Không đổi tập tác nhân, 30 use case hoặc ranh giới kiến trúc. Các câu về v0.14 phía trên ghi lịch sử lần duyệt trước.
+
+
+> Phê duyệt hiện hành: Lê Văn Minh, ngày 2026-09-14, GOV-144 — “duyệt toàn bộ sau đó push lên giúp tôi”. Các dòng kể lần soạn/duyệt trước giữ vai trò lịch sử; phiên bản này đã APPROVED. Phê duyệt tài liệu không đổi kết quả NOT RUN thành PASS.
 
 ## 1. Mục đích và giới hạn
 
@@ -111,7 +116,7 @@ Các ca sau chỉ liệt kê, không đặc tả đầy đủ. Một truy vấn 
 |---|---|---|---|
 | `UC-24` | Tìm sự kiện đã công bố | Buyer | Đọc kết quả của `A06`; `BIZ-127` |
 | `UC-25` | Xem chi tiết một sự kiện đã công bố | Buyer | Đọc kết quả của `A06` |
-| `UC-26` | Theo dõi một organizer | Buyer | `E05` |
+| `UC-26` | Theo dõi hoặc bỏ theo dõi một organizer | Buyer | `E05`; BIZ-157, GOV-101 bổ sung hành vi bỏ theo dõi, không tự đặt thêm mã sự kiện miền |
 | `UC-27` | Xem hồ sơ organizer công khai | Buyer | Đọc kết quả của `E03`; `BIZ-141` giới hạn ở hồ sơ `ACTIVE` |
 | `UC-28` | Xem danh sách đơn và vé của chính mình | Buyer | Đọc kết quả của `B01` và `B06`; quyền theo `BIZ-072` |
 | `UC-29` | Xem danh sách sự kiện thuộc chính mình | Organizer | Đọc kết quả của `A01`; quyền sở hữu theo `BIZ-135` |
@@ -138,9 +143,9 @@ Dòng E là dòng hỗ trợ, **không** phải mạch nghiệp vụ chính th�
 
 **Vì sao chọn cách này thay vì để ngoại lệ.** Ba luồng tài khoản chắc chắn sẽ được hiện thực. Nếu để ngoại lệ thì chúng không có đặc tả, không có yêu cầu chức năng ở B8 và không có ca kiểm thử truy ngược được. Thời điểm sửa cũng rẻ nhất lúc này vì B6 và B7 đều còn ở `DRAFT`; càng về sau vòng lan càng rộng.
 
-### 4.2 `B6-OPEN-02` — đã đóng phần nghĩa nghiệp vụ; tên trạng thái chờ B12/B13
+### 4.2 `B6-OPEN-02` — đã đóng; tên trạng thái được ghi tại B12/B13
 
-`BIZ-150` đã khóa nghĩa cần cho B6/B8: hoàn một khoản thu trùng hoặc đến muộn không tạo một trạng thái nghiệp vụ riêng cho đơn và không làm đơn hoặc vé hợp lệ mất hiệu lực. B6 tiếp tục mô tả kết quả bằng lời, không đặt tên trạng thái đơn. `BIZ-130` chỉ còn `OPEN` cho tên/chuyển trạng thái và cách biểu diễn ở B12/B13; nó không còn chặn B6 hoặc B8.
+`BIZ-150` khóa nghĩa: hoàn một khoản thu trùng hoặc đến muộn không tạo một trạng thái riêng cho đơn và không làm đơn hoặc vé hợp lệ mất hiệu lực. B6 tiếp tục mô tả kết quả bằng lời; tên/chuyển trạng thái đã được Minh chọn tại GOV-131/GOV-136, đặc tả ở B12/B13, không còn là câu hỏi chờ chọn.
 
 ### 4.3 `B6-OPEN-03` — đã đóng: hệ thống không kiểm sức chứa vật lý
 
@@ -217,7 +222,8 @@ Cột **Bất biến chạm tới** dẫn mã `INV-*` của `B4` §10 để B7 n
 4. Organizer nhập giá cho mọi loại vé; mỗi giá phải lớn hơn 0.
 5. Organizer nhập giới hạn mua cho sự kiện; đây là trường bắt buộc.
 6. Organizer cấu hình khuyến mãi của sự kiện với `startAt` và `endAt`. Hiệu lực được suy ra từ hai mốc này; không có thao tác bật, tạm dừng hay vô hiệu hóa thủ công.
-7. Hệ thống lưu cấu hình và giữ sự kiện ở `DRAFT`.
+7. Hệ thống lưu toàn bộ cấu hình hợp lệ hoặc không lưu thay đổi nào; sự kiện vẫn ở `DRAFT` (GOV-126).
+8. Ghế bị ẩn được giữ trong bản nháp và phục hồi đúng khi mở lại; không đem bán, không tự mất gán loại vé khi ẩn/hiện (GOV-127–130). Ẩn khác với xóa ghế. Không thêm cộng tác nhiều organizer cùng sửa.
 
 **Luồng thay thế**
 
@@ -290,7 +296,7 @@ Admin không có giao diện quản lý khuyến mãi riêng. Nơi lưu giá tr�
 **Luồng chính**
 
 1. Admin xem yêu cầu hủy và xác nhận.
-2. Sự kiện chuyển sang `CANCELLED` và đóng bán ngay.
+2. Sự kiện chuyển sang `CANCELLED` và đóng bán tại nơi quản lý sự kiện. Hậu quả lên các nơi khác có độ trễ; không cam kết dừng tức thời toàn hệ thống (GOV-134/135).
 3. Toàn bộ vé của sự kiện bị vô hiệu hóa; nguồn cung **không** trở lại khả dụng.
 4. Mọi đơn chưa thanh toán và giữ chỗ đang hoạt động bị hủy. Hệ thống chặn lần thanh toán mới, trả phần giới hạn mua và lượt khuyến mãi đúng một lần, nhưng không mở lại nguồn cung.
 5. Hệ thống chọn từng đơn thuộc sự kiện mà khoản thu hợp lệ được giữ lại vẫn còn số tiền phải hoàn, rồi chuyển sang `UC-15` cho từng khoản thu đó.
@@ -299,6 +305,7 @@ Admin không có giao diện quản lý khuyến mãi riêng. Nơi lưu giá tr�
 **Luồng thay thế**
 
 - **Admin từ chối yêu cầu.** Yêu cầu hủy chuyển `REJECTED`, lý do từ chối là tùy chọn, trạng thái sự kiện không đổi, và quy trình dừng trước khi tạo bất kỳ xử lý hoàn nào.
+- **Gửi lại sau từ chối.** Organizer được tạo yêu cầu mới; giữ lịch sử yêu cầu cũ. Mỗi sự kiện có tối đa một yêu cầu chờ xét; sự kiện đã hủy không nhận yêu cầu mới (BIZ-153–156). Không áp quy tắc này cho hồ sơ organizer bị từ chối.
 - **Organizer hủy trực tiếp.** Khi sự kiện chưa có đơn thu tiền, organizer tự hủy mà không cần admin; xem `UC-09`.
 
 **Ngoại lệ**
@@ -333,6 +340,7 @@ B6 chỉ mô tả kết quả nghiệp vụ. Không bổ sung các kịch bản 
 2. Hệ thống kiểm đồng thời: trạng thái mở bán của sự kiện, tồn kho hoặc ghế còn khả dụng, giới hạn mua của tài khoản và điều kiện của từng loại vé.
 3. Nếu hợp lệ, hệ thống tạo một đơn với **đúng một giữ chỗ** và **một thời hạn chung** cho toàn bộ dòng vé.
 4. Tồn kho và phần giới hạn mua tương ứng được cam kết tạm thời theo thời hạn đó.
+5. Email nhận vé được điền sẵn từ tài khoản, buyer được sửa trước khi tạo đơn; lưu email theo lần mua. Email không đổi người sở hữu đơn/vé (GOV-141/142).
 
 **Ngoại lệ** — mỗi trường hợp phải trả kết quả phân biệt được cho buyer
 
@@ -371,6 +379,8 @@ Quy tắc giới hạn mua áp cho tài khoản, không ngăn một người dù
 5. Hệ thống tính số tiền cuối và yêu cầu số tiền này lớn hơn 0.
 6. Nếu mọi điều kiện đạt, mã được áp và một lượt dùng được giữ theo đúng thời hạn của đơn.
 
+Giá vé và đầu vào giảm giá là số nguyên; tiền dùng VND. Giảm phần trăm tính một lần trên tổng đơn và làm tròn HALF_UP về nguyên đồng (BIZ-158, GOV-137/139). Khi bắt đầu thanh toán lần đầu, tiền đã đóng băng; không áp/thay mã trên đơn đó nữa, kể cả lần thử thanh toán thất bại (GOV-132/133).
+
 **Ngoại lệ** — sáu trường hợp phải phân biệt được, không gộp thành một thông báo chung
 
 - Mã không tồn tại trong sự kiện của đơn.
@@ -401,6 +411,7 @@ Quy tắc giới hạn mua áp cho tài khoản, không ngăn một người dù
 **Luồng chính**
 
 1. Buyer khởi tạo một lần thanh toán cho đơn.
+   Giá/giảm giá/số tiền thanh toán được đóng băng từ lần bắt đầu đầu tiên; các lần thử tiếp theo giữ nguyên tiền (GOV-132/133).
 2. Hệ thống chuyển yêu cầu tới cổng thanh toán và chờ kết quả. Không tạo lần thử mới song song khi lần hiện tại chưa kết thúc.
 3. Cổng thanh toán gửi kết quả về.
 4. Hệ thống xác minh kết quả thuộc đúng đơn, đúng lần thử và đúng số tiền.
@@ -415,6 +426,7 @@ Quy tắc giới hạn mua áp cho tài khoản, không ngăn một người dù
 
 - **Callback lặp mang cùng kết quả đã xử lý.** Không tạo tác dụng phụ lặp, không phát hành vé lần thứ hai.
 - **Tiền đến sau khi đơn đã hết hạn hoặc bị hủy**, kể cả do sự kiện bị hủy: đây là thanh toán đến muộn. Chuyển sang `UC-15` để hoàn toàn bộ. Không giải phóng giữ chỗ, tồn kho, giới hạn mua hay lượt khuyến mãi lần thứ hai.
+  Mốc phân xử là thời điểm hệ thống kiểm/chấp nhận thanh toán đối với hạn giữ chỗ, không phải thời gian thu ghi ở cổng. Đã hết hạn thì không hồi sinh đơn dù worker chưa cập nhật trạng thái (GOV-138).
 - **Cùng một nghĩa vụ bị thu nhiều lần.** Giữ một giao dịch hợp lệ; mỗi giao dịch thừa chuyển sang `UC-15` độc lập. Vé, tồn kho và giới hạn của đơn hợp lệ không thay đổi.
 - **Khởi tạo thanh toán sau khi đơn đã hết hạn hoặc bị hủy.** Từ chối, không tạo lần thử mới.
 
@@ -425,7 +437,9 @@ Quy tắc giới hạn mua áp cho tài khoản, không ngăn một người dù
 
 **Giới hạn của B6 tại ca này**
 
-B6 không đặt tên trạng thái đơn theo `BIZ-130`, không chọn giao thức với cổng thanh toán và không quyết định cơ chế bảo đảm idempotency. Nghĩa nghiệp vụ đã được khóa tại §4.2; tên/chuyển trạng thái và cách biểu diễn chờ B12/B13.
+B6 không chọn giao thức với cổng thanh toán hoặc cơ chế bảo đảm idempotency. Nghĩa nghiệp vụ đã được khóa tại §4.2; tên/chuyển trạng thái được xác nhận theo GOV-131/136 và đặc tả tại B12/B13/B14.
+
+PRJ-024 loại Q-07: không xây workflow/bảng/dashboard tiếp nhận khoản thu sai số tiền hoặc không xác định được liên kết. Vẫn bắt buộc kiểm chữ ký và đúng đơn/lần thử/số tiền; đầu vào sai không tạo quyền nhận vé. Đây là hạn chế phạm vi, không phải lời hứa đã giải quyết mọi khoản bất thường. Hoàn muộn/trùng có liên kết hợp lệ vẫn giữ nguyên.
 
 ### 6.7 `UC-13` — Hủy đơn của chính mình
 
@@ -553,6 +567,8 @@ Cách theo dõi, thử lại và kết thúc nhiều yêu cầu hoàn khi hủy 
 1. Hệ thống kiểm lại rằng sự kiện vẫn đủ điều kiện chi trả và đối soát đã được xác nhận ở `UC-18`.
 2. Admin đánh dấu sự kiện đã chi trả.
 3. Hệ thống ghi dấu vết người thao tác và thời điểm.
+
+Phí tính một lần trên tổng doanh thu hợp lệ của sự kiện sau giảm giá và hoàn; làm tròn HALF_UP về nguyên đồng. Không tính phí trên khoản thu thừa và không cộng phí đã làm tròn theo từng đơn (GOV-140).
 
 Việc đối chiếu số liệu với báo cáo cổng thanh toán thuộc `UC-18`, và việc chuyển tiền diễn ra ngoài hệ thống giữa hai use case. `UC-19` chỉ ghi nhận kết quả sau cùng.
 
@@ -743,6 +759,7 @@ Không đưa nguyên trạng mã `UC-*`, sổ `OPEN` hoặc trạng thái govern
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B6-v0.15` | 2026-09-14 | Đồng bộ quyền gửi lại yêu cầu hủy, follow/unfollow, tiền nguyên/làm tròn/đóng băng, email theo đơn, ghế ẩn và giới hạn Q-07 theo quyết định đã xác nhận; trình REVIEW_READY, không đổi 30 use case | GOV-143 |
 | `B6-v0.14` | 2026-08-27 | Chỉ khai lại phiên bản đầu vào theo `B2-v0.12`/`B3-v0.11`/`B4-v0.15`/`B5-v0.14` sau vòng `RES-034`. *(Dòng này trước 2026-08-29 ghi `B2-v0.11`, lệch với dòng khai đầu vào ở đầu tệp vốn ghi đúng `B2-v0.12` — `B2` lên `v0.12` khi bổ sung mục từ `Hồ sơ chi trả sự kiện` theo `RES-040`.)* **Không đổi use case, tác nhân, luồng, đặc tả hay sơ đồ nào**; bốn ghi chú kênh chatbot giữ nguyên | Lan truyền trạng thái |
 | `B6-v0.13` | 2026-08-26 | Sửa lỗi khai phiên bản: §3 và ô tự kiểm nói thân bài dùng `B4-v0.13` trong khi dòng khai đầu vào là `B4-v0.14`. Đồng bộ khai `B5-v0.13` sau tái baseline `A2`/`A4`. **Không đổi use case, tác nhân, luồng hay đặc tả nào** | Sửa lời khai và lan truyền |
 | `B6-v0.12` | 2026-08-22 | Không đổi nội dung use case. Chỉ đồng bộ khai đầu vào sang `B2-v0.10`/`B3-v0.10`/`B4-v0.14` sau khi B2 bổ sung mục từ **Yêu cầu hủy sự kiện** — khái niệm mà `UC-07`/`UC-08` vốn đã mô tả | Lan truyền trạng thái |

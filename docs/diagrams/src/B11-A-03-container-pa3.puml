@@ -1,0 +1,108 @@
+@startuml B11-A-03-container-pa3
+' B11-A / PA-3 - Moi bounded context mot ranh gioi, 7 ranh gioi (C4 muc 2)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md muc 4.3
+' Phuong an nay co mat de DO CAI GIA cua nguyen tac "1 context = 1 service",
+' nguyen tac ma Tang B muc 2.2 noi ro KHONG duoc ap dung may moc.
+' Luu y ky thuat: khong de cap bold ** ** bac qua mot \n tuong minh.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 160
+skinparam nodesep 40
+skinparam ranksep 50
+
+title PA-3 — Mỗi bounded context một ranh giới · 7 ranh giới (C4 mức 2)\nPhương án ứng viên — chưa được chọn
+
+rectangle "Kênh: web · ứng dụng di động · chatbot mua vé" <<Kênh>> as Ch
+
+package "Ranh giới nghiệp vụ" as BIZ {
+  rectangle "**Vòng đời sự kiện và cấu hình bán** <<RG-01>>" as R1
+  rectangle "**Mua vé và cam kết nguồn cung** <<RG-02>>\n//INV-01…INV-04, INV-06//" as R2
+  rectangle "**Thanh toán và hoàn tiền** <<RG-03>>\n//INV-05, INV-08//" as R3
+  rectangle "**Quyền tham dự và vào cửa** <<RG-04>>\n//INV-07, INV-09//" as R4
+  rectangle "**Đối soát và chi trả** <<RG-05>>\n//INV-10//" as R5
+  rectangle "**Giao nhận thông tin vé** <<RG-06>>" as R6
+  rectangle "**Tài khoản và quyền nghiệp vụ** <<RG-07>>" as R7
+}
+
+package "Quan sát và chẩn đoán" as Obs {
+  rectangle "Kho dữ liệu quan sát" <<Dữ liệu quan sát>> as OBS
+  rectangle "Cơ chế chẩn đoán nguyên nhân gốc" <<Đơn vị riêng · CHỈ ĐỌC>> as RCA
+}
+
+package "Hệ thống ngoài" as Ext {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Nguồn danh tính" as IDP
+}
+
+Ch --> R1
+Ch --> R2
+Ch --> R4
+
+R7 --> R1 : E1 [N2]
+R7 --> R2 : E1 [N2]
+R7 --> R3 : E1 [N2]
+R7 --> R4 : E1 [N2]
+R7 --> R5 : E1 [N2]
+R1 --> R2 : E2 [N2]
+R1 --> R4 : E3 [N2]
+R1 --> R5 : E4 [N2]
+R1 ..> R2 : E5 [N3]
+R1 ..> R3 : E5 [N3]
+R1 ..> R4 : E5 [N3]
+R1 ..> R5 : E5 [N3]
+R2 --> R3 : E6 [N2]
+R3 ..> R2 : E7 [N3]
+R3 --> R4 : E8 [**N4**]
+R3 ..> R5 : E9 [N3]
+R4 ..> R3 : E10 [**N4**]
+R4 ..> R2 : E11 [**N4**]
+R4 ..> R6 : E12 [N3]
+
+R3 --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG ..> R3 : callback kết quả thu,\nkết quả hoàn
+R7 --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+BIZ ..> OBS : dữ liệu quan sát — cả 7 ranh giới đều sinh
+RCA -> OBS : chỉ đọc, credential riêng
+
+note right of R5
+  **Ứng viên Saga vẫn là 1**
+  Chuỗi E8+E10+E11. Số ứng viên Saga không tăng
+  theo số ranh giới; hình dạng bù trừ do miền quy
+  định. Cái tăng là 16 hợp đồng và 6 điểm sao chép.
+end note
+
+note right of R7
+  **Rủi ro hạ tầng chưa đo**
+  Bảy tiến trình nghiệp vụ cộng đơn vị chẩn đoán và
+  hạ tầng, trên hai máy 2 vCPU / 8 GiB, hai tài khoản
+  rời, không cộng tài nguyên được.
+  ASR-11 vì vậy là //Chưa biết//.
+end note
+
+note bottom of Obs
+  ASR-12 / NFR-08: không có đường ghi vào dữ liệu nghiệp vụ,
+  không truy cập trực tiếp schema nghiệp vụ.
+  Phải tương quan tín hiệu của bảy nguồn.
+end note
+
+note bottom of Ch
+  Hộp //Kênh// gộp web, ứng dụng di động và chatbot mua vé, nên nó
+  nối tới mọi ranh giới có bề mặt người dùng. Số ranh giới mà
+  riêng //chatbot mua vé// chạm được ghi ở mục (9) của từng phương án.
+end note
+
+Ext -[hidden]- Obs
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | Quan hệ ĐỒNG BỘ ứng viên — gọi hoặc đọc trực tiếp |
+  | nét đứt | Quan hệ bằng SỰ KIỆN MIỀN ứng viên (B2 §1) |
+  | E1…E12 | Mã quan hệ xuyên context — nội dung đầy đủ ở B11-A §3.2 |
+  | N2 · N3 · N4 | Nhóm phân loại luồng — định nghĩa ở B11-A §3.4 |
+  | RG-* | Mã ranh giới triển khai, chỉ để truy vết |
+endlegend
+
+@enduml

@@ -1,0 +1,100 @@
+@startuml B11-A-04-container-pa4
+' B11-A / PA-4 - Tach nguon cung khoi don, 5 ranh gioi (C4 muc 2)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md muc 4.4
+' Day la phuong an duy nhat dat cau hoi HOT-02 / B5-OPEN-02 len ban.
+' Luu y ky thuat: khong de cap bold ** ** bac qua mot \n tuong minh.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 170
+skinparam nodesep 45
+skinparam ranksep 55
+
+title PA-4 — Tách nguồn cung khỏi đơn · 5 ranh giới (C4 mức 2)\nPhương án ứng viên — chưa được chọn
+
+rectangle "Kênh: web · ứng dụng di động · chatbot mua vé" <<Kênh>> as Ch
+
+package "Ranh giới nghiệp vụ" as BIZ {
+  rectangle "**Sự kiện, cấu hình bán và nguồn cung** <<RG-1a>>\nGhế · Loại vé · Sector theo nghĩa cam kết nguồn cung\n//INV-01 cục bộ//" as R1a
+  rectangle "**Đơn hàng, giới hạn mua và lượt khuyến mãi** <<RG-1b>>\nĐơn hàng · Giữ chỗ · Giới hạn mua\nKhuyến mãi theo nghĩa sử dụng · Lượt dùng khuyến mãi\n//INV-02, INV-04 cục bộ//" as R1b
+  rectangle "**Tiền** <<RG-2>>\nThanh toán và hoàn tiền · Đối soát và chi trả\n//INV-05, INV-08, INV-10 cục bộ//" as R2
+  rectangle "**Quyền tham dự, vào cửa và giao nhận vé** <<RG-3>>\n//INV-07, INV-09 cục bộ//" as R3
+  rectangle "**Tài khoản và quyền nghiệp vụ** <<RG-4>>" as R4
+}
+
+package "Quan sát và chẩn đoán" as Obs {
+  rectangle "Kho dữ liệu quan sát" <<Dữ liệu quan sát>> as OBS
+  rectangle "Cơ chế chẩn đoán nguyên nhân gốc" <<Đơn vị riêng · CHỈ ĐỌC>> as RCA
+}
+
+package "Hệ thống ngoài" as Ext {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Nguồn danh tính" as IDP
+}
+
+Ch --> R1a
+Ch --> R1b
+Ch --> R3
+
+R1b --> R1a : giữ / chốt / trả nguồn cung [**N4**]
+R1a --> R1b : E2 điều kiện bán,\ncấu hình thương mại [N2]
+R1a ..> R1b : trạng thái cam kết nguồn cung [N2]
+R1a ..> R1b : E5 [N3]
+R1a --> R3 : E3 [N2]
+R1a --> R2 : E4 [N2]
+R1a ..> R2 : E5 [N3]
+R1a ..> R3 : E5 [N3]
+R1b --> R2 : E6 [N2]
+R2 ..> R1b : E7 [N3]
+R2 --> R3 : E8 [**N4**]
+R3 ..> R2 : E10 [**N4**]
+R3 ..> R1b : E11 [**N4**]
+R4 --> R1a : E1 [N2]
+R4 --> R1b : E1 [N2]
+R4 --> R2 : E1 [N2]
+R4 --> R3 : E1 [N2]
+
+R2 --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG ..> R2 : callback kết quả thu,\nkết quả hoàn
+R4 --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+BIZ ..> OBS : dữ liệu quan sát — cả 5 ranh giới đều sinh
+RCA -> OBS : chỉ đọc, credential riêng
+
+note right of R1b
+  **Ứng viên Saga: 2**
+  Luồng giữ chỗ phân tán (RG-1b ↔ RG-1a)
+  và chuỗi thu tiền → phát hành. Trần 3 còn dư 1.
+  Ba cặp hai chiều, không phải bốn.
+  ----
+  **Ba bất biến xuyên ranh giới**
+  INV-03, INV-06, INV-11 — mức cao nhất của tập,
+  ngang PA-5, nên ASR-01 là //Chưa biết// tới khi đo.
+end note
+
+note bottom of Obs
+  ASR-12 / NFR-08: không có đường ghi vào dữ liệu nghiệp vụ,
+  không truy cập trực tiếp schema nghiệp vụ.
+  Kết quả ra được tới một chủ thể có quyền;
+  **hình thức cung cấp còn hoãn** (RES-044).
+end note
+
+note bottom of Ch
+  Hộp //Kênh// gộp web, ứng dụng di động và chatbot mua vé, nên nó
+  nối tới mọi ranh giới có bề mặt người dùng. Số ranh giới mà
+  riêng //chatbot mua vé// chạm được ghi ở mục (9) của từng phương án.
+end note
+
+Ext -[hidden]- Obs
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | Quan hệ ĐỒNG BỘ ứng viên — gọi hoặc đọc trực tiếp |
+  | nét đứt | Quan hệ bằng SỰ KIỆN MIỀN ứng viên (B2 §1) |
+  | E1…E12 | Mã quan hệ xuyên context — nội dung đầy đủ ở B11-A §3.2 |
+  | N2 · N3 · N4 | Nhóm phân loại luồng — định nghĩa ở B11-A §3.4 |
+  | RG-* | Mã ranh giới triển khai, chỉ để truy vết |
+endlegend
+
+@enduml

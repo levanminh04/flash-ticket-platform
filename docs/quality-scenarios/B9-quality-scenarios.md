@@ -1,11 +1,11 @@
 # B9 — Bộ kịch bản chất lượng
 
-- Phiên bản: `B9-v0.7`
+- Phiên bản: `B9-v0.8`
 - Trạng thái: `APPROVED`
 - Phân lớp: `FORMATION`
 - Người duyệt: Lê Văn Minh
-- Ngày duyệt: 2026-08-29, **giữa chuỗi `B8-v0.12` → `B9-v0.7` → `B10-v0.7`** (`GOV-050`), sau `B8-v0.12` và trước `B10-v0.7` · **Lịch sử:** `v0.7` từng bị trả về `REVIEW_READY` tại `GOV-047` vì nó điền 18 ô *Mức ưu tiên* sau khi `v0.6` được duyệt; nay đã được duyệt đúng phiên bản. `B9-v0.6` duyệt 2026-08-28 (`GOV-043`); `B9-v0.5` duyệt 2026-08-27 (`GOV-033`)
-- Đầu vào và phiên bản: `docs/domain/B7-aggregates-and-invariants.md` — `B7-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B8-requirements.md` — `B8-v0.12`, `APPROVED` 2026-08-28, **trước `B9`** (`GOV-043`); `docs/research/A3-research-objectives.md` — `A3-v0.5`, `DRAFT`; `MT-1`–`MT-4` đã được xác nhận định tính (`RES-002`), `MT-5` đổi câu chữ ngày 2026-08-27 (`RES-041`). **B9 không dẫn nội dung `MT-5` ở bất kỳ kịch bản nào** — đã kiểm: 0 chỗ dùng trong thân bài, nên thay đổi đó không đụng kịch bản nào; `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27, dùng làm ràng buộc từ vựng *(Rà 2026-08-29 — `GOV-052`: `A3` nay là `A3-v0.6`; `v0.6` chuyển `MT-5` sang Vòng 1 (`RES-045`) và đổi **vai** của `MT-1`–`MT-3` (`RES-046`) mà **không đổi một chữ câu chữ nào của `MT-1`–`MT-4`**, nên phần được tài liệu này dẫn không đổi.)*
+- Ngày duyệt: 2026-08-29, cho `B9-v0.8`, **sau `B7-v0.12`** và **trước `B10-v0.8`** (`GOV-059`) · `B9-v0.7` được duyệt 2026-08-29, **giữa chuỗi `B8-v0.12` → `B9-v0.7` → `B10-v0.7`** (`GOV-050`), sau `B8-v0.12` và trước `B10-v0.7` · **Lịch sử:** `v0.7` từng bị trả về `REVIEW_READY` tại `GOV-047` vì nó điền 18 ô *Mức ưu tiên* sau khi `v0.6` được duyệt; nay đã được duyệt đúng phiên bản. `B9-v0.6` duyệt 2026-08-28 (`GOV-043`); `B9-v0.5` duyệt 2026-08-27 (`GOV-033`)
+- Đầu vào và phiên bản: `docs/domain/B7-aggregates-and-invariants.md` — `B7-v0.12`, `APPROVED` 2026-08-29 (`GOV-058`), **trước `B9-v0.8`**; `docs/domain/B8-requirements.md` — `B8-v0.12`, `APPROVED` 2026-08-28, **trước `B9`** (`GOV-043`); `docs/research/A3-research-objectives.md` — `A3-v0.5`, `DRAFT`; `MT-1`–`MT-4` đã được xác nhận định tính (`RES-002`), `MT-5` đổi câu chữ ngày 2026-08-27 (`RES-041`). **B9 không dẫn nội dung `MT-5` ở bất kỳ kịch bản nào** — đã kiểm: 0 chỗ dùng trong thân bài, nên thay đổi đó không đụng kịch bản nào; `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27, dùng làm ràng buộc từ vựng *(Rà 2026-08-29 — `GOV-052`: `A3` nay là `A3-v0.6`; `v0.6` chuyển `MT-5` sang Vòng 1 (`RES-045`) và đổi **vai** của `MT-1`–`MT-3` (`RES-046`) mà **không đổi một chữ câu chữ nào của `MT-1`–`MT-4`**, nên phần được tài liệu này dẫn không đổi.)*
 - Nguồn phạm vi: `docs/domain/B4-domain-event-map.md` — `B4-v0.15` §10, bảng bất biến và hotspot cùng cột *"Gate xử lý tiếp"*
 
 > **Cổng phê duyệt — đã thỏa.** Toàn chuỗi `B2-v0.12 → B3-v0.11 → B4-v0.15 → B5-v0.14 → B6-v0.14 → B7-v0.11 → B8-v0.11` trở lại `REVIEW_READY` sau vòng `RES-034` — gỡ thiết kế trợ lý cũ khỏi bộ hệ thống — rồi được Lê Văn Minh duyệt lại **đúng thứ tự** ngày 2026-08-27 (`GOV-033`). B9 được duyệt **cuối chuỗi, sau `B8-v0.11`**, đúng yêu cầu Tầng B §3.3.
@@ -93,7 +93,7 @@ Mỗi bản ghi dùng bộ trường `C2`. Ô `Mức ưu tiên` và `ADR liên q
 | Thuộc tính chất lượng | Tính đúng đắn dưới đồng thời |
 | Nguồn kích thích | Nhiều người mua truy cập đồng thời |
 | Kích thích | `N` yêu cầu giữ chỗ cùng nhắm vào một nguồn cung còn lại nhỏ hơn `N`, phát sinh trong một khoảng rất ngắn |
-| Tạo tác | Các root nguồn cung `Ghế`, `Loại vé`, `Sector` và root `Đơn hàng` |
+| Tạo tác | Các root nguồn cung `Ghế`, `Loại vé`, `Sector`, root `Giữ chỗ` và root `Đơn hàng` |
 | Môi trường | Thời điểm mở bán, hệ thống ở mức tải cao nhất trong cấu hình được công bố |
 | Phản ứng | Số yêu cầu được chấp nhận đúng bằng lượng còn lại; các yêu cầu còn lại nhận từ chối rõ ràng, không bị treo |
 | Độ đo — (1) bất biến | Với `SEAT_MAP`: không ghế nào thuộc hai giữ chỗ hoặc đơn còn hiệu lực. Với `QUANTITY`/`STANDING`: số lượng khả dụng **không âm** tại mọi thời điểm. Sai lệch giữa số quyền đã cam kết và hạn mức bán bằng **0** |
@@ -177,7 +177,7 @@ Mỗi bản ghi dùng bộ trường `C2`. Ô `Mức ưu tiên` và `ADR liên q
 | Thuộc tính chất lượng | Tính đúng đắn khi thao tác lặp |
 | Nguồn kích thích | Hết hạn theo thời gian, người mua hủy đơn, hoặc thông điệp lặp |
 | Kích thích | Cùng một nguyên nhân giải phóng được kích hoạt nhiều lần cho một đơn |
-| Tạo tác | Root `Đơn hàng`, các root nguồn cung, `Giới hạn mua`, `Khuyến mãi`, `Lượt dùng khuyến mãi` |
+| Tạo tác | Root `Đơn hàng`, `Giữ chỗ`, các root nguồn cung, `Giới hạn mua`, `Khuyến mãi`, `Lượt dùng khuyến mãi` |
 | Môi trường | Đơn đang giữ chỗ, chưa có thanh toán thành công |
 | Phản ứng | Nguồn cung, phần giới hạn mua và lượt khuyến mãi được trả lại **đúng một lần**; lần kích hoạt sau không tạo thêm hậu quả |
 | Độ đo — (1) bất biến | Sau `k` lần kích hoạt cùng nguyên nhân (`k ≥ 2`), trạng thái tài nguyên **bằng** trạng thái sau đúng một lần. Không cộng dồn |
@@ -479,6 +479,9 @@ Các ô dưới đây được suy lại theo nội dung cuối cùng của tài
 - [x] Lê Văn Minh đã rà và duyệt `B9-v0.5` ngày 2026-08-27 (`GOV-033`), sau `B8-v0.11`; AI không tự đánh dấu thay.
 - [x] **Lê Văn Minh đã rà và duyệt `B9-v0.6` ngày 2026-08-28** (`GOV-043`), **sau `B8-v0.12`** và trước `B10-v0.5` — đúng thứ tự chuỗi. AI không tự đánh dấu thay.
 - [x] **Lê Văn Minh đã rà và duyệt `B9-v0.7` ngày 2026-08-29** (`GOV-050`), sau `B8-v0.12` và **trước `B10-v0.7`** — đúng thứ tự chuỗi. Tài liệu từng bị trả về `REVIEW_READY` tại `GOV-047` vì `v0.7` điền 18 ô *Mức ưu tiên* sau khi `v0.6` được duyệt; vòng duyệt lại này chữa đúng chỗ đó. AI không tự đánh dấu thay (`GOV-011`).
+- [x] **`B9-v0.8` chỉ lan truyền `B7-v0.12`, không đổi phép đo nào.** `Giữ chỗ` thành aggregate root (`RES-052`) nên nó được thêm vào ô *Tạo tác* của `QS-01` và `QS-06` — hai kịch bản có `Giữ chỗ` tham gia theo `B7` §5. **Vẫn đúng 18 kịch bản** (`GOV-036`), không kịch bản nào được thêm, bớt, hay đổi ô *Độ đo*, *Phản ứng*, *Kích thích* hoặc *Mức ưu tiên*; phân bố vẫn **13 Cao · 2 Trung bình · 3 Thấp**.
+- [x] **`INV-03` vẫn không thuộc B9, và điều đó không đổi sau `B7-v0.12`.** `B4` §10 định tuyến `INV-03` về `B7`; việc nó chuyển từ bất biến cục bộ của `Đơn hàng` thành bất biến xuyên `Đơn hàng`–`Giữ chỗ` **không** làm nó rơi vào phạm vi `B9`, vì phạm vi bất biến của `B9` lấy theo cột *Gate xử lý tiếp* của `B4` §10 chứ không theo việc bất biến đó cục bộ hay xuyên aggregate. `B9` không tự mở rộng phạm vi.
+- [x] **Lê Văn Minh đã duyệt `B9-v0.8` ngày 2026-08-29** (`GOV-059`), **sau `B7-v0.12`** và **trước `B10-v0.8`** — đúng thứ tự chuỗi mà Tầng B §3.3 bắt buộc. AI không tự tích ô này (`GOV-011`).
 - [ ] Chạy vòng đo thử đầu tiên rồi quay lại điền các ô ngưỡng `OPEN`. **Việc này không phải điều kiện duyệt** — `GOV-033` ghi rõ ngưỡng số là đầu ra của `B9`/`B10`, và `B9-OPEN-01` vẫn mở sau khi duyệt.
 
 ---
@@ -497,6 +500,7 @@ Không đưa nguyên trạng mã `QS-*`, sổ `OPEN` hay trạng thái governanc
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B9-v0.8` | 2026-08-29 | **Lan truyền `B7-v0.12`; không đổi một phép đo nào.** `Giữ chỗ` được nâng thành aggregate root (`RES-052`) nên nó xuất hiện thêm ở ô *Tạo tác* của **`QS-01`** và **`QS-06`** — đúng hai kịch bản mà `B7` §5 cho `Giữ chỗ` tham gia (`INV-01` qua phép xét khả dụng, và `INV-06` qua chuyển trạng thái hội tụ). Khai lại đầu vào sang `B7-v0.12`. **Vẫn đúng 18 kịch bản, phân bố 13 · 2 · 3 không đổi, không ô *Độ đo* hay *Mức ưu tiên* nào bị chạm.** `INV-03` vẫn không thuộc `B9` vì phạm vi lấy theo cột *Gate xử lý tiếp* của `B4` §10. Tài liệu về `REVIEW_READY` theo Tầng B §3.3 vì đầu vào đổi có ý nghĩa | Lan truyền từ `B7` |
 | `B9-v0.7` | 2026-08-28 | **Điền ô `Mức ưu tiên` cho cả 18 bản ghi** bằng giá trị của `B10-v0.5` đã duyệt (`GOV-043`), thi hành `B10-OPEN-13`. Phân bố: **13 Cao · 2 Trung bình · 3 Thấp** — đếm lại trực tiếp trên 18 ô sau khi điền, khớp bảng §2 của `B10`. Ba ô ghi thêm nguồn `GOV-040` vì mức của chúng do Lê Văn Minh chốt trực tiếp: `QS-14` Thấp, `QS-15` Cao, `QS-17` Thấp. **Không ô nào khác bị chạm; số dòng tệp không đổi.** Ô `ADR liên quan` vẫn để trống — `B11` mới điền | Thi hành bàn giao `B10` → `B9` |
 | `B9-v0.6` | 2026-08-28 | **Hai thay đổi, không đụng bất biến nào.** (1) Khai lại đầu vào theo `B8-v0.12`: `NFR-06` nay chốt **một mã tương quan duy nhất** cho mỗi giao dịch (`RES-042`). **`QS-13` không phải sửa một chữ** — ô bất biến của nó đã đòi đúng điều đó từ `v0.1`, và chính nó là một trong ba nguồn khiến `RES-042` chọn phía *bắt buộc*. (2) Ô *Nguồn kích thích* và ô *Kiểm chứng* của `QS-04` và `QS-05` viết lại theo `GOV-042`: tranh chấp được tạo bằng **nhiều lời gọi API đồng thời**, không dựng dàn thiết bị thật. **Thứ không đổi:** `INV-09` — một vé tối đa một check-in thành công — nguyên văn; mục từ *Yêu cầu check-in* ở `B2` cho phép cùng tài khoản dùng nhiều thiết bị, **giữ nguyên**, vì bản chất vấn đề là *đồng thời* chứ không phải *thiết bị*. Tài liệu chuyển `REVIEW_READY` vì đầu vào đổi có ý nghĩa | Lan truyền đầu vào + sửa cách kiểm chứng |
 | `B9-v0.5` | 2026-08-27 | **Thêm `QS-18`** cho `NFR-12` và `NFR-08`. Bản `v0.3` xếp hai dòng đó là *"ràng buộc, không phải tình huống chạy"* nên không viết kịch bản — lập luận **tự mâu thuẫn**, vì mọi `NFR` khác trong chính tài liệu này đều có kịch bản, và *"cơ chế chạy rồi kết quả tới người dùng"* là hành vi lúc chạy có kích thích, phản ứng và thứ đo được. Viết lại §5 còn đúng `NFR-07`. Hai ô ngưỡng của `QS-18` để `OPEN` kèm điều kiện điền được, mở `B9-OPEN-08`. **Vòng kiểm toán cùng ngày sửa tiếp ba lỗi của chính bản này:** `QS-18` bị đặt nhầm vào §4 thay vì §3; `B9-OPEN-07` và `B9-OPEN-08` nằm dưới dạng ghi chú trong `QS-17` thay vì thành dòng của bảng §4; bảng §4 sai thứ tự mã | Sửa lỗi tự mâu thuẫn + sửa lỗi đặt sai chỗ |

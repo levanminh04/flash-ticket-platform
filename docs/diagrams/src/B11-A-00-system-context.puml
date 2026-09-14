@@ -1,0 +1,54 @@
+@startuml B11-A-00-system-context
+' B11-A - So do ngu canh he thong (C4 muc 1)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md
+' Dung chung cho ca sau phuong an: muc nay khong phu thuoc cach gop ranh gioi.
+' Quy uoc: Tang C muc 3.2 va 3.2.1 - nhan chinh la ten nghiep vu tieng Viet,
+' khong dung mau nen de mang nghia, doc duoc khi in thang xam.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 200
+skinparam actorStyle awesome
+
+title B11-A — Sơ đồ ngữ cảnh hệ thống (C4 mức 1)\nDùng chung cho cả sáu phương án
+
+actor "Người mua" as Buyer
+actor "Nhà tổ chức" as Organizer
+actor "Quản trị viên" as Admin
+
+rectangle "**FlashTicket**\n<<Hệ thống trong phạm vi>>\nĐặt vé sự kiện trực tuyến; nơi cơ chế\nchẩn đoán nguyên nhân gốc được tích hợp và chạy" as FT
+
+rectangle "Cổng thanh toán" <<Hệ thống ngoài>> as PG
+rectangle "Nguồn danh tính\n(Keycloak)" <<Hệ thống ngoài>> as IDP
+
+Buyer --> FT : chọn vé, đặt đơn,\nthanh toán, xem vé
+Organizer --> FT : cấu hình và công bố sự kiện,\nquét vé vào cửa
+Admin --> FT : duyệt sự kiện, xử lý yêu cầu hủy,\nđối soát và đánh dấu chi trả
+
+FT --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG --> FT : callback kết quả thu,\nkết quả hoàn
+FT --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+note bottom of FT
+  Việc chuyển tiền thật cho nhà tổ chức
+  diễn ra **ngoài** hệ thống (B2 §5, mục từ *Chi trả*).
+  Hệ thống chỉ giữ *Hồ sơ chi trả sự kiện*.
+end note
+
+note right of FT
+  **Người nhận kết quả chẩn đoán chưa được vẽ.**
+  ASR-09 buộc kết quả phải đến được người có quyền,
+  nhưng *hình thức* cung cấp còn hoãn (RES-044, RES-039),
+  nên B11-A không đặt một tác nhân cho việc đó.
+end note
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | actor | Tác nhân nghiệp vụ |
+  | rectangle <<Hệ thống trong phạm vi>> | Hệ thống được thiết kế |
+  | rectangle <<Hệ thống ngoài>> | Hệ thống bên thứ ba |
+  | mũi tên | Chiều tương tác, kèm nội dung |
+endlegend
+
+@enduml

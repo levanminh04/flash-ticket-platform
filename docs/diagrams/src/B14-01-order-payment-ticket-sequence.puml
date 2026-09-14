@@ -1,0 +1,40 @@
+@startuml
+skinparam monochrome true
+title B14 — Mua vé, một Saga do Payment điều phối
+actor Buyer
+participant Booking
+database "Booking DB" as BDB
+participant Payment
+database "Payment DB" as PDB
+participant Gateway
+participant Ticket
+database "Ticket DB" as TDB
+Buyer -> Booking : Tạo đơn + Idempotency-Key
+Booking -> BDB : TX: order + reservation + allocations + counters
+Buyer -> Payment : Bắt đầu thanh toán
+Payment -> Booking : freeze-payment (subject đã xác thực)
+Booking -> BDB : TX: kiểm deadline + lưu snapshot frozen
+Booking --> Payment : Cùng snapshot cho retry
+Payment -> PDB : TX: snapshot + attempt trước gọi cổng
+Payment -> Gateway : Tạo thanh toán
+Gateway -> Payment : IPN có chữ ký / query result
+Payment -> PDB : TX: charge + Saga + outbox
+Payment -> Booking : accept-payment qua broker
+Booking -> BDB : TX: inbox + deadline/accepted charge + ISSUING + outbox
+Booking --> Payment : ACCEPTED / LATE / DUPLICATE / CANCELLED
+alt ACCEPTED
+  Payment -> PDB : TX: confirmation + WAITING_TICKETS + outbox
+  Payment -> Ticket : issue (purchase snapshot)
+  Ticket -> TDB : TX: inbox + đủ tập vé + COMPLETED + outbox + delivery
+  Ticket --> Payment : issuance-result
+  Payment -> PDB : TX: Saga result + outbox
+  Payment -> Booking : issuance-result
+  Booking -> BDB : TX: inbox + COMPLETED
+else không chấp nhận
+  Payment -> PDB : TX: refund duy nhất theo charge
+end
+note over Booking,Ticket
+  Mũi tên async là giao nhận ít nhất một lần qua outbox/broker/inbox.
+  Không có transaction xuyên DB. Timeout phát hành không cho quyền hoàn.
+end note
+@enduml

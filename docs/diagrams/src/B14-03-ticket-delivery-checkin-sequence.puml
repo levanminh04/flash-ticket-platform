@@ -1,0 +1,28 @@
+@startuml
+skinparam monochrome true
+title B14 — Gửi vé, tải lại QR và check-in
+actor Buyer
+participant Ticket
+database "Ticket DB" as DB
+participant SMTP
+actor Organizer
+Ticket -> DB : Delivery job đã commit cùng kết quả phát hành
+Ticket -> SMTP : Thông báo + link đăng nhập, ngoài TX
+SMTP --> Ticket : Thành công / lỗi / chưa rõ
+Ticket -> DB : Lưu outcome, retry cùng job
+Buyer -> Ticket : Tải QR (đúng owner)
+Ticket -> DB : Kiểm issuance/vé; đọc ciphertext + key version
+Ticket --> Buyer : QR giải mã, no-store
+Organizer -> Ticket : Quét QR + Idempotency-Key
+alt request gốc
+  Ticket -> DB : TX: khóa event/issuance/ticket; kiểm quyền + cửa sổ
+  Ticket -> DB : VALID thành USED + audit thành công hoặc từ chối
+else retry
+  Ticket -> DB : So hash; audit mới replay_of; không dùng vé lần hai
+end
+Ticket --> Organizer : Kết quả gốc hoặc lý do từ chối
+note over Ticket,DB
+  Một thành công/vé; mọi receipt có audit, không QR/JWT thô.
+  SMTP lỗi không VOID hoặc refund. Không check-in offline/undo.
+end note
+@enduml

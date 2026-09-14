@@ -1,0 +1,113 @@
+@startuml B11-A-06-container-pa6
+' B11-A / PA-6 - Mua ve tron mot ranh gioi, tien gop ca doi soat, 5 ranh gioi (C4 muc 2)
+' Nguon: docs/architecture/B11-A-independent-alternatives.md muc 4.6
+' Hinh dang do chu do an de xuat (RES-053), trang thai CANDIDATE. B11-C moi chon.
+' Luu y ky thuat: khong de cap bold ** ** bac qua mot \n tuong minh.
+
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam wrapWidth 170
+skinparam nodesep 45
+skinparam ranksep 55
+
+title PA-6 — Mua vé trọn một ranh giới, tiền gộp cả đối soát · 5 ranh giới (C4 mức 2)\nPhương án ứng viên — chưa được chọn
+
+rectangle "Kênh: web · ứng dụng di động · chatbot mua vé" <<Kênh>> as Ch
+
+package "Ranh giới nghiệp vụ" as BIZ {
+  rectangle "**Sự kiện và cấu hình bán** <<RG-1>>\nSự kiện bán vé · Yêu cầu hủy · Địa điểm · Phân loại\nSector, Loại vé, Khuyến mãi theo nghĩa cấu hình" as R1
+  rectangle "**Mua vé và cam kết nguồn cung** <<RG-2>>\nBC-02 trọn vẹn: Ghế, Loại vé, Sector theo nghĩa nguồn cung · Giữ chỗ · Đơn hàng\nGiới hạn mua · Khuyến mãi theo nghĩa sử dụng · Lượt dùng khuyến mãi\n//INV-01, INV-02, INV-03, INV-04, INV-06 cục bộ//" as R2
+  rectangle "**Tiền: thanh toán, hoàn tiền, đối soát và chi trả** <<RG-3>>\n//INV-05, INV-08, INV-10 cục bộ//" as R3
+  rectangle "**Quyền tham dự, vào cửa và giao nhận vé** <<RG-4>>\n//INV-07, INV-09 cục bộ//" as R4
+  rectangle "**Tài khoản và quyền nghiệp vụ** <<RG-5>>" as R5
+}
+
+package "Quan sát và chẩn đoán" as Obs {
+  rectangle "Kho dữ liệu quan sát" <<Dữ liệu quan sát>> as OBS
+  rectangle "Cơ chế chẩn đoán nguyên nhân gốc" <<Đơn vị riêng · CHỈ ĐỌC>> as RCA
+}
+
+package "Hệ thống ngoài" as Ext {
+  rectangle "Cổng thanh toán" as PG
+  rectangle "Nguồn danh tính" as IDP
+}
+
+Ch --> R1
+Ch --> R2
+Ch --> R4
+
+R1 --> R2 : E2 điều kiện bán,\ncấu hình thương mại [N2]
+R1 --> R4 : E3 cửa sổ, sở hữu sự kiện [N2]
+R1 --> R3 : E4 mốc kết thúc, tỷ lệ phí [N2]
+R1 ..> R2 : E5 [N3]
+R1 ..> R3 : E5 [N3]
+R1 ..> R4 : E5 [N3]
+
+R2 --> R3 : E6 nghĩa vụ thanh toán [N2]
+R3 ..> R2 : E7 chốt tài nguyên [N3]
+R3 --> R4 : E8 xác nhận thu → phát hành [**N4**]
+R4 ..> R3 : E10 phát hành lỗi → hoàn [**N4**]
+R4 ..> R2 : E11 trả lượt khuyến mãi [**N4**]
+
+R5 --> R1 : E1 [N2]
+R5 --> R2 : E1 [N2]
+R5 --> R3 : E1 [N2]
+R5 --> R4 : E1 [N2]
+
+R3 --> PG : khởi tạo thanh toán,\ngửi lệnh hoàn
+PG ..> R3 : callback kết quả thu,\nkết quả hoàn
+R5 --> IDP : xác thực, đọc vai trò,\nyêu cầu cấp vai trò organizer
+
+BIZ ..> OBS : dữ liệu quan sát — cả 5 ranh giới đều sinh
+RCA -> OBS : chỉ đọc, credential riêng
+
+note right of R2
+  **BC-02 giữ trọn trong một ranh giới**
+  Năm bất biến INV-01, INV-02, INV-03, INV-04, INV-06
+  đều cục bộ; không có đường cắt giữa giữ chỗ và đơn,
+  nên B11-A-OPEN-02 không áp cho phương án này.
+  ----
+  Chi phí: HOT-02 không có biên tiến trình để chèn lỗi;
+  QS-01 phải đo bên trong một ranh giới.
+end note
+
+note bottom of R3
+  **Ứng viên Saga: 1, không kèm điều kiện**
+  Chỉ chuỗi thu tiền → phát hành → bù trừ,
+  xuyên RG-3 → RG-4 → RG-3, RG-2. Trần 3 còn dư 2.
+  ----
+  **Một bất biến xuyên ranh giới:** INV-11 (RG-1 ↔ RG-3),
+  bản sao tỷ lệ phí — giá trị cố định sau phê duyệt.
+  ----
+  E9 nội bộ RG-3: đó là thứ cách gộp BC-03+BC-05 mua được.
+end note
+
+note bottom of Obs
+  ASR-12 / NFR-08: không có đường ghi vào dữ liệu nghiệp vụ,
+  không truy cập trực tiếp schema nghiệp vụ.
+  Kết quả ra được tới một chủ thể có quyền;
+  **hình thức cung cấp còn hoãn** (RES-044).
+  ----
+  Phải tương quan tín hiệu của 5 nguồn; một giao dịch
+  mua vé thành công đi qua 3 ranh giới.
+end note
+
+note bottom of Ch
+  Hộp //Kênh// gộp web, ứng dụng di động và chatbot mua vé, nên nó
+  nối tới mọi ranh giới có bề mặt người dùng. Số ranh giới mà
+  riêng //chatbot mua vé// chạm được ghi ở mục (9) của từng phương án.
+end note
+
+Ext -[hidden]- Obs
+
+legend bottom
+  |= Ký hiệu |= Nghĩa |
+  | nét liền | Quan hệ ĐỒNG BỘ ứng viên — gọi hoặc đọc trực tiếp |
+  | nét đứt | Quan hệ bằng SỰ KIỆN MIỀN ứng viên (B2 §1) |
+  | E1…E12 | Mã quan hệ xuyên context — nội dung đầy đủ ở B11-A §3.2 |
+  | N2 · N3 · N4 | Nhóm phân loại luồng — định nghĩa ở B11-A §3.4 |
+  | RG-* | Mã ranh giới triển khai, chỉ để truy vết |
+endlegend
+
+@enduml
