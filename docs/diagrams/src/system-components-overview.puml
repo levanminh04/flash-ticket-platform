@@ -1,0 +1,160 @@
+@startuml system-components-overview
+' FORMATION / derived overview, not a new architecture decision.
+' Sources: B11-C-v0.3, B12-v0.2, B13-v0.1, B14-v0.1,
+' B16-v0.1 and READY-v0.1; approved inputs under GOV-144.
+' Logical component inventory: not an AWS live inventory or a sequence diagram.
+!pragma layout smetana
+top to bottom direction
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam nodesep 35
+skinparam ranksep 50
+skinparam ArrowColor #526277
+skinparam packageBackgroundColor #F7F9FC
+skinparam componentBackgroundColor #E8F1FC
+skinparam databaseBackgroundColor #FFF3D6
+skinparam noteBackgroundColor #FFFBEA
+
+title FlashTicket — Toàn bộ thành phần của kiến trúc đích\nSơ đồ logic tổng hợp · không phải bằng chứng đã triển khai
+
+package "Kênh sử dụng" {
+  component "Frontend Web\nBuyer / Organizer / Admin\nTận dụng FE và renderer seatmap cũ" as WEB
+  component "Mobile\nCheck-in trực tuyến" as MOBILE
+  component "Chatbot adapter\nKênh bán vé, không phải service thứ sáu" as BOT
+}
+
+component "API Gateway\nSpring Cloud Gateway / WebFlux" as GW
+
+package "Ứng dụng nghiệp vụ — đúng 5 service / Spring Boot MVC" as APPS {
+  component "event-service\nSự kiện / địa điểm / seatmap\nCấu hình bán / khuyến mãi / hủy" as EVT
+  component "booking-service\nNguồn cung / giữ chỗ / đơn\nHạn mua / sử dụng khuyến mãi / expiry" as BKG
+  component "payment-service\nThu / hoàn / đối soát / chi trả\nĐiều phối Saga duy nhất" as PAY
+  component "ticket-service\nPhát hành / QR / gửi vé\nCheck-in" as TKT
+  component "user-service\nHồ sơ / đăng ký organizer\nQuyền nghiệp vụ / follow" as USR
+}
+
+package "Hạ tầng ứng dụng và danh tính" {
+  queue "RabbitMQ\nLệnh / sự kiện bất đồng bộ" as MQ
+  component "Keycloak\nOIDC / Code + PKCE / JWT\nTài khoản / role / session" as KC
+  component "Config Server\nCấu hình không nhạy cảm" as CFG
+  component "Discovery Server\nEureka" as DISC
+  database "Redis\nCache khi có nhu cầu cụ thể\nKhông là nguồn sự thật tồn kho" as REDIS
+}
+
+package "Dữ liệu — quyền truy cập riêng theo owner" {
+  node "Một PostgreSQL instance — 5 database riêng" {
+    database "Event DB\nevent_schema" as EDB
+    database "Booking DB\nbooking_schema" as BDB
+    database "Payment DB\npayment_schema" as PDB
+    database "Ticket DB\nticket_schema" as TDB
+    database "keycloak_db\nBảng nội bộ do Keycloak quản lý" as KDB
+  }
+  database "MongoDB / User\n4 collection nghiệp vụ" as MDB
+}
+
+package "Quan sát tập trung" {
+  rectangle "Nguồn telemetry (nhóm quy ước, không phải service)\nỨng dụng: OTel Java agent + log JSON + Actuator/Micrometer\nHạ tầng: Keycloak / DB / broker / host và tiến trình quan sát" as SIGNALS #F0F0F0
+  component "OpenTelemetry Collector\nNhận / xử lý / chuyển log và trace" as COL
+  database "Tempo\nTrace" as TEMPO
+  database "Loki\nLog" as LOKI
+  database "Prometheus\nMetric" as PROM
+  component "Grafana\nDashboard / tìm log và trace" as GRAF
+}
+
+package "RCA — một đơn vị triển khai riêng trong FlashTicket" {
+  component "Cơ chế RCA\nĐồ thị phụ thuộc / ánh xạ bằng chứng\nPhát hiện / lan truyền / xếp hạng" as RCA #E8F5E9
+  component "Lớp giải thích\nNhận kết quả sau xếp hạng\nLọc dữ liệu trước khi gọi AI" as EXPLAIN #E8F5E9
+}
+
+package "Dịch vụ bên ngoài" {
+  cloud "VNPay\nSandbox trước / không dùng thử tải" as VNP
+  cloud "SMTP\nGửi email vé" as SMTP
+  cloud "Gemini API\nGiải thích sau xếp hạng" as GEM
+}
+
+WEB --> GW : HTTPS / API
+MOBILE --> GW : HTTPS / API
+BOT --> GW : Hợp đồng công bố
+WEB --> KC : Đăng nhập / PKCE
+MOBILE --> KC : Đăng nhập / PKCE
+GW --> EVT
+GW --> BKG
+GW --> PAY
+GW --> TKT
+GW --> USR
+
+EVT --> EDB : Chỉ DB của mình
+BKG --> BDB
+PAY --> PDB
+TKT --> TDB
+USR --> MDB
+KC --> KDB
+USR --> KC : Admin API / cấp quyền
+
+EVT ..> MQ : Công bố cấu hình / hủy
+BKG ..> MQ : Nhận và phát
+PAY ..> MQ : Lệnh / kết quả Saga
+TKT ..> MQ : Nhận lệnh / phát kết quả
+PAY --> BKG : HTTP nội bộ theo B13\nSnapshot / đóng băng thanh toán
+PAY --> VNP : Khởi tạo / query / refund
+VNP --> GW : IPN HTTPS → Payment
+TKT --> SMTP : Giao vé / retry
+
+APPS ..> KC : JWT: kiểm chữ ký / issuer / audience\nJWKS, không gọi đăng nhập mỗi request
+GW ..> KC : JWT / JWKS
+APPS ..> CFG : Đọc cấu hình
+APPS ..> DISC : Đăng ký / tra cứu khi dùng
+GW ..> CFG
+GW ..> DISC
+
+APPS ..> SIGNALS : Log / trace / metric
+GW ..> SIGNALS
+SIGNALS ..> COL : Log JSON / trace
+COL ..> TEMPO : Trace
+COL ..> LOKI : Log
+PROM --> SIGNALS : Scrape metric endpoint / exporter
+GRAF --> TEMPO : Query
+GRAF --> LOKI : Query
+GRAF --> PROM : Query
+RCA --> TEMPO : Chỉ đọc
+RCA --> LOKI : Chỉ đọc
+RCA --> PROM : Chỉ đọc
+RCA --> EXPLAIN : Xếp hạng + bằng chứng
+EXPLAIN --> GEM : Bằng chứng đã lọc
+
+note bottom of APPS
+  Transaction chỉ trong datastore của owner; không JOIN/ghi xuyên DB.
+  Outbox/inbox và worker nằm trong service/DB tương ứng,
+  không tạo thêm outbox-service, saga-service hay notification-service.
+  Một Saga: Payment điều phối thu tiền → phát vé → bù trừ.
+  Hủy sự kiện: phản ứng một chiều có retry, không là Saga thứ hai.
+end note
+
+note bottom of REDIS
+  Không vẽ client cache cụ thể khi chưa có nhu cầu đã xác định.
+  Gateway/Config/Discovery + 5 service = 8 ứng dụng Spring.
+  Broker, DB, Keycloak và stack quan sát không tạo bằng Initializr.
+end note
+
+note bottom of RCA
+  Không truy DB nghiệp vụ; không gọi API ghi; không tự sửa hệ thống.
+  Hai khối RCA và giải thích cùng một đơn vị triển khai.
+  Gemini lỗi không làm mất kết quả xếp hạng.
+  OPEN: người nhận / UI-API kết quả (RES-039), tập node/metric RCA.
+end note
+
+legend bottom
+  |= Cách đọc |= Ý nghĩa |
+  | Nét liền | API, truy dữ liệu hoặc trao đổi trực tiếp; không mô tả thứ tự |
+  | Nét đứt | Messaging, telemetry hoặc phụ thuộc cấu hình; đọc nhãn để phân biệt |
+  | Liên kết MQ | Kết nối producer/consumer tổng hợp; chiều bản tin chi tiết xem B13/B14 |
+  | Phạm vi | Thành phần phần mềm; không liệt kê từng bảng, endpoint hoặc worker |
+  | Vận hành | Secret ngoài Git, credential theo owner; backup DB/Mongo/realm và khóa QR |
+  | AWS | Bố trí mục tiêu 2 máy theo B11-C; sơ đồ này không xác nhận hiện trạng hoặc HA |
+  | Chưa chốt | Nhà cung cấp lưu ảnh/background không được tự bổ sung vào sơ đồ |
+  | Kiểm thử về sau | Cổng giả lập / thử tải / chèn lỗi là công cụ test, không thêm service nghiệp vụ |
+endlegend
+@enduml
