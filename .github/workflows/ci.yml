@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  maven:
+    name: Maven / ${{ matrix.application }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - application: API Gateway
+            path: infrastructure/api-gateway
+          - application: Config Server
+            path: infrastructure/config-server
+          - application: Discovery Server
+            path: infrastructure/discovery-server
+          - application: Event Service
+            path: services/event-service
+          - application: Booking Service
+            path: services/booking-service
+          - application: Payment Service
+            path: services/payment-service
+          - application: Ticket Service
+            path: services/ticket-service
+          - application: User Service
+            path: services/user-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            ${{ matrix.path }}/pom.xml
+            ${{ matrix.path }}/.mvn/wrapper/maven-wrapper.properties
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x ./mvnw
+        working-directory: ${{ matrix.path }}
+
+      - name: Verify
+        run: ./mvnw -B -ntp verify
+        working-directory: ${{ matrix.path }}
+
+      - name: Upload Maven reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: maven-reports-${{ matrix.application }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ matrix.path }}/target/surefire-reports/**
+            ${{ matrix.path }}/target/failsafe-reports/**
+            ${{ matrix.path }}/target/site/jacoco/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dependency_review:
+    name: Dependency Review
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
+  codeql:
+    name: CodeQL
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  required:
+    name: Required
+    if: ${{ always() }}
+    needs: [maven, dependency_review, codeql]
+    permissions: {}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce required CI results
+        shell: bash
+        env:
+          MAVEN_RESULT: ${{ needs.maven.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          failed=0
+          if [[ "$MAVEN_RESULT" != "success" ]]; then
+            echo "Maven verification did not succeed: $MAVEN_RESULT"
+            failed=1
+          fi
+          if [[ "$CODEQL_RESULT" != "success" ]]; then
+            echo "CodeQL did not succeed: $CODEQL_RESULT"
+            failed=1
+          fi
+          if [[ "$EVENT_NAME" == "pull_request" && "$DEPENDENCY_REVIEW_RESULT" != "success" ]]; then
+            echo "Dependency Review did not succeed on this pull request: $DEPENDENCY_REVIEW_RESULT"
+            failed=1
+          fi
+          exit "$failed"

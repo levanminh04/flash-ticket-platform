@@ -31,3 +31,11 @@ Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead 
 4. [Trạng thái triển khai](docs/project/implementation-status.md) và [sổ quyết định](docs/project/decision-register.md).
 
 Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệu lực; không dùng tên/nhóm/phân công cũ thay nguồn 18/09.
+
+## Build và CI
+
+Mỗi pull request vào `main` chạy Maven verification cho cả tám ứng dụng, Dependency Review và CodeQL. Chỉ check tổng hợp **`CI / Required`** báo thành công khi các gate bắt buộc của sự kiện đó đều đạt.
+
+Để chạy cùng gate Maven ở máy cá nhân, vào thư mục ứng dụng và chạy `./mvnw -B -ntp verify` (Windows: `.\mvnw.cmd -B -ntp verify`). Lệnh này kiểm Java 21, chạy test, Spotless formatting check, tạo báo cáo JaCoCo tại `target/site/jacoco/` và chạy SpotBugs. `./mvnw spotless:apply` sửa định dạng Java theo Google Java Format; CI chỉ kiểm tra, không tự sửa mã. SpotBugs phân tích bytecode để tìm mẫu lỗi.
+
+Dependency Review chặn dependency mới hoặc thay đổi có lỗ hổng mức HIGH/CRITICAL. CodeQL phân tích mã Java/Kotlin để tìm lỗ hổng bảo mật và lỗi code. Cả hai chạy trong GitHub Actions; Maven-side checks có thể tái hiện bằng Maven Wrapper như trên.
