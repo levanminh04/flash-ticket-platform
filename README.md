@@ -1,27 +1,33 @@
 # FlashTicket Platform
 
-Đồ án tốt nghiệp về hệ thống đặt vé sự kiện trực tuyến, tập trung vào tính nhất quán và độ tin cậy trong vòng đời vé: giữ chỗ, thanh toán, phát hành vé và check-in trực tuyến.
+**Đề tài chính thức:** Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố.
 
-Repository này là không gian phân tích, thiết kế, hiện thực và đánh giá chính thức của đồ án. Kiến trúc được lập luận từ miền nghiệp vụ, bất biến, quyền sở hữu dữ liệu và thuộc tính chất lượng; mọi tài sản mã được đưa vào phải phù hợp các quyết định đích và vượt qua kiểm thử của phiên bản ĐATN.
+[Tên và nhiệm vụ nguyên văn, hiệu lực 18/09/2026](docs/evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Đồ án xây dựng hệ thống bán vé phân tán, đánh giá các giao dịch dưới tải/đồng thời và ứng dụng đồ thị phụ thuộc cùng log, trace, metrics để giám sát và hỗ trợ chẩn đoán. Phương pháp được thực nghiệm trên dữ liệu công khai trước rồi thử trên FlashTicket; kết quả có giao diện minh họa.
 
-## Trạng thái
+## Nhóm và ưu tiên
 
-Đang ở **Giai đoạn 1 — Vấn đề và bối cảnh**. Giai đoạn 0 đã hoàn thành phần kỹ thuật; câu hỏi cho giảng viên và phân vai chi tiết đang chờ nhóm thực hiện. Chưa chốt danh sách service, ranh giới dữ liệu, Saga hoặc cách bố trí hai EC2; vì vậy chưa chuyển mã nguồn nghiệp vụ vào repository này.
+Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead giai đoạn đầu và phụ trách chính RCA. Phân công chi tiết chỉ lấy tại [phạm vi phụ trách](docs/project/roles.md).
 
-## Ràng buộc đã chốt
+**Luồng chính chạy đúng → dữ liệu quan sát dùng được → thử tải/mô phỏng lỗi và RCA. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian.**
 
-- Không quá 8 service nghiệp vụ.
-- Không quá 3 luồng Saga.
-- Sử dụng 2 EC2; cách bố trí thành phần chưa chốt.
-- Mobile là client dùng chung backend; không làm check-in offline.
-- CI/CD là phần hỗ trợ, không phải trục nghiên cứu.
-- Trợ lý chẩn đoán chỉ đọc: log có cấu trúc → Drain → chọn ngữ cảnh → LLM API → tư vấn.
+## Trạng thái ngày 18/09/2026
+
+Đầu **Giai đoạn 5 — hiện thực**. Kiến trúc PA-6 và bộ thiết kế B12–B16 đã được duyệt; có năm project nghiệp vụ và ba project Spring hỗ trợ trong commit `091fca1`. Đây mới là bộ khung, chưa có bằng chứng nghiệp vụ/build/E2E đã đạt. Chi tiết tại [tiến độ](docs/project/implementation-status.md) và [bắt đầu hiện thực](docs/architecture/implementation-readiness.md).
+
+## Ràng buộc còn hiệu lực
+
+- Năm service nghiệp vụ: event, booking, payment, ticket, user; một Saga do Payment điều phối. Trần vẫn là tám service nghiệp vụ và ba Saga.
+- Hai EC2 theo B11-C, không HA; cấu hình mục tiêu không phải bằng chứng triển khai thực.
+- Dữ liệu sở hữu độc lập; không truy cập chéo datastore của service khác.
+- RCA chỉ đọc, không tự kết luận cuối cùng hoặc tự sửa nghiệp vụ; lớp giải thích nhận kết quả xếp hạng.
+- Mobile tùy thời gian; check-in offline ngoài phạm vi. Bất biến check-in backend vẫn giữ.
+- CI baseline là phần việc hỗ trợ của Minh; không phải mục tiêu nghiên cứu.
 
 ## Bắt đầu từ đâu
 
-1. Đọc [bối cảnh và mong muốn](docs/boi-canh-va-mong-muon.md).
-2. Theo [quy trình làm việc](docs/quy-trinh-lam-viec.md).
-3. Tra cứu [Tầng A](docs/tang-a-phuong-phap-nghien-cuu.md), [Tầng B](docs/tang-b-quy-trinh-ky-thuat.md) hoặc [Tầng C](docs/tang-c-quy-uoc-trinh-bay.md) khi thực hiện phiếu tương ứng.
-4. Xem [trạng thái triển khai](docs/project/implementation-status.md) trước khi bắt đầu một đầu ra mới.
+1. [Đề tài/nhiệm vụ hiện hành](docs/evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) và [phân công](docs/project/roles.md).
+2. [Bối cảnh và mong muốn](docs/boi-canh-va-mong-muon.md), phân biệt rõ khối hiện hành với lịch sử.
+3. [Quy trình làm việc](docs/quy-trinh-lam-viec.md) và [chỉ mục tài liệu](docs/README.md).
+4. [Trạng thái triển khai](docs/project/implementation-status.md) và [sổ quyết định](docs/project/decision-register.md).
 
-Mọi quyết định kiến trúc quan trọng được lưu trong `docs/adr/`. Mọi bí mật phải nằm ngoài Git; repository chỉ chứa tệp `.env.example` không có giá trị thật.
+Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệu lực; không dùng tên/nhóm/phân công cũ thay nguồn 18/09.

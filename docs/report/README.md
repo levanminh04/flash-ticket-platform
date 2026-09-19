@@ -5,11 +5,13 @@ Thư mục này chứa khung nội dung của quyển báo cáo và các bản b
 | Tạo tác | Vòng đời | Cách sử dụng |
 |---|---|---|
 | `report-outline.md` | Khung nội dung sống | Dẫn đường cho nội dung quyển báo cáo cuối; chưa khóa số chương trước khi có mẫu ĐATN hiện hành |
-| `bao-cao-2-tuan-2026-09-05.md` | Bản nộp theo mốc `DH-MOC` | Sáu mục đúng thứ tự thư định hướng. Chuyển sang `.docx` khi nộp |
+| `bao-cao-2-tuan-2026-09-05.md` | `HISTORICAL_SUPERSEDED` | Giữ dấu vết bản đầu; không dùng các kết luận chưa hiệu chỉnh |
+| `../research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` | Nguồn nghiên cứu hiện hành, `REVIEW_READY` | Kiểm định 11 CSV/990 dòng kết quả, mâu thuẫn, tính khả thi và cổng chấp nhận MyRCA |
+| `C:/Users/84583/Downloads/BaoCao_KhaoSat_RCA_v2.docx` | Bản Word v2 cần rà lại tên/nhiệm vụ/phân công trước khi dùng hiện hành; đợt này không sửa file Word | Bản giao tiếp cho nhóm/giảng viên; không ghi đè bản Word gốc |
 
 ## Quy tắc sử dụng
 
-- **Đề tài chính thức** là *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"*; nguyên văn thư tại [`../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md). Mọi bản báo cáo phải dùng đúng tên này.
+- **Đề tài chính thức:** *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*, theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), hiệu lực 18/09/2026. Báo cáo mới dùng tên này và nhóm bốn người tại [roles.md](../project/roles.md); bản lịch sử giữ ngày và nhãn lịch sử.
 - Bản báo cáo **không** tự trở thành nguồn quyết định nghiệp vụ hoặc kiến trúc. Khi nội dung khác với sổ quyết định, tài liệu phương pháp hoặc tạo tác `B2`–`B14` đã duyệt, phải sửa bản báo cáo theo nguồn có thẩm quyền chứ không dùng báo cáo để đổi ngược thiết kế.
 - Mỗi khẳng định trong báo cáo phải phân biệt được **phần nhóm tự làm** với **phần trích từ nguồn đã công bố**.
 - Không đưa mã truy vết nội bộ, sổ `OPEN` hay trạng thái governance vào quyển báo cáo nếu chúng không giúp giải thích một quyết định.

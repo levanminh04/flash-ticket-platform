@@ -1,9 +1,11 @@
 # Sẵn sàng hiện thực — từ bộ thiết kế đến lát cắt chạy được
 
+> **Cập nhật ngữ cảnh 18/09:** theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) và [phân công](../project/roles.md). Tám project khung đã có trong commit `091fca1`; chưa có bằng chứng build/E2E đạt. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`); chuẩn kỹ thuật được duyệt 14/09 giữ nguyên.
+
 - Phiên bản: `READY-v0.1`; ngày: 2026-09-14; trạng thái: `APPROVED`.
 - Người duyệt: Lê Văn Minh; ngày duyệt: 2026-09-14 (GOV-144). Phân lớp: `FORMATION`.
 - Đầu vào: B11-C-v0.3 `APPROVED`; quyết định GOV-101–142 và PRJ-010–024 còn hiệu lực; B12/B13/B14/B16 trong đợt hoàn thiện hiện tại. B12-v0.2/B13-v0.1/B14-v0.1/B16-v0.1 đã được Minh duyệt theo thứ tự phụ thuộc tại GOV-144.
-- Phạm vi: chỉ dẫn chia việc/khởi tạo, không phải bằng chứng đã tạo project, build, deploy hoặc đăng nhập thật.
+- Phạm vi: chỉ dẫn chia việc/khởi tạo, không phải bằng chứng build, deploy hoặc đăng nhập thật; việc tạo project khung đã được ghi nhận riêng ngày 18/09.
 
 ## 1. Có thể bắt đầu code khi nào?
 
@@ -70,20 +72,21 @@ Startup import bỏ qua realm đã tồn tại; muốn chứng minh cấu hình 
 | 1 — sự kiện bán được | Event draft→duyệt→công bố; Booking nhận snapshot; User identity/profile tối thiểu; FE adapter seat map | Reload giữ ghế ẩn và loại vé; không bán hidden; cấu hình version cũ không ghi đè mới |
 | 2 — đặt và trả giữ chỗ | Booking tạo đơn, áp mã, hạn mua, expiry/cancel; email đơn | Các ca tranh chấp cuối nguồn cung, trả lặp, deadline đều đạt; money integer/HALF_UP đúng vector B13 |
 | 3 — thu tiền và phát vé | Payment attempt/freeze/verify, Saga; Ticket atomic issuance; hoàn muộn/thừa/thất bại xác định | VNPay sandbox chạy một đơn thật trong sandbox; callback lặp không phát thêm vé; timeout không bị coi thành thất bại cuối |
-| 4 — giao vé và check-in | Mail/QR tải lại; mobile scan; hủy event một chiều và refund progress | Gửi lỗi không hoàn tiền; hai scan chỉ một thành công; hủy hội tụ, không mở lại nguồn cung |
+| 4 — giao vé và check-in | Mail/QR tải lại; kiểm API check-in; hủy event một chiều và refund progress. App mobile scan chỉ làm khi thực sự dư thời gian (PRJ-035) | Gửi lỗi không hoàn tiền; hai scan chỉ một thành công; hủy hội tụ, không mở lại nguồn cung |
 | 5 — phần phạm vi còn lại | Hồ sơ organizer/follow đơn giản; đọc đơn/đối soát/chi trả/CRUD đã duyệt | Không tự bỏ nghiệp vụ đã duyệt vì ít ưu tiên; không chặn lát cắt 1–4 để tô điểm CRUD |
 | 6 — tải, lỗi, RCA | Workload, cổng giả lập, fault injection có kiểm soát và thu evidence | Luồng chính đã đúng; B15/B16 có run manifest, dữ liệu đủ; đánh giá RCA theo bộ RCA |
 
-Không tự gán thành viên chưa được nhóm phân công. Với mỗi lát cắt, chỉ định một người sở hữu hợp đồng và một người review kiểm thử; FE/BE cùng dùng DTO B13, không dịch enum/money mỗi nơi một kiểu.
+Phạm vi bốn thành viên lấy tại `docs/project/roles.md`; không tự khôi phục phân công cũ hoặc giao mobile cho Tuyến. Với mỗi lát cắt, chỉ định một người sở hữu hợp đồng và một người review kiểm thử; FE/BE cùng dùng DTO B13, không dịch enum/money mỗi nơi một kiểu.
 
 ## 6. AWS đã có gì; còn thiếu gì để chạy thật?
 
-**FACT về tài liệu local, không phải live inventory:** đọc lại `Note AWS.txt` ngày 2026-09-14, SHA-256 `19F84D1D7A654A1541A052BF1FD11B8137F7B1E18B16547207D40DD1E21418AD` không đổi so với đối chiếu B12. Note ghi **một t3.small**, swap 4 GB và PostgreSQL/Keycloak/RabbitMQ/Redis/Mongo cùng port LISTEN. Không có bằng chứng trong note rằng đã triển khai đúng hai máy 8 GiB của B11-C. Không truy AWS trong lượt này, không kết luận port đang public hoặc an toàn.
+**Staged runtime baseline:** [aws-runtime-baseline.md](aws-runtime-baseline.md) là nguồn vận hành cho `CURRENT` Stage 1 và `TARGET` Stage 2–3. Theo xác nhận hiện hành của chủ đồ án, EC2 #1 `t3.small` là `TEMPORARY_CURRENT` có chủ ý cho PostgreSQL, MongoDB, RabbitMQ, Redis và Keycloak; developer chạy Spring application từ IDE/local JVM, còn Gateway/Eureka/Config Server vẫn local khi cần. Đây không phải topology cuối hay architecture defect. B11-C/B12 vẫn là target hai EC2. OTel Collector, Prometheus, Loki, Tempo và Grafana có EC2 #2 là `DERIVED_TARGET` placement; deployment, capacity, storage, version, limit và telemetry evidence vẫn là `NOT_DEPLOYED`/`RUNTIME_OPEN`. Điều đó không phải B16 acceptance. Không có AWS resource nào được kiểm hoặc sửa trong lượt tài liệu này.
 
 | Đầu vào `OPEN` / owner | Cần cung cấp hoặc kiểm tại bước nào | Chặn gì |
 |---|---|---|
-| Nhóm hạ tầng: inventory hai máy, RAM, volume, image tag/digest, resource limit | Đối chiếu B11-C; private endpoint xuyên máy; SG/firewall/TLS; health sau restart | Deploy/benchmark, **không chặn unit test/local code** |
-| Nhóm identity: HTTPS issuer, Web origin/callback, Android redirect chính xác, Keycloak/DB pin | Import realm thử sạch, registration/PKCE/token/role allow-deny tests | Đăng nhập/đăng ký E2E |
+| TEAM-AWS: inventory EC2 #1/#2, nhất là EC2 #2 capacity/disk/persistent volume/container runtime và Collector ingest endpoint | Theo thứ tự trong `aws-runtime-baseline.md`: inventory → pin image/version/tag/digest → provisional resource limit → minimum observability runtime → telemetry smoke → đo resource. Prometheus không tự scrape laptop sau NAT, nên application-metric evidence cho topology này là `NOT_RUN` | Telemetry smoke tập trung Stage 1; không chặn local JVM code hoặc được coi là B16 acceptance |
+| TEAM-AWS: stable private cross-EC2 connectivity capability | Khi Stage 2 có dependency liên tục xuyên máy, chọn/implement/document/validate cơ chế; phương thức vẫn `OPEN` | AWS integration/benchmark/demo authoritative, **không chặn unit test/local code** |
+| Nhóm identity: HTTPS issuer, Web origin/callback, Android redirect chính xác nếu thực hiện app mobile tùy thời gian, Keycloak/DB pin | Import realm thử sạch, registration/PKCE/token/role allow-deny tests | Đăng nhập/đăng ký E2E |
 | Nhóm thanh toán: merchant sandbox, secret cấp riêng, callback public HTTPS | Một lượt tạo payment→IPN→query; refund sandbox theo quyền merchant | VNPay E2E; không chặn unit test adapter |
 | Nhóm vận hành: SMTP tài khoản gửi và app password mới nếu dùng Gmail | Thử gửi vé cho địa chỉ thử được cho phép; retry có giới hạn | Delivery email; QR tải lại vẫn kiểm riêng |
 | Nhóm vận hành: bản backup và lần restore tách biệt | Kiểm database, role, QR key version và realm sau phục hồi | Tuyên bố phục hồi dữ liệu |

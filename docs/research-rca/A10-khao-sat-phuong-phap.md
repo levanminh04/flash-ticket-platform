@@ -1,220 +1,209 @@
-# A10 — Khảo sát phương pháp chẩn đoán nguyên nhân gốc và lập luận chọn phương pháp thực nghiệm
+# A10 — Khảo sát phương pháp chẩn đoán nguyên nhân gốc và lập luận chọn đối chứng
 
-- **Phiên bản:** `A10-v0.3`
-- **Trạng thái:** `DRAFT` — khảo sát phục vụ báo cáo hai tuần; chưa được duyệt
-- **Người duyệt:** — (chờ Lê Văn Minh)
+> **Căn cứ hiện hành từ 18/09:** [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). DH-* bên dưới giữ nguồn gốc khảo sát/kiểm định lịch sử; không là tên hoặc toàn bộ nhiệm vụ hiện hành. Số liệu và trạng thái khoa học của phiếu không được đổi bởi cập nhật này. Minh phụ trách chính RCA; phương pháp thử trên dữ liệu công khai trước rồi trên FlashTicket.
+
+- **Phiên bản:** `A10-v0.5`
+- **Trạng thái:** `REVIEW_READY` — đã hiệu chỉnh phả hệ công bố và mâu thuẫn MM-CIRCA theo nguồn chính chủ; chờ Lê Văn Minh và giảng viên phản biện
+- **Phân lớp:** `FORMATION`
+- **Người duyệt:** —
 - **Ngày duyệt:** —
-- **Đầu vào:** `A7-khai-niem-rca.md` (**`A7-v0.2`** — lời khai này trước 2026-08-29 ghi `v0.1`; `A7-v0.2` sửa §1 từ *"ba vai"* thành **bốn vai**, và §1 chính là mục mà §1 của tệp này dẫn tới); nguồn `T-06`–`T-14` trong `source-register.md`, trong đó **Bảng 6 toàn văn của `T-06` đã được mở và đối chiếu** ngày 2026-08-26; [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md) — nguyên văn, `FACT`
-- **Đi vào báo cáo:** phần Cơ sở lý thuyết — các hướng tiếp cận hiện có; và phần Phương pháp — lý do chọn tập phương pháp đối chứng
-- **Ràng buộc:** tài liệu này khảo sát và chọn **tập phương pháp để chạy đối chứng**. Nó **không** đề xuất phương pháp của đồ án, **không** tuyên bố tính mới, **không** chốt kiến trúc.
+- **Đầu vào:** `A7-v0.3`, `A8-v0.3`, `A9-v0.3`, `E1-v0.2`; nguồn `T-06`–`T-20`; [thư định hướng ngày 2026-08-22](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md)
+- **Đi vào báo cáo:** cơ sở lý thuyết, phương pháp thực nghiệm, giới hạn tái lập và lập luận cho MyRCA
+- **Ranh giới:** phiếu này phân tích phương pháp RCA. Nó không chọn kiến trúc `B11-C`, không chốt tập node hay chuẩn quan sát của FlashTicket và không đọc repository cũ.
+
+> **Kết luận:** không có phương pháp nào mạnh trong mọi bối cảnh. Một pipeline chạy hết không chứng minh RCA đúng. Đóng góp phù hợp của nhóm là **tổ hợp có kiểm chứng**, còn thiết kế và hiệu quả MyRCA vẫn là `CANDIDATE`/`OPEN` cho tới khi vượt cổng đánh giá tại `E1`.
 
 ---
 
-## 1. Bốn họ phương pháp
+## 1. Bốn họ cơ chế cần phân biệt
 
-Phân họ theo **cơ chế lõi** và **nguồn dữ liệu**, không theo năm công bố. Chi tiết thuật ngữ ở `A7` §4.
-
-### 1.1 Họ thống kê thuần — không dựng đồ thị
-
-Không xây bất kỳ đồ thị nào. Coi mỗi chỉ số là một chuỗi thời gian, tìm thời điểm chuỗi đổi hành vi, rồi xếp hạng bằng kiểm định thống kê.
-
-| Phương pháp | Nguồn | Cơ chế | Đầu vào |
+| Họ | Cơ chế lõi | Bằng chứng bắt buộc | Điểm mù điển hình |
 |---|---|---|---|
-| **BARO** | `T-09`, FSE 2024 | Multivariate Bayesian Online Change Point Detection để phát hiện bất thường; kiểm định giả thuyết phi tham số để xếp hạng | metric |
-| ε-Diagnosis | trong `T-06` | Kiểm định hai mẫu trên chuỗi số liệu | metric |
+| Thống kê thuần | So sánh phân phối hoặc độ lệch chuỗi thời gian rồi xếp hạng | metric có nhãn thực thể, mốc thời gian và cửa sổ hợp lệ | Dễ xếp cao hệ quả có biên độ lớn thay vì nguyên nhân |
+| Suy luận nhân quả | Học quan hệ phụ thuộc thống kê và lần ngược ứng viên | metric đồng bộ, đủ mẫu; giả định của thuật toán phải phù hợp | Cấu trúc học được có thể bất ổn khi số biến lớn hoặc cửa sổ ngắn |
+| Đồ thị lời gọi từ trace | Dựng quan hệ operation/service từ span rồi lan truyền/xếp hạng | trace ID, span ID, parent span, operation, thời gian, duration, status | Mù tại service không instrument, trace đứt hoặc lấy mẫu thiên lệch |
+| Khai phá trace không lan truyền | So sánh trace bình thường/bất thường và tập thực thể xuất hiện | trace đầy đủ và ranh giới normal/abnormal | Không nhìn thấy lỗi chỉ biểu hiện ở metric; coverage thấp làm mất ứng viên |
 
-Đóng góp đáng chú ý của BARO theo `T-09`: bước xếp hạng được thiết kế để **ít nhạy cảm với độ chính xác của bước phát hiện bất thường** so với các công trình trước. Đây là bài học thiết kế đáng giữ: không dồn toàn bộ đặt cược vào bộ phát hiện bất thường.
+Log là một nguồn bằng chứng riêng: có thể chấm theo mức tăng của mẫu log hoặc hợp nhất với metric. Kỹ thuật gom mẫu log chỉ là tiền xử lý; nó không tự dựng đồ thị và không tự chọn nguyên nhân.
 
-### 1.2 Họ suy luận nhân quả — đồ thị suy ra từ thống kê
+---
 
-Có cấu trúc đồ thị, nhưng đồ thị **không lấy từ trace**. Nó được suy ra bằng kiểm định độc lập có điều kiện trên dữ liệu số.
+## 2. Tập phương pháp thực sự được kiểm định
 
-| Phương pháp | Nguồn | Cơ chế | Đầu vào |
+Báo cáo giữ **sáu mục phương pháp**, nhưng hai biến thể đa nguồn nằm chung một mục nên có **bảy phương pháp chạy được**. `Dummy` là đối chứng ngẫu nhiên, không phải phương pháp RCA thứ tám.
+
+| Mục trong báo cáo | Phương pháp chạy | Họ | Mô tả công bố và hành vi mã đã kiểm tra |
 |---|---|---|---|
-| **RCD** | `T-10`, NeurIPS 2022 | Coi sự cố như một **can thiệp** lên nguyên nhân gốc; học phân cấp và cục bộ, **không học toàn bộ đồ thị nhân quả**, chỉ chạy kiểm định để tìm đích can thiệp | metric |
-| CIRCA, MicroCause, CausalRCA, EasyRCA, RUN | trong `T-06` | Các biến thể phát hiện cấu trúc nhân quả rồi lần ngược | metric |
+| 1 | BARO | thống kê thuần | metric |
+| 2 | CIRCA | suy luận nhân quả | metric |
+| 3 | TraceRCA | trace, không lan truyền | trace |
+| 4 | MicroRank | đồ thị lời gọi + PageRank | trace |
+| 5 | MM-BARO; MM-CIRCA | đa nguồn | Bài WWW 2025 mô tả các biến thể đa nguồn xử lý metric cùng time series từ log và trace. Tại commit `6018cde`, MM-BARO có nhánh trace; loader của MM-CIRCA nạp/truyền cả ba nguồn nhưng hàm `mmcirca` chỉ đọc metric và log. Modality thật của 11 CSV vẫn `OPEN` |
+| 6 | PC+RandomWalk | đồ thị học từ metric + lan truyền | metric, nhưng bản triển khai hiện tại có lỗi làm kết quả không kiểm chứng được tác dụng của đồ thị |
+| Đối chứng | Dummy | ngẫu nhiên | danh sách ứng viên; phải có seed và manifest |
 
-Đây là dòng mà bài `T-07` — nguồn giảng viên gửi — khảo sát. `T-07` đánh giá 9 phương pháp phát hiện nhân quả và 21 phương pháp chẩn đoán.
+TORAI (`T-19`) và GALA+ (`T-20`) chỉ đặt **ranh giới nghiên cứu gần nhất**. Chúng không được thêm vào tập thực nghiệm chính sau khi đã xem kết quả, vì như vậy sẽ đổi giao thức giữa chừng. TORAI cung cấp mốc công bố mới có mã; GALA+ là prior art quan trọng cho fusion bằng RRF nhưng chưa có mã công khai do thỏa thuận công nghiệp.
 
-### 1.3 Họ đồ thị phụ thuộc dựng từ trace — đúng hướng giảng viên định hướng
+**Quy tắc đọc MM-CIRCA:** luôn tách ba lớp bằng chứng. “Tác giả mô tả phương pháp thế nào”, “mã công khai tại commit cụ thể thực sự tiêu thụ trường nào” và “lượt chạy tạo CSV dùng mã/patch nào” là ba câu hỏi khác nhau. Hai lớp đầu đã kiểm được; lớp thứ ba chưa có run manifest và patch hash nên không được tự suy ra.
 
-Đồ thị lấy trực tiếp từ quan hệ gọi trong trace, rồi lan truyền trên đồ thị đó.
+---
 
-| Phương pháp | Nguồn | Cơ chế | Đầu vào |
-|---|---|---|---|
-| **MicroRank** | `T-11`, WWW 2021 | Phân biệt trace bất thường và bình thường; personalized PageRank gán trọng số cho các trace; phân tích phổ mở rộng để xếp hạng | trace |
-| MicroRCA | `T-12`, NOMS 2020 | Đồ thị thuộc tính mô hình hóa lan truyền bất thường xuyên **service và máy chủ**; trích đồ thị con bất thường; personalized PageRank | metric + quan hệ gọi |
+## 3. Kiểm định từng phương pháp
 
-### 1.4 Họ dùng trace nhưng không lan truyền
+### 3.1 BARO — baseline metric mạnh, nhưng phải tách bài báo khỏi cấu hình RCAEval
 
-| Phương pháp | Nguồn | Cơ chế | Đầu vào |
-|---|---|---|---|
-| **TraceRCA** | `T-13`, IWQoS 2021 | Ba bước: phát hiện trace bất thường → khai phá tập service nghi ngờ → xếp hạng. Giả thiết lõi: service có **càng nhiều trace lỗi và càng ít trace bình thường** đi qua thì càng khả nghi | trace |
+BARO gốc (`T-09`) kết hợp phát hiện điểm đổi đa biến bằng MBOCPD với xếp hạng thống kê bền vững. Đường chạy RCAEval đã kiểm tra không thực thi toàn bộ quy trình đó: nó dùng thời điểm tiêm lỗi đã biết để chia trước/sau, chuẩn hóa bền vững rồi lấy độ lệch lớn nhất để xếp hạng.
 
-### 1.5 Ngoài bốn họ — để tham chiếu, không đưa vào thực nghiệm kỳ này
+- **Mạnh:** ít phụ thuộc trace; kết quả trên Train Ticket và Online Boutique cho thấy đây là baseline cần phải vượt.
+- **Yếu:** cần mốc chia cửa sổ hợp lệ; có thể ưu tiên một metric hậu quả có biên độ lớn; tên metric phải ánh xạ chính xác về thực thể.
+- **Hợp với:** CPU, bộ nhớ, đĩa và những lỗi làm chuỗi số thay đổi rõ.
+- **Không được tuyên bố:** kết quả cấu hình RCAEval là tái lập toàn bộ BARO gốc.
 
-| Nhóm | Đại diện | Vì sao ghi nhận |
+### 3.2 CIRCA — mạnh trên Online Boutique, nhưng nhạy với số biến và cấu trúc học được
+
+CIRCA học quan hệ nhân quả từ metric rồi truy vết nguyên nhân. Trong 90 ca Online Boutique đã kiểm định, CIRCA đạt `AC@1 = 0,667`, cao nhất trong nhóm có tệp kết quả của hệ này.
+
+- **Mạnh:** có khả năng phân biệt nguyên nhân với hệ quả tốt hơn xếp hạng độ lệch thuần trong bối cảnh đã đo.
+- **Yếu:** chi phí và độ ổn định giảm khi số metric tăng; cần đồng bộ thời gian và đủ mẫu; cấu trúc học từ quan sát không mặc nhiên là phụ thuộc kiến trúc thật.
+- **Rủi ro pipeline chạy nhưng sai:** thuật toán vẫn trả hạng khi đồ thị học sai, hoặc nhánh fallback che giấu lỗi cấu trúc.
+
+### 3.3 TraceRCA — khoanh vùng tốt khi trace đủ, nhưng coverage là điều kiện sống còn
+
+TraceRCA (`T-13`) phát hiện trace bất thường, khai phá tập service nghi ngờ rồi xếp hạng. Nó không dùng PageRank.
+
+- **Mạnh:** giải thích được bằng trace cụ thể; trên Train Ticket đạt `AC@1 = 0,644`, gần BARO `0,667`.
+- **Yếu:** service không xuất hiện trong trace gần như không có cơ hội được chọn; timestamp, operation và parent-child phải đúng.
+- **Bằng chứng coverage:** tập ứng viên quan sát trong CSV chỉ có 7 tên ở Online Boutique và 20 ở Train Ticket, thấp hơn đáng kể tập ứng viên đánh giá.
+- **Điều kiện FlashTicket:** phải truyền context qua HTTP và RabbitMQ; nếu producer/consumer không nối trace, nguyên nhân ở luồng bất đồng bộ có thể biến mất khỏi đồ thị.
+
+### 3.4 MicroRank — đúng hướng đồ thị nhưng hợp đồng đầu vào rất chặt
+
+MicroRank (`T-11`, `T-16`) phân tách trace bình thường/bất thường, xây phổ thực thi và dùng personalized PageRank để xếp hạng operation/service.
+
+- **Mạnh:** dùng cả cấu trúc gọi và sự khác nhau giữa hai nhóm trace; phù hợp lỗi độ trễ lan truyền theo request path.
+- **Yếu:** cần đầy đủ trace ID, span ID, parent span, operation, duration, status và đủ hai nhóm trace; nhạy với sampling và điểm mù instrumentation.
+- **Kết quả kiểm định:** trên Train Ticket, `AC@1 = 0,144`; 56/90 ca không có hạng ground truth. Nếu bỏ các ca thiếu thay vì tính thất bại, MRR sẽ bị thổi phồng từ `0,237` lên khoảng `0,627`.
+- **Với LEMMA:** phải kiểm schema trace thô trước. Viết adapter về schema chuẩn; không sửa thuật toán riêng cho từng dataset và không gọi là MicroRank hợp lệ khi thiếu liên kết span.
+
+### 3.5 MM-BARO và MM-CIRCA — mô tả công bố, mã công khai và lượt chạy không đồng nhất
+
+Ba lớp bằng chứng hiện có là:
+
+- **Công bố của tác giả (`T-06`):** phần baseline nói mã của multi-source BARO, RCD và CIRCA được cập nhật để xử lý time series từ log và trace; README hiện hành diễn đạt cả ba phương pháp dùng metric, log và trace.
+- **Mã công khai tại commit `6018cde` (`T-15`):** loader nạp `logts`, `tracets_err`, `tracets_lat` rồi truyền cả ba cùng metric. MM-BARO có dùng time series trace khi khả dụng; riêng hàm `mmcirca` chỉ lấy `metric` và `logts`, hạ mẫu metric còn 15 giây, lọc tương quan rồi chạy PC + RHT. Release 1.4.0 của tác giả cũng mô tả MM-CIRCA là hợp nhất metric và log time series.
+- **Lượt chạy tạo 11 CSV:** chưa có run manifest, trạng thái working tree hoặc patch hash. Commit ghi trong CSV không chứng minh không có bản vá cục bộ, nên modality thực sự của lượt chạy là `OPEN`.
+
+Vì modality thực tế của run, tần suất mẫu, số biến và nhánh thuật toán chưa được cô lập, không thể gán chênh lệch kết quả cho “thêm log” hay “thêm trace”. Trên các CSV được cung cấp, MM-BARO gần BARO còn MM-CIRCA thấp hơn CIRCA; sau bootstrap theo cụm và hiệu chỉnh Holm, bằng chứng cho kết luận “MM-CIRCA gây hại” chưa đủ bền (`p_Holm = 0,0694` cho AC@1), và nguyên nhân không được quy cho một modality cụ thể.
+
+### 3.6 PC+RandomWalk — bản hiện tại không đo được giá trị của đồ thị
+
+Kiểm tra mã RCAEval tại commit được CSV khai báo cho thấy khi điểm bất thường đầu vào bằng 0, ma trận chuyển tiếp trở thành phân phối đều; điểm bắt đầu dùng lựa chọn ngẫu nhiên không seed; số bước chỉ bằng số node. Khi đó cạnh đồ thị hầu như không quyết định kết quả.
+
+Do đó:
+
+- kết quả `AC@1 = 0,033` trên Online Boutique chỉ mô tả **bản triển khai lỗi/không xác định**;
+- không được dùng nó để kết luận đồ thị phụ thuộc vô ích;
+- muốn đánh giá lại phải sửa bằng một test đồ thị nhỏ có đáp án, seed cố định, kiểm tổng xác suất và so ablation có/không cạnh.
+
+### 3.7 Dummy — mức sàn, không phải một thuật toán RCA
+
+Dummy phải dùng cùng candidate manifest với phương pháp được so, lặp nhiều seed và công bố khoảng tin cậy. CSV hiện để trống seed, nên con số chỉ là một lượt đối chứng chưa đủ tái lập.
+
+---
+
+## 4. Vì sao không được gọi so sánh hiện tại là “2×2”
+
+Một thiết kế nhân tố 2×2 hợp lệ cần giữ nguyên mọi thứ ngoài hai yếu tố đang xét. Dữ liệu hiện tại không đạt điều đó:
+
+| Cặp | Thay đổi ngoài modality | Hệ quả |
 |---|---|---|
-| Đa phương thức | Nezha (FSE 2023), MULAN, CORAL, MRCA, PDiagnose | Hợp nhất log, metric, trace thành **sự kiện** rồi khai phá mẫu. Nezha cho nguyên nhân ở mức **vùng mã nguồn và loại tài nguyên** — mịn hơn mức service của MicroRank và TraceRCA |
-| Dựa log | LogRCA | Chọn tập dòng log tối thiểu liên quan nguyên nhân. Đây là nhánh mà Drain đóng vai trò **tiền xử lý — gom dòng log thành mẫu, trước khi ánh xạ lên đồ thị**; Drain không tự làm việc ánh xạ. Nhóm từng chọn kỹ thuật này cho hướng cũ; nó vẫn là một **ứng viên** khi thiết kế bước xử lý log của `DH-MT2`, **chưa chốt dùng** (`RES-035`) |
-| LLM và tác tử | RCACopilot (EuroSys 2024), Flow-of-Action (WWW 2025), Praxis, mABC | Dự đoán loại nguyên nhân và sinh diễn giải. RCACopilot công bố độ chính xác 0,766 trên dữ liệu sự cố thật của Microsoft |
+| BARO → MM-BARO | hạ mẫu metric 15 giây, đường tiền xử lý khác, có thể thêm nhiều loại dữ liệu | Chênh lệch không cô lập tác dụng log/trace |
+| CIRCA → MM-CIRCA | mã công khai hạ mẫu, thêm biến log, lọc tương quan và có nhánh fallback; modality của lượt chạy CSV chưa xác minh | Chênh lệch không cô lập tác dụng log hoặc trace |
+
+Cách viết hợp lệ là **so sánh quan sát bị trộn biến**. Muốn đo tác dụng modality, nhóm phải tự dựng ablation: cùng cửa sổ, cùng sampling, cùng candidate set, cùng lõi chấm điểm và chỉ bật/tắt một nguồn bằng chứng.
 
 ---
 
-## 2. Phân bố trong benchmark hiện có
+## 5. Ranh giới nghiên cứu gần nhất
 
-15 phương pháp tham chiếu của `T-06` chia theo nguồn dữ liệu:
+### 5.1 Phả hệ công bố RCAEval và phạm vi Online Boutique
 
-| Nhóm | Số lượng | Tên |
-|---|---|---|
-| Dựa metric | **9** | RUN, CausalRCA, CIRCA, RCD, MicroCause, EasyRCA, MSCRED, BARO, ε-Diagnosis |
-| Dựa trace | **2** | TraceRCA, MicroRank |
-| Đa nguồn | **4** | PDiagnose, multi-source BARO, multi-source RCD, multi-source CIRCA |
+Ba snapshot `ase24 → www25 → fse26` trong kho tác giả gắn với ba công bố khác nhau, không phải ba revision của cùng một bài:
 
-### 2.1 Ba nhận định rút ra
+- Công trình ASE 2024 (`T-07`) là tiền thân metric-only và có công bố kết quả trên Online Boutique.
+- Bài duy nhất mang tiêu đề *RCAEval* tại WWW Companion 2025 (`T-06`) có năm revision arXiv. Cả năm chỉ trình bày bảng hiệu năng RCA sơ bộ trên Train Ticket–RE2; Online Boutique vẫn là một hệ dùng để thu dataset nhưng không có bảng hiệu năng tương ứng trong bài này.
+- Công trình TORAI tại FSE 2026 (`T-19`) tiếp tục dùng hạ tầng RCAEval và công bố kết quả trên Online Boutique.
 
-**`FACT` — hướng dựa trace là nhóm mỏng nhất.** Chỉ 2 trên 15 phương pháp tham chiếu dùng trace, trong khi 9 chỉ dùng metric.
+Vì vậy câu hợp lệ là: **“Bài RCAEval tại WWW Companion 2025 không trình bày bảng hiệu năng RCA trên Online Boutique.”** Không được rút gọn thành “RCAEval không công bố kết quả Online Boutique”, vì câu đó xóa mất hai công bố còn lại.
 
-**`FACT` — chưa có phương pháp nào vượt trội ở mọi tình huống.** `T-07` kết luận mỗi phương pháp hoặc thiếu về hiệu quả, hoặc thiếu về hiệu năng, hoặc nhạy cảm với điều kiện cụ thể. `T-07` cũng nêu rằng kết quả trên dữ liệu tổng hợp **không phản ánh đúng** hiệu năng trên hệ thật, và hệ microservice quy mô lớn vẫn là thách thức.
+### 5.2 TORAI
 
-**`FACT` — mọi loại lỗi trong các bộ dữ liệu công khai đều là lỗi kỹ thuật.** Theo `T-06` và `T-07`: CPU hog, memory leak, disk IO stress, network delay, packet loss, socket, và lỗi mức mã nguồn. Không bộ nào chèn lỗi vi phạm bất biến nghiệp vụ.
+TORAI (`T-19`, FSE 2026) kết hợp telemetry đa nguồn và báo cáo trên Online Boutique, Sock Shop, Train Ticket. Nguồn này quan trọng vì công bố cả độ phủ trace: Online Boutique chỉ 7/11 service có trace, Train Ticket 27/64. Điều đó củng cố yêu cầu chất lượng dữ liệu và cơ chế từ chối, không chứng minh sẵn rằng MyRCA sẽ thắng.
 
-### 2.2 Hệ quả — ở mức `CANDIDATE`
+Cả arXiv v1 ngày 2026-04-15 và v2 ngày 2026-04-18 mang tiêu đề *TORAI: Multi-source Root Cause Analysis for Blind Spots in Microservice Service Call Graph*. Cụm *TORAI: Unsupervised Fine-grained RCA using Multi-Source Telemetry Data* là tiêu đề Mục 3 của bài, không phải tiêu đề metadata của v1. Khi trích xuất bản, gọi v1/v2 là các revision của bản tiền in và gọi DOI `10.1145/3808137` là bản công bố chính thức tại PACMSE/FSE 2026.
 
-Ba nhận định trên gợi ra hai hướng đóng góp kiểm chứng được. Cả hai đều là `CANDIDATE`, **chưa được chọn**:
+### 5.3 GALA+
 
-| ID | Hướng | Cần gì để trở thành đề xuất |
-|---|---|---|
-| `A10-CAND-01` | Kết hợp đồ thị phụ thuộc từ trace với phát hiện điểm đổi trên metric và tín hiệu từ log, đánh giá xem đa nguồn có cải thiện so với đơn nguồn không | Kết quả thực nghiệm ở `E1` cho thấy khoảng cách thật giữa nhóm đơn nguồn và đa nguồn |
-| `A10-CAND-02` | Đánh giá các phương pháp hiện có trên một lớp lỗi chưa xuất hiện trong benchmark công khai — vi phạm bất biến nghiệp vụ | Quyết định của Lê Văn Minh và giảng viên về vai trò hệ thống của đồ án; hiện là `A7-OPEN-02` |
-
-**Không được viết trong báo cáo** rằng đồ án "đề xuất phương pháp mới" cho tới khi có kết quả thực nghiệm chống lưng. Việc dùng lại một cơ chế đã công bố không tạo ra tính mới.
+GALA+ (`T-20`, 2026) đã dùng Reciprocal Rank Fusion trong pipeline RCA. Vì vậy “dùng RRF để gộp nhiều hạng” không phải tính mới. Giá trị có thể bảo vệ của MyRCA phải nằm ở hợp đồng dữ liệu, trọng số theo chất lượng, ablation, trạng thái từ chối và bằng chứng trên dữ liệu giữ lại. Mã GALA+ chưa công khai, nên chỉ dùng làm prior art, không làm baseline tái lập kỳ này.
 
 ---
 
-## 3. Chọn tập phương pháp cho thực nghiệm hai tuần
+## 6. Lập luận chọn MyRCA để kiểm chứng
 
-### 3.1 Tiêu chí chọn
+- `USER_CONFIRMED`: định vị đóng góp là **tổ hợp có kiểm chứng**.
+- `CANDIDATE`: MyRCA v0 chuẩn hóa metric/log/span, chấm từng modality, hợp nhất hạng có trọng số chất lượng, thử hiệu chỉnh bằng đồ thị như một ablation và có quyền từ chối khi bằng chứng yếu.
+- `OPEN`: MyRCA có vượt hoặc ít nhất không thua baseline mạnh về `AC@1` hay không; trọng số, ngưỡng từ chối, tập node và hiệu quả trên FlashTicket.
 
-Bốn tiêu chí, áp theo thứ tự:
+Quyết định này không hứa phát minh một thuật toán hoàn toàn mới. Một kết quả âm vẫn có giá trị nếu chứng minh minh bạch thành phần nào không giúp, trong điều kiện nào và vì sao.
 
-1. **Phủ được cả bốn họ.** Mục đích của thực nghiệm là cho thấy các cơ chế khác nhau cho kết quả khác nhau, không phải xếp hạng dài.
-2. **Có cài đặt tái lập được trong `T-06`.** Phương pháp phải tự cài lại là rủi ro tiến độ, không phải giá trị nghiên cứu.
-3. **Đại diện được nguồn giảng viên gửi.** Bỏ hoàn toàn dòng suy luận nhân quả là bỏ chính nguồn `T-07`.
-4. **Gần định hướng "đồ thị phụ thuộc".** Phải có ít nhất một phương pháp thực sự lan truyền trên đồ thị.
+---
 
-### 3.2 Tập được chọn — 5 phương pháp và 1 đối chứng
+## 7. Điều kiện thực nghiệm bắt buộc
 
-> **Lý do chọn không dùng điểm số** (`A10-v0.2`). Bản `v0.1` biện minh cho BARO bằng *"điểm cao nhất trong `T-06`"* và cho TraceRCA bằng *"điểm cao thứ nhì"*. Sau khi mở Bảng 6 toàn văn, **cả hai đều sai**: cao nhất là multi-source BARO với 0,81, còn 0,77 của TraceRCA đứng **thứ ba**. Quan trọng hơn, chọn phương pháp đối chứng theo điểm là **sai phương pháp luận** — nó biến tập đối chứng thành một bảng vinh danh thay vì một mặt cắt qua bốn họ. Tiêu chí ở §3.1 vốn đã là **phủ họ**; §3.2 nay viết đúng theo tiêu chí đó.
+1. Một bảng chỉ chứa ca từ cùng dataset/phiên bản; không trộn mức sàn khác nhau.
+2. `AC@1` là thước đo chính; ca thiếu hạng là thất bại, không bị loại.
+3. Mỗi run phải khóa commit, patch, dataset hash, candidate manifest, seed, cửa sổ và runtime.
+4. Phân biệt lỗi chương trình với cột `success` trong CSV; cột này hiện bằng `AC@5`.
+5. So sánh ghép cặp theo cùng `case_id`; bootstrap theo cụm `service × fault`; McNemar exact cho AC@1 và Holm cho nhiều kiểm định.
+6. Không dùng ground truth để lọc ứng viên ở pipeline triển khai. Nếu dùng để thăm dò thì phải ghi **oracle upper bound**.
+7. Không chọn trọng số/graph rule trên cùng tập dùng báo cáo kết quả cuối.
 
-| Chọn | Họ | Lý do chọn | Tiêu chí thoả |
+---
+
+## 8. Vấn đề còn mở
+
+| ID | Trạng thái | Vấn đề | Điều kiện đóng |
 |---|---|---|---|
-| **Ngẫu nhiên** | đối chứng | Xác lập mức sàn theo `A7` §7. Trả lời trước câu hỏi *"đoán bừa được bao nhiêu?"*. Rất ít công trình công bố cột này, nên nó cũng là điểm mạnh của báo cáo | — |
-| **BARO** | thống kê thuần | Đại diện họ thống kê thuần. Chỉ cần metric nên rủi ro môi trường thấp nhất → chạy đầu tiên | 1, 2 |
-| **RCD** | suy luận nhân quả | Đại diện đúng dòng mà `T-07` khảo sát | 1, 2, 3 |
-| **TraceRCA** | trace, không lan truyền | Một trong **hai** phương pháp dựa trace duy nhất trong `T-06`; đại diện cách dùng trace **không** lan truyền, để tách bạch với MicroRank | 1, 2 |
-| **MicroRank** | **đồ thị phụ thuộc + PageRank** | **Gần định hướng của giảng viên nhất.** Là mẫu chuẩn của "lan truyền trên đồ thị phụ thuộc" ở mục tiêu nghiên cứu số 3 | 1, 2, 4 |
-| **Multi-source BARO** (`mmbaro`) | đa nguồn | Cùng lõi thuật toán với BARO, nên chênh lệch giữa hai dòng **chỉ do nguồn dữ liệu** — đúng câu hỏi của `A10-CAND-01` và câu hỏi phụ 1 ở `A4` | 1, 2 |
-
-### 3.3 Loại và lý do loại
-
-| Loại | Họ | Lý do loại |
-|---|---|---|
-| CIRCA, MicroCause, CausalRCA, EasyRCA, RUN | nhân quả | Trùng họ với RCD. Thêm một phương pháp cùng họ chỉ thêm một dòng, không thêm góc nhìn. **Ngoại lệ:** nếu người phụ trách họ nhân quả còn thời gian, thêm CIRCA để so trong nội bộ họ |
-| MSCRED | học sâu tái tạo | **Cần huấn luyện mô hình.** Lệch khỏi đặc điểm "không huấn luyện" của các phương pháp còn lại và làm phần so sánh mất tính đồng nhất về điều kiện |
-| ε-Diagnosis | thống kê | BARO đã đại diện họ này với cơ chế mạnh hơn |
-| PDiagnose | đa nguồn | `mmbaro` đại diện họ đa nguồn với gốc so sánh rõ hơn: cùng lõi BARO nên tách bạch được ảnh hưởng của việc thêm nguồn dữ liệu |
-| MicroRCA (`T-12`) | đồ thị | Không nằm trong tập cài đặt của `T-06` → phải tự cài. MicroRank đã đại diện cơ chế personalized PageRank. Ngoài ra số hiệu năng công bố của `T-12` đo trên bộ dữ liệu riêng nên **không so trực tiếp** được |
-| Nezha, LogRCA, nhóm LLM | đa phương thức, log, LLM | Ngoài phạm vi thực nghiệm hai tuần. Ghi nhận ở §1.5 để tham chiếu; nhóm LLM liên quan tới mục tiêu nghiên cứu số 4 và sẽ xử lý ở gate sau |
-| TORAI, EventADL | đa nguồn | Xuất hiện trong kho mã của `T-06` nhưng mới hơn bài báo; tài liệu chưa ổn định |
-
-### 3.4 Nguyên tắc bắt buộc khi chạy
-
-- **Một bảng chỉ được chứa kết quả từ một bộ dữ liệu.** Không trộn số của `re1-ob` với `re2-tt`.
-- **Mọi phương pháp trong cùng một bảng phải chạy trên cùng bộ, cùng độ đo.** Đây là nghĩa của yêu cầu "cùng bộ dataset" trong thư giảng viên.
-- **Mỗi con số phải ghi rõ do nhóm chạy hay trích từ nguồn nào.**
+| `A10-OPEN-02` | Đã đóng | BARO gốc và cấu hình RCAEval đã được phân biệt | Kiểm tra bài BARO và mã RCAEval |
+| `A10-OPEN-03` | `OPEN` | Mô tả công bố và hành vi mã công khai của MM-CIRCA đã kiểm tra, nhưng chưa biết 11 CSV được tạo từ working tree/patch nào | Run manifest, lockfile, trạng thái working tree và patch hash |
+| `A10-OPEN-04` | Đã thay | Hướng đóng góp không còn là hai ứng viên ngang nhau | Lê Văn Minh chọn “tổ hợp có kiểm chứng”; hiệu quả MyRCA chuyển sang `A10-OPEN-07` |
+| `A10-OPEN-05` | Đã đóng cho E1 | Đã có 90 ca Online Boutique và 90 ca Train Ticket cho các phương pháp khả dụng | Không có nghĩa hai hệ có cùng tập phương pháp |
+| `A10-OPEN-06` | Đã thu hẹp | TORAI/GALA+ đã có nguồn; các tên tham khảo khác không được dùng nếu chưa bổ sung nguồn | Chỉ mở lại khi đưa chúng vào lập luận |
+| `A10-OPEN-07` | `OPEN` | MyRCA có đạt cổng `AC@1`, ổn định held-out và từ chối đúng khi dữ liệu kém hay không | Thực nghiệm tuần 2 và tập kiểm tra giữ lại |
+| `A10-OPEN-08` | `OPEN` | Sửa và kiểm chứng PC+RandomWalk | Unit test đồ thị, seed, ablation và rerun |
 
 ---
 
-## 4. Số hiệu năng đã công bố — đã đối chiếu Bảng 6 toàn văn
+## 9. Phép tự kiểm
 
-### 4.1 Ba cảnh báo phải đọc trước khi nhìn bảng
-
-1. **Mọi số dưới đây đo trên `re2-tt`, tức bộ `RE2` thu từ Train Ticket.** `RES-022` chốt bộ chính là **`RE2`** nhưng **chưa chốt hệ nào trong `RE2`** — bộ này có dữ liệu từ ba hệ, và báo cáo hai tuần §5.4 mới đề xuất Online Boutique ở mức `CANDIDATE`. Nếu chốt một hệ khác Train Ticket thì **không số nào ở đây là mốc đối chiếu**: Train Ticket có 64 ứng viên mức service, Online Boutique có 12, nên mức sàn ngẫu nhiên `Avg@5` chênh nhau hơn năm lần (`R0` §2.2). Hai bảng khác mức sàn thì **không so ngang** được. Việc chọn hệ ghi ở `A10-OPEN-05`.
-2. **Bản `A10-v0.1` gán sai một số.** Nó ghi *"RCD ≈ 0,54"*. Bảng 6 cho **RCD = 0,13**; **0,54 là điểm của multi-source RCD**, một dòng khác. Đây là lỗi khớp **tên** mà lệch **nghĩa** — chỉ lộ ra khi mở bảng gốc, không lộ ra khi đọc bản tóm tắt.
-3. **Số của bài là để đối chiếu mức tái lập, không phải để trích thẳng vào báo cáo.** Số chính của báo cáo là số nhóm tự chạy ở `E1`.
-
-### 4.2 Bảng 6 của `T-06` — `Avg@5` trên `re2-tt`
-
-| Phương pháp | Họ | `Avg@5` | Ghi chú |
-|---|---|---|---|
-| **Multi-source BARO** | đa nguồn | **0,81** | Cao nhất trong bảng |
-| **BARO** | thống kê thuần | **0,80** | Chỉ dùng metric. Mạnh ở lỗi tài nguyên, yếu ở lỗi mạng |
-| **TraceRCA** | trace, không lan truyền | **0,77** | Đứng **thứ ba**, không phải thứ nhì |
-| **Multi-source RCD** | đa nguồn | **0,54** | Đây mới là dòng ứng với số 0,54 |
-| **CIRCA** | nhân quả | **0,46** | Chỉ dùng metric |
-| **MicroRank** | **đồ thị phụ thuộc + PageRank** | **0,31** | **Thấp nhất trong nhóm được trích** |
-| **RCD** | nhân quả | **0,13** | Chỉ dùng metric |
-
-Chênh lệch BARO → multi-source BARO là **+0,01**; chênh lệch RCD → multi-source RCD là **+0,41**. Hai con số này nói rằng lợi ích của việc thêm nguồn dữ liệu **phụ thuộc mạnh vào lõi thuật toán**, không phải một hằng số. Đó chính là lý do câu hỏi phụ 1 ở `A4` bắt buộc so **cùng lõi thuật toán**.
-
-### 4.3 Điểm khó chịu phải nói thẳng
-
-**MicroRank là phương pháp gần định hướng của giảng viên nhất — và nó đứng gần cuối bảng.** `DH-MT3` yêu cầu *lan truyền trên đồ thị phụ thuộc*; MicroRank là mẫu chuẩn của đúng cơ chế đó, nhưng đạt `Avg@5` = 0,31 trong khi một phương pháp không dựng đồ thị nào đạt 0,80.
-
-Không được giấu điều này, và cũng không được đọc nó thành *"hướng đồ thị là hướng sai"*. Ba cách đọc đều còn mở, và chỉ thực nghiệm mới phân định được:
-
-- Bảng đo trên Train Ticket với **lỗi kỹ thuật** — CPU, bộ nhớ, đĩa, mạng. Lỗi tài nguyên biểu hiện rõ trên **chuỗi chỉ số** hơn trên **cấu trúc gọi**, nên sân chơi này thuận cho họ thống kê.
-- MicroRank chỉ dùng **trace**. Nó không nhìn thấy metric, tức không nhìn thấy đúng lớp tín hiệu mà lỗi tài nguyên tạo ra.
-- Điểm thấp có thể là điểm của **một cài đặt cụ thể trong `T-06`**, không phải trần của cơ chế PageRank trên đồ thị.
-
-Cách đọc thứ nhất và thứ hai cùng gợi một điều kiểm chứng được: **đồ thị phụ thuộc có thể mạnh lên khi được nuôi thêm nguồn dữ liệu**, đúng hướng `A10-CAND-01`. Cách đọc thứ ba là lý do phải chạy lại chứ không trích số.
-
-### 4.4 Số ngoài Bảng 6 — không so trực tiếp
-
-| Phương pháp | Số đọc được | Nguồn | Vì sao không so ngang |
-|---|---|---|---|
-| MicroRCA | precision 89 %, MAP 97 % | `T-12` | Đo trên bộ dữ liệu riêng của tác giả, độ đo khác |
-| RCACopilot | độ chính xác 0,766 | EuroSys 2024 | Đo trên dữ liệu sự cố nội bộ Microsoft, bài toán khác |
+- [x] Sáu mục báo cáo và bảy phương pháp chạy được đã được đếm riêng; Dummy là đối chứng.
+- [x] MM-CIRCA được tách đủ ba lớp: công bố `metric + log + trace`; mã công khai tại `6018cde` tiêu thụ `metric + log`; modality của 11 CSV là `OPEN`.
+- [x] Không gọi cặp multi-source là thí nghiệm 2×2.
+- [x] Tách BARO gốc khỏi cấu hình RCAEval dùng mốc tiêm lỗi biết trước.
+- [x] PC+RandomWalk không còn được dùng để suy giá trị của đồ thị.
+- [x] TORAI/GALA+ chỉ là ranh giới nghiên cứu, không thêm hồi tố vào thực nghiệm chính.
+- [x] Chỉ “tổ hợp có kiểm chứng” là `USER_CONFIRMED`; thiết kế và hiệu quả MyRCA vẫn `CANDIDATE`/`OPEN`.
+- [x] Không đọc repository cũ và không quyết định thay `B11-C`/`B16`.
+- [ ] Lê Văn Minh và giảng viên duyệt.
 
 ---
 
-## 5. Vấn đề `OPEN`
-
-| ID | Vấn đề | Gate xử lý |
-|---|---|---|
-| `A10-OPEN-06` | Các phương pháp ghi nhận ở §1.5 chưa có mã nguồn trong `source-register.md`. Không chặn thực nghiệm, nhưng chặn việc trích chúng vào báo cáo | Trước khi đưa bất kỳ khẳng định nào của §1.5 vào báo cáo |
-| `A10-OPEN-05` | `RES-022` chốt bộ `RE2` nhưng chưa chốt **hệ nào trong `RE2`** ở mức quyết định; báo cáo hai tuần §5.4 đề xuất Online Boutique ở mức `CANDIDATE` (`A8-OPEN-06`). Nếu chốt một hệ khác Train Ticket thì Bảng 6 **không còn là mốc đối chiếu mức tái lập** | Trước `E1`; nếu cần giữ mốc đối chiếu thì chạy thêm một vòng trên `re2-tt` |
-| `A10-OPEN-02` | Chưa xác minh từ toàn văn `T-09` rằng BARO hoàn toàn không dựng đồ thị; kế thừa `A7-OPEN-04` | Khi đọc toàn văn `T-09` |
-| `A10-OPEN-03` | Chưa đọc toàn văn cơ chế của CIRCA; hiện chỉ xếp họ theo mô tả trong `T-06` | Chỉ cần xử lý nếu quyết định chạy CIRCA |
-| `A10-OPEN-04` | `A10-CAND-01` và `A10-CAND-02` chưa được chọn làm hướng đóng góp | Sau `E1` và sau phản hồi của giảng viên |
-
-`A10-OPEN-01` **đã đóng** ngày 2026-08-26: Bảng 6 toàn văn của `T-06` đã được mở, bốn số được đối chiếu, và một số đã được sửa — xem §4.1 mục 2. Phần chưa biết còn lại không phải *"số có đúng không"* mà là *"số nào áp cho bộ nhóm chạy"*, chuyển sang `A10-OPEN-05`.
-
----
-
-## 6. Phép tự kiểm
-
-- [x] Phân họ theo cơ chế lõi và nguồn dữ liệu, không theo năm công bố.
-- [x] Mỗi phương pháp **được chọn hoặc bị loại ở §3** dẫn về một mã nguồn trong `source-register.md`.
-- [ ] **Chưa đạt:** các phương pháp chỉ **ghi nhận để tham chiếu** ở §1.5 — nhóm đa phương thức, nhóm dựa log, nhóm mô hình ngôn ngữ — **chưa có mã nguồn** trong sổ nguồn. Chúng nằm ngoài phạm vi thực nghiệm vòng này nên không chặn, nhưng **không được trích số hay khẳng định nào của chúng vào báo cáo** trước khi bổ sung nguồn. Ghi tại `A10-OPEN-06`.
-- [x] Nêu rõ họ nào thật sự lan truyền trên đồ thị, họ nào không.
-- [x] Tiêu chí chọn nêu trước danh sách chọn, không dựng tiêu chí sau để hợp thức hoá lựa chọn.
-- [x] Mỗi phương pháp bị loại đều có lý do cụ thể, không loại vì "không đủ thời gian" chung chung.
-- [x] Mọi số ở §4.2 đã đối chiếu Bảng 6 toàn văn của `T-06`, không còn số nào ở trạng thái *"đọc từ bản tóm tắt"*.
-- [x] Số của bản `v0.1` gán sai được nói thẳng ở §4.1 mục 2, kèm dòng đúng và dòng bị nhầm — không sửa im lặng.
-- [x] Phạm vi của bảng — `re2-tt`, không phải bộ nhóm sẽ chạy — nêu **trước** bảng chứ không nêu trong chú thích cuối.
-- [x] Kết quả bất lợi cho hướng đồ thị được nêu ở §4.3 kèm ba cách đọc còn mở, không giấu và cũng không kết luận sớm.
-- [x] Không tuyên bố tính mới; hai hướng đóng góp giữ ở `CANDIDATE`.
-- [x] Chỉ dùng tài liệu đã công bố làm căn cứ; không dùng nguồn đối chiếu cài đặt nào.
-- [ ] Lê Văn Minh duyệt.
-
----
-
-## 7. Nhật ký phiên bản
+## 10. Nhật ký phiên bản
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
-| `A10-v0.3` | 2026-08-27 | Thêm một câu ở §1.5 ghi vai trò và trạng thái của kỹ thuật gom mẫu log sau khi nó đổi chủ từ bộ hệ thống sang bộ này (`RES-035`): ứng viên cho bước **tiền xử lý**, chưa chốt dùng. **Không đổi bốn họ phương pháp, tập đối chứng hay số ở §4** | Tiếp nhận từ bộ hệ thống |
-| `A10-v0.2` | 2026-08-26 | Đối chiếu Bảng 6 toàn văn của `T-06`: sửa RCD 0,54 → **0,13**, bổ sung multi-source RCD 0,54, multi-source BARO 0,81 và **MicroRank 0,31**; viết lại §4 thành ba mục có cảnh báo phạm vi `re2-tt` đứng trước bảng; thêm §4.3 nói thẳng việc MicroRank đứng gần cuối; gỡ điểm số khỏi lý do chọn ở §3.2 và chuyển sang tiêu chí phủ họ; đóng `A10-OPEN-01`, mở `A10-OPEN-05`; suy lại ô tự kiểm §6 | Sửa sau khi mở nguồn gốc |
-| `A10-v0.1` | 2026-08-23 | Bản đầu: bốn họ phương pháp và họ nào dùng đồ thị; phân bố 9/2/4 trong benchmark; ba nhận định `FACT` và hai hướng `CANDIDATE`; tiêu chí chọn và tập 5 phương pháp + 1 đối chứng; lý do loại từng phương pháp; bảng số hiệu năng kèm cảnh báo chưa xác minh | Tạo mới theo định hướng giảng viên ngày 2026-08-22 |
+| `A10-v0.5` | 2026-09-02 | Thu hồi kết luận tuyệt đối về modality MM-CIRCA; tách công bố–mã–lượt chạy; phân biệt năm revision bài RCAEval với ba snapshot công bố; định danh đúng phạm vi Online Boutique và tiêu đề TORAI | Sửa theo nguồn chính chủ của tác giả |
+| `A10-v0.4` | 2026-09-02 | Kiểm định lại tập thực nghiệm; sửa modality MM-CIRCA, thiết kế “2×2”, BARO trong RCAEval và PC+RandomWalk; thêm TORAI/GALA+ làm ranh giới; định vị MyRCA theo quyết định “tổ hợp có kiểm chứng” | Sửa mâu thuẫn và bổ sung bằng chứng |
+| `A10-v0.3` | 2026-08-27 | Ghi trạng thái ứng viên của kỹ thuật gom mẫu log | Tiếp nhận từ bộ hệ thống |
+| `A10-v0.2` | 2026-08-26 | Đối chiếu Bảng 6 RCAEval và sửa số RCD/MicroRank | Sửa sau khi mở nguồn gốc |
+| `A10-v0.1` | 2026-08-23 | Bản khảo sát đầu | Tạo mới |

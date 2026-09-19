@@ -1,10 +1,12 @@
 # A7 — Từ vựng nền cho chẩn đoán nguyên nhân gốc
 
-- **Phiên bản:** `A7-v0.2`
-- **Trạng thái:** `DRAFT` — từ vựng nền phục vụ định hướng mới của giảng viên ngày 2026-08-22; chưa được duyệt
+> **Căn cứ hiện hành từ 18/09:** [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). DH-* bên dưới giữ nguồn gốc khảo sát/kiểm định lịch sử; không là tên hoặc toàn bộ nhiệm vụ hiện hành. Số liệu và trạng thái khoa học của phiếu không được đổi bởi cập nhật này. Minh phụ trách chính RCA; phương pháp thử trên dữ liệu công khai trước rồi trên FlashTicket.
+
+- **Phiên bản:** `A7-v0.3`
+- **Trạng thái:** `DRAFT` — từ vựng nền của bộ RCA; ngữ cảnh hiện hành theo DT18; chưa được duyệt
 - **Người duyệt:** — (chờ Lê Văn Minh)
 - **Ngày duyệt:** —
-- **Đầu vào:** [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md) — nguyên văn, `FACT`; các nguồn `T-06`–`T-13` trong `source-register.md`
+- **Đầu vào:** [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md) — nguyên văn, `FACT`; các nguồn `T-06`–`T-19` liên quan trong `source-register.md`; kiểm định tệp chạy ở `E1`
 - **Đi vào báo cáo:** phần Cơ sở lý thuyết — mục thuật ngữ; và phần Phương pháp đánh giá
 - **Ràng buộc:** tài liệu này chỉ định nghĩa thuật ngữ và ghi nhận sự kiện đã công bố. Nó **không** chọn phương pháp, **không** chốt phạm vi đề tài, **không** sửa `A1`/`A2`/`A4` — việc tái baseline ba phiếu đó đã làm ở gate của chính chúng theo `RES-032`.
 
@@ -49,13 +51,13 @@ Cách nhớ: **nơi ra đề — đề thi — thí sinh — ba-rem chấm.**
 
 Ba hệ thống mã nguồn mở mà giới nghiên cứu dùng làm nơi chèn lỗi. Nhóm **không cần cài** chúng — dữ liệu đã được thu sẵn và công bố.
 
-| Hệ thống | Số service | Ghi chú |
+| Hệ thống | Quy mô được nguồn mô tả | Ghi chú |
 |---|---|---|
-| Online Boutique | 12 | Ứng dụng thương mại điện tử của Google, nhiều ngôn ngữ |
+| Online Boutique | **11 microservice** trong kho chính thức hiện hành (`T-18`) | RCAEval và tệp kết quả có thể dùng một **tập định danh đánh giá** khác; 12 tên ứng viên quan sát được không biến thành 12 microservice của ứng dụng |
 | Sock Shop | 15 | Go, Java Spring, Node.js |
-| **Train Ticket** | **64** | **Nền tảng Java, hệ lớn nhất trong nhóm benchmark** |
+| **Train Ticket** | **64 service** theo mô tả hệ thống/benchmark (`T-14`) | Tệp đối chứng đã cung cấp xuất hiện ít nhất **68 định danh ứng viên**; trong đó có thể có tài nguyên hoặc kho dữ liệu, nên 64 không tự động là `N` của phép chấm |
 
-Train Ticket là hệ thống Java quy mô lớn nhất được dùng phổ biến trong nghiên cứu chẩn đoán microservice, và cũng là bộ có ý nghĩa phân định nhất vì số ứng viên lớn.
+Train Ticket là hệ thống Java quy mô lớn nhất trong ba hệ benchmark được khảo sát. Tuy nhiên, **số service của hệ thống**, **số thực thể vận hành** và **số ứng viên mà bộ đánh giá cho phép xếp hạng** là ba đại lượng khác nhau. Mức sàn ngẫu nhiên ở §7 phải dùng đại lượng cuối cùng được kiểm kê từ chính tệp đánh giá, không được lấy số 64 theo thói quen.
 
 ---
 
@@ -84,18 +86,18 @@ Ba bộ × ba hệ thống = chín tổ hợp.
 
 Tổng **735 ca lỗi**, **11 loại lỗi**, trên ba hệ thống. Nguồn: `T-06`.
 
-> **`OPEN` — số cần xác minh.** Cận trên số chỉ số của RE2 đọc được là 327 ở một lần trích và 376 ở lần khác từ bảng 2 của `T-06`. Người viết báo cáo phải mở trực tiếp bảng 2 xác nhận trước khi đưa con số vào quyển. Không tự chọn một trong hai.
+Đối chiếu lại bảng công bố cho thấy khoảng của RE2 là **77–376 chỉ số**; `A7-OPEN-01` được đóng ở phiên bản này. Con số này mô tả số chuỗi telemetry trong bộ dữ liệu, không phải số service hay số node của đồ thị.
 
-### Một ca lỗi gồm những file gì
+### Một ca lỗi có những nội dung logic gì
 
-Mỗi ca lỗi là một thư mục:
+Mỗi ca lỗi có các nội dung dưới đây. **Tên tệp vật lý thay đổi giữa bản dữ liệu thô, bản tiền xử lý và mã chạy RCAEval**, nên bảng này không phải schema để viết cứng adapter:
 
-| File | Nội dung | Có ở bộ nào |
+| Nội dung | Trường tối thiểu cần hiểu | Có ở bộ nào |
 |---|---|---|
-| `metrics.json` | Chuỗi số liệu theo thời gian | RE1, RE2, RE3 |
-| `inject_time.txt` | Mốc thời gian chèn lỗi (Unix timestamp) | RE1, RE2, RE3 |
-| `logs.csv` | Log | RE2, RE3 |
-| `traces.csv` | Trace | RE2, RE3 |
+| Metric | Mốc thời gian, định danh thực thể, tên chỉ số, giá trị | RE1, RE2, RE3 |
+| Mốc tiêm lỗi | Thời điểm chia cửa sổ bình thường và bất thường trong benchmark | RE1, RE2, RE3 |
+| Log | Mốc thời gian, định danh thực thể, nội dung hoặc mẫu log | RE2, RE3 |
+| Trace | Trace/span ID, quan hệ cha–con, service/operation, thời gian và trạng thái nếu phương pháp yêu cầu | RE2, RE3 |
 
 Nhãn đáp án gồm **hai mức**: service nào là nguyên nhân, và chỉ số nào chỉ ra nó.
 
@@ -104,7 +106,7 @@ Nhãn đáp án gồm **hai mức**: service nào là nguyên nhân, và chỉ s
 | Nguồn | Nội dung | Modality |
 |---|---|---|
 | Zenodo 13305663 (`T-07`) | Artifact bài ASE 2024. 606,2 MB. Gồm dữ liệu tổng hợp (CIRCA, RCD, CausIL — mỗi loại 10 và 50 nút) và bốn bộ hệ thật: Online Boutique 31,0 MB · Sock Shop 1 3,5 MB · Sock Shop 2 79,1 MB · Train Ticket 279,7 MB | **Chỉ metric**, thu bằng Prometheus và cAdvisor |
-| LEMMA-RCA (`T-08`) | 51 ca lỗi. Lĩnh vực CNTT (nền tảng đánh giá sản phẩm 216 pod; nền tảng điện toán đám mây 11 nút) và công nghiệp (hệ nước SWaT 51 cảm biến, WADI 123 cảm biến). 235,5 MB – 765 GB | Log + metric + trace |
+| LEMMA-RCA (`T-08`, `T-17`) | 51 ca lỗi. Lĩnh vực CNTT (nền tảng đánh giá sản phẩm 216 pod; nền tảng điện toán đám mây 11 nút) và công nghiệp (hệ nước SWaT 51 cảm biến, WADI 123 cảm biến). 235,5 MB – 765 GB | Bản tiền xử lý mô tả rõ **metric + log không cấu trúc**; nguồn tổng quan nói có trace nhưng schema span, quan hệ cha–con và độ đầy đủ cần cho MicroRank **chưa được kiểm chứng** |
 
 **Sự kiện cần ghi nhận (`FACT`):** bộ Zenodo giảng viên gửi **không chứa log và trace**. Mục tiêu nghiên cứu số 2 trong thư định hướng yêu cầu *"ánh xạ log giao dịch và dấu vết vận hành (trace) lên đồ thị"*. Việc lấp chỗ này được xử lý ở `A8`, không kết luận tại đây.
 
@@ -171,7 +173,7 @@ Bảng dưới giả định một ca có đúng một nguyên nhân thật:
 
 - **`AC@1`** — nghiêm khắc nhất, chỉ tính khi đoán trúng ngay lần đầu. Gần với giá trị vận hành thực tế nhất, vì người trực sẽ kiểm tra nghi phạm đầu tiên trước.
 - **`AC@3`, `AC@5`** — dễ dần. Nhược điểm: hạng 1 và hạng 3 được điểm như nhau ở `AC@3`, nên không phân biệt được xếp giỏi với xếp may.
-- **`Avg@5`** — vá đúng nhược điểm đó, là điểm tổng hợp cân bằng nhất.
+- **`Avg@5`** — vá đúng nhược điểm đó và hữu ích để mô tả chất lượng cả top 5, nhưng **không thay thế `AC@1`** khi câu hỏi vận hành là nghi phạm đầu tiên có đúng hay không.
 
 ### Ví dụ tính tay
 
@@ -226,16 +228,18 @@ Suy ra `Avg@5`: nếu nguyên nhân thật rơi vào hạng `p ≤ 5` thì `Avg@
 
 Bảng tham chiếu:
 
-| Số ứng viên `N` | `AC@1` ngẫu nhiên | `Avg@5` ngẫu nhiên |
+| Số ứng viên thực sự được phép xếp hạng `N` | `AC@1` ngẫu nhiên | `Avg@5` ngẫu nhiên |
 |---|---|---|
 | 6 | 16,7 % | 50,0 % |
+| 11 | 9,1 % | 27,3 % |
 | 12 | 8,3 % | 25,0 % |
 | 15 | 6,7 % | 20,0 % |
 | 64 | 1,6 % | 4,7 % |
+| 68 | 1,5 % | 4,4 % |
 | 120 | 0,8 % | 2,5 % |
 | 300 | 0,3 % | 1,0 % |
 
-**Cách dùng bảng này.** Mọi con số hiệu năng phải đọc **cùng với** mức sàn tương ứng. Một điểm `Avg@5 = 0,85` trên 6 ứng viên và trên 300 ứng viên là hai kết quả khác nhau về bản chất. Vì vậy `E1` bắt buộc có cột đối chứng ngẫu nhiên.
+**Cách dùng bảng này.** Mọi con số hiệu năng phải đọc **cùng với** mức sàn tương ứng. Một điểm `Avg@5 = 0,85` trên 6 ứng viên và trên 300 ứng viên là hai kết quả khác nhau về bản chất. Vì vậy `E1` bắt buộc có đối chứng ngẫu nhiên và phải công bố cách lập tập ứng viên. Các dòng 11/12 và 64/68 minh họa chính sự khác nhau giữa **số service được mô tả** và **định danh ứng viên quan sát được**; không được chọn dòng có lợi hơn sau khi nhìn kết quả.
 
 Hệ quả trực tiếp lên số ứng viên: đánh giá ở **mức thô** trên một hệ ít service cho mức sàn rất cao, còn đánh giá ở **mức mịn** đưa số ứng viên lên hàng trăm và khôi phục khả năng phân biệt. Đây là lý do kỹ thuật để chọn mức đánh giá, không phải nhận định về quy mô hệ thống nào tốt hơn.
 
@@ -245,11 +249,11 @@ Hệ quả trực tiếp lên số ứng viên: đánh giá ở **mức thô** t
 
 | ID | Vấn đề | Gate xử lý |
 |---|---|---|
-| `A7-OPEN-01` | Cận trên số chỉ số của RE2 (327 hay 376) chưa xác minh trực tiếp từ bảng 2 của `T-06` | Trước khi đưa số vào báo cáo |
-| `A7-OPEN-03` | Bộ dữ liệu giảng viên gửi không có log/trace trong khi `DH-MT2` yêu cầu cả hai | `A8`; và câu hỏi gửi giảng viên, vòng 2 câu 1 |
-| `A7-OPEN-04` | Chưa xác minh trực tiếp từ bài gốc rằng BARO hoàn toàn không dựng đồ thị. Phần tóm tắt mô tả cơ chế thống kê trên chuỗi đa biến; chưa đọc toàn văn | `A10` |
+| `A7-OPEN-03` | Artifact Zenodo `T-07` giảng viên gửi chỉ có metric trong khi `DH-MT2` yêu cầu log và trace | `A8`; và câu hỏi gửi giảng viên, vòng 2 câu 1 |
+| `A7-OPEN-05` | Tập ứng viên chính xác của từng cấu hình đánh giá chưa được khai báo thành manifest; Train Ticket được mô tả có 64 service nhưng các tệp chạy lộ ít nhất 68 định danh | `E1`: chuẩn hóa định danh và công bố candidate manifest trước khi so mức sàn |
+| `A7-OPEN-06` | LEMMA có tuyên bố tổng quan về trace, nhưng chưa xác minh dữ liệu thô có đủ trace/span ID, quan hệ cha–con và cửa sổ bình thường/bất thường để chạy MicroRank hợp lệ hay không | Kiểm tra schema và mẫu dữ liệu thô trước khi viết adapter LEMMA → MicroRank |
 
-`A7-OPEN-02` **đã đóng** theo `RES-032`: nó ghi mâu thuẫn giữa một ô tự kiểm của `A2` và định hướng ngày 2026-08-22. `A2-v0.2` đã tái baseline và **gỡ hẳn** ô đó, nên mâu thuẫn không còn đối tượng.
+`A7-OPEN-01` **đã đóng**: cận trên RE2 được xác minh là 376. `A7-OPEN-04` **đã đóng**: toàn văn BARO và cấu hình triển khai RCAEval đã được tách bạch ở `A10`; cả hai đều không dựng đồ thị, nhưng cấu hình benchmark không chạy đầy đủ bước MBOCPD của phương pháp gốc. `A7-OPEN-02` **đã đóng** theo `RES-032`: nó ghi mâu thuẫn giữa một ô tự kiểm của `A2` và định hướng ngày 2026-08-22; `A2-v0.2` đã gỡ hẳn ô đó.
 
 ---
 
@@ -262,7 +266,8 @@ Hệ quả trực tiếp lên số ứng viên: đánh giá ở **mức thô** t
 - [x] Không chọn phương pháp, không xếp hạng phương án, không chốt phạm vi đề tài.
 - [x] Không sửa `A1`, `A2`, `A4` từ tệp này; mâu thuẫn với `A2` từng được ghi thành `OPEN` và đã đóng ở gate của chính `A2`, không đóng bằng một phán quyết tại đây.
 - [x] Chỉ dùng tài liệu đã công bố và định hướng của giảng viên làm căn cứ; không dùng nguồn đối chiếu cài đặt nào.
-- [ ] Xác minh `A7-OPEN-01` và `A7-OPEN-04` từ toàn văn bài gốc.
+- [x] Đã tách số service khỏi số thực thể/ứng viên đánh giá; đã đóng `A7-OPEN-01` và `A7-OPEN-04` bằng nguồn công bố và kiểm định triển khai.
+- [ ] Đóng `A7-OPEN-05` và `A7-OPEN-06` bằng candidate manifest và kiểm tra schema LEMMA thực tế.
 - [ ] Lê Văn Minh duyệt.
 
 ---
@@ -271,5 +276,6 @@ Hệ quả trực tiếp lên số ứng viên: đánh giá ở **mức thô** t
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `A7-v0.3` | 2026-09-02 | Tách số microservice khỏi số định danh ứng viên; sửa Online Boutique thành 11 microservice chính thức và nêu chênh lệch 64/ít nhất 68 ở Train Ticket; xác minh RE2 có tối đa 376 chỉ số; hạ tuyên bố trace của LEMMA về `OPEN`; quy định `AC@1` là câu hỏi vận hành chính và mở manifest ứng viên/schema trace | Sửa mâu thuẫn bằng nguồn chính chủ + kiểm định tệp chạy |
 | `A7-v0.2` | 2026-08-26 | §1 sửa *"ba vai"* thành **bốn vai** cho khớp bảng bốn dòng, và mở rộng câu ghi nhớ để không bỏ vai *hệ thống thử nghiệm*; khai lại đầu vào trỏ về tạo tác nguyên văn thư định hướng; đóng `A7-OPEN-02` theo `RES-032`; suy lại hai ô tự kiểm §9 | Sửa lỗi nội tại + đồng bộ `DH-TEN` |
 | `A7-v0.1` | 2026-08-23 | Bản đầu: ba vai và bảng nhầm lẫn thường gặp; giải mã tên bộ dữ liệu; bốn họ thuật toán và họ nào dùng đồ thị; công thức `AC@k`/`Avg@k` kèm ví dụ; hai mức đánh giá; mức sàn ngẫu nhiên; bốn vấn đề `OPEN` | Tạo mới theo định hướng giảng viên ngày 2026-08-22 |

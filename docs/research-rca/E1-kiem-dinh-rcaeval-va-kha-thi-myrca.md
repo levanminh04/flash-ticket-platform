@@ -1,5 +1,7 @@
 # E1 — Kiểm định RCAEval và nghiên cứu khả thi MyRCA
 
+> **Căn cứ hiện hành từ 18/09:** [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). DH-* bên dưới giữ nguồn gốc khảo sát/kiểm định lịch sử; không là tên hoặc toàn bộ nhiệm vụ hiện hành. Số liệu và trạng thái khoa học của phiếu không được đổi bởi cập nhật này. Minh phụ trách chính RCA; phương pháp thử trên dữ liệu công khai trước rồi trên FlashTicket.
+
 - **Phiên bản:** `E1-v0.3`
 - **Trạng thái:** `REVIEW_READY` — đã kiểm định lại phả hệ công bố, tính toàn vẹn 990 dòng và giới hạn suy luận thống kê; chờ Lê Văn Minh và giảng viên phản biện
 - **Phân lớp:** `FORMATION`

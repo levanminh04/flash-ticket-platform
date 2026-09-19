@@ -1,5 +1,7 @@
 # B2 — Từ điển miền
 
+> **Cập nhật ngữ cảnh 18/09:** đề tài/nhiệm vụ theo [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm bốn người; mobile là phần phụ theo PRJ-035. Nội dung nghiệp vụ/bất biến và baseline duyệt bên dưới không được đổi trong đợt này. Các phiên bản A1–A6 và DH-* được dẫn trong hồ sơ duyệt là đầu vào tại thời điểm duyệt; bản diễn giải A1–A6 hiện hành đang REVIEW_READY. Không coi bản mới tự được phê duyệt, không dùng lời khai cũ để hạ nhiệm vụ xây dựng/đánh giá DT18.
+
 - Phiên bản: `B2-v0.12`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
@@ -9,7 +11,7 @@
 
 ## 1. Mục đích và quy tắc sử dụng
 
-Tài liệu này tạo ngôn ngữ chung cho ba thành viên trước khi mô hình hóa quy trình B3. Các định nghĩa mô tả **khái niệm nghiệp vụ**, không mặc nhiên là tên lớp, bảng, API, bounded context hoặc service. Vòng đời, lệnh, sự kiện miền và bất biến chi tiết lần lượt được làm rõ ở B3, B4 và B7.
+Tài liệu này tạo ngôn ngữ chung cho bốn thành viên trước khi mô hình hóa quy trình B3. Các định nghĩa mô tả **khái niệm nghiệp vụ**, không mặc nhiên là tên lớp, bảng, API, bounded context hoặc service. Vòng đời, lệnh, sự kiện miền và bất biến chi tiết lần lượt được làm rõ ở B3, B4 và B7.
 
 | Trạng thái | Cách hiểu trong B2 |
 |---|---|
@@ -167,7 +169,7 @@ Các ID được giữ để bảo toàn dấu vết. `CLOSED` là tình trạng
 
 ## 9. Tiêu chí để chuyển B2 thành `APPROVED`
 
-- Ba thành viên mô tả cùng một luồng từ chọn vé đến check-in mà không dùng hai từ khác nhau cho cùng một khái niệm.
+- Bốn thành viên mô tả cùng một luồng từ chọn vé đến check-in mà không dùng hai từ khác nhau cho cùng một khái niệm.
 - Lê Văn Minh duyệt hoặc yêu cầu chỉnh các định nghĩa `CANDIDATE` và xác nhận cách diễn đạt của các mục `USER_CONFIRMED`.
 - Mọi vấn đề làm đổi nghĩa thuật ngữ đã được đóng hoặc ghi `OPEN` nguyên tử; hiện không còn mục `BLOCKS_B2`.
 - Không suy từ thuật ngữ sang service, Saga, schema, bảng hoặc hợp đồng kỹ thuật.

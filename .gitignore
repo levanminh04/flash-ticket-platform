@@ -7,6 +7,14 @@
 **/.env.*
 !**/.env.example
 
+# Local overrides and machine-specific configuration
+docker-compose.override.yml
+docker-compose.local.yml
+application-local.yml
+application-local.yaml
+application-local.properties
+*.local
+
 # Credentials and private keys
 *.pem
 *.key
@@ -14,6 +22,9 @@
 *.pfx
 credentials.json
 service-account*.json
+*-credentials.json
+secrets/
+**/secrets/
 
 # Claude Code local wiring
 # .claude/skills/govern-capstone-work is a filesystem junction to
@@ -28,6 +39,15 @@ service-account*.json
 .DS_Store
 Thumbs.db
 ~$*.docx
+.fleet/
+.project
+.classpath
+.settings/
+
+# Local tool state
+.codex/
+.claude/settings.local.json
+.claude/*.local.*
 
 # Build and dependency outputs
 **/target/
@@ -35,6 +55,21 @@ Thumbs.db
 **/dist/
 **/node_modules/
 .gradle/
+**/.gradle/
+out/
+**/out/
+
+# Frontend package-manager and bundler caches
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.yarn/install-state.gz
+*.tsbuildinfo
+.parcel-cache/
+.next/
+.nuxt/
+.vite/
 
 # Runtime and test artifacts
 *.log
@@ -42,3 +77,23 @@ logs/
 tmp/
 coverage/
 test-results/
+**/.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.tox/
+htmlcov/
+
+# Test and local report outputs
+surefire-reports/
+failsafe-reports/
+*.jfr
+
+# Local database and container artifacts
+*.sqlite
+*.sqlite3
+*.db
+docker-data/
+**/docker-data/

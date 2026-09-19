@@ -1,4 +1,6 @@
 # QUY TRÌNH LÀM VIỆC — TÀI LIỆU CHỦ
+
+> **Ngữ cảnh hiện hành 18/09/2026:** đề tài **Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố**, nguồn [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Nhóm bốn người và phạm vi phụ trách theo [roles.md](project/roles.md). Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`).
 ## ĐATN FlashTicket · PTIT
 ### *Tài liệu duy nhất theo hằng ngày. Ba tầng A/B/C là phần tra cứu chi tiết cho từng bước ở đây.*
 
@@ -62,7 +64,7 @@ Một lần ở giai đoạn lập kế hoạch: tài liệu này → phần ch�
 
 **7. Nhóm dùng công cụ AI.** Viết mã rẻ, ra quyết định kiến trúc thì không. Nút thắt là chất lượng thiết kế.
 
-**8. Mobile là một client của cùng hệ thống nghiệp vụ.** Không tạo nhánh nghiên cứu mobile riêng nếu ứng dụng chủ yếu dùng lại backend Spring Boot. Tuy nhiên, check-in trực tuyến vẫn là use case cốt lõi: backend phải xác thực QR, bảo đảm idempotency và ngăn hai thiết bị check-in cùng vé. **Không làm check-in offline.**
+**8. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`).** Nếu làm, mobile là client của cùng hệ thống nghiệp vụ. Không tạo nhánh nghiên cứu mobile riêng nếu ứng dụng chủ yếu dùng lại backend Spring Boot. Tuy nhiên, check-in trực tuyến vẫn là use case cốt lõi: backend phải xác thực QR, bảo đảm idempotency và ngăn hai thiết bị check-in cùng vé. **Không làm check-in offline.**
 
 **9. CI/CD là phần hỗ trợ.** Thực hiện nếu giúp tích hợp/triển khai, nhưng không đưa thành mục tiêu nghiên cứu, ASR hay điều kiện kết luận đồ án thành công.
 
@@ -101,9 +103,9 @@ Chỉ viết lý thuyết cần để hiểu quyết định và phép đánh gi
 
 # PHẦN 3 — BẢY GIAI ĐOẠN, HAI NHÁNH
 
-Đề tài là **chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc** (`DH-TEN`). Nguyên văn thư định hướng tại [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
+Đề tài là **Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố** (`DT18-TEN`). Nhiệm vụ nguyên văn tại [nguồn 18/09](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); thư 22/08 giữ vai trò bằng chứng lịch sử.
 
-**Bảy giai đoạn dưới đây là nhịp của bộ tài liệu hệ thống** — nghiệp vụ bán vé và quản trị liên quan, tức hệ giao dịch được mô hình hóa ở `DH-MT1`. Bộ tài liệu RCA ở `docs/research-rca/` có nhịp làm việc và cổng kiểm soát riêng, **không** đi qua bảy giai đoạn này.
+**Bảy giai đoạn dưới đây là nhịp của bộ tài liệu hệ thống** — nghiệp vụ bán vé và quản trị liên quan, phục vụ trực tiếp nhiệm vụ xây dựng và đánh giá hệ phân tán `DT18-NV1`. Bộ tài liệu RCA ở `docs/research-rca/` có nhịp làm việc và cổng kiểm soát riêng, **không** đi qua bảy giai đoạn này.
 
 Hai bộ gặp nhau ở đúng ba chỗ:
 
@@ -113,7 +115,7 @@ Hai bộ gặp nhau ở đúng ba chỗ:
 | **Giai đoạn 4 — kiến trúc** | Nơi cơ chế RCA được tích hợp và chạy trong FlashTicket (`RES-023` mức 2, gate B11); quyền chỉ đọc; vị trí triển khai |
 | **Hai cửa nối** | `docs/research-rca/R0-boi-canh-va-rang-buoc.md` §3 và `docs/project/lien-ket-rca.md` |
 
-> **Cách chia "nhánh N / nhánh T" đã bị gỡ** (`RES-034`). Nó ra đời khi trợ lý chẩn đoán là một **tính năng phụ của sản phẩm bán vé**. Nay phần chẩn đoán **là đề tài** và có bộ tài liệu riêng, nên chia như cũ là tổ chức theo bản đồ đã lỗi thời. Ranh giới trách nhiệm giữa hai bộ ghi tại `AGENTS.md` mục 7.
+> **Cách chia "nhánh N / nhánh T" đã bị gỡ** (`RES-034`). Nó ra đời khi trợ lý chẩn đoán là một **tính năng phụ của sản phẩm bán vé**. Theo DT18, xây dựng hệ phân tán và ứng dụng đồ thị để giám sát/chẩn đoán cùng là nhiệm vụ của đề tài; phần phương pháp có bộ tài liệu riêng, nên chia như cũ là tổ chức theo bản đồ đã lỗi thời. Ranh giới trách nhiệm giữa hai bộ ghi tại `AGENTS.md` mục 7.
 
 ---
 
@@ -205,7 +207,7 @@ Hai bộ gặp nhau ở đúng ba chỗ:
 - B11-A ở đúng đường dẫn canonical, được người thật duyệt `APPROVED`; B11-B ghi phiên bản B11-A đã dùng và cũng được duyệt trước B11-C
 - Mỗi ADR ở B11-C truy được phương án độc lập tại B11-A và kết quả kiểm tra khả thi tại B11-B; B5.5 không xuất hiện như nguồn sinh ranh giới đích
 - Mỗi ADR đã ghi kết quả kiểm tra tác động lên A1–A6. Nếu phát biểu vấn đề, mục tiêu, phạm vi, câu hỏi nghiên cứu hoặc cách đánh giá bị ảnh hưởng, các tạo tác liên quan đã được cập nhật, duyệt lại và các đầu vào phụ thuộc đã được kiểm tra lại trước khi ADR chuyển sang `Chấp nhận`
-- Các bản đồ/đặc tả xuyên service cốt lõi ở Phần 5 đã đủ để ba thành viên hiện thực nhất quán; không đặt chỉ tiêu đúng 8 hình
+- Các bản đồ/đặc tả xuyên service cốt lõi ở Phần 5 đã đủ để bốn thành viên hiện thực nhất quán; không đặt chỉ tiêu đúng 8 hình
 - Mọi ADR có đủ hai trường *Phục vụ ASR nào* và *Kiểm chứng bằng cách nào*
 - **Kỷ luật dữ liệu — đã chốt:** thiết kế đích chia dữ liệu theo ranh giới; mỗi đơn vị sở hữu phần của mình và dùng credential chỉ có quyền trên phần đó; giữa các ranh giới **không có khóa ngoại, JOIN, repository hoặc truy vấn trực tiếp**; liên kết ngoài miền là ID mềm, dữ liệu cần dùng cục bộ lấy qua API hoặc bản sao đồng bộ bằng sự kiện. **Thứ B11-A và B12 quyết là *năng lực nào gộp vào ranh giới nào*** — số ranh giới và cách nhóm chúng — chứ không phải có áp kỷ luật trên hay không (`GOV-045`, siết `GOV-038`)
 - **Không có vòng lặp phụ thuộc đồng bộ** (A gọi B, B gọi A)
@@ -362,9 +364,9 @@ Không biến quy trình thành chuỗi cổng hình thức. Các giai đoạn c
 | Hiện thực một Saga | Trạng thái, idempotency, timeout/thử lại/bù trừ và test lỗi | Đây là phần tốn chi phí nhất và bị giới hạn ≤3 luồng |
 | Tích hợp cơ chế chẩn đoán | Logging có cấu trúc, mã tương quan, masking và nguồn log | Không phương pháp chẩn đoán nào cứu được đầu vào thiếu ngữ cảnh hoặc lộ bí mật |
 | Benchmark | Cấu hình triển khai thực tế, workload, dữ liệu kiểm tra và tiêu chí | Kết quả chỉ có nghĩa khi điều kiện chạy được công bố |
-| Ba người hiện thực song song | Hợp đồng liên quan đủ ổn định và có người sở hữu thay đổi | Tránh sửa hai đầu không kiểm soát |
+| Các thành viên hiện thực song song | Hợp đồng liên quan đủ ổn định và có người sở hữu thay đổi | Tránh sửa hai đầu không kiểm soát |
 
-Hai ràng buộc phạm vi **không được vượt** nếu chưa có quyết định mới của chủ đồ án: ≤8 service nghiệp vụ và ≤3 Saga. Việc dùng 2 EC2 cũng đã chốt; **cách bố trí chưa chốt** và được quyết định sau khi so sánh/đo thử.
+Hai ràng buộc phạm vi **không được vượt** nếu chưa có quyết định mới của chủ đồ án: ≤8 service nghiệp vụ và ≤3 Saga. Việc dùng 2 EC2 cũng đã chốt; **cách bố trí mục tiêu đã chốt tại B11-C**; phải kiểm chứng khi triển khai/thử tải, không coi thiết kế là kết quả vận hành.
 
 Khi theo dõi tiến độ, nhóm có thể dùng lịch tuần bình thường. Mỗi lần rà soát chỉ cần trả lời:
 

@@ -1,25 +1,15 @@
-# Phân vai và quyền quyết định
+# Phạm vi phụ trách của nhóm
 
-## Thành viên
+- Cập nhật: 2026-09-18; phân công lần đầu do Minh cung cấp (`PRJ-027`–`PRJ-034`).
+- Nhóm hiện có **4 người: Minh, Sơn, Tuấn, Tuyến**. Nhật không còn trong nhóm (`PRJ-028`); bảng này thay toàn bộ phân công cũ.
 
-| Thành viên | Mã sinh viên | Trạng thái phân vai |
-|---|---|---|
-| Lê Văn Minh | B22DCCN533 | Đã xác nhận: kiến trúc tổng thể, backend, nghiên cứu và thiết kế cơ chế chẩn đoán nguyên nhân gốc |
-| Phạm Văn Tuyến | B22DCCN773 | Đã xác nhận: phụ trách trọn gói mobile; có thể hỗ trợ một số chức năng backend sau khi chia workload |
-| Phạm Long Nhật | B22DCCN581 | Đã xác nhận: phụ trách trọn gói frontend ReactJS; hỗ trợ nghiên cứu chẩn đoán và phân tích nghiệp vụ |
+| Thành viên | Phạm vi phụ trách |
+|---|---|
+| Minh | Lead giai đoạn đầu; phụ trách chính RCA; API Gateway, Eureka, Config Server, hạ tầng local, coding convention, quy tắc branch/PR, CI baseline, cấu trúc Postman, observability baseline, review PR kiến trúc |
+| Sơn | Keycloak, custom theme Keycloak, tích hợp Keycloak–RabbitMQ để đồng bộ người dùng mới đăng nhập; booking-service và dữ liệu Booking |
+| Tuấn | payment-service, ticket-service và dữ liệu tương ứng |
+| Tuyến | Frontend, event-service, user-service, dữ liệu Event/User và chatbot |
 
-## Ma trận phân công baseline
+**Mobile:** phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`); chưa phân công người phụ trách. Không mặc nhiên tiếp tục phân công mobile cũ cho Tuyến.
 
-Hai cột `Người quyết định thiết kế` và `Người hiện thực hóa` phải tách biệt. Một người có thể nằm ở cả hai cột, nhưng không được suy ra trách nhiệm thiết kế chỉ từ số dòng code.
-
-| Phạm vi | Người quyết định thiết kế | Người hiện thực hóa | Người rà soát | Trạng thái |
-|---|---|---|---|---|
-| Kiến trúc tổng thể và ranh giới service | Lê Văn Minh | Lê Văn Minh điều phối tích hợp | Cả nhóm | Minh đã xác nhận; ranh giới cụ thể chờ B11 |
-| Backend, giao dịch đặt vé và kiểm thử độ tin cậy | Lê Văn Minh | Lê Văn Minh chính; Phạm Văn Tuyến có thể hỗ trợ phần sẽ chốt sau | Cả nhóm | Minh đã xác nhận; phần hỗ trợ của Tuyến còn `OPEN` |
-| Frontend web và trải nghiệm buyer/organizer | Phạm Long Nhật trong phạm vi FE; Lê Văn Minh duyệt hợp đồng/kiến trúc chung | Phạm Long Nhật | Lê Văn Minh và Phạm Văn Tuyến | Đã xác nhận |
-| Mobile và check-in trực tuyến | Phạm Văn Tuyến trong phạm vi mobile; Lê Văn Minh duyệt hợp đồng/kiến trúc chung | Phạm Văn Tuyến | Lê Văn Minh và Phạm Long Nhật | Đã xác nhận |
-| Cơ chế chẩn đoán nguyên nhân gốc | Lê Văn Minh | Lê Văn Minh chính; Phạm Long Nhật hỗ trợ | Cả nhóm | Đã xác nhận |
-| Phân tích nghiệp vụ | Lê Văn Minh | Lê Văn Minh chính; Phạm Long Nhật hỗ trợ | Cả nhóm | Đã xác nhận |
-| Tích hợp, thí nghiệm và báo cáo | Cả nhóm | Cả nhóm | Cả nhóm | Đã định hướng |
-
-“Trọn gói” nghĩa là chịu trách nhiệm chính từ phân tích giao diện, hiện thực đến kiểm thử phần client tương ứng, trong giới hạn hợp đồng backend và kiến trúc chung đã duyệt. Không dùng bảng này để tự khai đóng góp. Ba thành viên đã xác nhận baseline phân vai; phạm vi backend cụ thể Tuyến sẽ hỗ trợ vẫn là `OPEN` cho đến khi nhóm chia workload. Mọi thay đổi sau đó phải được nhóm ghi lại.
+Phạm vi phụ trách không thay quyền phê duyệt thiết kế/gate của dự án. Đóng góp thực tế được ghi theo công việc đã hoàn thành, không suy từ bảng giao việc.

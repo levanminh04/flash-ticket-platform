@@ -1,4 +1,6 @@
 # TẦNG A — KHUNG PHƯƠNG PHÁP NGHIÊN CỨU
+
+> **Áp dụng từ 18/09/2026:** nguồn tên/nhiệm vụ là [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Khung phương pháp phải phục vụ cả xây dựng/đánh giá hệ bán vé phân tán và giám sát/chẩn đoán; không dùng khung để thu hẹp nguyên văn nhiệm vụ. Phân công bốn người và mobile tùy thời gian đọc [roles.md](project/roles.md).
 ## ĐATN FlashTicket · PTIT · Nộp 14/12/2026
 ### *(Bản viết lại — thay thế bản trước, vốn đã đi thẳng vào điền nội dung thay vì dựng khung)*
 
@@ -153,8 +155,8 @@ Ba dữ kiện bối cảnh, mỗi cái đẻ ra một quy tắc:
 
 | Dữ kiện | Quy tắc phát sinh cho Tầng A |
 |---|---|
-| **Chấm điểm cá nhân, một quyển báo cáo, hỏi theo phần** | Không chia thành nhiều câu hỏi nghiên cứu song song (dễ thành ba đồ án dán lại). Dùng **một trục nghiên cứu duy nhất**, và bổ sung một bảng **phân công thực hiện** để mỗi phần truy được về người làm → Phiếu A9 |
-| **Bạn là người quyết định thiết kế toàn hệ thống** | Trục nghiên cứu là **chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc** (`DH-TEN`). Hệ thống đặt vé là hệ được mô hình hóa ở `DH-MT1`, nên kiến trúc và các cơ chế bảo đảm tính đúng đắn vẫn phải làm — nhưng chúng là **đầu vào và bối cảnh** của trục, không phải bản thân trục. Mobile là một client của cùng hệ thống và không thành nhánh nghiên cứu riêng; check-in trực tuyến vẫn là use case nghiệp vụ cốt lõi cần API, idempotency và kiểm thử cạnh tranh ở backend |
+| **Chấm điểm cá nhân, một quyển báo cáo, hỏi theo phần** | Không chia thành nhiều câu hỏi nghiên cứu song song (dễ thành các đồ án rời ghép lại). Dùng **một trục nghiên cứu duy nhất**, và bổ sung một bảng **phân công thực hiện** để mỗi phần truy được về người làm → Phiếu A9 |
+| **Minh lead giai đoạn đầu, phụ trách chính RCA; nhóm bốn người** | Nhiệm vụ DT18 bao gồm xây dựng và đánh giá hệ thống bán vé phân tán, cùng đồ thị phụ thuộc để giám sát/chẩn đoán. Phân công lấy tại `docs/project/roles.md`; mobile chỉ làm khi thực sự thừa thời gian. Không hạ hệ thống thành bối cảnh chỉ cần chạy được |
 | **Phần chẩn đoán và giải thích thuộc bộ tài liệu RCA** | Tầng A chỉ phát biểu mục tiêu ở mức vấn đề. Phương pháp — dựng đồ thị, xếp hạng, lớp giải thích — đặc tả ở `docs/research-rca/`, không ở Tầng A và không ở Tầng B. Bộ hệ thống chịu trách nhiệm **dữ liệu quan sát và điểm tích hợp** (`RES-033`). Không tuyên bố huấn luyện mô hình |
 
 ---
@@ -333,13 +335,13 @@ Khách thể (bối cảnh áp dụng): ________________________________
 | Vòng | Nghĩa | Kiểm chứng ở mức nào |
 |---|---|---|
 | **Vòng 1 — Phạm vi nghiên cứu** | Đào sâu, có đo đạc, có phân tích đánh đổi | Thực nghiệm + phân tích |
-| **Vòng 2 — Phạm vi sản phẩm** | Làm chạy được để vòng 1 có ngữ cảnh hoạt động | Chỉ kiểm thử chức năng |
+| **Vòng 2 — Phạm vi sản phẩm** | Sản phẩm và chức năng cần hiện thực | Kiểm chức năng; các thuộc tính được DT18 yêu cầu đo phải có thực nghiệm, không được hạ xuống chỉ chạy được |
 | **Vòng 3 — Ngoài phạm vi** | Nêu tên **kèm lý do**, không làm | Không |
 
-- Chỉ đưa vào lớp nghiên cứu những điểm gắn trực tiếp với `DH-TEN` — chẩn đoán nguyên nhân gốc bằng đồ thị phụ thuộc — hoặc với các bất biến của hệ giao dịch được mô hình hóa, và có cách kiểm chứng rõ.
+- Đưa vào lớp đo sâu các nội dung thuộc DT18: tính đúng đắn/hiệu năng/mở rộng/ổn định của hệ bán vé và giám sát/chẩn đoán bằng đồ thị, mỗi nội dung có cách kiểm chứng rõ. Ba vòng là cách tổ chức, không được cắt bớt nhiệm vụ chính thức.
 - Nêu các mục ngoài phạm vi quan trọng để tránh hiểu nhầm; không cần liệt kê mọi tính năng không làm.
 - Ghi kèm điều kiện hạ tầng/dữ liệu vì chúng giới hạn khả năng suy rộng kết quả.
-- Mobile được tính trong phạm vi sản phẩm và phân tích nghiệp vụ chung. Check-in trực tuyến thuộc lớp nghiên cứu khi dùng để kiểm chứng bất biến “một vé chỉ check-in thành công một lần”; **check-in offline nằm ngoài phạm vi**.
+- Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (PRJ-035); nếu làm thì dùng chung nghiệp vụ backend. Check-in trực tuyến thuộc lớp nghiên cứu khi dùng để kiểm chứng bất biến “một vé chỉ check-in thành công một lần”; **check-in offline nằm ngoài phạm vi**.
 - CI/CD là công việc hỗ trợ nếu có điều kiện, không nằm trong phạm vi nghiên cứu cốt lõi.
 
 **Phép thử:** với mỗi mục ở lớp nghiên cứu, phải chỉ ra được vấn đề nguồn và bằng chứng sẽ thu. Nếu hai mục đo cùng một điều, gộp lại.
@@ -441,7 +443,7 @@ Kết quả nghiên cứu gồm (theo loại tạo tác):
 - Chỉ chốt số chương sau khi nhận mẫu/ý kiến chính thức cho ĐATN; tài liệu môn Thực tập cơ sở chỉ là tham khảo phong cách.
 - Bố cục: mỗi chương một dòng, nói rõ nội dung và đầu ra chính; không cần gắn số hoạt động DSRM.
 - Phân công: một bảng nhỏ **phần việc → người thực hiện**, đặt ở Lời mở đầu hoặc cuối Chương 1
-- Vì bạn quyết định thiết kế toàn hệ thống, bảng cần tách hai cột khác nhau: **người quyết định thiết kế** và **người hiện thực hóa** — hai cột này không trùng nhau, và đó chính là điều cần thể hiện
+- Phân công hiện hành chỉ ghi phạm vi phụ trách tại `docs/project/roles.md`. Khi báo cáo đóng góp thực tế, phân biệt quyết định thiết kế với hiện thực nếu cần; không tự gán quyền duyệt chỉ từ người viết code
 
 **Phép thử:** khi hội đồng hỏi riêng một thành viên về phần của họ, người đó tra bảng này có biết mình phải trả lời phần nào không?
 
@@ -452,10 +454,11 @@ BỐ CỤC (số chương theo mẫu ĐATN được xác nhận):
  Chương/Mục: ________________ | Nội dung/đầu ra: ______________
  Chương/Mục: ________________ | Nội dung/đầu ra: ______________
 
-PHÂN CÔNG (phần việc | quyết định thiết kế | hiện thực hóa):
- ______________ | ______________ | ______________
- ______________ | ______________ | ______________
- ______________ | ______________ | ______________
+PHÂN CÔNG (thành viên | phạm vi phụ trách):
+ Minh  | ______________
+ Sơn   | ______________
+ Tuấn  | ______________
+ Tuyến | ______________
 ```
 
 **Đi vào:** mục Bố cục đồ án/Lời mở đầu theo mẫu chính thức

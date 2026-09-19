@@ -7,7 +7,7 @@
 
 ## 1. Phạm vi và căn cứ
 
-FlashTicket phải cho dựng lại một giao dịch xuyên HTTP, database và message, rồi cung cấp dữ liệu đã lọc cho cơ chế RCA chỉ đọc. Đích nghiên cứu vẫn là **chẩn đoán nguyên nhân gốc bằng đồ thị phụ thuộc**, gồm log và trace theo [thư định hướng DH-TEN, DH-MT1–DH-MT4](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md). B16 không quyết phương pháp dựng đồ thị, xếp hạng, bộ node được chấm hoặc cách dùng LLM.
+FlashTicket phải cho dựng lại một giao dịch xuyên HTTP, database và message, rồi cung cấp dữ liệu đã lọc cho cơ chế RCA chỉ đọc. Nhiệm vụ hiện hành gồm xây dựng/đánh giá hệ thống và ứng dụng đồ thị để giám sát/chẩn đoán bằng **log, trace và metrics**, theo [DT18-NV1–NV3](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Cập nhật căn cứ ngày 18/09 không đổi schema quan sát đã duyệt. B16 không quyết phương pháp dựng đồ thị, xếp hạng, bộ node được chấm hoặc cách dùng LLM.
 
 Năm service nghiệp vụ giữ nguyên. RCA/lớp giải thích ở đơn vị triển khai riêng, đọc kho quan sát; không credential database nghiệp vụ và không đường tự sửa đơn/tiền/vé. Gateway và Keycloak, broker, database, host cũng có thể sinh tín hiệu; số node quan sát không bằng số service nghiệp vụ.
 

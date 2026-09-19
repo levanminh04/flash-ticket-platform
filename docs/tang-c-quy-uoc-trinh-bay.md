@@ -1,4 +1,6 @@
 # TẦNG C — KHUNG QUY ƯỚC TRÌNH BÀY
+
+> **Ngữ cảnh hiện hành 18/09:** tên/nhiệm vụ theo [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); nhóm và phạm vi phụ trách theo [roles.md](project/roles.md). Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian. Các ví dụ/lịch sử không thay thế ngữ cảnh này.
 ## ĐATN FlashTicket · PTIT · Nộp 14/12/2026
 
 ---
@@ -312,7 +314,7 @@ docs/
  │   └─ ADR-XXX-….md                   (ADR kiến trúc đích — cổng B11-C, xem adr/README.md)
  ├─ domain/                            (B3–B8: quy trình, sự kiện, context, use case, aggregate, yêu cầu)
  ├─ quality-scenarios/                 (B9 bộ kịch bản, B10 bảng ưu tiên và danh sách ASR)
- ├─ architecture/                      (B11-A tập phương án độc lập, B11-B đối chiếu khả thi — CHƯA TẠO)
+ ├─ architecture/                      (B11-A tập phương án độc lập — ĐÃ TẠO 2026-08-29, DRAFT; B11-B đối chiếu khả thi — CHƯA TẠO)
  ├─ diagrams/src/                      (sơ đồ dạng mã: PlantUML, Structurizr DSL)
  ├─ contracts/                         (đặc tả API, lược đồ sự kiện)
  ├─ experiments/                       (kịch bản đo, script, kết quả thô)
@@ -354,7 +356,7 @@ docs/
 > **Trạng thái:** Chấp nhận · **Ngày:** ___ · **Người quyết định:** ___
 >
 > ## Bối cảnh
-> Đồ án kéo dài khoảng 19 tuần với ba thành viên, trong đó một người giữ vai trò quyết định thiết kế. Các quyết định kiến trúc sẽ được đưa ra rải rác trong suốt quá trình, và một số sẽ phải thay đổi khi triển khai thực tế bộc lộ vấn đề. Đến giai đoạn viết báo cáo, nhóm cần tái dựng được *vì sao* từng quyết định được đưa ra, không chỉ *quyết định là gì*. Ngoài ra, do hình thức chấm điểm là cá nhân trong khi chỉ có một quyển báo cáo, cần có cơ chế truy vết ai quyết định điều gì.
+> Đồ án kéo dài khoảng 19 tuần với bốn thành viên, Minh lead giai đoạn đầu và phụ trách chính RCA. Các quyết định kiến trúc sẽ được đưa ra rải rác trong suốt quá trình, và một số sẽ phải thay đổi khi triển khai thực tế bộc lộ vấn đề. Đến giai đoạn viết báo cáo, nhóm cần tái dựng được *vì sao* từng quyết định được đưa ra, không chỉ *quyết định là gì*. Ngoài ra, do hình thức chấm điểm là cá nhân trong khi chỉ có một quyển báo cáo, cần có cơ chế truy vết ai quyết định điều gì.
 >
 > ## Các phương án đã cân nhắc
 >
@@ -551,7 +553,7 @@ Ma trận 9 cột và file bảng tính riêng là quá nặng cho đồ án nà
 |---|---|---|---|
 | Sửa khi nào | Khi mục tiêu/phạm vi/bằng chứng được duyệt hoặc thay đổi | Khi đầu ra, quyết định hoặc thứ tự thực hiện đổi | Khi phát sinh loại sơ đồ/mẫu mới hoặc quy định chính thức |
 | Nếu sai thì | Sửa mạch vấn đề–mục tiêu–đánh giá liên quan | Rà lại đầu ra/thiết kế bị ảnh hưởng | Sửa biểu diễn và liên kết liên quan |
-| Ai đọc | Cô Liên, hội đồng | Ba thành viên | Người đang vẽ hoặc đang viết |
+| Ai đọc | Cô Liên, hội đồng | Bốn thành viên | Người đang vẽ hoặc đang viết |
 
 ---
 

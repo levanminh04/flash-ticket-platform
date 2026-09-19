@@ -1,5 +1,7 @@
 # B3 — Quy trình nghiệp vụ
 
+> **Cập nhật ngữ cảnh 18/09:** đề tài/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm bốn người; mobile là phần phụ theo PRJ-035. Nội dung nghiệp vụ/bất biến và baseline duyệt bên dưới không được đổi trong đợt này. Các phiên bản A1–A6 và DH-* được dẫn trong hồ sơ duyệt là đầu vào tại thời điểm duyệt; bản diễn giải A1–A6 hiện hành đang REVIEW_READY. Không coi bản mới tự được phê duyệt, không dùng lời khai cũ để hạ nhiệm vụ xây dựng/đánh giá DT18.
+
 - Phiên bản: `B3-v0.11`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh
@@ -13,7 +15,7 @@
 
 ## 1. Mục đích và giới hạn
 
-Tài liệu mô tả hành vi nghiệp vụ đầu-cuối để ba thành viên thống nhất tác nhân, điều kiện, đường đi chính và nhánh lỗi trước khi lập dòng thời gian sự kiện miền ở B4. Đây chưa phải thiết kế đơn vị triển khai, cơ sở dữ liệu, hợp đồng tích hợp hoặc cơ chế giao dịch phân tán. Các luồng phối hợp chỉ được mô tả theo kết quả nghiệp vụ; việc có dùng Saga hay mẫu kiến trúc nào thuộc B10/B11.
+Tài liệu mô tả hành vi nghiệp vụ đầu-cuối để bốn thành viên thống nhất tác nhân, điều kiện, đường đi chính và nhánh lỗi trước khi lập dòng thời gian sự kiện miền ở B4. Đây chưa phải thiết kế đơn vị triển khai, cơ sở dữ liệu, hợp đồng tích hợp hoặc cơ chế giao dịch phân tán. Các luồng phối hợp chỉ được mô tả theo kết quả nghiệp vụ; việc có dùng Saga hay mẫu kiến trúc nào thuộc B10/B11.
 
 Phạm vi gồm bốn quy trình:
 
@@ -200,7 +202,7 @@ Yêu cầu/kết quả hoàn, giao dịch thu, đơn, giữ chỗ, vé, trạng 
 
 ### 5.1 Tác nhân
 
-- Nhà tổ chức: đăng nhập mobile và quét QR cho sự kiện thuộc chính mình.
+- Nhà tổ chức: kiểm soát vé cho sự kiện thuộc chính mình. Các bước đăng nhập/quét QR trên mobile dưới đây là ví dụ client tùy chọn, chỉ triển khai khi thực sự thừa thời gian (`PRJ-035`); chức năng và bất biến check-in backend vẫn giữ nguyên.
 - Người xuất trình vé: đưa QR hợp lệ; sản phẩm không tạo hồ sơ hoặc xác minh danh tính attendee.
 
 ### 5.2 Tiền điều kiện
@@ -253,7 +255,7 @@ Quyền sở hữu organizer–sự kiện, vé/QR, cửa sổ check-in, trạng
 
 ## 7. Điểm cần người duyệt kiểm tra
 
-- Bốn quy trình đã bao phủ đúng phạm vi demo của web, backend và mobile hay chưa.
+- Bốn quy trình đã bao phủ đúng phạm vi demo của web/backend và, nếu thực hiện phần tùy chọn, mobile hay chưa.
 - Cách diễn đạt trạng thái/nhánh lỗi có phản ánh đúng quyết định nguồn mà không thêm chính sách mới hay không.
 - Công thức đối soát và điều kiện `PAID` có đủ dễ giải thích trong báo cáo và khi bảo vệ hay không.
 - Không có kết luận nào về đơn vị triển khai, schema, hợp đồng hoặc mẫu giao dịch phân tán ở tài liệu này.

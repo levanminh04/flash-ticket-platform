@@ -174,7 +174,7 @@ Các trường hợp sau phải trả kết quả rõ cho buyer, nhưng B4 khôn
 - vé thuộc sự kiện khác;
 - vé chưa phát hành, đã bị hủy/vô hiệu hoặc đã sử dụng.
 
-Mất kết nối trước khi yêu cầu tới hệ thống là trạng thái cục bộ của mobile: ứng dụng báo chưa thể xác nhận và cho phép thử lại khi có kết nối. Trường hợp này không thuộc `D03` và không mặc nhiên có bản ghi audit phía server.
+Nếu triển khai client mobile tùy thời gian (`PRJ-035`), mất kết nối trước khi yêu cầu tới hệ thống là trạng thái cục bộ: ứng dụng báo chưa thể xác nhận và cho phép thử lại khi có kết nối. Trường hợp này không thuộc `D03` và không mặc nhiên có bản ghi audit phía server. Ưu tiên mobile không thay các sự kiện/bất biến check-in backend.
 
 Không có danh tính attendee để đối chiếu. Người xuất trình QR hợp lệ được dùng vé; “không hỗ trợ chuyển nhượng” chỉ có nghĩa không có chức năng chuyển vé giữa tài khoản.
 
@@ -305,7 +305,7 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 | `B4-OPEN-01` | Cách đồng bộ/kho lưu kỹ thuật của hồ sơ nghiệp vụ và nghĩa cụ thể của nơi tạo admin đầu tiên | Vòng đời, tập trường tối thiểu, bộ role, điều kiện cấp role/công khai, từ chối và các trường hợp ngoài phạm vi đã được đóng bởi `BIZ-131`–`BIZ-141`, `BIZ-151`; chi tiết kỹ thuật chưa thuộc thẩm quyền B4 | Lê Văn Minh; đồng bộ/contract ở B11–B13 | Không; không được mở lại phần nghiệp vụ đã chốt hoặc dùng B4 để chốt schema |
 | `B4-OPEN-02` | **Chuyển giao 2026-08-27** sang bộ tài liệu RCA, mã kế nhiệm `R0-OPEN-07`. Câu hỏi — cơ chế chẩn đoán được khởi động thế nào, chọn dấu vết nào, lưu phản hồi ra sao, tập ca đánh giá gồm gì — **chưa được trả lời**, chỉ đổi nơi quản lý theo `RES-034`. B4 không còn mô hình hóa workflow chẩn đoán | `RES-034`; `T01`–`T04` đã bị gỡ cùng §8.3 | Bộ RCA, qua cửa `docs/project/lien-ket-rca.md` | Không chặn B4 |
 | `B4-OPEN-03` | Các mốc `saleStartAt`, `saleEndAt`, `eventStartAt`, `eventEndAt` được tính động hay phát thành sự kiện kỹ thuật | Đây là lựa chọn thiết kế/contract, không làm đổi quy tắc nghiệp vụ | Lê Văn Minh; B11/B13 | Không |
-| `B4-OPEN-04` | Dữ liệu audit chi tiết cho yêu cầu check-in bị từ chối và thao tác quản trị | B3 chỉ yêu cầu đủ dấu vết, chưa chốt trường/payload/lưu giữ | Lê Văn Minh; Phạm Văn Tuyến rà nhu cầu hiển thị mobile; B8/B13/B16 | Không |
+| `B4-OPEN-04` | Dữ liệu audit chi tiết cho yêu cầu check-in bị từ chối và thao tác quản trị | B3 chỉ yêu cầu đủ dấu vết, chưa chốt trường/payload/lưu giữ | Lê Văn Minh; B8/B13/B16. Phân công hiện hành theo roles.md; chưa giao người làm mobile, chỉ thực hiện khi dư thời gian (PRJ-035) | Không |
 | `B4-OPEN-05` | Cách bảo vệ đồng thời `INV-01`, `INV-03`, `INV-06` khi có nhiều yêu cầu cạnh tranh | B4 chỉ xác định hotspot; chưa có aggregate/ASR và không được chọn vị trí triển khai | Lê Văn Minh; B7/B9/B10, sau đó B11-A | Không; đây là đầu vào bắt buộc cho B7/B10 |
 | `B4-OPEN-06` | Cách theo dõi, thử lại và kết thúc xử lý N yêu cầu hoàn theo từng đơn khi hủy sự kiện | B3 chốt kết quả nghiệp vụ nhưng chưa chốt ngưỡng/thời gian/chính sách vận hành | Lê Văn Minh; B7/B9/B10; cơ chế kiến trúc chờ B11 | Không; giữ nguyên hotspot |
 | `B4-OPEN-08` | Quyền sở hữu dữ liệu vật lý của tỷ lệ phí nền tảng đặt ở đâu | Tính cố định sau phê duyệt đã được chốt tại `BIZ-142`; `BIZ-123` giữ riêng câu hỏi sở hữu dữ liệu | B12 sau B11-C | Không; B5/B7 được dùng nghĩa cố định nhưng không được chốt schema hoặc nơi sở hữu |

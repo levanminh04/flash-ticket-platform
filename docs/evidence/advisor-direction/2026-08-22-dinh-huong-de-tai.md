@@ -1,14 +1,16 @@
 # Thư định hướng của giảng viên hướng dẫn — 2026-08-22
 
+> **BẰNG CHỨNG LỊCH SỬ — cập nhật hiệu lực 18/09/2026.** Nguyên văn thư và mã DH-* bên dưới giữ đúng nghĩa tại ngày 22/08. Tên/nhiệm vụ hiện hành đã được Minh thay bằng [nguồn DT18](../project-direction/2026-09-18-de-tai-va-nhiem-vu.md), `PRJ-025/026`. Không dùng tên cũ hoặc lời diễn giải ở §3 làm định hướng hiện hành trái DT18.
+
 - **Loại tạo tác:** bằng chứng gốc, `FACT`
 - **Nguồn:** thư điện tử của cô Liên, giảng viên hướng dẫn
 - **Ngày nhận:** 2026-08-22
 - **Ngày lưu vào repo:** 2026-08-25, do Lê Văn Minh cung cấp nguyên văn
 - **Trạng thái:** chép nguyên văn, **không biên tập, không tóm tắt, không diễn giải**
 
-> **Vì sao tệp này tồn tại.** Đây là **văn bản định nghĩa đề tài**. Trước ngày 2026-08-25 nó chỉ tồn tại trong hộp thư, trong khi `A6`, `A7`, `A8`, `A9`, `A10` và `R0` đều khai nó là đầu vào — nghĩa là mọi trích dẫn "mục tiêu số 2/3/4" trong repo không kiểm chứng lại được. Việc lưu tệp này đóng `RES-008`, `A6-OPEN-05` và `R0-OPEN-04`.
+> **Vì sao tệp này tồn tại.** Đây là **văn bản định nghĩa đề tài tại thời điểm 22/08/2026**. Trước ngày 2026-08-25 nó chỉ tồn tại trong hộp thư, trong khi `A6`, `A7`, `A8`, `A9`, `A10` và `R0` đều khai nó là đầu vào — nghĩa là mọi trích dẫn "mục tiêu số 2/3/4" trong repo không kiểm chứng lại được. Việc lưu tệp này đóng `RES-008`, `A6-OPEN-05` và `R0-OPEN-04`.
 >
-> Mọi tài liệu trích dẫn định hướng phải trỏ về tệp này, không trỏ về trí nhớ hoặc về một bản tóm tắt trung gian.
+> Mọi tài liệu trích dẫn thư định hướng lịch sử 22/08 phải trỏ về tệp này, không trỏ về trí nhớ hoặc về một bản tóm tắt trung gian.
 
 ---
 

@@ -1,5 +1,7 @@
 # B11-C — Chốt kiến trúc đích và chuẩn bị ADR
 
+> **Cập nhật ngữ cảnh 18/09:** tên/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); nhóm bốn người theo [roles.md](../project/roles.md), mobile tùy thời gian. PA-6/Saga/quyền RCA và phê duyệt kiến trúc bên dưới giữ nguyên. Bảng tác động A1–A6 ghi kết quả của gate 04/09, không tự duyệt các bản A1–A6 viết lại theo DT18; các bản đó hiện REVIEW_READY.
+
 - Phiên bản: `B11-C-v0.3`
 - Trạng thái: `APPROVED`
 - Người duyệt: **Lê Văn Minh**

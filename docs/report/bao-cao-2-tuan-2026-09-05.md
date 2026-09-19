@@ -1,9 +1,13 @@
 # Báo cáo hai tuần — Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc
 
+> **LỊCH SỬ, không dùng làm ngữ cảnh hiện hành.** Tên đề tài và nhóm trong bản này thuộc thời điểm soạn. Từ 18/09, dùng [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) và [nhóm bốn người](../project/roles.md); Nhật đã rời nhóm. Không sửa ngược tác giả hay kết quả lịch sử thành thông tin mới.
+
+> ⛔ **BẢN LỊCH SỬ — ĐÃ BỊ THAY THẾ.** Tệp này được giữ để bảo toàn dấu vết của vòng báo cáo ban đầu, **không còn là nguồn kết luận hiện hành**. Các mâu thuẫn về số service/node, modality của MM-CIRCA, cấu hình BARO, PC+RandomWalk, phép so sánh “2×2”, oracle graph filter, thống kê, seed/runtime và patch trace đã được kiểm định và sửa tại [`docs/research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md`](../research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md). Bản Word hiện hành là `BaoCao_KhaoSat_RCA_v2.docx`; không trích nội dung bên dưới mà không đối chiếu E1.
+
 - **Nhóm:** Lê Văn Minh (B22DCCN533) · Phạm Văn Tuyến (B22DCCN773) · Phạm Long Nhật (B22DCCN581)
 - **Giảng viên hướng dẫn:** Cô Liên
 - **Mốc:** `DH-MOC` — báo cáo sau hai tuần kể từ định hướng ngày 2026-08-22
-- **Trạng thái:** `DRAFT`, chưa nộp
+- **Trạng thái:** `HISTORICAL_SUPERSEDED` — chưa nộp; được giữ làm lịch sử, không dùng làm kết luận hiện hành
 - **Đầu vào định hướng:** [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md) — nguyên văn
 
 > **Bố cục.** Báo cáo đi đúng sáu mục cô liệt kê, theo đúng thứ tự trong thư. Mã `DH-*` ở mỗi tiêu đề trỏ về câu nguyên văn tương ứng.

@@ -1,12 +1,14 @@
 # Liên kết giữa bộ tài liệu hệ thống và bộ tài liệu chẩn đoán
 
+> **Hiệu đính ngữ cảnh 18/09:** căn cứ đề tài là DT18; R0-v0.6 cập nhật ngữ cảnh, bảng 12 ràng buộc §3 không đổi. Các kết quả gate và phiên bản ở bảng dưới là dấu vết của lần đối chiếu đã ghi ngày, không tự chứng nhận đầu vào mới. Trạng thái hiện hành ở `implementation-status.md`; chưa tự chọn tập node/độ đo hoặc sửa thiết kế.
+
 - **Phiên bản:** `LK-v0.6`
 - **Trạng thái:** `DRAFT`
 - **Ngày tạo:** 2026-08-25 · **Sửa:** 2026-09-04, chạy lại phép thử độc lập trên `B11-C-v0.3` và đóng gate B11
 - **Thuộc bộ:** tài liệu hệ thống (`docs/`)
 - **Cửa đối ứng:** [`docs/research-rca/R0-boi-canh-va-rang-buoc.md`](../research-rca/R0-boi-canh-va-rang-buoc.md) §3
 
-> **Vì sao tệp này tồn tại.** Đề tài mà giảng viên đặt là *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"*, và `DH-MT1` đặt chính hệ thống của nhóm vào mục tiêu đầu tiên. Hai bộ tài liệu tách nhau để làm việc cho gọn, **không phải để tách đề tài**. Tệp này là **cửa chiều Hệ thống → Nghiên cứu**; `R0` §3 là cửa chiều ngược lại.
+> **Vì sao tệp này tồn tại.** Nhiệm vụ hiện hành [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) yêu cầu xây dựng/đánh giá hệ bán vé phân tán và áp dụng đồ thị để giám sát/chẩn đoán. Hai bộ tài liệu tách nhau để làm việc cho gọn, **không phải để tách đề tài**. Tệp này là **cửa chiều Hệ thống → Nghiên cứu**; `R0` §3 là cửa chiều ngược lại.
 >
 > Mục đích cụ thể: tránh việc thiết kế hệ thống ở `B9`–`B16` vô tình chặn khả năng tích hợp cơ chế chẩn đoán, phát hiện ra khi đã quá muộn để sửa rẻ.
 
@@ -14,7 +16,7 @@
 
 ## 1. Bộ hệ thống cấp gì cho bộ nghiên cứu
 
-`DH-MT1` cần một mô hình đồ thị phụ thuộc. Nguồn để dựng nó **đã có sẵn và đã được duyệt**:
+`DT18-NV2` cần một mô hình đồ thị phụ thuộc. Nguồn để dựng nó **đã có sẵn và đã được duyệt**:
 
 | Cần cho đồ thị | Lấy từ | Trạng thái |
 |---|---|---|

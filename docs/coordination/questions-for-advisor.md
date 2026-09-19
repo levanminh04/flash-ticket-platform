@@ -1,8 +1,29 @@
 # Nội dung cần xác nhận với giảng viên hướng dẫn
 
+- Trạng thái: bản soạn nội bộ, **chưa gửi trong đợt cập nhật này**.
+- Tên dùng hiện hành: **Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố**, theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) do Minh cung cấp ngày 18/09.
+- Nhóm bốn người và phạm vi phụ trách theo [roles.md](../project/roles.md). Không tự ghi đã nhận phản hồi từ giảng viên.
+
+## Nội dung hiện hành cần xác nhận
+
+| Nội dung | Đầu vào/nơi ghi phản hồi |
+|---|---|
+| Mẫu báo cáo, số chương, chuẩn trích dẫn và UML bắt buộc | Khung báo cáo, Tầng C |
+| Cách diễn giải mục tiêu/đối tượng/phạm vi theo nhiệm vụ mới | A1–A6 bản 18/09 đang REVIEW_READY |
+| Bộ dữ liệu và thiết kế đánh giá phù hợp | A8/A9/A10 của bộ RCA; các điểm OPEN do giảng viên sở hữu chưa tự đóng |
+
+### Tin nhắn dự thảo
+
+> Thưa cô, nhóm em đang cập nhật tài liệu cho đề tài “Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố”. Cô cho nhóm em xin cấu trúc báo cáo ĐATN, mẫu trình bày và yêu cầu sơ đồ hiện hành của khoa để nhóm hoàn thiện đúng quy định được không ạ? Nhóm sẽ trình rõ phần xây dựng và đánh giá hệ thống phân tán, cùng phần thực nghiệm và áp dụng đồ thị phụ thuộc để giám sát, chẩn đoán sự cố. Em cảm ơn cô.
+
+## Hồ sơ câu hỏi cũ — lịch sử, không gửi nguyên trạng
+
+Phần sau giữ bản soạn theo thư 22/08 và mốc 05/09. Tên cũ, cách chia phạm vi và câu “nếu còn sức, cô không yêu cầu” **không còn là nội dung đề nghị hiện hành**; đối chiếu DT18 trước khi sử dụng. Chưa có bằng chứng phản hồi mới trong lượt này.
+
+
 - **Trạng thái:** Đã soạn, chưa gửi.
 - **Người gửi dự kiến:** Lê Văn Minh hoặc đại diện nhóm.
-- **Tên đề tài dùng trong mọi tin nhắn:** *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"* (`DH-TEN`), nguyên văn tại [`../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
+- **Tên đề tài tại thời điểm soạn cũ:** *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"* (`DH-TEN`), nguyên văn tại [`../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
 
 ## Vòng 1 — tin nhắn ngắn đề xuất
 

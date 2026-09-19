@@ -1,5 +1,18 @@
 # BỐI CẢNH VÀ MONG MUỐN — ĐATN FlashTicket
 
+## Ngữ cảnh hiện hành — 2026-09-18
+
+- **Tên đề tài:** Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố.
+- **Nhiệm vụ nguyên văn:** [nguồn DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), thay định hướng cũ trong phạm vi `PRJ-025/026`.
+- **Nhóm:** bốn người — Minh, Sơn, Tuấn, Tuyến. Nhật đã rời nhóm. Minh lead giai đoạn đầu, phụ trách chính RCA; [phạm vi phụ trách lần đầu](project/roles.md) là nguồn phân công hiện hành.
+- **Mobile:** phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`); chưa phân công người thực hiện.
+- **Ưu tiên:** luồng chính chạy đúng → dữ liệu quan sát dùng được → thử tải/mô phỏng lỗi và RCA. Xây dựng và đánh giá hệ phân tán là nhiệm vụ trực tiếp, gồm thông lượng, thời gian đáp ứng, tỷ lệ lỗi, mở rộng, nhất quán và ổn định.
+- **Tiến độ:** Giai đoạn 5; thiết kế B12–B16 đã được duyệt 14/09, tám project khung được tạo trong commit 18/09. Không đồng nghĩa nghiệp vụ/build/E2E đã đạt. Xem [tiến độ](project/implementation-status.md).
+
+## Hồ sơ lịch sử — các mục 1–11 bên dưới
+
+Các mục 1–11 giữ lời nói/văn bản của từng thời điểm, **không phải ngữ cảnh hiện hành khi trái khối 18/09 ở trên**. Đặc biệt: tên cũ, nhóm ba người, phân công Nhật/Tuyến cũ, ưu tiên mobile và cách đặt hệ thống chỉ làm nền đã được thay thế. Các quyết định khác đọc theo phần còn hiệu lực của [sổ quyết định](project/decision-register.md), không khôi phục thiết kế trợ lý cũ từ lời ghi lịch sử.
+
 > **Mục đích:** ghi lại bối cảnh thực và mong muốn của chủ đồ án, tổng hợp từ các trao đổi và từ tài liệu do chính chủ đồ án cung cấp.
 >
 > **Nguyên tắc soạn:** chỉ ghi những gì chủ đồ án đã nói hoặc đã viết. Không thêm phân tích, không thêm đề xuất, không suy diễn. Cột **Nguồn** cho biết thông tin lấy từ đâu để kiểm chứng lại.

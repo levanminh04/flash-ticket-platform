@@ -1,5 +1,7 @@
 # B1 — Baseline quy trình chẩn đoán sự cố hiện tại
 
+> **Phạm vi thời điểm:** đây là baseline của cuộc khảo sát đã ghi ngày, không phải trạng thái triển khai hiện hành. Tên/nhiệm vụ nay theo [DT18](../project-direction/2026-09-18-de-tai-va-nhiem-vu.md); nhóm và phân công theo [roles.md](../../project/roles.md). Không dùng tên/nhân sự hoặc mức telemetry lịch sử để khẳng định hiện trạng mới.
+
 - **Ngày kiểm kê:** 2026-08-09
 - **Nguồn:** Kinh nghiệm xử lý sự cố do chủ đồ án cung cấp; log và mã nguồn phát triển được kiểm kê nội bộ tại commit `609fa2d37cad69aafa593b7db5b6cedeaf803da5`
 - **Trạng thái:** `APPROVED` — baseline quy trình và INC-01; độ bao phủ tập ca và thời gian chẩn đoán còn `OPEN`

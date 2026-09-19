@@ -1,5 +1,7 @@
 # B8 — Bảng yêu cầu chức năng và phi chức năng
 
+> **Cập nhật ngữ cảnh 18/09:** đề tài/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm bốn người; mobile là phần phụ theo PRJ-035. Nội dung nghiệp vụ/bất biến và baseline duyệt bên dưới không được đổi trong đợt này. Các phiên bản A1–A6 và DH-* được dẫn trong hồ sơ duyệt là đầu vào tại thời điểm duyệt; bản diễn giải A1–A6 hiện hành đang REVIEW_READY. Không coi bản mới tự được phê duyệt, không dùng lời khai cũ để hạ nhiệm vụ xây dựng/đánh giá DT18.
+
 - Phiên bản: `B8-v0.13`
 - Trạng thái: `APPROVED`
 - Người duyệt: Lê Văn Minh

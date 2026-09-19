@@ -1,164 +1,78 @@
 # Khung nội dung báo cáo
 
-**Đề tài:** *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"* — tên do giảng viên đặt, `DH-TEN`.
+**Đề tài:** Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố.
 
-**Trạng thái:** Khung nội dung sống. Chưa đánh số chương cho tới khi nhận mẫu ĐATN hiện hành.
-
-**Phiên bản khung:** `v4` — cập nhật ngày 2026-08-28 sau vòng duyệt `B8`/`B9`/`B10` và ba quyết định về mục tiêu nghiên cứu (`GOV-043`, `RES-045`–`RES-047`, `GOV-041`, `RES-046`). `v3` dựng ngày 2026-08-25 sau khi thư định hướng được lưu nguyên văn tại [`docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md).
-
-> **Phân biệt hai tài liệu.** Tệp này là khung của **quyển báo cáo cuối** (nộp 14/12/2026). Báo cáo nộp cô ở mốc hai tuần (`DH-MOC`) là một tài liệu khác, bám đúng sáu mục cô liệt kê, nằm tại `bao-cao-2-tuan-2026-09-05.md`.
-
----
+**Nguồn:** [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), Minh xác nhận 18/09/2026. **Phiên bản khung:** v5; khung sống, chưa khóa số chương trước mẫu khoa. Phân công theo [roles.md](../project/roles.md), nhóm Minh, Sơn, Tuấn, Tuyến. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian.
 
 ## Nguyên tắc chi phối
 
-**Một đề tài, một trục.** `DH-MT1` đặt hệ thống của nhóm — các dịch vụ đặt vé, thanh toán, xác thực, cơ sở dữ liệu, API đối tác — vào mục tiêu đầu tiên. Khối phân tích nghiệp vụ `B2`–`B8` **không phải phần phụ**: nó là nguồn dựng đồ thị.
+Một đề tài gồm xây dựng/đánh giá hệ bán vé phân tán và ứng dụng đồ thị để giám sát/chẩn đoán. Nội dung báo cáo phải bao phủ DT18-NV1–NV3; không giới hạn hệ thống vào vai bối cảnh hoặc chỉ kiểm chức năng.
 
-**Hai thứ không được lẫn:**
-
-| | Chỗ cơ chế được xây và chạy | Chỗ lấy số so sánh |
-|---|---|---|
-| Ở đâu | FlashTicket Platform | Bộ dữ liệu ca lỗi đã công bố |
-| Vì sao | `DH-MT1` | `DH-DATA`: chỉ bộ công bố mới có nhãn nguyên nhân thật |
-
-**Giới hạn phải công bố:** cho tới khi đạt mức 3 của lộ trình tại `A6` §1.3, không suy rộng kết quả trên bộ công bố thành khẳng định về hiệu quả trên chính FlashTicket.
-
----
+Thực nghiệm phương pháp trên dữ liệu công khai trước, thử trên FlashTicket sau. Tách rõ nguồn dữ liệu, cấu hình, nhãn và độ đo; không suy kết quả benchmark thành hiệu quả FlashTicket. Bản báo cáo 05/09 là lịch sử, không dùng tên/nhóm/phạm vi ở bản đó làm hiện hành.
 
 ## Bối cảnh và vấn đề
 
-- Bối cảnh hệ giao dịch trực tuyến kiến trúc phân tán; hậu quả nghiệp vụ khi phối hợp sai.
-- Chi phí xác định nguyên nhân khi dấu vết của một giao dịch nằm rải ở nhiều thành phần.
-- Hiện trạng quy trình chẩn đoán thủ công.
-- Giới hạn của khảo sát hệ thống bên ngoài.
+Nhu cầu phối hợp sự kiện, loại vé, đặt vé, tồn kho và thanh toán; tính đúng đắn dưới đồng thời/lỗi từng phần; yêu cầu đánh giá hệ phân tán; khó liên kết bằng chứng vận hành và xác định vùng sự cố.
 
-**Nguồn:** `A1-v0.2` (mạch năm nước), `A2-v0.2`, `B1`.
+**Nguồn:** A1-v0.3, A2-v0.3 và khảo sát B1. A1–A6 vừa được đồng bộ DT18, đang REVIEW_READY; không lấy dấu duyệt các phiên bản cũ làm phê duyệt câu chữ mới.
 
-> ✅ `A1-v0.2`, `A2-v0.2`, `A4-v0.2` đã tái baseline theo `DH-TEN` (`RES-032`) và **đã được Lê Văn Minh duyệt ngày 2026-08-27** (`GOV-033`). Khung này trích được và khóa được câu chữ. *(Dòng này trước 2026-08-28 còn ghi ba phiếu ở `REVIEW_READY` — lời khai lỗi thời.)*
+## Mục tiêu, đối tượng, phạm vi và phương pháp
 
-## Đối tượng, phạm vi, mục tiêu, phương pháp
+Trình bày nhiệm vụ DT18; mục tiêu/bằng chứng theo A3-v0.7, câu hỏi A4-v0.4 nếu mẫu yêu cầu, đối tượng A5-v0.4 và phạm vi A6-v0.7. Thể hiện các bước khảo sát → phân tích → thiết kế → hiện thực → kiểm chứng, không ép số chương theo khung phương pháp.
 
-Đối tượng nghiên cứu · phương tiện · khách thể · ba vòng phạm vi · mục tiêu từng vòng · câu hỏi nghiên cứu · phương pháp thu bằng chứng.
+## Cơ sở lý thuyết và lựa chọn
 
-**Nguồn:** `A5`, `A6`, `A3`, `A4`.
+Kiến trúc phân tán, bất biến/nhất quán, xử lý lặp và phối hợp giao dịch; quan hệ log–trace–metrics; đồ thị phụ thuộc và giới hạn suy luận nhân quả; nhóm phương pháp phát hiện/chẩn đoán và độ đo phù hợp. Chỉ đưa lý thuyết thực sự dùng.
 
-## Cơ sở lý thuyết
-
-Chỉ trình bày khái niệm thực sự được dùng trong một quyết định hoặc một phép đánh giá.
-
-- Bốn nhóm tên riêng không được lẫn: hệ thống thử nghiệm · bộ dữ liệu · thuật toán · độ đo.
-- Bốn họ phương pháp chẩn đoán, và họ nào thật sự lan truyền trên đồ thị.
-- Bộ độ đo xếp hạng, cách đọc, mức sàn ngẫu nhiên.
-- Quan hệ log – span – trace – metric.
-- Nền tảng nghiệp vụ: phân rã theo miền, nhất quán phân tán, idempotency.
-
-**Nguồn:** `A7`, `A9`, `A10` trong `docs/research-rca/`; `T-01`–`T-05`.
+Nguồn RCA: `docs/research-rca/A7-khai-niem-rca.md`, `docs/research-rca/A8-khao-sat-dataset.md`, `docs/research-rca/A9-do-do-thuc-nghiem.md`, `docs/research-rca/A10-khao-sat-phuong-phap.md`, E1; nguồn chung tại `docs/research/source-register.md`.
 
 ## Phân tích và thiết kế hệ thống
 
-- Tác nhân, use case, đặc tả use case.
-- Quy trình nghiệp vụ có nhánh thất bại.
-- Từ điển miền, mô hình miền, aggregate và bất biến.
-- Yêu cầu chức năng, ASR, kịch bản chất lượng.
-- C4 System Context và Container.
-- Lập luận ranh giới context, rồi lập luận riêng cách gộp/tách thành service vật lý.
-- Sở hữu dữ liệu, schema độc lập, ERD đích.
-- API, sự kiện, các luồng giao dịch xuyên service.
-- Check-in trực tuyến, idempotency, xử lý cạnh tranh.
-- Chuẩn logging, mã tương quan, khử nhạy cảm.
-- Kiến trúc triển khai trên hai máy.
-- UML theo đúng mục đích từng hình.
+Actor/use case và quy trình có nhánh lỗi; mô hình miền/bất biến; yêu cầu và kịch bản chất lượng; ranh giới service có căn cứ; sở hữu dữ liệu; API/sự kiện; Saga và các luồng cạnh tranh; mô hình triển khai; chuẩn quan sát và quyền truy cập. Check-in backend giữ bất biến đã duyệt; app mobile chỉ trình bày nếu thực sự được làm.
 
-**Nguồn:** `B2`–`B8`; `B10`/`B11` cùng ADR; `B12`–`B16`.
+**Nguồn:** B2–B16, ADR được chấp nhận. PA-6 và dữ liệu/hợp đồng đã duyệt không bị thay bởi tên đề tài mới. Các sơ đồ giải thích trạng thái đích, không kể lịch sử chuyển mã.
 
-> Phần này vừa là thiết kế sản phẩm, vừa là **đầu vào của `DH-MT1` và `DH-MT2`**. Ràng buộc để nó không chặn nhánh chẩn đoán: [`docs/project/lien-ket-rca.md`](../project/lien-ket-rca.md).
+## Đồ thị phụ thuộc và dữ liệu quan sát — DT18-NV2
 
-## Mô hình đồ thị phụ thuộc — `DH-MT1`
+Nút là dịch vụ/thành phần; cạnh gọi, trao đổi thông điệp hoặc phụ thuộc dữ liệu. Mỗi cạnh có nguồn và ý nghĩa; không chép đồ thị ngữ nghĩa B5 thành đồ thị runtime. Trình bày quy tắc ánh xạ log, trace, metrics; coverage, định danh, thời gian, sampling và dữ liệu thiếu.
 
-- Vì sao đồ thị ngữ nghĩa của `B5` §5 **không phải** đồ thị phụ thuộc vận hành.
-- Quy tắc chuyển đổi, và bằng chứng cho từng cạnh.
-- Nút hạ tầng và hệ ngoài.
-- Ánh xạ sang service vật lý sau khi `B11` chốt.
+## Giám sát và chẩn đoán
 
-## Ánh xạ log giao dịch và trace lên đồ thị — `DH-MT2`
+Xác định vùng ảnh hưởng, phát hiện bất thường, xếp hạng thành phần khả nghi; chỉ rõ bằng chứng và giới hạn. MyRCA là phương án nghiên cứu CANDIDATE cho tới khi được kiểm chứng. Lớp giải thích kế thừa RES-034 nhận kết quả đã xếp hạng; quyền chỉ đọc được thực thi thật. Không cam kết bỏ tái hiện lỗi, không tự kết luận nguyên nhân cuối cùng, không tự sửa nghiệp vụ.
 
-Trường bắt buộc của một dòng log giao dịch · quy tắc một span thành một cạnh · cách gắn tín hiệu bất thường vào nút hay cạnh.
+## Hiện thực và giao diện minh họa
 
-## Cơ chế lan truyền và xếp hạng — `DH-MT3`
-
-Bốn họ phương pháp và họ nào lan truyền trên đồ thị · cơ chế của nhóm · thiết kế so sánh.
-
-**Nguồn:** `A10` §1, §3.
-
-> Không viết "đề xuất phương pháp mới" khi chưa có kết quả thực nghiệm chống lưng.
-
-## Tích hợp AI hỗ trợ giải thích — `DH-MT4`
-
-Đầu vào là danh sách nghi phạm đã xếp hạng kèm bằng chứng; đầu ra là diễn giải nguyên nhân và bước xử lý gợi ý.
-
-**Ranh giới chỉ đọc** viết theo `NFR-08` và `ASR-12`, không dẫn `PRJ-002` như một thiết kế: `PRJ-002` gắn với **trợ lý cũ** đã bị gỡ, ba giới hạn của nó được chép sang `RES-034` và ràng buộc chỉ đọc nay viết trung tính cho **mọi thành phần quan sát hoặc chẩn đoán**. `ASR-12` thêm một vế phải giữ: quyền đó **thực thi bằng phân quyền thật, không phải bằng quy ước**.
-
-Ba giới hạn còn nguyên hiệu lực, phải nêu trong báo cáo: **không cam kết loại bỏ việc tái hiện lỗi · không tự kết luận nguyên nhân cuối cùng · không tự sửa hệ thống**.
-
-## Hiện thực
-
-Thành phần đã xây · phương pháp phát triển áp dụng thực tế · cách hiện thực các quyết định đích · sai lệch có ý nghĩa so với thiết kế đã chấp nhận.
-
-Mô tả trạng thái cuối, không kể lịch sử chuyển file, package hay commit.
+Thành phần thực sự đã xây, tích hợp và kiểm; giao diện minh họa mô hình/kết quả phân tích theo DT18-NV3. Thể hiện quyền người sử dụng và liên kết từ kết quả tới bằng chứng. Giao diện này là đầu ra chính, không đánh đồng với app mobile hoặc dashboard vận hành nâng cao tùy thời gian.
 
 ## Thực nghiệm và đánh giá
 
-**Hai mục tách bạch, không trộn số.**
+### Hệ thống bán vé phân tán — DT18-NV1
 
-### Kết quả chẩn đoán — `DH-DO`
+- Kiểm các luồng chính và bất biến: tồn kho, tiền, phát hành, xử lý lặp, check-in backend.
+- Nhiều mức tải và tình huống đồng thời; công bố workload, dữ liệu seed, thời gian đo, cấu hình/tài nguyên và số lần lặp.
+- Thông lượng, thời gian đáp ứng, tỷ lệ lỗi, khả năng mở rộng, tính nhất quán dữ liệu và độ ổn định giao dịch. Chưa có cấu hình đối chiếu thì không kết luận mở rộng tốt.
+- Phân tích đánh đổi và ca lỗi. Ngưỡng/giao thức còn OPEN lấy từ nguồn B15/B16/A3, không tự điền vào báo cáo.
 
-- Cấu hình chạy, bộ dữ liệu, số ca lỗi, điều kiện tái lập.
-- Bảng so sánh: **một bảng cho một bộ dữ liệu**, mọi phương pháp cùng bộ cùng độ đo.
-- **Cột đối chứng ngẫu nhiên trong mọi bảng.**
-- Mỗi số ghi rõ do nhóm chạy hay trích nguồn nào.
-- Hai lớp lỗi: tài nguyên/mạng và mức mã nguồn.
-- Kết quả không đạt và các ca thất bại.
+### Phát hiện và chẩn đoán — DT18-NV2/NV3
 
-### Nghiệm thu sản phẩm
+- Công khai trước, FlashTicket sau; mỗi bộ/môi trường có bảng riêng và điều kiện tái lập.
+- Chấm phát hiện, vùng ảnh hưởng, xếp hạng và giải thích theo đúng loại đầu ra; độ đo xếp hạng không thay độ đo phát hiện.
+- Đối chứng cùng điều kiện và mức sàn phù hợp tập ứng viên; kiểm ảnh hưởng đồ thị và từng nguồn dữ liệu, không chọn cấu hình trên tập test cuối.
+- Phân tích kết quả hiệu quả, thất bại, thiếu dữ liệu; runtime/tài nguyên chỉ báo khi đã đo.
 
-Kiểm thử chức năng và hợp đồng · không bán vượt vé dưới tải cao · một vé không check-in thành công nhiều lần · thanh toán chỉ ghi nhận một lần khi callback lặp · độ trễ và thông lượng trên cấu hình công bố.
+Nguồn kết quả: báo cáo run/manifest và E1. Kiểm định 990 dòng không phải 990 sự cố FlashTicket, không chứng minh MyRCA đã đạt.
 
-> **Ba mục tiêu `MT-1`, `MT-2`, `MT-3` được báo cáo Ở ĐÂY, không ở phần đóng góp nghiên cứu** (`RES-046`, 2026-08-28). Câu chữ và ý nghĩa của chúng không đổi; chỉ vai trò trong báo cáo đổi. Lý do viết thẳng vào báo cáo được: việc hệ đặt vé không bán vượt vé, không tính tiền hai lần, phục hồi được sau lỗi từng phần là **yêu cầu đúng đắn mà mọi hệ bán vé nghiêm túc đều phải có** — giữ chúng ở vai đóng góp buộc nhóm phải chứng minh cái không mới.
+## Kết luận, giới hạn và đóng góp
 
-**Nguồn:** `A9` cho độ đo; `B15` cho kiểm thử; `A3` §2 cho ba mục tiêu.
+Đối chiếu từng nhiệm vụ DT18 với kết quả có bằng chứng; phân biệt sản phẩm đã làm với kế hoạch. Ghi đóng góp thực tế từng thành viên theo bốn phạm vi hiện hành, không sao chép phân công cũ. Báo giới hạn cỡ mẫu/môi trường, telemetry, khử nhạy cảm và suy rộng. Không coi việc chưa làm mobile tùy thời gian là thiếu nhiệm vụ chính.
 
-## Kết luận và hướng phát triển
+## Điểm còn OPEN
 
-Đối chiếu bốn mục tiêu của `DH-MT1`–`DH-MT4` với kết quả · đối chiếu riêng hai nhóm mục tiêu của `A3` — `MT-R1`–`MT-R4` và `MT-5` cho vòng nghiên cứu, `MT-1`–`MT-4` cho vòng sản phẩm, **không trộn vào cùng một bảng** · đóng góp kỹ thuật và đóng góp từng thành viên · hạn chế, giới hạn suy rộng, hướng phát triển.
+- Minh rà soát A1–A6 sau cập nhật; chưa có bằng chứng giảng viên duyệt các diễn giải mới.
+- Mẫu khoa, số chương và chuẩn trích dẫn.
+- Giao thức/ngưỡng thử tải, khả năng mở rộng và ổn định; độ đo phát hiện/vùng ảnh hưởng; tập ca thử FlashTicket.
+- Tập node RCA, manifest dữ liệu và đặc tả giao diện kết quả ở đúng nơi sở hữu.
 
-**Giới hạn tự nhận phải công bố, không được bỏ:**
+## Lịch sử khung
 
-- **Mức độ hoàn thiện của việc khử/che trường nhạy cảm trước khi dữ liệu rời phạm vi kiểm soát** (`GOV-041`, 2026-08-28). Yêu cầu này còn nguyên hiệu lực ở `B8`/`B9` và vẫn phải kiểm chứng, nhưng được xếp mức **Thấp** ở bảng ưu tiên kiến trúc, nên nó không chỉ đạo việc chọn phương án. Chủ đồ án chọn **công bố thẳng đây là điểm cần cải thiện** thay vì giấu.
-- **Giới hạn suy rộng của số đo chẩn đoán** — xem *Nguyên tắc chi phối* ở đầu tệp này.
-- **Cỡ tập ca lỗi thật trên hệ nhà**: baseline hiện có đúng một ca có đáp án gốc (`B9-OPEN-02`).
-
----
-
-## Quy tắc viết — trả lời phê bình `DH-PB`
-
-Cô phê bình bản trước: *"cảm tưởng bản thảo em gửi đây do AI viết còn khá mơ hồ, phần tổng hợp của các em cũng chưa thể hiện rõ liên kết logic giữa các nội dung đưa ra."*
-
-1. Mỗi khẳng định có **một nguồn hoặc một con số**.
-2. Mỗi phần mở đầu bằng một câu nói rõ **nó nối vào phần trước thế nào**.
-3. Phân biệt tuyệt đối phần **nhóm tự chạy** với phần **trích từ bài báo**.
-4. Ưu tiên bảng và hình **của chính hệ thống nhóm** hơn văn xuôi khảo sát.
-5. Cấm cụm mơ hồ kiểu "có thể cải thiện đáng kể", "góp phần nâng cao".
-6. Viết báo cáo **song song** với khảo sát và đánh giá, không đợi xong mới hồi tưởng.
-
-## Điểm `OPEN` ảnh hưởng tới khung này
-
-| ID | Ảnh hưởng |
-|---|---|
-| `A6-OPEN-01` | Cô chưa xác nhận cách đặt phạm vi |
-| ~~`RES-032`~~ | **Không còn ảnh hưởng.** `A1`, `A2`, `A4` và chuỗi `B2`–`B9` đã được duyệt ngày 2026-08-27 (`GOV-033`); `B8-v0.12`, `B9-v0.7`, `B10-v0.5` được duyệt ngày 2026-08-28 (`GOV-043`). Câu chữ khóa được |
-| `A3-OPEN-07` | `ASR-14` — kiểm quyền theo quan hệ sở hữu — **không truy về mục tiêu nào** và không nằm trong bốn tiêu chí nghiệm thu, dù là động lực kiến trúc mức Cao. Nếu không xử, chương Thiết kế sẽ có một động lực mà chương Mục tiêu không nhắc tới |
-| `A3-OPEN-05` | Giảng viên **chưa xác nhận** `MT-R1`–`MT-R4`; nơi trình là báo cáo hai tuần |
-| `A8-OPEN-04` | Bộ chính `RE2` đã chốt nội bộ (`RES-022`); còn chờ cô xác nhận |
-| `A8-OPEN-06`, `A10-OPEN-05` | Chưa chốt **hệ nào trong `RE2`**; lựa chọn này quyết định mức sàn ngẫu nhiên, tức quyết định cách đọc mọi điểm số |
-| `A10-OPEN-04` | Hướng đóng góp chưa chọn — chạy thực nghiệm trước |
-| — | Số chương và mẫu trình bày chờ đề cương ĐATN |
+v4 ngày 28/08 theo thư DH-*; v5 ngày 18/09 theo DT18 và phân công mới. Lịch sử nội dung đầy đủ được giữ trong Git; không dùng lời khai “đã duyệt” của v4 cho bản v5.

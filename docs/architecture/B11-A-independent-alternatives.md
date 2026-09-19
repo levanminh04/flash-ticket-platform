@@ -1,5 +1,7 @@
 # B11-A — Tập phương án kiến trúc độc lập
 
+> **Hiệu lực ngữ cảnh 18/09:** nhóm hiện có bốn người theo [roles.md](../project/roles.md), nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Các phép so sánh và lời chủ đồ án về “ba người/ba thành viên” bên dưới là **đầu vào lịch sử của tập phương án đã duyệt**, không phải phân công hiện hành; không tính lại/xếp hạng lại phương án từ thay đổi nhân sự. PA-6 đã được chọn ở B11-C.
+
 - Phiên bản: `B11-A-v0.5`
 - Trạng thái: `APPROVED`
 - Người duyệt: **Lê Văn Minh**
@@ -295,7 +297,7 @@ Cách bố trí để so sánh, **không khóa** (`ASR-11`): (a) `RG-1` một m�
 
 Vòng đồng bộ: cặp `RG-2`→`RG-1` (`E2`, `E3`) và `RG-1`→`RG-2` (`E9`) tồn tại hai chiều. Không thành vòng **nếu** `E9` đi bằng **sự kiện miền** — hợp lý vì `C07` mô tả sổ cái là kết quả **tổng hợp**. Đây là **điều kiện cần kiểm ở `B13`**, không phải ràng buộc `B11-A` chốt; `R8` **đạt với điều kiện đó**.
 
-Rủi ro: `RG-1` gánh 4 context và **10 nhóm root (12 tên root)** theo quy tắc đếm ở §3.1 — khối lớn, khó chia việc cho ba thành viên; ít điểm chèn lỗi nhất; ít ứng viên mức service nhất.
+Rủi ro: `RG-1` gánh 4 context và **10 nhóm root (12 tên root)** theo quy tắc đếm ở §3.1 — khối lớn, khó chia việc theo giả định lịch sử ba thành viên; ít điểm chèn lỗi nhất; ít ứng viên mức service nhất.
 
 ---
 
@@ -664,7 +666,7 @@ Rủi ro, xếp theo mức:
 1. **Vừa hạ tầng chưa biết** — 7 tiến trình như `PA-3`, và `ASR-11` là `Chưa biết` vì lý do đó.
 2. **Chi phí phối hợp cao nhất** — 18 hợp đồng và 7 điểm sao chép, cả hai là mốc trên của tập phương án.
 3. **`INV-03` và `INV-06` xuyên `RG-2`–`RG-3`** — luồng tạo đơn phải giữ được điều kiện ở mục (3), nếu không số ứng viên Saga thành 2.
-4. **Chia việc cho ba thành viên** — 7 ranh giới trên ba người, tỷ lệ cao nhất trong tập **cùng với `PA-3`** (cũng 7); đây là rủi ro dự án, không phải rủi ro kiến trúc, và `B11-A` chỉ ghi chứ không dùng nó để loại phương án.
+4. **Chi phí chia việc tại thời điểm duyệt — giả định lịch sử ba thành viên** — 7 ranh giới trên ba người, tỷ lệ cao nhất trong tập **cùng với `PA-3`** (cũng 7); đây là rủi ro dự án, không phải rủi ro kiến trúc, và `B11-A` chỉ ghi chứ không dùng nó để loại phương án.
 
 ---
 
@@ -680,7 +682,7 @@ Rủi ro, xếp theo mức:
 | `RG-4` **Quyền tham dự, vào cửa và giao nhận vé** | `BC-04`, `BC-06` |
 | `RG-5` **Tài khoản và quyền nghiệp vụ** | `BC-07` |
 
-> **Vì sao phương án này có mặt, và ở trạng thái nào.** Chủ đồ án đề xuất hình dạng này ngày 2026-08-30 và **tự khai đây là phán đoán `CANDIDATE`, không phải quyết định thay `B11-C`** (`RES-053`). Nó vào tập để **so sánh ngang hàng** với `PA-1`–`PA-5`; `GOV-018` giữ nguyên việc chọn ở `B11-C` sau `B11-B`. **Ba lý do chủ đồ án nêu, chép lại chứ không diễn giải:** không tạo đường cắt giữ chỗ–đơn khi **bất đối xứng tải chưa được đo**; ba thành viên và hai máy 2 vCPU / 8 GiB; giữ ba miền cốt lõi *đặt vé → tiền → vé* thành ba đơn vị rõ ràng. Chủ đồ án cũng tự nêu rằng đồ thị phụ thuộc cho `RCA` **không nghèo đi**, vì đồ thị còn gồm cổng thanh toán, nguồn danh tính, hai máy chủ, ranh giới dữ liệu và kho dữ liệu quan sát.
+> **Vì sao phương án này có mặt, và ở trạng thái nào.** Chủ đồ án đề xuất hình dạng này ngày 2026-08-30 và **tự khai đây là phán đoán `CANDIDATE`, không phải quyết định thay `B11-C`** (`RES-053`). Nó vào tập để **so sánh ngang hàng** với `PA-1`–`PA-5`; `GOV-018` giữ nguyên việc chọn ở `B11-C` sau `B11-B`. **Ba lý do chủ đồ án nêu, chép lại chứ không diễn giải:** không tạo đường cắt giữ chỗ–đơn khi **bất đối xứng tải chưa được đo**; ba thành viên tại thời điểm đề xuất 30/08 và hai máy 2 vCPU / 8 GiB; giữ ba miền cốt lõi *đặt vé → tiền → vé* thành ba đơn vị rõ ràng. Chủ đồ án cũng tự nêu rằng đồ thị phụ thuộc cho `RCA` **không nghèo đi**, vì đồ thị còn gồm cổng thanh toán, nguồn danh tính, hai máy chủ, ranh giới dữ liệu và kho dữ liệu quan sát.
 >
 > ⚠️ **Hệ quả `R14`, ghi thẳng vì nó là điều kiện hợp lệ của phương án này.** `PA-6` đặt `Đơn hàng` **cùng ranh giới** với `Giới hạn mua`, `Khuyến mãi` theo nghĩa tổng lượt và `Lượt dùng khuyến mãi` — đúng thứ vế sau của `R14` cấm khi đọc tuyệt đối. `PA-6` vì vậy **chỉ hợp lệ dưới cách đọc có phạm vi** của `RES-050`, đúng cách đọc mà `GOV-062` đã xác lập khi giữ `PA-4`. Chủ đồ án **tự phát hiện và tự khai** hệ quả này khi đề xuất; `B11-A` không suy thêm phạm vi nào.
 
@@ -776,7 +778,7 @@ Rủi ro, xếp theo mức:
 1. **`RG-2` gánh trọn `BC-02` — sáu nhóm root, tám tên root — nên mọi tranh chấp nóng của `QS-01` nằm trong một đơn vị.** ⚠️ `v0.3` gọi đây là *“khối lớn nhất trong các phương án nhiều ranh giới”*; **sai theo chính quy tắc đếm ở §3.1**: `RG-1a` của `PA-4` gánh `BC-01` (bảy nhóm) cộng nhóm nguồn cung, tức **tám nhóm / mười tên**, lớn hơn trên cả hai cách đếm. Thứ `RG-2` đứng đầu là **mức tranh chấp**, không phải kích thước — và tài liệu này **không có thước đo mức tranh chấp**, nên câu so sánh đã được gỡ thay vì đổi thước. Đây là chỗ `ASR-06` sẽ đo, và `ASR-06` là `Chưa biết` ở mọi phương án.
 2. **`HOT-02` không có biên tiến trình để chèn lỗi** — xem mục (10). `B5-OPEN-02` giao câu hỏi ranh giới nguồn cung/giữ chỗ/đơn cho `B11-A`; `PA-6` trả lời bằng cách **không cắt**, và đó là một câu trả lời hợp lệ chỉ khi phép thử 5 được đo.
 3. **`INV-11` xuyên ranh giới** — bản sao tỷ lệ phí, cùng loại chi phí với `PA-2`, `PA-3`, `PA-5`.
-4. **Chia việc cho ba thành viên** — 5 ranh giới trên ba người, cùng mức `PA-4`; rủi ro dự án, không phải rủi ro kiến trúc.
+4. **Chi phí chia việc tại thời điểm duyệt — giả định lịch sử ba thành viên** — 5 ranh giới trên ba người, cùng mức `PA-4`; rủi ro dự án, không phải rủi ro kiến trúc.
 
 ---
 

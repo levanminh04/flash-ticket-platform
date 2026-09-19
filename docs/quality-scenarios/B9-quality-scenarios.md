@@ -1,5 +1,7 @@
 # B9 — Bộ kịch bản chất lượng
 
+> **Cập nhật ngữ cảnh 18/09:** đề tài/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm bốn người; mobile là phần phụ theo PRJ-035. Nội dung nghiệp vụ/bất biến và baseline duyệt bên dưới không được đổi trong đợt này. Các phiên bản A1–A6 và DH-* được dẫn trong hồ sơ duyệt là đầu vào tại thời điểm duyệt; bản diễn giải A1–A6 hiện hành đang REVIEW_READY. Không coi bản mới tự được phê duyệt, không dùng lời khai cũ để hạ nhiệm vụ xây dựng/đánh giá DT18.
+
 - Phiên bản: `B9-v0.8`
 - Trạng thái: `APPROVED`
 - Phân lớp: `FORMATION`
@@ -14,7 +16,7 @@
 >
 > Câu này ở `B9-v0.4` từng ghi *"`NFR-12` là ràng buộc kiến trúc nên không sinh kịch bản"* — sai, và tự chống lại vế ngay sau nó. Mọi `NFR` khác trong tài liệu đều có kịch bản; `QS-18` đã đóng chỗ hổng đó ở `v0.5`.
 
-> **Đề tài.** Đề tài chính thức là *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"* (`DH-TEN`), nguyên văn tại [`../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md). B9 thuộc **bộ tài liệu hệ thống** và sinh nội dung từ `B4`, `B7`, `B8`, `A3` — **không** sinh nội dung từ `docs/research-rca/`. Ngược lại, **phương pháp** chẩn đoán và lớp giải thích thuộc bộ RCA và không được đặc tả ở đây (`RES-033`). Mục §6 chỉ **đối chiếu** với `R0` §3 theo `RES-015`, và mọi dòng ở đó giữ `CANDIDATE`/`OPEN`; phép thử ở `docs/project/lien-ket-rca.md` §2.2 đã chạy.
+> **Đề tài.** Đề tài chính thức là *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*, theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). B9 thuộc **bộ tài liệu hệ thống** và sinh nội dung từ `B4`, `B7`, `B8`, `A3` — **không** sinh nội dung từ `docs/research-rca/`. Ngược lại, **phương pháp** chẩn đoán và lớp giải thích thuộc bộ RCA và không được đặc tả ở đây (`RES-033`). Mục §6 chỉ **đối chiếu** với `R0` §3 theo `RES-015`, và mọi dòng ở đó giữ `CANDIDATE`/`OPEN`; phép thử ở `docs/project/lien-ket-rca.md` §2.2 đã chạy.
 
 > **Mẫu bản ghi.** Dùng bộ trường của mẫu `C2` ở Tầng C, không dùng bộ rút gọn trong ví dụ của phiếu B9. Lý do và bảng đối chiếu hai mẫu ở `README.md` §1.
 

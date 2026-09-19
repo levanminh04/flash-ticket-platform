@@ -10,7 +10,7 @@
 - Điều kiểm được an toàn từ nguồn sẵn có thì **kiểm ngay trong lượt và đưa ra kết quả cùng đề xuất**. Không dùng “để kiểm”, “sau này cần kiểm” để thay công việc hiện làm được; không hỏi người dùng điều có thể xác minh từ code. Nếu thật sự không thể kiểm, nói rõ thiếu đầu vào/quyền gì và giới hạn kết luận, tuyệt đối không bịa kết quả.
 - Khi đưa ra lựa chọn, nói trực diện **dùng lại gì / sửa gì / bỏ gì / thêm gì**, lý do liên quan luồng chính và công sức triển khai. Không mở lại lựa chọn đã chốt; chỉ trình những quyết định còn ảnh hưởng hành vi, phạm vi hoặc chi phí mà người dùng cần chọn.
 
-Rule này không thay đề tài chính thức, quyền quyết định giữa hai bộ tài liệu, lịch ưu tiên “luồng chính trước, công cụ tải/chèn lỗi về sau” (`PRJ-013/014`), hoặc quyền phê duyệt của con người. Đọc tiếp toàn bộ hiến pháp và nguồn `DH-*` trước khi diễn giải mục tiêu.
+Rule này không thay đề tài chính thức, quyền quyết định giữa hai bộ tài liệu, lịch ưu tiên “luồng chính trước, công cụ tải/chèn lỗi về sau” (`PRJ-013/014`), hoặc quyền phê duyệt của con người. Đọc tiếp toàn bộ hiến pháp và nguồn `DT18-*` và `docs/project/roles.md` trước khi diễn giải mục tiêu hoặc phân công.
 
 ## Scope and required workflow
 
@@ -23,13 +23,13 @@ Rule này không thay đề tài chính thức, quyền quyết định giữa h
 
 Đọc mục này trước khi kết luận bất kỳ điều gì về phạm vi, mục tiêu, hay vai trò của hệ thống đặt vé.
 
-1. **Đề tài chính thức do giảng viên hướng dẫn đặt ngày 2026-08-22:** *"Chẩn đoán nguyên nhân gốc sự cố giao dịch trực tuyến bằng đồ thị phụ thuộc"*. Nguyên văn thư và bảng mã `DH-TEN`, `DH-MT1`–`DH-MT4`, `DH-DATA`, `DH-DO`, `DH-MOC`, `DH-PB` nằm tại `docs/evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md`. **Mọi trích dẫn định hướng phải trỏ về tệp đó**, không trỏ về trí nhớ hay một bản tóm tắt trung gian. `DH-MT1` gọi đích danh *"các dịch vụ đặt vé, thanh toán, xác thực, cơ sở dữ liệu, API đối tác"* — hệ thống của nhóm nằm **trong** mục tiêu đầu tiên của đề tài, không phải một đề tài tách rời.
+1. **Đề tài chính thức hiện hành từ 2026-09-18:** *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*. Tên và nguyên văn nhiệm vụ do Lê Văn Minh xác nhận nằm tại `docs/evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md` (`DT18-TEN`, `DT18-NV1`–`DT18-NV3`; `PRJ-025/026`). **Bắt buộc đọc nguồn này trước mọi kết luận về đề tài, mục tiêu, phạm vi hay đánh giá.** Thư ngày 22/08 và mã `DH-*` chỉ là bằng chứng lịch sử; không dùng tên cũ hoặc mốc báo cáo hai tuần làm định hướng hiện hành.
 
-2. **Hai bộ tài liệu, một đề tài.** Bộ hệ thống ở `docs/` và bộ nghiên cứu ở `docs/research-rca/` **độc lập về nhịp làm việc và cổng kiểm soát**. Chúng **không độc lập về đề tài**. Đề tài chính là RCA; bộ hệ thống cung cấp mô hình hệ giao dịch cho `DH-MT1`, bộ nghiên cứu cung cấp phương pháp, dữ liệu, độ đo và ràng buộc. Quyển báo cáo cuối được tổng hợp có chọn lọc từ cả hai nguồn.
+2. **Hai bộ tài liệu, một đề tài.** Bộ hệ thống ở `docs/` chịu trách nhiệm thiết kế, xây dựng và đánh giá hệ thống bán vé phân tán; bộ RCA ở `docs/research-rca/` chịu trách nhiệm phương pháp giám sát/chẩn đoán bằng đồ thị và thực nghiệm. Hai bộ độc lập về nhịp làm việc và cổng kiểm soát, cùng phục vụ nhiệm vụ DT18. **Không viết hệ thống chỉ là bối cảnh hoặc chỉ cần chạy được:** phải đo thông lượng, thời gian đáp ứng, tỷ lệ lỗi, khả năng mở rộng, tính nhất quán dữ liệu và độ ổn định giao dịch theo nhiệm vụ mới.
 
-   FlashTicket là **sản phẩm đích** và là nơi cơ chế chẩn đoán được tích hợp, triển khai và chạy trực tiếp (`RES-023`). Bộ dữ liệu công khai chỉ dùng để thử nghiệm có đáp án và so sánh kết quả.
+   FlashTicket là sản phẩm đích và nơi áp dụng cơ chế. Phương pháp được thực nghiệm trước trên dữ liệu công khai phù hợp, sau đó thử trên FlashTicket; log, trace **và metrics** được ánh xạ lên đồ thị. Kết quả gồm hệ thống, mô hình đồ thị, cơ chế hỗ trợ chẩn đoán và giao diện minh họa phân tích. Không lấy kết quả dataset thay cho kiểm chứng trên FlashTicket, không tuyên bố tính mới hoặc hiệu quả chưa đo.
 
-   **Không được viết** rằng hai bộ là "hai đề tài", "hai trục", hay bộ này "không phụ thuộc" bộ kia. **Không được hiểu** việc tách bộ là hủy hoặc hạ vai trò bộ tài liệu hệ thống.
+   **Nhóm và phân công hiện hành:** bốn người **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead giai đoạn đầu, phụ trách chính RCA và nền tảng chung. Đọc `docs/project/roles.md` để lấy đúng phạm vi từng người; không khôi phục phân công cũ. **Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian** (`PRJ-035`); chưa giao người thực hiện. Ưu tiên này không tự bỏ bất biến/API check-in backend đã duyệt.
 
 3. **Quyền quyết định, không phải quyền đọc** (`RES-028`). Mỗi bộ **không được dùng tài liệu của bộ kia để tự quyết định phần thuộc trách nhiệm riêng của mình**.
 
@@ -40,20 +40,15 @@ Rule này không thay đề tài chính thức, quyền quyết định giữa h
 
 4. **Đúng hai cửa nối, không tạo cửa thứ ba.** Chiều nghiên cứu → hệ thống đi qua `docs/research-rca/R0-boi-canh-va-rang-buoc.md` §3; chiều hệ thống → nghiên cứu đi qua `docs/project/lien-ket-rca.md`. Nội dung đi qua cửa chỉ được ghi ở `CANDIDATE` hoặc `OPEN`, và **không được sinh ra hoặc sửa đổi** một kịch bản, yêu cầu, bất biến hay ranh giới của bên kia. Trước khi đóng một gate, chạy **Phép thử độc lập** tại `docs/project/lien-ket-rca.md`.
 
-5. **Không còn bảng quy đổi khi đọc.** `RES-031` thu hồi khung *"chỉ ngừng nhắc ở tài liệu mới"*. Mọi tài liệu đã được sửa thẳng để khớp `DH-TEN`; **đọc tài liệu nào cũng theo đúng nghĩa đen của nó**.
-
-   Hai ngoại lệ có chủ đích, đều tự khai rõ ngay trong tệp:
-
-   - `docs/boi-canh-va-mong-muon.md` là **bản ghi lời chủ đồ án**, nên các dòng cũ được giữ nguyên và §11 của chính tệp đó đính chính phần đổi đề tài.
-   - Nhật ký phiên bản và các dòng quyết định đã bị thay thế trong `decision-register.md` giữ nguyên câu chữ theo quy tắc 3 của sổ; cột *Thay thế quyết định* cho biết dòng nào còn hiệu lực.
+5. **Đọc đúng hiệu lực, không dùng lịch sử làm hiện trạng.** Tài liệu làm việc phải dùng DT18 và phân công 18/09 ngay trong thân bài. Thư giảng viên 22/08, hồ sơ bối cảnh cũ, báo cáo lịch sử và nhật ký quyết định giữ nguyên bằng chứng nhưng phải khai rõ phạm vi lịch sử và dẫn nguồn mới. Không chỉ đổi tiêu đề rồi giữ lập luận “đề tài chính là RCA” hoặc “hệ thống không được đo sâu” ở thân bài. Khi nguồn cũ và xác nhận 18/09 khác nhau, áp xác nhận mới trong đúng phạm vi; các quyết định kỹ thuật không bị đổi thì vẫn giữ hiệu lực.
 
 6. **Trợ lý cũ đã bị gỡ; năng lực giải thích thì không** (`RES-034`, `GOV-030`). Đây là chỗ đã gây hiểu sai nhiều lần, nên đọc kỹ ba dòng sau trước khi kết luận bất cứ điều gì về phần chẩn đoán.
 
    | Tên | Là gì | Tình trạng |
    |---|---|---|
    | **Trợ lý cũ** | Thành phần độc lập tự thu thập dấu vết và tự đề xuất nguyên nhân, chạy đường ống cố định `log → Drain → context → LLM API`; có bounded context riêng và một "nhánh `T`" đan xen bảy giai đoạn | **Đã gỡ khỏi bộ hệ thống** |
-   | **Cơ chế RCA** | Dựng đồ thị phụ thuộc, ánh xạ log và trace, phát hiện bất thường, lan truyền và xếp hạng nguyên nhân (`DH-MT1`–`DH-MT3`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
-   | **Lớp giải thích** | Nhận kết quả đã xếp hạng, diễn giải nguyên nhân và gợi ý bước kiểm tra (`DH-MT4`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
+   | **Cơ chế RCA** | Dựng đồ thị phụ thuộc, ánh xạ log, trace và metrics, xác định vùng ảnh hưởng, phát hiện bất thường và xếp hạng nguyên nhân (`DT18-NV2`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
+   | **Lớp giải thích** | Nhận kết quả đã xếp hạng, diễn giải nguyên nhân và gợi ý bước kiểm tra (quyết định còn hiệu lực `RES-034`; nguồn lịch sử `DH-MT4`) | Phương pháp ở bộ RCA · **chạy trong FlashTicket** |
 
    > **"Trợ lý RCA"** là tên gọi tắt của **lớp giải thích** — đúng thứ `DH-MT4` gọi là *"trợ lý"*. Nó **không phải** nhánh `T`, **không phải** trợ lý cũ, và **không** chạy đường ống `log → Drain → context → LLM API`. Thân bài các tài liệu dùng chữ *"cơ chế chẩn đoán"* và *"lớp giải thích"*; câu này tồn tại để nối chữ *"trợ lý"* trong thư của giảng viên với thiết kế mới.
 
@@ -63,7 +58,7 @@ Rule này không thay đề tài chính thức, quyền quyết định giữa h
 
    | Bộ hệ thống (`docs/`) chịu trách nhiệm | Bộ RCA (`docs/research-rca/`) chịu trách nhiệm |
    |---|---|
-   | FlashTicket phải sinh **dữ liệu quan sát** nào | Cách xử lý log và trace |
+   | FlashTicket phải sinh **dữ liệu quan sát** nào | Cách xử lý log, trace và metrics |
    | FlashTicket **tích hợp và chạy** cơ chế RCA (`RES-023` mức 2, gate `B11`) | Cách dựng đồ thị và xếp hạng |
    | Kết quả **đến được người có quyền sử dụng** | Có dùng kỹ thuật gom mẫu log hay không (`RES-035`) |
    | Cơ chế **chỉ được đọc**, không tự sửa nghiệp vụ | Cách dùng mô hình ngôn ngữ |

@@ -36,7 +36,7 @@ B6 **không** quyết định:
 
 **Ràng buộc thuật ngữ.** Mọi khái niệm và danh từ nghiệp vụ dùng trong tài liệu này đều lấy từ `B2-v0.12`. **Tác nhân nghiệp vụ** — người mua, nhà tổ chức, quản trị viên — cũng lấy từ B2. **Tác nhân là hệ thống ngoài hoặc nguồn kích hoạt không phải người** truy về B3 hoặc B4, vì B2 là từ điển khái niệm nghiệp vụ chứ không phải danh mục hệ thống ngoài. Từ mô tả thông thường không cần đưa vào B2. Khi gặp một khái niệm nghiệp vụ chưa có tên chuẩn, B6 ghi `OPEN` và đề xuất cập nhật B2 chứ không tự khóa nghĩa mới.
 
-**Quan hệ với mobile.** Check-in trực tuyến trên mobile không tạo một bộ use case riêng. Nó là cùng một use case với tác nhân và điều kiện thiết bị tương ứng, theo đúng quy định của Tầng B và B3 §5.
+**Quan hệ với mobile.** Theo `PRJ-035` ngày 18/09, app mobile chỉ làm khi thực sự thừa thời gian. Các bước dùng mobile dưới đây mô tả client tùy chọn khi được triển khai; không phải đầu ra bắt buộc. Check-in backend và các bất biến đã duyệt vẫn giữ nguyên. Check-in trên mobile không tạo bộ use case riêng, theo Tầng B và B3 §5. Người phụ trách lấy theo [phân công hiện hành](../project/roles.md), không kế thừa phân công mobile cũ.
 
 **Quan hệ với chatbot.** Chatbot hỗ trợ mua vé cũng **không** tạo bộ use case riêng và không phải một tác nhân nghiệp vụ mới. Nó là một kênh để buyer thực hiện `UC-24` và `UC-25`, và để buyer khởi tạo ý định mua rồi đi tiếp bằng đúng quy tắc của `UC-10`. Mọi thay đổi trạng thái vẫn đi qua các lệnh ở dòng B của B4, theo đúng B4 §8.2.
 

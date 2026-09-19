@@ -1,4 +1,6 @@
 # TẦNG B — KHUNG QUY TRÌNH KỸ THUẬT
+
+> **Ngữ cảnh hiện hành 18/09:** tên/nhiệm vụ theo [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); nhóm và phạm vi phụ trách theo [roles.md](project/roles.md). Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian. Các ví dụ/lịch sử không thay thế ngữ cảnh này.
 ## ĐATN FlashTicket · PTIT · Nộp 14/12/2026
 
 ---
@@ -181,9 +183,9 @@ Không mô hình hóa nghiệp vụ, không lấy yêu cầu chức năng, khôn
 | **Aggregate** | 🔴 LẤY, **coi là khái niệm trung tâm của Tầng B** | Aggregate xác định đơn vị nhất quán được bảo vệ bằng giao dịch cục bộ. Kết hợp aggregate với ranh giới service mới cho biết chỗ nào dùng ACID và chỗ nào cần phối hợp phân tán. Đây là mắt xích nối **mô hình miền** với **quyết định kiến trúc** ở `B11` — không phải mắt xích tới đề tài nghiên cứu, vì aggregate nói về cách giữ nhất quán dữ liệu nghiệp vụ |
 | **Domain Event** | 🔴 LẤY | Là đầu vào của Event Storming và là đơn vị giao tiếp bất đồng bộ giữa service |
 | **Entity, Value Object** | 🟡 LẤY nhẹ | Dùng để phân biệt cái gì có định danh, cái gì không. Không cần đào sâu |
-| **Anti-Corruption Layer** | 🟡 LẤY như **một mẫu ứng viên**, không phải cơ chế đã chọn | Hai chỗ có thể cần: (a) tích hợp cổng thanh toán — không để mô hình của cổng rò vào mô hình nghiệp vụ; (b) ranh giới của **cơ chế chẩn đoán** khi nó đọc dữ liệu quan sát. **Ràng buộc phải giữ là `NFR-08` — chỉ đọc, không có đường ghi vào dữ liệu nghiệp vụ.** ACL là **một cách** thực thi ràng buộc đó, không phải cách duy nhất; `B11` chọn cơ chế thật. Không gọi cơ chế chẩn đoán là *"tính năng AI"* — nó là đề tài, không phải tính năng phụ của sản phẩm bán vé (`RES-033`) |
+| **Anti-Corruption Layer** | 🟡 LẤY như **một mẫu ứng viên**, không phải cơ chế đã chọn | Hai chỗ có thể cần: (a) tích hợp cổng thanh toán — không để mô hình của cổng rò vào mô hình nghiệp vụ; (b) ranh giới của **cơ chế chẩn đoán** khi nó đọc dữ liệu quan sát. **Ràng buộc phải giữ là `NFR-08` — chỉ đọc, không có đường ghi vào dữ liệu nghiệp vụ.** ACL là **một cách** thực thi ràng buộc đó, không phải cách duy nhất; `B11` chọn cơ chế thật. Không gọi cơ chế chẩn đoán là *"tính năng AI"* — nó thực hiện nhiệm vụ giám sát/chẩn đoán của DT18-NV2/NV3, cùng nhiệm vụ xây dựng/đánh giá hệ thống |
 | **Open Host Service / Published Language** | 🟡 LẤY | Là cách gọi có tên cho việc chốt hợp đồng API/event giữa các service |
-| **Shared Kernel, Customer–Supplier, Conformist, Separate Ways** | ⚪ BỎ | Bốn mẫu này giải quyết vấn đề phối hợp giữa nhiều đội độc lập — nhóm 3 người dưới một người quyết định thiết kế không có vấn đề đó |
+| **Shared Kernel, Customer–Supplier, Conformist, Separate Ways** | ⚪ BỎ | Bốn mẫu này giải quyết vấn đề phối hợp giữa nhiều đội độc lập — nhóm bốn người với Minh lead giai đoạn đầu không có vấn đề đó |
 | **Repository, Factory, Domain Service, Specification** | ⚪ BỎ khỏi tài liệu thiết kế | Là chi tiết cài đặt, xuất hiện tự nhiên trong code Spring. Không cần mô hình hóa riêng |
 | **Dòng thời gian sự kiện miền (tham khảo Event Storming)** | 🔴 LẤY gọn | Dùng nội bộ để nhìn luồng và tìm ranh giới; không cần tổ chức đầy đủ nghi thức workshop hay đưa toàn bộ bảng màu vào báo cáo |
 | **Event Storming mức Process Level** | 🟡 LẤY cho 2–3 quy trình then chốt | Chỉ làm cho luồng mua vé và luồng xử lý thất bại |
@@ -304,7 +306,7 @@ OOAD cho ra biểu đồ lớp → ERD, nhưng theo giả định một CSDL duy
 
 ### (b) 🔴 Hợp đồng giao tiếp (API và Event)
 
-Không framework nào trong ba cái nói về việc chốt hợp đồng. Nhưng đây là **ranh giới giữa ba thành viên**: chưa chốt hợp đồng thì không ai tích hợp được với ai.
+Không framework nào trong ba cái nói về việc chốt hợp đồng. Nhưng đây là **ranh giới giữa bốn thành viên**: chưa chốt hợp đồng thì không ai tích hợp được với ai.
 
 **Bổ sung:** đặc tả API đồng bộ + lược đồ sự kiện bất đồng bộ, chốt **trước** khi chia việc code.
 
@@ -370,7 +372,7 @@ Những gì không thể quan sát/không được suy luận: ________
 ### 🔴 B2 — Từ điển miền
 **Đầu vào:** B1
 **Phương pháp:** liệt kê mọi danh từ nghiệp vụ, định nghĩa 1–2 câu. Quan trọng nhất là **chỉ ra các cặp từ dễ nhầm** và phân biệt dứt khoát.
-**Phép thử:** ba thành viên cùng mô tả luồng đặt vé — dùng khác từ cho cùng khái niệm nghĩa là chưa xong. Phải có một baseline `APPROVED` trước khi B3 được duyệt; B2 tiếp tục là từ điển sống và được duyệt lại khi nghĩa nghiệp vụ thay đổi.
+**Phép thử:** bốn thành viên cùng mô tả luồng đặt vé — dùng khác từ cho cùng khái niệm nghĩa là chưa xong. Phải có một baseline `APPROVED` trước khi B3 được duyệt; B2 tiếp tục là từ điển sống và được duyệt lại khi nghĩa nghiệp vụ thay đổi.
 ```
 Thuật ngữ | Định nghĩa | Dễ nhầm với | Khác ở chỗ
 _________ | __________ | ____________ | ___________
@@ -650,7 +652,7 @@ Các con số trên là tỷ lệ tham khảo, không phải quy trình chấm c
 | 2 | **Vượt phạm vi kiến trúc đã chốt** | > 8 service nghiệp vụ hoặc > 3 Saga | Gộp/rút lại ranh giới trước khi hiện thực; hai trần đều là ràng buộc dự án |
 | 3 | **Tài liệu phương pháp lấn át nội dung đồ án** | Báo cáo nói nhiều về framework hơn vấn đề và kết quả | DSRM/DDD/ATAM chỉ dùng ở mức cần thiết; số chương và biểu đồ theo mẫu ĐATN được xác nhận |
 | 4 | **Tuyên bố quá mức về phương pháp** | — | Bảng quy ước diễn đạt ở Tầng C mục 3.4 |
-| 5 | **Ba người làm lệch nhau, không tích hợp được** | Chưa chốt hợp đồng mà đã code | Phiếu B13 phải xong trước khi chia việc code |
+| 5 | **Các thành viên làm lệch nhau, không tích hợp được** | Chưa chốt hợp đồng mà đã code | Phiếu B13 phải xong trước khi chia việc code |
 | 6 | **Mất dấu lý do quyết định** | Không giải thích được một ranh giới/cơ chế cốt lõi | Viết ADR ngắn ngay khi chốt quyết định lớn; cập nhật bảng liên kết tối thiểu sau khi chốt kiến trúc và sau đánh giá |
 | 7 | **Sinh ra mã không giải thích được** | Không trả lời được câu hỏi về đoạn mã trong phần mình phụ trách | PTIT chấm cá nhân và hỏi theo phần — đây là rủi ro điểm trực tiếp. Nguyên tắc Tầng A mục 8 mở rộng sang cả mã nguồn |
 | 8 | **Thiết kế nghe hợp lý nhưng sai tinh vi** | Ranh giới aggregate "chạy được" cho tới khi gặp tranh chấp thật | Trường *"Các phương án đã cân nhắc"* trong ADR phải do chính người quyết định tự viết |

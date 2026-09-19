@@ -1,9 +1,17 @@
 # Trạng thái triển khai plan
 
+- **Cập nhật hiện hành 2026-09-18:** tên/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm **Minh, Sơn, Tuấn, Tuyến** theo [roles.md](roles.md). Minh lead giai đoạn đầu và chính RCA; mobile chỉ làm khi thực sự thừa thời gian (`PRJ-035`).
+- **Giai đoạn hiện tại:** Giai đoạn 5 — đầu hiện thực. `B11-C-v0.3` và baseline B12–B16 đã duyệt (GOV-144). Commit `091fca1` ngày 18/09 đã tạo 5 project nghiệp vụ + API Gateway, Config Server, Discovery Server; mã ứng dụng hiện là bộ khung. Không dùng dòng “chưa tạo application” trong mốc 14/09 bên dưới làm hiện trạng.
+- **Kiểm chứng:** chưa có bằng chứng build/service/E2E/tải/RCA FlashTicket PASS trong lượt cập nhật ngữ cảnh; không kiểm AWS trực tiếp. Kế hoạch được duyệt không đồng nghĩa kết quả đã đạt.
+- **Mục tiêu/phạm vi:** A1-v0.3, A2-v0.3, A3-v0.7, A4-v0.4, A5-v0.4, A6-v0.7 `REVIEW_READY` sau DT18; các phê duyệt cũ không được gắn cho diễn giải mới. Giữ thiết kế kỹ thuật đã duyệt; giao thức đo phần mở rộng của nhiệm vụ còn OPEN tại A3/A6.
+- **Nghiên cứu:** A7-v0.3, A8-v0.3, A9-v0.4 `DRAFT`; A10-v0.5 và E1-v0.3 `REVIEW_READY`. E1 kiểm định 11 CSV/990 dòng kết quả; MyRCA là CANDIDATE, hiệu quả chưa được chứng minh. Các phiên bản cũ bên dưới là lịch sử.
+
+## Lịch sử theo mốc — không dùng thay khối hiện hành ở trên
+
 - **Cập nhật kiến trúc 2026-09-04:** `B11-C-v0.3` đã `APPROVED` và đóng B11. Kiến trúc đích là `PA-6` với `event-service`, `booking-service`, `payment-service`, `ticket-service`, `user-service`; một Saga do `payment-service` điều phối; RCA riêng chỉ đọc, lớp giải thích dùng Gemini API; hai máy không HA. `GOV-097` thay benchmark chặn B11 bằng ngân sách mục tiêu khoảng 6 GiB tiến trình/container mỗi máy, thử tải thật ở Giai đoạn 5–6; `GOV-098` cho phép nâng instance AWS tạm thời nếu cần. Bốn ADR đích đều **`Chấp nhận`**.
 - **Cập nhật nghiên cứu 2026-09-02:** đã kiểm định 11 tệp CSV/990 ca và tạo `E1-v0.1` `REVIEW_READY`; `A7-v0.3`, `A8-v0.3`, `A9-v0.3` ở `DRAFT`, `A10-v0.4` ở `REVIEW_READY`. `RES-054` chỉ chốt cách định vị **“tổ hợp có kiểm chứng”**; thiết kế MyRCA là `CANDIDATE` (`RES-055`) và hiệu quả/tập node vẫn `OPEN` (`RES-056`). Cập nhật này không thay trạng thái `B11-C`.
 - **Cập nhật 2026-09-14 — GOV-144/GOV-145:** Minh duyệt B6-v0.15/B7-v0.13/B8-v0.13 → B12-v0.2 → B13-v0.1 → B14-v0.1 → B16-v0.1, cùng B15/READY-v0.1 và bộ dẫn xuất. Cho phép commit/push bộ hệ thống. 47 bảng SQL/467 cột và 4 collection; kế hoạch kiểm được duyệt, kết quả service/E2E/RCA vẫn NOT RUN.
-- **Giai đoạn hiện tại:** Giai đoạn 5 — hiện thực được phép bắt đầu theo baseline đã duyệt (GOV-144). Chưa tạo application hoặc triển khai AWS. Xem readiness §5 để code luồng chính; đầu vào môi trường còn OPEN được giải quyết ở đúng lát cắt.
+- **Giai đoạn ghi nhận tại 14/09:** Giai đoạn 5 — hiện thực được phép bắt đầu theo baseline đã duyệt (GOV-144). Chưa tạo application hoặc triển khai AWS. Xem readiness §5 để code luồng chính; đầu vào môi trường còn OPEN được giải quyết ở đúng lát cắt.
 
   ⚠️ **Giai đoạn 3 còn đúng một việc: chốt `A3` và `A6`** (`A5-v0.3` đã `APPROVED` tại `GOV-054`). Hai giai đoạn **chồng lấn** theo `docs/quy-trinh-lam-viec.md` PHẦN 6 — *"Các giai đoạn có thể chồng lấn"*; việc còn lại **không chặn `B11-A`**, vì `B10-OPEN-11` ghi rõ nội dung dẫn `MT-3` *"đứng được trên `NFR-04` đã duyệt"*, và `GOV-050` đã cho phép `B11-A` coi bảng ưu tiên là đầu vào đã chốt. Khai Giai đoạn 4 ở đây là **khai đúng loại công việc đang làm**, không phải tuyên bố Giai đoạn 3 đã đóng.
 
