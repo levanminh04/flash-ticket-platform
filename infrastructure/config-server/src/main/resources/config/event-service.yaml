@@ -1,0 +1,13 @@
+server:
+  port: ${EVENT_SERVICE_PORT:8081}
+
+spring:
+  datasource:
+    url: ${EVENT_DB_URL}
+    username: ${EVENT_DB_USERNAME}
+    password: ${EVENT_DB_PASSWORD}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}

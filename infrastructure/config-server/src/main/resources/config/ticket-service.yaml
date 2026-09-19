@@ -1,0 +1,18 @@
+server:
+  port: ${TICKET_SERVICE_PORT:8084}
+
+spring:
+  datasource:
+    url: ${TICKET_DB_URL}
+    username: ${TICKET_DB_USERNAME}
+    password: ${TICKET_DB_PASSWORD}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}

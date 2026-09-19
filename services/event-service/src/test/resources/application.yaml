@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: event-service
+  config:
+    import: "optional:configserver:"
+  cloud:
+    config:
+      enabled: false
+# Test-only isolation: production configuration comes from Config Server and
+# requires the real PostgreSQL and RabbitMQ endpoints.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
+
+eureka:
+  client:
+    enabled: false

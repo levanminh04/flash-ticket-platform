@@ -1,0 +1,11 @@
+server:
+  port: ${USER_SERVICE_PORT:8085}
+
+spring:
+  mongodb:
+    uri: ${MONGO_URI}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}

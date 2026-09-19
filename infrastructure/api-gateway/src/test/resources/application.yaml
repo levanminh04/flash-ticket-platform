@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: api-gateway
+  config:
+    import: "optional:configserver:"
+  cloud:
+    config:
+      enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://issuer.invalid/realms/flashticket
+          jwk-set-uri: https://issuer.invalid/realms/flashticket/protocol/openid-connect/certs
+          audiences: flashticket-api
+
+eureka:
+  client:
+    enabled: false

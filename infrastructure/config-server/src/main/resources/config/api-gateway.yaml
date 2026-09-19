@@ -1,0 +1,102 @@
+server:
+  port: ${API_GATEWAY_PORT:8080}
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          audiences: ${KEYCLOAK_AUDIENCE}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+
+flashticket:
+  gateway:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      eventServiceBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED
+      bookingServiceBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED
+      paymentServiceBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED
+      ticketServiceBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED
+      userServiceBreaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED
+  timelimiter:
+    instances:
+      eventServiceBreaker:
+        timeoutDuration: 10s
+      bookingServiceBreaker:
+        timeoutDuration: 10s
+      paymentServiceBreaker:
+        timeoutDuration: 10s
+      ticketServiceBreaker:
+        timeoutDuration: 10s
+      userServiceBreaker:
+        timeoutDuration: 10s
+
+#registerHealthIndicator	                    Đưa trạng thái của Circuit Breaker này vào trang /actuator/health.
+#slidingWindowSize: 10	                        Theo dõi kết quả của 10 cuộc gọi gần nhất để tính toán tỷ lệ lỗi.
+#minimumNumberOfCalls: 5	                    Phải có ít nhất 5 cuộc gọi (SUCC or FAIL) thì mới bắt đầu tính toán để ngắt mạch.
+#failureRateThreshold: 50	                    Nếu tỉ lệ lỗi >= 50%, mạch sẽ chuyển sang trạng thái OPEN (Ngắt).
+#waitDurationInOpenState: 10s	                Sau khi ngắt, nó sẽ chờ 10 giây trước khi thử chuyển sang trạng thái Half-Open.
+#permittedNumberOfCallsInHalfOpenState: 3	    Ở trạng thái Half-Open, cho phép 3 cuộc gọi để kiểm tra hệ thống đã ổn định chưa.
+#automaticTransitionFromOpenToHalfOpenEnabled	Tự động chuyển từ OPEN sang Half-Open mà không cần có request mới đến.
