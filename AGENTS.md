@@ -19,6 +19,13 @@ Rule này không thay đề tài chính thức, quyền quyết định giữa h
 - If a Flash Ticket task starts from another workspace, remain read-only and report the workspace mismatch before project mutation.
 - Use the repository skill `$govern-capstone-work` for every task involving project planning, research, surveys, requirements, business analysis, B3–B14, bounded contexts, microservices, ADRs, Sagas, database/schema ownership, AI-assistant design, report writing, legacy-source comparison, or multi-file changes under `docs/`.
 
+## Java formatting and quality gate
+
+- The authoritative Java formatter is Spotless with Google Java Format, as configured in each application's `pom.xml`. Generate and edit Java in that format; do not add a competing formatter.
+- Before handing off Java changes, run `./mvnw -B -ntp spotless:check` in every affected application (`.\mvnw.cmd -B -ntp spotless:check` on Windows). `./mvnw -B -ntp verify` already runs this check.
+- Do not run `spotless:apply` reflexively or across every application. Finish the Java edits first; if the check fails, run `spotless:apply` once in only the affected application, inspect the formatting diff, then rerun the check or `verify`.
+- Do not leave formatting failures for CI to discover. The PR workflow runs `./mvnw -B -ntp verify` and blocks the aggregate check on failure.
+
 ## Đề tài và ranh giới hai bộ tài liệu
 
 Đọc mục này trước khi kết luận bất kỳ điều gì về phạm vi, mục tiêu, hay vai trò của hệ thống đặt vé.
