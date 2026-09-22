@@ -4,6 +4,8 @@
 
 Tài liệu này là bộ nhớ quyết định bền vững của đồ án. Lịch sử chat có thể cung cấp bằng chứng, nhưng không thay thế sổ này. Chỉ ghi một quyết định khi đã xác định rõ trạng thái, người chốt, gate và phạm vi ảnh hưởng.
 
+**Đăng ký phân sổ RCA — 22/09/2026:** [RESEARCH-DECISIONS.md](../research-rca/RESEARCH-DECISIONS.md) là nơi sở hữu nội dung nguyên tử **RCA-001–017**, do **Lê Văn Minh** xác nhận trong yêu cầu U22 “Finish Task C Phase 2 + Establish RCA Master Research Program”; nguồn/hash lưu trong phân sổ. Trạng thái **USER_CONFIRMED**, gate **Task C Phase 2**, phạm vi RQ/đóng góp/vai trò năng lực và ranh giới thực hiện RCA. Sổ dự án đăng ký ID/quyền nguồn bằng liên kết này, không chép lại mười bảy quyết định để tạo hai bản cạnh tranh. Contract áp dụng tại [C Phase 2](../research-rca/task-c-research-decision-lock.md); artifacts chịu tác động kê ở [ARTIFACT-MAP](../research-rca/ARTIFACT-MAP.md). Việc ghi lựa chọn C1 không phê duyệt thuật toán/proposal MyRCA cũ hoặc thay gate kiến trúc/hệ thống; các quyết định dự án còn lại giữ nguyên.
+
 ## Trạng thái được phép
 
 | Trạng thái | Ý nghĩa |
