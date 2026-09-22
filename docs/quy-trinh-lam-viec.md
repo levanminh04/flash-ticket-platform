@@ -2,7 +2,9 @@
 
 > **Ngữ cảnh hiện hành 18/09/2026:** đề tài **Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố**, nguồn [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md). Nhóm bốn người và phạm vi phụ trách theo [roles.md](project/roles.md). Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`).
 ## ĐATN FlashTicket · PTIT
-### *Tài liệu duy nhất theo hằng ngày. Ba tầng A/B/C là phần tra cứu chi tiết cho từng bước ở đây.*
+### *Tài liệu theo hằng ngày cho nhịp hệ thống. Ba tầng A/B/C là phần tra cứu chi tiết cho từng bước ở đây.*
+
+**Nhịp RCA riêng (22/09/2026):** theo [RCA Master Research Program](research-rca/MASTER-RESEARCH-PROGRAM.md) và [CURRENT-STATE](research-rca/CURRENT-STATE.md), cùng phục vụ DT18. Tasks D–G trên dữ liệu công khai không chờ FlashTicket; bước chuyển giao H nhận readiness qua hai cửa hiện hành. Bảy giai đoạn/gate hệ thống bên dưới không bị thay bởi roadmap RCA.
 
 > **Bản này không chứa lịch theo tuần.** Trình tự được điều khiển bằng **cổng chuyển giai đoạn** — điều kiện phải đạt để đi tiếp — chứ không bằng mốc thời gian. Lý do ở Phần 6.
 

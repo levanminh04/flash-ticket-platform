@@ -1,5 +1,7 @@
 # R0 — Ngữ cảnh hiện tại và ràng buộc gửi tới các gate hạ nguồn
 
+> **Điều hướng nghiên cứu cập nhật 22/09/2026:** trạng thái/lựa chọn phương pháp công khai trong §1–2 là snapshot 18/09. Hướng hiện hành đọc [C Phase 2](task-c-research-decision-lock.md), data capability đọc [B digest](task-b-dataset-capability-summary.md), tiến độ/lộ trình đọc [CURRENT-STATE](CURRENT-STATE.md) và [MASTER](MASTER-RESEARCH-PROGRAM.md). Notice này không sửa mười hai ràng buộc §3, các OPEN, gate hệ thống hoặc duyệt proposal MyRCA cũ.
+
 - **Phiên bản:** `R0-v0.6`
 - **Trạng thái:** `DRAFT` — ghi ngữ cảnh và ràng buộc; chưa được duyệt
 - **Người duyệt:** — (chờ Lê Văn Minh)

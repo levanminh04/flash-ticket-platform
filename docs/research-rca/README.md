@@ -6,6 +6,8 @@ Thư mục này là **bộ tài liệu thứ hai** của đồ án, mở ngày 2
 
 ## Vì sao tách riêng
 
+**Bắt đầu phiên từ 22/09/2026:** [SESSION-BOOTSTRAP](SESSION-BOOTSTRAP.md) → [CURRENT-STATE](CURRENT-STATE.md). [Task C Phase 2](task-c-research-decision-lock.md) đã ghi lựa chọn C1 của Minh; [MASTER-RESEARCH-PROGRAM](MASTER-RESEARCH-PROGRAM.md) là lộ trình RCA từ A đến bảo vệ. [RESEARCH-DECISIONS](RESEARCH-DECISIONS.md) giữ quyết định; [ARTIFACT-MAP](ARTIFACT-MAP.md) định vị nguồn giữa repository và workspace. Task D chưa bắt đầu.
+
 Lý do tách là **nhịp làm việc và cổng kiểm soát**, không phải nội dung. Ép mọi thứ vào cùng một chuỗi phiếu A1–A9 và cùng chuỗi gate Tầng B làm cả hai bị méo: phiếu khảo sát phương pháp phải chờ gate phân tích miền, còn phiếu nghiệp vụ phải mang nội dung khảo sát thuật toán.
 
 Tách ra thì mỗi bộ chạy theo nhịp của nó. Hai bộ vẫn phục vụ **một** đề tài và nối với nhau qua hai cửa ở §Quy tắc. Quyển báo cáo cuối được tổng hợp có chọn lọc từ cả hai nguồn (`RES-024`).
@@ -16,20 +18,26 @@ Tách ra thì mỗi bộ chạy theo nhịp của nó. Hai bộ vẫn phục v�
 
 > **"Trợ lý RCA"** là tên gọi tắt của **lớp giải thích** ở bước cuối chuỗi RCA — đúng thứ `DH-MT4` gọi là *"trợ lý"*. Nó **không phải** nhánh `T`, **không phải** trợ lý cũ, và **không** chạy đường ống `log → Drain → context → LLM API`.
 
-Chuỗi đầy đủ: **đồ thị phụ thuộc → ánh xạ log, trace và metrics → phát hiện bất thường → lan truyền và xếp hạng → giải thích**. Mô hình, quan sát và xếp hạng theo DT18-NV2; lớp giải thích kế thừa RES-034 (nguồn lịch sử DH-MT4). Cả chuỗi được thiết kế ở bộ này và **chạy trong FlashTicket** (`RES-023` mức 2, gate `B11`).
+Chuỗi năng lực: **dữ liệu quan sát → ánh xạ graph/bằng chứng → phát hiện bất thường → xếp hạng → giải thích**; vị trí/cơ chế graph cụ thể thuộc Task D, chưa khóa thuật toán lan truyền. Mô hình, quan sát và xếp hạng theo DT18-NV2; lớp giải thích kế thừa RES-034 (nguồn lịch sử DH-MT4). Cả chuỗi được thiết kế ở bộ này và **chạy trong FlashTicket** (`RES-023` mức 2, gate `B11`).
 
-Ba giới hạn còn nguyên hiệu lực cho lớp giải thích, chép từ `PRJ-002` sang `RES-034`: không cam kết loại bỏ việc tái hiện lỗi · không tự kết luận nguyên nhân cuối cùng · không tự sửa hệ thống. Cách đo ghi tại `A9` §6.
+Ba giới hạn còn nguyên hiệu lực cho lớp giải thích, chép từ `PRJ-002` sang `RES-034`: không cam kết loại bỏ việc tái hiện lỗi · không tự kết luận nguyên nhân cuối cùng · không tự sửa hệ thống. Contract hiện hành ở C Phase 2; cách đo cụ thể thuộc D/I. `A9` §6 giữ vai trò đề xuất nền, không tự là protocol đã khóa.
 
 ## Danh sách tài liệu
 
 | Phiếu | Tệp | Nội dung | Trạng thái |
 |---|---|---|---|
 | R0 | `R0-boi-canh-va-rang-buoc.md` | Ngữ cảnh hiện hành ngày 2026-09-18; **mười hai ràng buộc gửi tới `B9`–`B16`** để thiết kế hệ thống không chặn nhánh chẩn đoán | `DRAFT` |
+| Task A | `task-a-ban-do-bang-chung-doc-lap.md` | Bản đồ bằng chứng độc lập về graph-based anomaly detection và RCA; tách detector/ranker, phân loại vai trò graph, kiểm prior work và chuyển câu hỏi dữ liệu sang Task B | `DRAFT` (2026-09-20) |
+| Task B | [task-b-dataset-capability-summary.md](task-b-dataset-capability-summary.md) | Capability/GT/leakage digest dẫn về báo cáo CLOSED tại workspace | Work `CLOSED`, digest dẫn xuất |
+| Task C Phase 1 | [task-c-independent-research-shortlist.md](task-c-independent-research-shortlist.md) | Discovery/gates/Red Team, giữ lịch sử lựa chọn độc lập | Review COMPLETE; lựa chọn hiện tại ở Phase 2 |
+| Task C Phase 2 | [task-c-research-decision-lock.md](task-c-research-decision-lock.md) | Human decision lock, conceptual RQ/hypotheses và handoff D | COMPLETE, `USER_CONFIRMED` về ý định |
 | A7 | `A7-khai-niem-rca.md` | Từ vựng nền; tách service, thực thể vận hành, operation và bằng chứng; công thức độ đo và mức sàn | `DRAFT` (`A7-v0.3`) |
 | A8 | `A8-khao-sat-dataset.md` | Quy mô hệ, candidate set, schema/giấy phép LEMMA và điều kiện chạy adapter | `DRAFT` (`A8-v0.3`) |
 | A9 | `A9-do-do-thuc-nghiem.md` | `AC@1` chính; độ đo phụ; bootstrap cụm, McNemar exact, Holm và quy tắc ca thiếu hạng | `DRAFT` (`A9-v0.4`) |
 | A10 | `A10-khao-sat-phuong-phap.md` | Bảy phương pháp trong sáu mục, điều kiện dữ liệu, lỗi triển khai và ranh giới nghiên cứu gần nhất | `REVIEW_READY` (`A10-v0.5`) |
 | E1 | `E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` | Kiểm định 11 CSV/990 dòng kết quả, sửa mâu thuẫn báo cáo, trả lời câu hỏi số node/MicroRank–LEMMA và thiết kế MyRCA có cổng loại | `REVIEW_READY` (`E1-v0.3`) |
+
+A7–A10/E1 giữ nội dung và trạng thái phiên bản lịch sử; không tự là lựa chọn phương pháp/metric hiện hành. E1 không phải **Task E — Baseline Reproduction** trong master mới. Quyền nguồn từng tệp được phân loại trong ARTIFACT-MAP.
 
 ## Quy tắc của bộ tài liệu này
 
@@ -46,7 +54,7 @@ Ba giới hạn còn nguyên hiệu lực cho lớp giải thích, chép từ `P
 
 ## Đọc theo thứ tự nào
 
-Người mới vào: `A7` trước để phân biệt các mức node và bằng chứng; `A8` để biết dữ liệu thật sự có gì; `A9` để biết cách chấm; `A10` để hiểu từng cơ chế. Đọc `E1` sau cùng để xem kết quả kiểm định, đề xuất MyRCA và các điều kiện có thể loại bỏ đề xuất đó.
+Phiên mới đọc minimum pack sáu tệp trong [SESSION-BOOTSTRAP](SESSION-BOOTSTRAP.md); không đọc lại toàn bộ A/B/C. C1 đã được Minh chọn: không mở lại discovery chỉ vì Phase 1 còn lưu hai lựa chọn lịch sử. Khi D cần comparator hoặc luận cứ, đọc đúng mục Task A/primary sources; khi cần data fact, dùng B digest rồi truy B CLOSED/raw evidence cho bất đồng cụ thể. A7–A10/E1 chỉ mở có mục đích và giữ đúng hiệu lực lịch sử.
 
 Người sắp chốt một gate của Tầng B (`B9` trở đi): đọc **`R0` §3**, rồi chạy **Phép thử độc lập** tại `docs/project/lien-ket-rca.md` §2.2.
 
@@ -54,7 +62,7 @@ Người sắp chốt một gate của Tầng B (`B9` trở đi): đọc **`R0` 
 
 - **Lộ trình DT18-NV3:** thực nghiệm trên dữ liệu công khai phù hợp trước, thử trên FlashTicket sau; mỗi môi trường có nhãn/giao thức riêng. RE2 vẫn là bộ chính nội bộ (RES-022). Không suy từ số dataset sang hiệu quả trên hệ nhà.
 
-- **Bản báo cáo Markdown hai tuần cũ đã là lịch sử.** Kết luận hiện hành về RCAEval/MyRCA nằm ở `E1`; bản Word đã hiệu chỉnh được tạo riêng với hậu tố `_v2`, không ghi đè bản gốc.
+- **Bản báo cáo Markdown hai tuần cũ đã là lịch sử.** E1 và bản Word `_v2` giữ kiểm định tại thời điểm cũ; capability dataset hiện hành thuộc Task B CLOSED, hướng nghiên cứu thuộc C Phase 2. Không lấy E1 làm bằng chứng đã chạy method mới hoặc mặc định MyRCA đã được chọn.
 - **Mã phiếu còn nợ một lần sửa.** Bốn phiếu vẫn dùng `A7`–`A10`, trùng nghĩa với `A7`/`A8`/`A9` mà Tầng A định nghĩa là phương pháp nghiên cứu, ý nghĩa/đóng góp và bố cục/phân công. Ghi tại `RES-009` và `R0-OPEN-05`; đổi sang `R1`–`R4` kéo theo khoảng 59 tham chiếu mã nên chưa làm.
 
   > 🔴 **Quy tắc bắt buộc trong khi chưa đổi mã** (`GOV-046`, 2026-08-29). Trích bốn phiếu này **từ bên ngoài thư mục `docs/research-rca/`** thì phải viết **đường dẫn đầy đủ**: `docs/research-rca/A9-do-do-thuc-nghiem.md` §6, **không** viết trần `A9` §6. Bên trong thư mục này viết trần được.
