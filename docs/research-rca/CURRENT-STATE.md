@@ -1,25 +1,23 @@
 # RCA — Current state
 
-Chủ sở hữu: **Minh**. Cập nhật **2026-09-23**. `CURRENT_STATE`: checkpoint hiện hành duy nhất; completion không thay human approval hoặc kết quả đo.
+Chủ sở hữu: **Minh**. Cập nhật **2026-09-23**, sau TD-v1.1 reconciliation. Đây là checkpoint hiện hành duy nhất; completion không thay human approval hoặc kết quả đo.
 
 | Trạng thái | Nội dung |
 |---|---|
-| DONE | A evidence map COMPLETE/document DRAFT; B CLOSED; C Phase1+2 COMPLETE; **Pre-D READY WITH D-OWNED CONDITIONS; Task D specification/validation COMPLETE** |
-| CURRENT | [TD-v1.0](task-d-method-and-experiment-specification.md) **REVIEW_READY**, kỹ thuật CANDIDATE; [D handoff](task-d-handoff.md) chứa validation và minimum continuation pack |
-| NEXT | **Task E — Baseline Reproduction / Calibration**, chưa bắt đầu |
-| AUTHORIZATION | Minh đã cho phép D qua continuation contract22/23-09. **Chờ Minh chấp thuận TD-v1.0 và giao execution E**, đúng request§36/master D/E; không phải thiếu quyền tiếp tục D |
-| LATER DEPENDENCY | FlashTicket readiness chỉ chặn target validation H khi tới bước đó; không chặn E–G. Full experimental corpus chưa được lưu; retrieval/env phải thuộc scope E được giao |
+| DONE | A evidence map COMPLETE/document DRAFT; B CLOSED; C Phase1+2 COMPLETE; TD-v1.0 preserved; **TD-v1.1 specification/reconciliation/review COMPLETE** |
+| CURRENT | [TD-v1.1](task-d-method-and-experiment-specification.md) **REVIEW_READY**, technical CANDIDATE; [handoff](task-d-handoff.md) chứa nguồn/validation/open owners |
+| NEXT | Minh review/accept protocol, sau đó giao scope Task E riêng |
+| AUTHORIZATION | Request “Independent Reconciliation + TD-v1.1 Revision” chỉ cho specification/source/math/review. **Task E NOT STARTED / NOT AUTHORIZED**; E–I không chạy trong revision này |
+| LATER DEPENDENCY | D–G không chờ FlashTicket; H mới cần target readiness. Multi-public extension phải có task-compatible addendum/scope trước campaign mới |
 
-**Quyết định con người không đổi:** [RCA-001–017](RESEARCH-DECISIONS.md), [C Phase2](task-c-research-decision-lock.md). C1 primary; empirical/system/reproducibility contribution và valid negative; C2 optional; C3/C4 còn trong design; C5/LLM intended capabilities vẫn mandatory. Những dòng “D chưa bắt đầu/chờ lệnh” trong C/master/bootstrap là snapshot trước lệnh hiện tại; không dùng làm live status.
+**Human decisions:** [RCA-001–017](RESEARCH-DECISIONS.md) và C lock giữ nguyên. **RCA-018–021 mới từ câu Minh làm rõ:** DT18 hiện hành; nguồn advisor mới tiếp nhận thuộc giai đoạn cũ; còn giá trị phương pháp RCA; không giảm nhẹ FlashTicket. [Nguồn nguyên văn](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) tách lời giảng viên khỏi lời Minh; exact send date/channel NOT VERIFIED.
 
-**D đã đặc tả:** common metric+trace occurrence evidence; identity/observed/rewired graph controls giữ local score/candidates/degree/components theo contract; 30dev/60eval grouped incidents; tie-aware MRR/δ/conditional uncertainty/denominators; C3 operation support, C4 late graph placement, separate C5/LLM/adapter contracts. Chưa claim baseline chạy được hoặc graph hiệu quả.
+**Revision:** C1 M+T L/O/R/split/controls/inference nguyên vẹn; thêm NDCG phụ. C5 graph-conditioned trước alert + LOGCOUNT-v1 + bốn supporting configs; trace structure khác trace evidence; triggered diagnosis MTL profile riêng. C3/C4/C2 roles giữ; no new primary RQ. [MRP-v1.1](MASTER-RESEARCH-PROGRAM.md) thêm public-extension ownership; không thêm mandatory C1 dataset hoặc E authorization.
 
-**Phát hiện quan trọng:** historical E1 đã xem TT baseline outputs/metrics; evaluation sau D không gọi untouched hoặc độc lập hoàn toàn. [Exposure ledger](D:/Project/flash-ticket-rca-research/task-d/task-d-exposure-ledger.md) giữ mức tiếp xúc và split. [Evidence ledger](D:/Project/flash-ticket-rca-research/task-d/task-d-evidence-ledger.md) có bounded primary checks, Pre-D và main adjudication; [independent review](D:/Project/flash-ticket-rca-research/task-d/task-d-independent-review.md) giữ từng pass/closure, không voting.
+**Independent assurance:** [source-first](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-source-first-review.md) và [fresh delta reviewer khác](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-delta-review.md). Bản sửa không còn CRITICAL/MAJOR specification finding;3 delta MINOR đã xử lý. Actual details, conflict/metric/modality matrices và exact file inventory nằm trong [reconciliation evidence](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-reconciliation-evidence.md).
 
-**NEXT EXACT ACTION:** Minh chấp thuận protocol và giao Task E. Phiên mới đọc D handoff/minimum pack; bắt đầu từ input manifests và synthetic/invariance/evaluator fixtures, pin declared baseline adapter/environment; không mở lại RQ, không root-label tuning, không bulk download cho tiện, không chạy G hoặc đổi FlashTicket.
+**Checks:** [TD-v1.1 receipt](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-validation.json), [governance](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-governance-validation.txt). Document/math checks không là dataset/model execution. TD-v1.0 receipts/review/exposure giữ nguyên; historical E1 outcomes vẫn exposed, không untouched evaluation.
 
-**OPEN và owner:** Minh — human acceptance/E scope; E/F — source pins/license/env, loader actual inputs/all-used-log joins, reference-window mobility/coverage, C5 unlabeled calibration, resource measurements; G — effects dưới frozen protocol; H/I — target/explanation validation. Faculty format/defense date do Minh khi J/K cần. Không còn major specification objection chưa phân xử trong D handoff; execution facts vẫn chưa verified.
+**OPEN:** Minh acceptance/E scope; second-public compatible task/release/addendum; E/F source/license/env/loader/all-used-log joins/calibration/control mobility/resources; G effects; H target/integration/DT18 system evaluation; I explanations. Không fake node/operation/path GT hoặc production FPR.
 
-**Bằng chứng bàn giao:** [D validation](D:/Project/flash-ticket-rca-research/task-d/task-d-validation.json), [governance log](D:/Project/flash-ticket-rca-research/task-d/task-d-governance-validation.txt). Hai correction giới hạn: Task A§M provenance notice, B2B scope status. Giữ C/decision register/master/B CLOSED/raw/history và README edit sẵn; không commit/push. D chỉ có document/synthetic checks, chưa baseline/train/benchmark/download/install/application changes.
-
-Khi bị ngắt, kiểm artifacts này và HEAD/working trees; tiếp tục phần thiếu, không restart reviewer hoặc A/B/C vì quota. Roadmap duy nhất [MASTER](MASTER-RESEARCH-PROGRAM.md); định vị bằng [ARTIFACT-MAP](ARTIFACT-MAP.md).
+**Local state:** TD-v1.1 chưa commit/push; hai HEAD vẫn P `6bd04e6`, W `c7e47fd`. README edit sẵn giữ nguyên. Source/decision/protocol/derived/evidence changes đúng inventory15 files, không app/schema/legacy/raw changes. Phiên tiếp theo kiểm working trees và handoff trước; không tự khởi động E.

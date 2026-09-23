@@ -1,6 +1,6 @@
 # RCA Master Research Program — Task A đến bảo vệ
 
-Chủ sở hữu: **Minh**, phụ trách RCA. Phiên bản `MRP-v1`, 2026-09-22. Lớp: `ROADMAP / FORMATION`. Đây là lộ trình RCA duy nhất; [CURRENT-STATE](CURRENT-STATE.md) là nơi duy nhất theo dõi trạng thái chạy hiện tại. Các quyết định con người nằm ở [RESEARCH-DECISIONS](RESEARCH-DECISIONS.md), hợp đồng nghiên cứu ở [C Phase 2](task-c-research-decision-lock.md). Cách sắp công việc/gate ở đây là thiết kế điều phối để thực hiện yêu cầu U22, không tự là human approval cho phương pháp chưa chọn.
+Chủ sở hữu: **Minh**, phụ trách RCA. Phiên bản `MRP-v1.1`, cập nhật 2026-09-23; bản MRP-v1 ngày22/09 giữ trong lịch sử Git. Lớp: `ROADMAP / FORMATION`. Đây là lộ trình RCA duy nhất; [CURRENT-STATE](CURRENT-STATE.md) là nơi duy nhất theo dõi trạng thái chạy hiện tại. Các quyết định con người nằm ở [RESEARCH-DECISIONS](RESEARCH-DECISIONS.md), hợp đồng nghiên cứu ở [C Phase 2](task-c-research-decision-lock.md). Cách sắp công việc/gate ở đây là thiết kế điều phối để thực hiện yêu cầu U22, không tự là human approval cho phương pháp chưa chọn.
 
 ## 1. Mục tiêu, trách nhiệm và các nghĩa khác nhau
 
@@ -46,6 +46,10 @@ ID là trách nhiệm, không phải lịch cứng buộc tất cả chạy tu�
 **Ranh giới trước pilot:** trước E, D phải định danh development/calibration scope và phần giữ lại cho final evaluation theo thiết kế sẽ được chọn. Ghi exposure ledger cả các ca đã xem khi audit A/B/C và những ca dùng trong E/F, phân biệt xem schema với xem outcome/score để lựa chọn thiết kế. Không gán một ca đã dùng chọn feature/parameter/control thành “untouched test” chỉ bằng sửa split; mọi thay đổi phải giữ lịch sử tiếp xúc và giải thích claim còn hợp lệ tới đâu. Quy tắc này không chọn sẵn tỷ lệ split hoặc loại bỏ các ca audit.
 
 **Status snapshot khi lập MRP:** Task A COMPLETE (evidence map; nguồn vẫn DRAFT về phê duyệt), Task B COMPLETE/CLOSED, Task C Phase 1+2 COMPLETE. D–K chưa thực hiện; trạng thái sống đọc CURRENT-STATE. Lập roadmap không cấp quyền chạy D/E/F/G hoặc tải/cài dữ liệu/framework.
+
+**Bổ sung TD-v1.1, 23/09:** [nguồn advisor riêng](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) và RCA-018–021 xác định hướng dẫn phương pháp cũ còn giá trị, không giảm phạm vi DT18 của FlashTicket. [TD-v1.1 §10/15](task-d-method-and-experiment-specification.md) đặc tả C5 graph-conditioned trước alert, M/T/L node evidence với trace structure riêng; C1 giữ nguyên. Đây là thiết kế CANDIDATE chờ Minh, không mở thêm primary RQ.
+
+**PUBLIC-EXTENSION gate (Minh + D/E, kiểm trước final public-program claim J/K):** RE2-TT vẫn primary C1. Yêu cầu nghiên cứu trên public datasets bổ sung có đường xử lý riêng: E kiểm compatibility nguồn trong scope được giao; D addendum nêu exact release/GT/graph/modalities/split/metrics và task; Minh chấp nhận scope trước retrieval/implementation campaign; F/G chạy khi được giao; J tách kết quả từng dataset. RE2-SS M/L không trace nên không lặp nguyên C1; LEMMA subdataset/graph mapping chưa verified. Không dựng graph giả, không pool GT khác mức, không dùng FlashTicket thay second-public evidence. Chưa có second dataset được chọn hoặc waived; thiếu evidence này không phá validity của narrow C1 hay chặn RE2-TT pilot đã được giao, nhưng không được tuyên bố đã hoàn thành hướng public mở rộng. Không phát sinh Task E authorization từ gate này.
 
 ## 3. Hợp đồng chung của mọi task
 
@@ -151,7 +155,7 @@ Mỗi task phải dùng các trường ở §4, cộng các quy tắc sau; chún
 | Inputs / dependencies | D protocol hiện hành và E handoff; public telemetry; không cần hệ FlashTicket |
 | Outputs / artifacts | `W/src/rca/`, `W/tests/`, `W/configs/`, `W/results/task-f/`; `P/task-f-handoff.md` (behavior/contract version/known failures) |
 | Mandatory / entry | Mandatory; E exit đạt và quyền implementation được giao |
-| Exit | End-to-end data→anomaly evidence→observed graph→ranking→structured diagnosis chạy; graph-free/structure controls cùng contract; C3/C4 có disposition; C5 mode có tests đúng scope; packet không labels/oracles; fail/missingness hữu hình. LLM renderer do I, không chặn F/G |
+| Exit | End-to-end data→anomaly evidence→observed graph→ranking→structured diagnosis chạy; graph-free/structure controls cùng contract; C3/C4 có disposition; C5 graph-conditioned mode và nested node-evidence configs theo TD-v1.1 có tests đúng scope; packet không labels/oracles; fail/missingness hữu hình. LLM renderer do I, không chặn F/G |
 | Scientific checks | Feature availability, same universe/evidence, no hidden repair, deterministic or seed-controlled reproducibility, raw/cached equivalence; C4 changing score không tự relational-only inference |
 | Reproducibility / evidence | Source snapshot/patch, tests, per-case packets, config/cache/input hashes, failure log và traceability tới D; reusable adapter boundary không hardcode benchmark answer tokens |
 | Out of scope | Chốt lại RQ theo kết quả, production streaming platform, FlashTicket code/deployment, C2 infra làm phình core |

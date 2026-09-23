@@ -1,51 +1,50 @@
 # Task D — Handoff
 
-- Ngày: **2026-09-23**. Chủ sở hữu: **Minh**. Protocol: **TD-v1.0**.
-- **STATUS: COMPLETE — công việc đặc tả và kiểm định D. Document: REVIEW_READY, human approval OPEN. Task E: NOT STARTED.** Hoàn tất đặc tả không tự là phê duyệt execution.
-- **PURPOSE:** chuyển C1 thành phép thử utility của observed relation arrangement trong cùng cơ chế ranking, với leakage/exposure/controls/statistics/failure contracts đủ triển khai.
+- Ngày: **2026-09-23**. Chủ sở hữu: **Minh**. Protocol hiện hành: **TD-v1.1**.
+- **STATUS: REVIEW_READY — hoàn tất revision/specification và independent review; human approval OPEN. Task E: NOT STARTED / NOT AUTHORIZED.** Bằng chứng kiểm tra cuối ở receipt phía dưới; review-ready không là kết quả thực nghiệm hoặc phê duyệt của con người.
+- PURPOSE: giữ nguyên C1 và sửa khoảng thiếu graph-conditioned detection/multimodal specification, provenance, metric/program ownership. Các lựa chọn kỹ thuật vẫn **CANDIDATE**.
 
-## Nguồn và lựa chọn
+## Quyền nguồn và lịch sử
 
-Nguồn thực dùng: [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), TC-P2-v1/RCA-001–017, MRP-v1 D/E/common contracts, B CLOSED§12/B digest, Task A comparators/provenance, C targeted/gates/cross-review/red-team. Kiểm E1 **chỉ để xác minh historical outcome exposure**. Input hashes/HEAD/source locators trong [evidence ledger](D:/Project/flash-ticket-rca-research/task-d/task-d-evidence-ledger.md); không reset kho.
+[Protocol TD-v1.1](task-d-method-and-experiment-specification.md) là đặc tả duy nhất. [Reconciliation evidence](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-reconciliation-evidence.md) chứa conflict matrix28 hàng, modality audit, pipeline, component roles, GT/metric matrix, new findings và **exact15-file inventory**. [Advisor source23/09](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) giữ nguyên văn hướng dẫn và câu Minh làm rõ.
 
-**DECISIONS MADE:** không thêm/chuyển trạng thái USER_CONFIRMED. Kỹ thuật ở [protocol](task-d-method-and-experiment-specification.md) vẫn **CANDIDATE** chờ Minh: metric+trace occurrence local evidence; late restart smoothing; L/O/R controls; 30dev/60eval cells; tie-aware MRR; δ=.05; conditional scenario bootstrap; mandatory Local-MAX và BARO-component adapted context. C3 operation support/defer scored representation; C4 graph-at-ranking/defer cross-placement; C5/LLM vẫn mandatory intended capabilities, chưa thực hiện.
+**Quyết định mới thực sự của con người: RCA-018–021**, ghi nguyên tử trong [phân sổ](RESEARCH-DECISIONS.md) và đăng ký tại sổ dự án: giữ tên DT18; hướng dẫn thuộc giai đoạn RCA-primary trước đây; còn giá trị cho phương pháp RCA; không dùng để giảm nhẹ FlashTicket. Không phải giảng viên duyệt TD. Ngày/kênh gửi gốc vẫn NOT VERIFIED. RCA-001–017/C lock/root-label policy giữ nguyên.
 
-Pre-D **READY WITH D-OWNED CONDITIONS**. Hai correction: Task A§M thêm notice historical attribution; B2B scope sửa EXECUTING thành COMPLETE theo B closure. Không sửa scientific A/B/C history, advisor letter, root-label policy, C1 hoặc decision register. P README edit sẵn giữ nguyên.
+TD-v1.0 được bảo tồn ở P commit `6bd04e625926e923301cc6bb1433682f01fd87fc`, protocol SHA256 `9822a92081fb5d958fde35b68d274906bd36ee66288017645a7ec6840a2c1c4d`; W commit `c7e47fdcc69c53876f7bd3f1a5e71ef89c59ccf6` giữ evidence/review/validation cũ. Revision này **local chưa commit/push**. README edit sẵn giữ nguyên.
 
-## Bằng chứng kiểm định và giới hạn
+## Thay đổi có ý nghĩa và phạm vi không đổi
 
-- Một reviewer độc lập, source-first opinion lưu **trước** khi xem F01–F12; sau đó challenge proposal và full draft qua20 lenses. [Review/closure](D:/Project/flash-ticket-rca-research/task-d/task-d-independent-review.md): 0 CRITICAL, 5 MAJOR và6 MINOR đã sửa, reviewer kiểm lại. Main adjudication trong evidence ledger; không quyết bằng vote.
-- [Validation receipt](D:/Project/flash-ticket-rca-research/task-d/task-d-validation.json): links/UTF-8/file scope/preservation, synthetic tie metrics/identity/constant signal/isolate/rewired graph/permutation/C5 state sequence. [Governance audit](D:/Project/flash-ticket-rca-research/task-d/task-d-governance-validation.txt) ghi kiểm chính thức của repo.
-- [Exposure ledger](D:/Project/flash-ticket-rca-research/task-d/task-d-exposure-ledger.md): metadata split30/60 có thật, repeats không tách; full-case graphs có valid swaps, **không** chứng minh reference-window mobility. E1 historical metrics/outcomes đã exposed; không gọi final set untouched.
-- Bounded primary check: Eadro/DejaVu/TORAI có graph/component ablations; BARO paper/artifact formulas khác; MicroRCA driver dùng target/fault threshold; không world-first absence claim. Inaccessible passages/pins ghi NOT VERIFIED.
-- Không dataset download, raw67M rerun, training, baseline execution, benchmark, app/API/schema edit, commit/push/deployment. D không chứng minh graph thắng, detector tốt, LLM faithful hoặc target runtime sẵn sàng.
+- **C1 giữ nguyên:** known-window M+T; cùng V/windows/features L/O/R; solver/controls/seeds; split30/60; MRR/δ=.05/inference/verdict/failure rules và baselines. NDCG@5 chỉ phụ, tie/miss/failure rõ.
+- **C5 candidate:** reference trace graph tác động score trước threshold; bốn configs G-M/G-MT/G-MTL/L-MTL. M/T/L là detector node evidence; mọi config vẫn có trace-derived candidates, G có trace topology. Nested comparisons có điều kiện, không full factorial/new primary RQ.
+- **Logs:** LOGCOUNT-v1 theo service/time, không templates/Drain/GNN bắt buộc, không gán log vào edge. Count scoring có giới hạn; thiếu logs0+mask, không loại ca, không hứa equal alerts giữa configs.
+- **Triggered integrated diagnosis:** cùng MTL profile cho cả bốn detector configs; tách hoàn toàn primary C1. C3 operation support, C4 late-ranking disposition và C2 optional giữ nguyên.
+- **Public extension:** D§15/MRP-v1.1 có owner/gate. RE2-SS không trace; LEMMA chưa pinned/mapped. Chưa chọn dataset thứ hai hoặc claim multi-public validation đã hoàn thành.
+- Packetv1.1 tách detector/profile/quality khỏi evaluator GT. Source-file-hash log samples có thể thay khi rehash suffix; future invariance chỉ numerical decisions/ranks, không toàn packet/LLM. H owns actual availability semantics.
 
-## OPEN có người sở hữu
+## Independent review và kiểm tra
 
-| OPEN | Owner / bước | Ảnh hưởng |
+[Source-first review](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-source-first-review.md) lưu trước candidate fixes; reviewer đó sau đó challenge proposal. [Fresh delta review](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-delta-review.md) do **reviewer khác**, thử20 attacks và open-ended pass: 0 CRITICAL/MAJOR trong revised specification;3 MINOR về evaluation bin, future-hash sampling và crop streak đã sửa/kiểm lại. Không dùng số reviewer như approval.
+
+[Validation receipt](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-validation.json): actual checks/hashes/preservation, source quote, exact scope/links/UTF8, synthetic graph-before-threshold/convexity/NDCG/calibration/state fixtures. [Governance audit](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-governance-validation.txt) là kết quả kiểm quản trị. Không nhận fixtures là benchmark, full-log compatibility, runtime hoặc experimental success.
+
+[Exposure ledger v1.0](D:/Project/flash-ticket-rca-research/task-d/task-d-exposure-ledger.md) vẫn có hiệu lực: E1 đã xem TT outcomes; không untouched test. Đọc revision evidence cho thêm source/metadata checks; không new outcome exposure, không raw67M re-audit.
+
+## OPEN, owner và đúng điểm dừng
+
+| OPEN | Owner / timing | Tác động |
 |---|---|---|
-| **Minh chấp thuận TD-v1.0 và cho phép execution E** | Minh, trước E | Ranh giới từ master D/E và request§36; chưa tự thông qua |
-| Immutable baseline pins/license/env; BARO adaptation fixtures | E | Cần trước reproduction/freeze; formula đã chọn, không chọn theo điểm |
-| Loader/schema/join actual corpus, resource limits | E/F | Cần trước G; sampled B joins không thay full-input checks |
-| Reference-window control mobility, candidate coverage, flat-evidence checks | E/F topology/label-free validation | Áp gate định trước, không drop/repair hard cases |
-| Historical raw-revision equivalence/parameter tuning history | E evaluator/provenance nếu có nguồn | Claim luôn disclose exposure; thiếu nguồn không chứng minh untouched |
-| C5 performance, packet usefulness, LLM/H transfer | F/G/I/H | Không block E; chưa đo |
+| Chấp nhận TD-v1.1 và giao execution E riêng | Minh trước E | **E chưa được phép**; không tự chạy từ review-ready |
+| Exact second-public task/release/scope | Minh + D/E, trước campaign mới và trước final multi-public claim J/K | Không điều kiện validity C1; không silently waive hoặc giả graph của SS |
+| Source pins/licenses/env, BARO adaptation fidelity | E trước freeze | Không evidence đã chạy |
+| Full used-input loader/log joins, C5 calibration reachability/resources | E/F trước G | Giữ missing/error cases; method revision phải review |
+| C1 reference graph mobility/coverage/flat evidence | E/F label-free validation | Giữ nguyên numeric gates; không dùng GT chọn phương pháp |
+| Effects/robustness/negative outcomes | G | Đo sau freeze; không ép graph/MTL thắng |
+| Target timing/healthy controls/integration và DT18 system evaluation | H + system team | Không giảm phạm vi FlashTicket; public không thay target |
+| LLM model/prompt/rubric/faithfulness/usefulness | I | Không rerank/repair/GT creation; chưa chạy |
+| Original advisor date/channel | Minh khi có nguồn | Relative historical context đã xác nhận; không chặn nghiên cứu phương pháp |
 
-**Assumptions:** B CLOSED đúng phạm vi chưa có discrepancy; labels evaluator-only; bootstrap là conditional scenario-resampling approximation; relations không causal. Valid negative kể cả local ceiling được giữ; failure/data/control-informativeness conventions định trước.
+**NEXT EXACT ACTION:** Minh đọc/duyệt TD-v1.1 và giao scope Task E nếu chấp nhận. Không execute E/F/G/H/I hoặc tự thêm dataset campaign trong phiên D này.
 
-## Exact next action và minimum pack
+Minimum pack sau AGENTS/skill/DT18: CURRENT-STATE → handoff này → toàn TD-v1.1 → B digest → exposure ledger → MRP§2–3/TaskE; mở revision evidence/delta review đúng vấn đề. Không restart survey/raw audit hay reviewer đã xong.
 
-**NEXT EXACT ACTION:** Minh duyệt TD-v1.0 và giao Task E với scope retrieval/environment/baseline implementation. Khi có lệnh E, kiểm hai HEAD/working trees, đọc pack dưới, tạo opaque dev manifest/validation fixtures trước comparator; không download full corpus mặc định. Dừng phiên D tại đây.
-
-Sau mandatory project `AGENTS.md` + skill governance + DT18, phiên mới cần:
-
-1. [CURRENT-STATE](CURRENT-STATE.md) — live status/authorization boundary.
-2. [Handoff này](task-d-handoff.md) — nguồn, open owners, exact next action.
-3. [TD-v1.0](task-d-method-and-experiment-specification.md) — đọc đầy đủ để triển khai.
-4. [B capability digest](task-b-dataset-capability-summary.md) — data/GT; chỉ mở B§12 khi dispute.
-5. [Exposure ledger](D:/Project/flash-ticket-rca-research/task-d/task-d-exposure-ledger.md) — split/historical exposure.
-6. [MASTER](MASTER-RESEARCH-PROGRAM.md) §§2–3, Task E, common handoff/reproducibility.
-
-Mở evidence ledger đúng BARO/source finding khi pin adapter; mở review đúng objection khi scientific revision. Không đọc lại toàn A/B/C/six reviewers/65-input inventory. Canonical protocol sở hữu choices; W là evidence, không protocol cạnh tranh.
-
-**Formal-report material:** C1 contrast/limits; known-window vs detection; provenance/exposure; split/dependence; negative/inconclusive rules; C3/C4; failure-inclusive results khi có; separate C5/LLM/H evidence. Chưa viết performance conclusions.
+**Formal-report material:** rationale/limits của mechanism; primary versus C5/integrated profiles; source chronology/DT18; multimodal nested comparisons/missingness; one-root NDCG; bounded GT; historical exposure và finite-scenario inference; public-extension/target/LLM evidence riêng. Chưa có số hiệu năng mới để đưa vào báo cáo.

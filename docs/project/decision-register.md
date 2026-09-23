@@ -6,6 +6,8 @@ Tài liệu này là bộ nhớ quyết định bền vững của đồ án. L�
 
 **Đăng ký phân sổ RCA — 22/09/2026:** [RESEARCH-DECISIONS.md](../research-rca/RESEARCH-DECISIONS.md) là nơi sở hữu nội dung nguyên tử **RCA-001–017**, do **Lê Văn Minh** xác nhận trong yêu cầu U22 “Finish Task C Phase 2 + Establish RCA Master Research Program”; nguồn/hash lưu trong phân sổ. Trạng thái **USER_CONFIRMED**, gate **Task C Phase 2**, phạm vi RQ/đóng góp/vai trò năng lực và ranh giới thực hiện RCA. Sổ dự án đăng ký ID/quyền nguồn bằng liên kết này, không chép lại mười bảy quyết định để tạo hai bản cạnh tranh. Contract áp dụng tại [C Phase 2](../research-rca/task-c-research-decision-lock.md); artifacts chịu tác động kê ở [ARTIFACT-MAP](../research-rca/ARTIFACT-MAP.md). Việc ghi lựa chọn C1 không phê duyệt thuật toán/proposal MyRCA cũ hoặc thay gate kiến trúc/hệ thống; các quyết định dự án còn lại giữ nguyên.
 
+**Bổ sung đăng ký phân sổ — 23/09/2026:** [RCA-018–021](../research-rca/RESEARCH-DECISIONS.md) do Lê Văn Minh xác nhận trực tiếp trong TD-v1.1 reconciliation; trạng thái USER_CONFIRMED, gate làm rõ nguồn/phạm vi DT18. Nguồn nguyên văn và phạm vi từng xác nhận nằm trong phân sổ. Các xác nhận giữ tên hiện hành, đặt hướng dẫn cũ vào đúng bối cảnh, giữ giá trị nghiên cứu RCA và không giảm nhẹ FlashTicket. Không thay RCA-001–017, không duyệt thuật toán, dataset hoặc Task E. Artifacts chịu tác động: nguồn advisor23/09, Task D/handoff, Master, Task A§M, CURRENT-STATE và ARTIFACT-MAP.
+
 ## Trạng thái được phép
 
 | Trạng thái | Ý nghĩa |

@@ -32,6 +32,17 @@ Mọi dòng có ngày **2026-09-22**, người chốt **Lê Văn Minh**, trạng
 | RCA-016 | Không để quyết định quan trọng chỉ tồn tại ngoài repository; không chép dataset lớn vào repository chỉ để thống nhất hình thức. | Giữ tri thức bền vững và phục hồi ngữ cảnh giữa các phiên. | U22 §6, §14.H–I | Chưa bị thay; cách bố trí hai root do chương trình đánh giá, không gán thành lựa chọn cụ thể Minh đã chốt |
 | RCA-017 | Phiên này chỉ hoàn tất C Phase 2 và hồ sơ điều phối; Task D phải chờ lệnh bắt đầu riêng. | Đúng ranh giới ủy quyền. | U22 phần đầu, §15: “Do not start Task D automatically.” | Chưa bị thay |
 
+## Xác nhận làm rõ nguồn và phạm vi — 23/09/2026
+
+Nguồn U23: [nguyên văn xác nhận Minh §3](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md). Mọi dòng dưới: người chốt **Lê Văn Minh**, ngày **2026-09-23**, trạng thái **USER_CONFIRMED**, gate **TD-v1.1 reconciliation / làm rõ phạm vi DT18**. Không thay RCA-001–017, không duyệt phương pháp hay execution.
+
+| ID | Xác nhận nguyên tử | Nguồn / trích ngắn | Phạm vi ảnh hưởng |
+|---|---|---|---|
+| RCA-018 | Tên đề tài hiện hành đúng là “Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố”. | U23: tên đề tài “chuẩn” | Tái xác nhận DT18/PRJ-025; không thay tên hoặc nhiệm vụ |
+| RCA-019 | Đoạn hướng dẫn giảng viên được cung cấp ở U23 thuộc giai đoạn đề tài trước, khi RCA là đối tượng nghiên cứu chính. | U23: “đoạn hướng dẫn trên là khi đề tài vẫn còn lấy RCA là đối tượng nghiên cứu chính” | Provenance tương đối; không suy ngày/kênh gửi gốc |
+| RCA-020 | Hướng dẫn cũ vẫn có giá trị cho phần RCA; RCA không bị bỏ khi đồ án thêm đối tượng nghiên cứu hệ thống. | U23: “hướng dẫn cũ này của cô vẫn còn giá trị … RCA không bỏ” | Cách đọc nguồn phương pháp trong D/Master/A; không xác nhận từng ví dụ là bắt buộc |
+| RCA-021 | Không áp dụng nguyên xi hướng dẫn cũ theo cách giảm nhẹ hoặc coi nhẹ việc xây dựng FlashTicket. | U23: “không nên tuân thủ y hệt … giảm nhẹ hay coi nhẹ việc xây dựng hệ thống flash ticket” | D/H/J và diễn giải DT18 giữ nghĩa vụ hệ thống; không thêm API/kiến trúc |
+
 ## Quy tắc cập nhật
 
 Thay đổi ý định đã khóa phải có xác nhận mới của Minh, ID mới, nguồn/ngày và liên kết thay thế; giữ dòng cũ. Không thêm đề xuất reviewer hoặc thiết kế Task D chưa được duyệt vào bảng USER_CONFIRMED. Một quyết định triển khai được giao cho agent không tự là lời Minh xác nhận đúng phương án agent chọn. Không dùng sổ này thay các gate kiến trúc/hợp đồng của bộ hệ thống.
