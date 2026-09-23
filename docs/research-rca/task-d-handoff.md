@@ -10,7 +10,7 @@
 
 **Quyết định mới thực sự của con người: RCA-018–021**, ghi nguyên tử trong [phân sổ](RESEARCH-DECISIONS.md) và đăng ký tại sổ dự án: giữ tên DT18; hướng dẫn thuộc giai đoạn RCA-primary trước đây; còn giá trị cho phương pháp RCA; không dùng để giảm nhẹ FlashTicket. Không phải giảng viên duyệt TD. Ngày/kênh gửi gốc vẫn NOT VERIFIED. RCA-001–017/C lock/root-label policy giữ nguyên.
 
-TD-v1.0 được bảo tồn ở P commit `6bd04e625926e923301cc6bb1433682f01fd87fc`, protocol SHA256 `9822a92081fb5d958fde35b68d274906bd36ee66288017645a7ec6840a2c1c4d`; W commit `c7e47fdcc69c53876f7bd3f1a5e71ef89c59ccf6` giữ evidence/review/validation cũ. Revision này **local chưa commit/push**. README edit sẵn giữ nguyên.
+TD-v1.0 được bảo tồn ở P commit `6bd04e625926e923301cc6bb1433682f01fd87fc`, protocol SHA256 `9822a92081fb5d958fde35b68d274906bd36ee66288017645a7ec6840a2c1c4d`; W commit `c7e47fdcc69c53876f7bd3f1a5e71ef89c59ccf6` giữ evidence/review/validation cũ. TD-v1.1 đã commit/push lên P branch `codex/rca-research-program` (commit nội dung `a4a2fa3`) và W branch `main` (commit nội dung `9eca376`). README edit sẵn vẫn chỉ ở local, chưa commit/push.
 
 ## Thay đổi có ý nghĩa và phạm vi không đổi
 

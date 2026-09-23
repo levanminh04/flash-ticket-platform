@@ -20,4 +20,4 @@ Chủ sở hữu: **Minh**. Cập nhật **2026-09-23**, sau TD-v1.1 reconciliat
 
 **OPEN:** Minh acceptance/E scope; second-public compatible task/release/addendum; E/F source/license/env/loader/all-used-log joins/calibration/control mobility/resources; G effects; H target/integration/DT18 system evaluation; I explanations. Không fake node/operation/path GT hoặc production FPR.
 
-**Local state:** TD-v1.1 chưa commit/push; hai HEAD vẫn P `6bd04e6`, W `c7e47fd`. README edit sẵn giữ nguyên. Source/decision/protocol/derived/evidence changes đúng inventory15 files, không app/schema/legacy/raw changes. Phiên tiếp theo kiểm working trees và handoff trước; không tự khởi động E.
+**GitHub state:** TD-v1.1 đã commit/push lên P branch `codex/rca-research-program` (commit nội dung `a4a2fa3`) và W branch `main` (commit nội dung `9eca376`). README edit sẵn vẫn chỉ ở local, chưa commit/push. Source/decision/protocol/derived/evidence changes đúng inventory 15 files, không app/schema/legacy/raw changes. Phiên tiếp theo kiểm HEAD/remote và handoff trước; không tự khởi động E.
