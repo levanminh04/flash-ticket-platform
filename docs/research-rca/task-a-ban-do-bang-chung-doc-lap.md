@@ -515,6 +515,8 @@ Không có hàng nào đạt `STRONG CANDIDATE`. Trước khi hình thành RQ, c
 
 ## M. Diễn giải mức phù hợp với định hướng giảng viên
 
+> **Đính chính nguồn, 2026-09-23:** bảng dưới giữ nguyên như bằng chứng diễn giải ở Task A, **không dùng cột `DIRECTLY SUPPORTED BY EMAIL` để trích nguyên nghĩa thư 22/08**. [Thư gốc](../evidence/advisor-direction/2026-08-22-dinh-huong-de-tai.md) không nêu PageRank/subgraph/GNN, bộ P/R/F1/MRR/NDCG hoặc lựa chọn LLM cụ thể; thư nêu AI hỗ trợ giải thích và khảo sát độ đo phù hợp. Hướng dẫn cụ thể của Minh ở Task C không phải lời giảng viên trong quá khứ; xem [EC-09](D:/Project/flash-ticket-rca-research/task-c/task-c-evidence-cross-review.md). Nhiệm vụ hiện hành theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); vai trò LLM theo [RCA-010/011](RESEARCH-DECISIONS.md). Notice chỉ sửa quyền quy nguồn, không sửa lịch sử khảo sát hoặc trạng thái phê duyệt `DRAFT`.
+
 | Bước trong email | `DIRECTLY SUPPORTED BY EMAIL` | `TECHNICAL INTERPRETATION` từ literature | Điểm cần hỏi lại sau |
 |---|---|---|---|
 | **1. Xây dependency graph** | Graph giữa các dịch vụ | Phải định nghĩa node, edge, hướng, nguồn cạnh, thời gian hiệu lực, coverage và version. Service graph là mức tối thiểu trực tiếp từ email; operation/resource layers chưa được email chốt | Cô yêu cầu service-only graph hay cho phép/đòi thêm operation/resource nodes? |

@@ -32,6 +32,8 @@ Các đường dẫn dưới đây là root-relative. Trong P, `R/` viết tắt
 | B-DIGEST | Data/GT/leakage tóm tắt bền vững · CANONICAL_SYNTHESIS | Dẫn xuất của B CLOSED, không audit mới | P: `R/task-b-dataset-capability-summary.md` | B/program → D–I | Nhỏ, repo; **L1** |
 | C-P1 | Shortlist và phân xử Phase 1 · CANONICAL_SYNTHESIS | Phase 1 COMPLETE, historical human-choice status; notice trỏ Phase 2 | P: `R/task-c-independent-research-shortlist.md` | C Phase 1 → C Phase 2/D/J | Repo; L2 lý do/claim gate cụ thể |
 | C-P2 | Research Decision Lock + C handoff · CANONICAL_DECISION | TC-P2-v1, COMPLETE theo U22; exact methods OPEN | P: `R/task-c-research-decision-lock.md` | C Phase 2 → D–K | Repo; **L1** |
+| D-PROTOCOL | Method/experiment specification · CANONICAL_DECISION | TD-v1.0 REVIEW_READY; design CANDIDATE, human execution approval OPEN | P: `R/task-d-method-and-experiment-specification.md` | D → E–I/J | Repo; **L1 cho E**, authoritative technical choices |
+| D-HANDOFF | D completion/validation/next action · CURRENT_STATE | Work COMPLETE; E NOT STARTED; no self-approval | P: `R/task-d-handoff.md` | D → E/fresh session | Nhỏ, repo; **L1 cho E** |
 | REF-SOURCES | Danh mục primary sources chung · DETAILED_EVIDENCE | Một source register cho một luận văn, không đổi lượt này | P: `docs/research/source-register.md` | Survey → A/D/J | Repo; L2 nguồn được trích |
 | RCA-R0 | Cửa nghiên cứu → hệ thống · CANONICAL_SYNTHESIS | R0-v0.6 DRAFT; §3/OPENs giữ nguyên, notice hiện hành bổ sung | P: `R/R0-boi-canh-va-rang-buoc.md` | Research → system gates/H | Repo; L2 khi qua cửa |
 | SYS-RCA-DOOR | Cửa hệ thống → nghiên cứu · CANONICAL_SYNTHESIS | Hiện hành; giữ nguyên | P: `docs/project/lien-ket-rca.md` | System → H; independence checks | Repo; L2 khi qua cửa |
@@ -82,16 +84,19 @@ Mỗi collection trong bảng là một major artifact có manifest/đường d�
 | PROGRAM-REVIEW | Neutral proposal + challenge + closure · DETAILED_EVIDENCE | `program-review/independent-workflow-review.md` | Program independent reviewer → main adjudication | External; L2/3, không scientific GT |
 | PROGRAM-BEFORE | Preservation baseline · RAW_OR_MACHINE_EVIDENCE | `program-review/pre-change-inventory.json` | Program → validator | External; 59 relevant files, không raw corpus |
 | PROGRAM-CHECK | Package validation · RAW_OR_MACHINE_EVIDENCE | `program-review/program-package-validation.json`; `program-review/program-governance-validation.txt`; `program-review/validate-program-package.ps1` | Program → handoff/recovery | External; kiểm links/UTF-8/preservation/contracts |
+| D-EVIDENCE | Primary checks + Pre-D/main adjudication · DETAILED_EVIDENCE | `task-d/task-d-evidence-ledger.md` | D → E baseline provenance/J | External text; L2 source/finding |
+| D-EXPOSURE | Historical exposure + split/graph feasibility · DETAILED_EVIDENCE | `task-d/task-d-exposure-ledger.md`; reference-only mobility NOT VERIFIED | D → E/F/G | External; **L1 cho E**; protocol owns split rule |
+| D-REVIEW | Source-first + challenges + final review · DETAILED_EVIDENCE | `task-d/task-d-independent-review.md`; one reviewer, no human approval | D → E revisions | External; L2 objections/closure |
+| D-CHECK | Synthetic/document checks · RAW_OR_MACHINE_EVIDENCE | `task-d/task-d-validation.json`, `task-d/task-d-governance-validation.txt`, `task-d/validate-task-d.py` | D → handoff/E fixtures | Small external files; no RCA experimental results |
 
 Không có Task D–K experiment outputs được tuyên bố đã sinh ở bảng này. `results/` hiện là nơi dự kiến nhận runs; `EXPERIMENT_OUTPUT` chỉ áp dụng khi có run thật. Reviewer prose/machine audit không phải benchmark results. Không tìm thấy bản duplicate byte-for-byte nào cần xóa trong phạm vi tổ chức; chồng lấn **quyền diễn giải** được xử lý dưới đây, không đồng nhất với trùng file.
 
 ## 4. Hợp đồng định vị artifacts tương lai
 
-Các hàng này **PLANNED, NOT CREATED**. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
+Các hàng **E–K** dưới đây **PLANNED, NOT CREATED**. Task D documents đã tồn tại và được định vị ở §§2–3; không có Task D baseline/benchmark execution. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
 
 | ID / producer | Canonical path, class | Execution path, class | Consumers |
 |---|---|---|---|
-| D | `R/task-d-method-and-experiment-specification.md` CANONICAL_DECISION (DRAFT đến khi người có quyền duyệt); `R/task-d-handoff.md` CURRENT_STATE | Review/evidence cần thiết trong W, chưa tạo folder rỗng | E/F/G/H/I |
 | E | `R/task-e-handoff.md` CANONICAL_SYNTHESIS | `baselines/`, `environments/` IMPLEMENTATION; `results/task-e/` EXPERIMENT_OUTPUT | F/G/J |
 | F | `R/task-f-handoff.md` CANONICAL_SYNTHESIS | `src/rca/`, `tests/`, `configs/` IMPLEMENTATION; `results/task-f/` EXPERIMENT_OUTPUT | G/H/I/J |
 | G | `R/task-g-handoff.md` CANONICAL_SYNTHESIS | `results/task-g/<run-id>/` EXPERIMENT_OUTPUT + manifests | H/I/J/K |
