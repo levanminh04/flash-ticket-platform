@@ -22,3 +22,8 @@ Nguồn đọc: Task B §12.1–12.20, và các hiệu chỉnh phạm vi tại [
 **Handoff:** D đặc tả mapping/evaluator; E/F xác minh loader/schema trên đúng input thực dùng, manifests và leakage isolation trước khi G chạy. Không loại ca thiếu logs hoặc graph resolution thấp để làm đẹp kết quả; không invent nhãn/resources. Thay đổi capability phải có evidence mới và phiên bản summary, không chỉ do quyết định phương pháp.
 
 Tìm artifacts chi tiết, raw manifests, scripts và reviewers qua [ARTIFACT-MAP](ARTIFACT-MAP.md). Không mặc định tải/rerun khi đọc file này.
+
+
+## U26 policy notice — 26/09/2026
+
+Bảng trên giữ B snapshot 22/09 và evaluation-only policy lịch sử. RCA-026–030 / TC-P2-v1.1 / TD-v1.2 supersede đúng prohibition development selection/calibration; runtime/final tuning vẫn cấm. Không sửa B CLOSED hoặc raw data. RE3/OB/SS/LEMMA compatibility ở D §11 và W task-d/td-v1.2-provenance-and-data.md; footers không chứng nhận raw joins của 29 ca RE3-TT chưa đọc.

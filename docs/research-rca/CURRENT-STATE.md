@@ -1,23 +1,21 @@
 # RCA — Current state
 
-Chủ sở hữu: **Minh**. Cập nhật **2026-09-23**, sau TD-v1.1 reconciliation. Đây là checkpoint hiện hành duy nhất; completion không thay human approval hoặc kết quả đo.
+Chủ sở hữu Minh. Cập nhật **2026-09-26**. Đây là live checkpoint duy nhất, không thay human approval hoặc kết quả thực nghiệm.
 
-| Trạng thái | Nội dung |
+| State | Nội dung |
 |---|---|
-| DONE | A evidence map COMPLETE/document DRAFT; B CLOSED; C Phase1+2 COMPLETE; TD-v1.0 preserved; **TD-v1.1 specification/reconciliation/review COMPLETE** |
-| CURRENT | [TD-v1.1](task-d-method-and-experiment-specification.md) **REVIEW_READY**, technical CANDIDATE; [handoff](task-d-handoff.md) chứa nguồn/validation/open owners |
-| NEXT | Minh review/accept protocol, sau đó giao scope Task E riêng |
-| AUTHORIZATION | Request “Independent Reconciliation + TD-v1.1 Revision” chỉ cho specification/source/math/review. **Task E NOT STARTED / NOT AUTHORIZED**; E–I không chạy trong revision này |
-| LATER DEPENDENCY | D–G không chờ FlashTicket; H mới cần target readiness. Multi-public extension phải có task-compatible addendum/scope trước campaign mới |
+| DONE | A evidence map; B CLOSED; C Phase1+2; TD-v1.0/v1.1 history giữ; **TD-v1.2 source-first redesign, ring reconciliation, delta closure và document/math validation** |
+| CURRENT | [TD-v1.2](task-d-method-and-experiment-specification.md) technical **CANDIDATE**, **REVIEW_READY WITH BLOCKERS — do not start E** |
+| NEXT | Xử lý assurance năm distinct independent reviewers; Minh review/accept protocol và giao E scope riêng |
+| AUTHORIZATION | U26 cho D review/redesign và bounded compatibility/math/document checks. **Task E NOT STARTED / NOT AUTHORIZED**; chưa training, baseline runs, full-corpus retrieval, empirical selection/sensitivity hoặc final freeze |
+| LATER | E/F development selection+sensitivity+fidelity+actual-use audits khi được giao; G locked evaluation; H FlashTicket; I LLM |
 
-**Human decisions:** [RCA-001–017](RESEARCH-DECISIONS.md) và C lock giữ nguyên. **RCA-018–021 mới từ câu Minh làm rõ:** DT18 hiện hành; nguồn advisor mới tiếp nhận thuộc giai đoạn cũ; còn giá trị phương pháp RCA; không giảm nhẹ FlashTicket. [Nguồn nguyên văn](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) tách lời giảng viên khỏi lời Minh; exact send date/channel NOT VERIFIED.
+[Human decisions RCA-022–042](RESEARCH-DECISIONS.md) append đúng nguồn [U26](../evidence/project-direction/2026-09-26-rca-task-d-redesign.md); RCA-001–021 giữ nguyên. Scoped dev-label permission supersedes prohibition development selection/calibration, không runtime/final tuning. C5 first-class không thay C1 primary. Exact PPR/ridge/TV/RCD/folds/threshold choices là CANDIDATE.
 
-**Revision:** C1 M+T L/O/R/split/controls/inference nguyên vẹn; thêm NDCG phụ. C5 graph-conditioned trước alert + LOGCOUNT-v1 + bốn supporting configs; trace structure khác trace evidence; triggered diagnosis MTL profile riêng. C3/C4/C2 roles giữ; no new primary RQ. [MRP-v1.1](MASTER-RESEARCH-PROGRAM.md) thêm public-extension ownership; không thêm mandatory C1 dataset hoặc E authorization.
+[Handoff](task-d-handoff.md) → [A–J review packet](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-review-packet.md) → [memos](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-review-memos.md) → [provenance/data](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-provenance-and-data.md). Ba distinct agents thực hiện năm vai trò và đủ các cạnh phản biện; chưa thỏa năm independent agents do native thread limit. B/C/D đã đọc TD-v1.2 và đóng các finding delta họ xác định trong scope review; không thay blocker hoặc human approval.
 
-**Independent assurance:** [source-first](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-source-first-review.md) và [fresh delta reviewer khác](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-delta-review.md). Bản sửa không còn CRITICAL/MAJOR specification finding;3 delta MINOR đã xử lý. Actual details, conflict/metric/modality matrices và exact file inventory nằm trong [reconciliation evidence](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-reconciliation-evidence.md).
+[Validation receipt](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-validation.json): **126/126 PASS** cho document/math/scope. [Governance](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-governance-validation.txt): PASS với một impact-map warning; impact map và U26 authorization đã có. [Metadata receipt](D:/Project/flash-ticket-rca-research/task-d/td-v1.2-public-metadata.json): 90 RE3-TT HTTP206 footers, 6,026,998 bytes, schema/count checks đạt; không lấy remote telemetry rows. Một existing raw sample được kiểm, không chứng nhận joins của cả 30 ca. E1 TT90 outcome exposure vẫn hiệu lực; không gọi là clean test.
 
-**Checks:** [TD-v1.1 receipt](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-validation.json), [governance](D:/Project/flash-ticket-rca-research/task-d/td-v1.1-governance-validation.txt). Document/math checks không là dataset/model execution. TD-v1.0 receipts/review/exposure giữ nguyên; historical E1 outcomes vẫn exposed, không untouched evaluation.
+**Git snapshot:** P codex/rca-research-program fa27a9d32873d957818ac389b8d3fc8f4e98b185; W main 38a0d0362e1e51a56ba3a6334a7f7c13a036f603. TD-v1.2 đang local, chưa commit, **chưa push**. P README dirty từ trước được bảo tồn. Không đổi application/API/schema/raw/legacy. Packet có từng tệp, lý do và checks.
 
-**OPEN:** Minh acceptance/E scope; second-public compatible task/release/addendum; E/F source/license/env/loader/all-used-log joins/calibration/control mobility/resources; G effects; H target/integration/DT18 system evaluation; I explanations. Không fake node/operation/path GT hoặc production FPR.
-
-**GitHub state:** TD-v1.1 đã commit/push lên P branch `codex/rca-research-program` (commit nội dung `a4a2fa3`) và W branch `main` (commit nội dung `9eca376`). README edit sẵn vẫn chỉ ở local, chưa commit/push. Source/decision/protocol/derived/evidence changes đúng inventory 15 files, không app/schema/legacy/raw changes. Phiên tiếp theo kiểm HEAD/remote và handoff trước; không tự khởi động E.
+**OPEN:** assurance năm independent agents; human acceptance/E scope; future empirical compatibility/selection/sensitivity/fidelity/resources; exact authorized extension campaign/license; G effects; H integration/system evaluation; I explanation; advisor original send date/channel. Chưa có báo cáo hiệu quả đo được mới.

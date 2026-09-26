@@ -1,6 +1,6 @@
 # RCA Master Research Program — Task A đến bảo vệ
 
-Chủ sở hữu: **Minh**, phụ trách RCA. Phiên bản `MRP-v1.1`, cập nhật 2026-09-23; bản MRP-v1 ngày22/09 giữ trong lịch sử Git. Lớp: `ROADMAP / FORMATION`. Đây là lộ trình RCA duy nhất; [CURRENT-STATE](CURRENT-STATE.md) là nơi duy nhất theo dõi trạng thái chạy hiện tại. Các quyết định con người nằm ở [RESEARCH-DECISIONS](RESEARCH-DECISIONS.md), hợp đồng nghiên cứu ở [C Phase 2](task-c-research-decision-lock.md). Cách sắp công việc/gate ở đây là thiết kế điều phối để thực hiện yêu cầu U22, không tự là human approval cho phương pháp chưa chọn.
+Chủ sở hữu: **Minh**, phụ trách RCA. Phiên bản `MRP-v1.2`, cập nhật 2026-09-26; bản MRP-v1 ngày22/09 giữ trong lịch sử Git. Lớp: `ROADMAP / FORMATION`. Đây là lộ trình RCA duy nhất; [CURRENT-STATE](CURRENT-STATE.md) là nơi duy nhất theo dõi trạng thái chạy hiện tại. Các quyết định con người nằm ở [RESEARCH-DECISIONS](RESEARCH-DECISIONS.md), hợp đồng nghiên cứu ở [C Phase 2](task-c-research-decision-lock.md). Cách sắp công việc/gate ở đây là thiết kế điều phối để thực hiện yêu cầu U22, không tự là human approval cho phương pháp chưa chọn.
 
 ## 1. Mục tiêu, trách nhiệm và các nghĩa khác nhau
 
@@ -11,7 +11,7 @@ Chủ sở hữu: **Minh**, phụ trách RCA. Phiên bản `MRP-v1.1`, cập nh�
 | RESEARCH QUESTION | **C1 mandatory** | Giá trị observed service relations trong pipeline/controls/budget được kiểm, với service ranking GT |
 | OPTIONAL EXTENSION | C2 | Evidence-budget dependence sau C1 ổn định; không yêu cầu để luận văn thành công |
 | SUPPORTING DESIGN / ABLATION | C3, C4 phải hiện diện | C3 operation-aware evidence; C4 graph placement. D phải giải thích dùng/không dùng, exact experiment conditional; không novelty độc lập |
-| SYSTEM CAPABILITY | C5 và LLM mandatory intended capabilities | Detection → RCA và downstream explanation; mỗi capability có kiểm chứng riêng, không lấy điểm ranking thay tất cả |
+| FIRST-CLASS METHOD / CAPABILITY | C5 first-class graph AD; LLM mandatory explanation | Detection → RCA và downstream explanation; mỗi capability có kiểm chứng riêng, không lấy điểm ranking thay tất cả |
 | DEMO FEATURE | Hiển thị graph/rank/evidence/explanation | Chỉ chứng minh thao tác đã chạy; hình đẹp không chứng minh hiệu quả |
 | GROUND-TRUTH-EVALUABLE OUTPUT | RE2-TT service rank; bounded regime; FlashTicket theo nhãn thực có | Không operation-root/affected-node/path accuracy khi thiếu nhãn; explanation faithfulness khác diagnosis correctness |
 
@@ -47,15 +47,15 @@ ID là trách nhiệm, không phải lịch cứng buộc tất cả chạy tu�
 
 **Status snapshot khi lập MRP:** Task A COMPLETE (evidence map; nguồn vẫn DRAFT về phê duyệt), Task B COMPLETE/CLOSED, Task C Phase 1+2 COMPLETE. D–K chưa thực hiện; trạng thái sống đọc CURRENT-STATE. Lập roadmap không cấp quyền chạy D/E/F/G hoặc tải/cài dữ liệu/framework.
 
-**Bổ sung TD-v1.1, 23/09:** [nguồn advisor riêng](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) và RCA-018–021 xác định hướng dẫn phương pháp cũ còn giá trị, không giảm phạm vi DT18 của FlashTicket. [TD-v1.1 §10/15](task-d-method-and-experiment-specification.md) đặc tả C5 graph-conditioned trước alert, M/T/L node evidence với trace structure riêng; C1 giữ nguyên. Đây là thiết kế CANDIDATE chờ Minh, không mở thêm primary RQ.
+**Lịch sử TD-v1.1, 23/09 (kỹ thuật nay được TD-v1.2 thay):** [nguồn advisor riêng](../evidence/advisor-direction/2026-09-23-huong-dan-do-minh-cung-cap.md) và RCA-018–021 xác định hướng dẫn phương pháp cũ còn giá trị, không giảm phạm vi DT18 của FlashTicket. Bản TD-v1.1 trong lịch sử Git đặc tả C5 graph-conditioned trước alert và M/T/L node evidence với trace structure riêng; C1 giữ nguyên. Thiết kế hiện hành đọc [TD-v1.2 §7/11](task-d-method-and-experiment-specification.md), vẫn là CANDIDATE chờ Minh, không mở thêm primary RQ.
 
-**PUBLIC-EXTENSION gate (Minh + D/E, kiểm trước final public-program claim J/K):** RE2-TT vẫn primary C1. Yêu cầu nghiên cứu trên public datasets bổ sung có đường xử lý riêng: E kiểm compatibility nguồn trong scope được giao; D addendum nêu exact release/GT/graph/modalities/split/metrics và task; Minh chấp nhận scope trước retrieval/implementation campaign; F/G chạy khi được giao; J tách kết quả từng dataset. RE2-SS M/L không trace nên không lặp nguyên C1; LEMMA subdataset/graph mapping chưa verified. Không dựng graph giả, không pool GT khác mức, không dùng FlashTicket thay second-public evidence. Chưa có second dataset được chọn hoặc waived; thiếu evidence này không phá validity của narrow C1 hay chặn RE2-TT pilot đã được giao, nhưng không được tuyên bố đã hoàn thành hướng public mở rộng. Không phát sinh Task E authorization từ gate này.
+**PUBLIC-EXTENSION gate (Minh + D/E, kiểm trước final public-program claim J/K):** RE2-TT vẫn primary C1. Yêu cầu nghiên cứu trên public datasets bổ sung có đường xử lý riêng: E kiểm compatibility nguồn trong scope được giao; D addendum nêu exact release/GT/graph/modalities/split/metrics và task; Minh chấp nhận scope trước retrieval/implementation campaign; F/G chạy khi được giao; J tách kết quả từng dataset. RE2-SS M/L không trace nên không lặp nguyên C1; LEMMA subdataset/graph mapping chưa verified. Không dựng graph giả, không pool GT khác mức, không dùng FlashTicket thay second-public evidence. TD-v1.2 đề xuất RE3-TT frozen-transfer, RE3-OB cross-application, SS/LEMMA component roles; campaign authorization OPEN; thiếu evidence này không phá validity của narrow C1 hay chặn RE2-TT pilot đã được giao, nhưng không được tuyên bố đã hoàn thành hướng public mở rộng. Không phát sinh Task E authorization từ gate này.
 
 ## 3. Hợp đồng chung của mọi task
 
 Mỗi task phải dùng các trường ở §4, cộng các quy tắc sau; chúng áp dụng theo tham chiếu, không cần sao chép sang từng handoff.
 
-**Validity:** scope/task/unit/GT phải khớp. Primary C1 là known-window RCA với boundary oracle công khai; detector evaluation là nhánh riêng. Paths/root/fault/oracle metadata tách khỏi model và LLM input. Candidate universe lấy từ telemetry hợp lệ, không injected-label set. Giữ failures/missingness; kiểm leakage, feature/supervision/capacity fairness và scenario dependence; không biến spans/seeds thành incident độc lập. Graph semantics, multimodal joins và sample/full-population scope theo Task B. Không có luật mới cho supervised labels ngoài policy đã khóa.
+**Validity:** scope/task/unit/GT phải khớp. Primary C1 là known-window RCA với boundary oracle công khai; detector evaluation là nhánh riêng. Paths/root/fault/oracle metadata tách khỏi model và LLM input. Candidate universe lấy từ telemetry hợp lệ, không injected-label set. Giữ failures/missingness; kiểm leakage, feature/supervision/capacity fairness và scenario dependence; không biến spans/seeds thành incident độc lập. Graph semantics, multimodal joins và sample/full-population scope theo Task B. RCA-026–030 cho label-guided development selection/calibration; runtime/final tuning cấm, sensitivity trước freeze theo D.
 
 **Reproducibility:** trước một run phải có run ID, task/protocol version, source revision, dataset file manifest/hash, code revision hoặc patch hash khi chưa commit, environment/package lock, command/config, seeds nếu có, actual input/split IDs, preprocessing/availability rules, hardware/runtime scope, output schema, per-case predictions và failure/error log. Evaluator và model-facing inputs tách biệt. Cache có source/config hash và cutoff provenance; không chia cache khiến nhìn trước. Ghi cả failed/negative runs, deviations và số ca trong mẫu số. Những việc này là output của E–I, chưa được nhận là đã có tại MRP-v1.
 
@@ -124,7 +124,7 @@ Mỗi task phải dùng các trường ở §4, cộng các quy tắc sau; chún
 | Outputs / artifacts | `P/task-d-method-and-experiment-specification.md` (gồm evidence/adapter/LLM packet contract, C3/C4 disposition, claim register ban đầu); `P/task-d-handoff.md` |
 | Mandatory / entry | Mandatory; C lock hiện hành và Minh cho phép bắt đầu D |
 | Exit | Feature/reference/graph/rank/detection modes, candidate/split/metric/controls/statistics/baseline families và failure policy đủ implement; independent critique được phân xử; Minh chấp thuận protocol baseline trước execution E |
-| Scientific checks | Counterfactual controls giữ được nuisance nào, không giữ được gì; held-out scope; root labels evaluation-only; known-window vs detection tách; fair local evidence ở mọi nhánh |
+| Scientific checks | Counterfactual controls giữ được nuisance nào, không giữ được gì; held-out scope; registered development-label selection/sensitivity/freeze; final/runtime firewall; known-window vs detection tách; fair local evidence ở mọi nhánh |
 | Reproducibility / evidence | Specification version, per-field source/availability, planned analysis, negative/inconclusive rules; decision log và review delta. Không tính effect bằng mô hình ngôn ngữ |
 | Out of scope | Chạy baseline, tải dataset, cài framework hoặc code FlashTicket; không chốt operational SLA từ event-time |
 | Fallback | Không có fair comparator/control khả thi thì sửa scope phép đo và review trước run; cần đổi C1/roles phải quay Minh |
@@ -140,7 +140,7 @@ Mỗi task phải dùng các trường ở §4, cộng các quy tắc sau; chún
 | Outputs / artifacts | `W/baselines/` source snapshots; `W/environments/` lockfiles; `W/results/task-e/` manifests, smoke outputs, metric fixtures, resource measurements; `P/task-e-handoff.md` |
 | Mandatory / entry | Mandatory; có quyền chạy E và retrieval/install cần thiết trong phạm vi được duyệt; ranh giới dữ liệu trước pilot/exposure ledger theo §2; chọn môi trường từ baseline thực, không mặc định WSL/GPU |
 | Exit | Selected comparators chạy trên development/calibration scope được D cho phép; loader checks đúng data dùng; evaluator tính đúng ties/misses/failures trên fixtures; fidelity/adaptation và chi phí sơ bộ ghi rõ; D revisions đã review trước final freeze |
-| Scientific checks | Không test-label tuning, không nhầm paper score với reproduced result; supervision/input compatibility; calibration detection không dùng injection oracle trái policy |
+| Scientific checks | Không test-label tuning, không nhầm paper score với reproduced result; supervision/input compatibility; development regime calibration khai báo, runtime detection không nhận injection oracle |
 | Reproducibility / evidence | Dùng full run contract §3; lưu upstream commit, patch/license, download revision/hash, packages/command/hardware, evaluator fixture expected/actual và failures |
 | Out of scope | Chạy confirmatory final test hoặc báo graph đã tốt hơn; bulk full-dataset download cho tiện |
 | Fallback | Baseline không chạy/không tương thích: lưu nguyên lỗi và nguyên nhân; sửa adapter có nhãn adaptation hoặc quay D chọn comparator trước test, không âm thầm bỏ đối thủ mạnh |
@@ -295,3 +295,10 @@ Phép thử độc lập: (1) tạo tác thuộc RCA; (2) nguồn dẫn phân lo
 ## 9. Independent workflow challenge và acceptance
 
 Review hai bước, đề xuất độc lập được lưu trước khi reviewer thấy cấu trúc U22. Bằng chứng và xử lý từng phản biện được dẫn tại [ARTIFACT-MAP](ARTIFACT-MAP.md), mục workflow review. Không lấy số reviewer làm lý do duyệt. Việc lập chương trình xong không phải Task D đã bắt đầu; điểm dừng hiện tại ở CURRENT-STATE.
+
+
+## 10. TD-v1.2 selection gate — 26/09/2026
+
+C1 là primary controlled ranking; C5 là first-class graph forecasting/residual track, không thay C1. D sở hữu registry, folds, objectives, ranges, G/L/ALL, TV secondary và RCD contextual comparator. E/F chỉ thực hiện empirical development selection, sensitivity, compatibility, fidelity và resource checks khi Minh giao; chưa có final configuration frozen. D §3/8/13 supersede old label-free calibration assumptions đúng phạm vi. Historical TT90 exposure được giữ.
+
+RE3-TT có CANDIDATE frozen RE2-selected transfer trên cả 30 ca, equal-cell headline, không outcome tuning; RE3-OB là cross-application candidate; SS/LEMMA có task-compatible component roles. D §11 sở hữu role/admission; exact campaign scope cần lệnh riêng. Yêu cầu năm distinct independent agents chưa thỏa dù có đủ năm vai trò và vòng phản biện; CURRENT giữ blocker. REVIEW_READY không tự là human approval hoặc E authorization. Nghĩa vụ FlashTicket theo DT18 giữ nguyên.

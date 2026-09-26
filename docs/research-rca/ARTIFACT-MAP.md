@@ -152,3 +152,19 @@ Reviewer không phát hiện fatal structural defect trong draft đã đọc. Đ
 Đổi quyết định tại RCA-DEC trước, contract/source kế tiếp, handoff/map/state sau. Sửa một số đo từ W evidence rồi mới sửa digest/claim tại P. Không sửa snapshot validation cũ để hợp thức hóa hash thay đổi hợp lệ. Mỗi tệp mới phải có purpose/owner và consumer, không tạo “summary of summary” không cần thiết.
 
 Thêm dataset/run thì ghi manifest ở W và logical ID/version tại handoff; backup/location/access phải kiểm thật trong E/J/K. Bản đồ này không thay giấy phép dữ liệu và không nhận các local paths dùng được trên máy khác khi chưa remap root.
+
+
+## 8. Current TD-v1.2 routes — 26/09/2026
+
+RCA-001–042, TC-P2-v1.1, MRP-v1.2, TD-v1.2; CURRENT live state. Earlier inventory versions historical. U26 source P: docs/evidence/project-direction/2026-09-26-rca-task-d-redesign.md. D canonical/handoff paths unchanged.
+
+| ID | W root-relative path | Purpose / consumer |
+|---|---|---|
+| D12-PACKET | task-d/td-v1.2-review-packet.md | A–J packet/file inventory → human |
+| D12-MEMOS | task-d/td-v1.2-review-memos.md | Initial roles/ring/reconciliation/independence limits |
+| D12-LINEAGE | task-d/td-v1.2-provenance-and-data.md | Formula/parameter/task compatibility → D/E |
+| D12-SNAPSHOT | task-d/td-v1.2-prechange-inventory.json | Prechange tracked hashes/branch/status |
+| D12-METADATA | task-d/audit_td_v1_2_public_metadata.py; task-d/td-v1.2-public-metadata.json | Bounded footer/tree/README, no model campaign |
+| D12-CHECK | task-d/validate_td_v1_2.py; task-d/td-v1.2-validation.json; task-d/td-v1.2-governance-validation.txt | Actual document/math/diff/scope receipts |
+
+Năm vai trò và đủ các cạnh phản biện được thực hiện bởi ba distinct agents; chưa đạt năm independent reviewers. E chưa bắt đầu, revision chưa push. Technical candidates không phải human approval.

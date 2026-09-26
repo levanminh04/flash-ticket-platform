@@ -1,8 +1,8 @@
 # Task C Phase 2 — Research Decision Lock
 
-- Phiên bản: `TC-P2-v1`, ngày **2026-09-22**. Chủ sở hữu/người quyết định: **Lê Văn Minh**.
+- Phiên bản: `TC-P2-v1.1`, cập nhật **2026-09-26**; bản22/09 giữ trong Git. Chủ sở hữu/người quyết định: **Lê Văn Minh**.
 - **TASK C PHASE 2: COMPLETE.** Ý định/phạm vi: `USER_CONFIRMED` theo [RCA-001–017](RESEARCH-DECISIONS.md). Đây là ghi nhận quyết định Minh đã cung cấp; không tự nhận giảng viên duyệt hoặc AI duyệt kết quả của mình.
-- Lớp tạo tác: `CANONICAL_DECISION / FORMATION`. Công việc Task D: **NOT STARTED; chờ lệnh riêng**.
+- Lớp tạo tác: `CANONICAL_DECISION / FORMATION`. U26 cho D redesign; CURRENT-STATE sở hữu live state. **Task E NOT STARTED / NOT AUTHORIZED**.
 - Nguồn hiện hành: [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), U22 trong sổ quyết định, [Task B CLOSED §12](D:/Project/flash-ticket-rca-research/dataset-audit/TASK-B-RCAEval-audit.md), [Task A](task-a-ban-do-bang-chung-doc-lap.md), [Phase 1](task-c-independent-research-shortlist.md). Sự thật dataset không thay đổi theo mong muốn nghiên cứu.
 
 ## 1. Quyết định đã khóa và câu hỏi chính
@@ -27,7 +27,7 @@ Chấp nhận **controlled empirical + engineering/system + reproducible experim
 | C2 | Optional temporal/evidence-budget extension | Chỉ sau C1 hoàn chỉnh, hợp lệ, ổn định và được chọn làm thêm; không real-time/online/SLA/early-stop claim; không tăng đáng kể độ phức tạp C1 chỉ để dự phòng |
 | C3 | Mandatory topic to preserve; implementation/experiment conditional | Operation-aware intermediate evidence hỗ trợ service output/giải thích; ablation representation nếu Task D biện minh. **Không operation-root accuracy trên RE2-TT** |
 | C4 | Mandatory topic to preserve; exact ablation conditional | Vị trí/cách graph tham gia scoring/propagation/ranking. So sánh thay scorer phải khai thay đổi đó và kiểm fairness; không nhận là relational-only effect nếu capacity/features cùng đổi |
-| C5 | Mandatory system capability | Detection → RCA vẫn trong pipeline đích. RE2-TT chỉ phép đánh giá injection-regime có giới hạn, tách khỏi known-window C1; FlashTicket dùng healthy/fault runs có kiểm soát khi có nhãn phù hợp |
+| C5 | FIRST-CLASS GRAPH-BASED ANOMALY-DETECTION METHOD TRACK (RCA-024), mandatory capability | Detection → RCA vẫn trong pipeline đích. RE2-TT chỉ phép đánh giá injection-regime có giới hạn, tách khỏi known-window C1; FlashTicket dùng healthy/fault runs có kiểm soát khi có nhãn phù hợp |
 | LLM | Mandatory intended downstream explanation capability | Nhận rank + structured evidence, giải thích/gợi ý kiểm tra; đo faithfulness/unsupported claims/usefulness riêng. Không rerank, tạo nhãn, repair hay chứng thực RCA |
 | Demo/UI | Đầu ra minh họa, không tự là kết quả nghiên cứu | Cho thấy rank, evidence, uncertainty và lời giải thích; chỉ chứng minh điều đã chạy. FlashTicket UI/runtime thuộc gate hệ thống tương ứng |
 
@@ -42,11 +42,11 @@ Topic được giữ trong report không bắt buộc phải có một implement
 ## 4. Hợp đồng đánh giá và leakage kế thừa
 
 - Một ca sự cố là đơn vị đánh giá; repeat/scenario dependence phải được xử lý trong D. Span/window/seed không tăng số incident độc lập.
-- Root-service là target; fault/root labels **evaluation only**, không fit/tune bằng nhãn hoặc train baseline supervised chỉ vì có label. Evaluator có thể phân tầng/chấm theo contract đã khóa. Case ID, path, root text/presence và metadata oracle không vào features/explanation prompts.
-- Inject time chỉ làm boundary bên ngoài cho **RCA-given-known-window**; không làm input/calibration shortcut cho end-to-end detector. D phải tách hai chế độ chạy và đánh giá.
+- Root-service là target; **Label-guided development / hyperparameter selection** được phép RCA-026–030, registered sensitivity/freeze ở TD-v1.2. Runtime labels và final tuning vẫn cấm; full supervised baseline không tự được chọn chỉ vì có label. Evaluator giữ GT ngoài worker. Case ID, path, root text/presence và metadata oracle không vào features/explanation prompts.
+- Inject time chỉ làm boundary bên ngoài cho **RCA-given-known-window**; không runtime detector input hoặc fit segmentation theo τ. Development regime calibration là CANDIDATE interpretation khai rõ ở TD-v1.2, không thêm injection policy vào lời Minh. D phải tách hai chế độ chạy và đánh giá.
 - Tập ứng viên lấy từ telemetry được phép, cùng giữa các nhánh; không thu hẹp về năm nhãn tiêm lỗi. Full-case coverage không bảo đảm prefix coverage nếu C2 được mở sau.
 - Giữ failures/missing-target/low-coverage trong mẫu số định trước; không repair graph từ kiến trúc/đáp án hoặc impute không khai báo. Logs có một ca thiếu; mức kiểm schema/join metric/log còn theo mẫu, loader E/F phải kiểm đúng dữ liệu thực dùng.
-- Họ độ đo service ranking và paired effects/uncertainty được xem xét ở D. Primary metric, tie/miss/error handling, practical-effect criterion, split và statistic chưa chọn. Không sao chép mặc định của A9 lịch sử thành protocol đã khóa.
+- C khóa họ độ đo service ranking và paired effects/uncertainty. TD-v1.2 đã đặc tả CANDIDATE primary metric, tie/miss/error handling, practical-effect criterion, split và statistic để Minh review; chưa thành protocol APPROVED. Không sao chép mặc định của A9 lịch sử thành quyết định đã khóa.
 - Supporting evaluations: C3/C4 nếu hợp lệ; coverage/chi phí/tái lập/failure analysis; C5 injection-regime hoặc healthy/fault truth đúng môi trường; LLM faithfulness tới packet tách khỏi root-ranking correctness. Operation evidence không là quantitative operation target.
 
 ## 5. Kết quả âm, falsification và claim bị cấm
@@ -69,7 +69,7 @@ H1 bị bác/không được hỗ trợ khi mức gain không đạt criterion �
 | KNOWN LIMITATIONS | Contribution acceptance là của Minh, không bảo đảm H1/điểm luận văn; dataset có giới hạn nhãn/semantics; corpus thực nghiệm chưa có đủ tại máy |
 | OPEN ITEMS | Exact feature/reference construction, anomaly/graph/ranking mechanisms, controls, metrics/effect size, split/calibration/statistics, baseline adapters, C3/C4 ablations; D/E xử lý đúng gate |
 | PROHIBITED INTERPRETATIONS | Không tự duyệt phương pháp/hệ thống; không biến C3/C4 thành discarded hay mandatory extra RQs; không lấy C1 thay detection/LLM |
-| NEXT EXACT ACTION | Chờ Minh yêu cầu bắt đầu Task D. Khi có lệnh: đọc minimum pack, viết specification và independent review; không tự chạy baseline/download/install |
+| NEXT EXACT ACTION | U26 đã có TD-v1.2; đọc handoff/CURRENT, xử lý assurance blocker và human acceptance trước E; không tự baseline/download/install |
 | FILES REQUIRED BY NEXT SESSION | SESSION-BOOTSTRAP → CURRENT-STATE → tài liệu này → MASTER §Task D và common contracts → Task-B capability summary. Sổ quyết định chỉ mở ID liên quan; raw evidence chỉ khi có xung đột cụ thể |
 
 ## 7. Hiệu lực, supersession và kiểm độc lập hai bộ
@@ -77,3 +77,8 @@ H1 bị bác/không được hỗ trợ khi mức gain không đạt criterion �
 Phase 2 thay **trạng thái chờ chọn** ở Phase 1, không viết lại quá trình blind discovery, 12→5 normalization, gates hoặc Red Team. C1 thành primary do lựa chọn hiện tại của Minh, không vì reviewer voting. C2 trở thành optional; C3/C4 giữ supporting design; C5 và LLM là capability theo U22. Dòng MAJOR RT-17 về giá trị luận văn được xử lý ở mức **Minh chấp nhận loại đóng góp**, không biến thành bằng chứng novelty hoặc phê duyệt của giảng viên.
 
 Phép thử theo [hai cửa nối](../project/lien-ket-rca.md): tạo tác thuộc RCA; DT18/U22/A/B/C là nguồn quyết định nghiên cứu. Tham chiếu bộ hệ thống chỉ để đối chiếu trách nhiệm/gate tại mục này: [R0 §3](R0-boi-canh-va-rang-buoc.md) và [cửa hệ thống → nghiên cứu](../project/lien-ket-rca.md). Không nguồn nào ở đây sinh service, Saga, invariant, schema hoặc yêu cầu mới của bộ hệ thống; nhu cầu adapter mới ở mức OPEN tới gate sở hữu. Không tạo cửa nối thứ ba.
+
+
+## 8. U26 supersession — 26/09/2026
+
+RCA-022–042 giữ C1 primary, C1 không toàn bộ graph story, C5 first-class. RCA-026–030 supersede đúng prohibition development selection/calibration tại TC-P2-v1 §4. Giữ U22/Phase1/B history; runtime/final tuning cấm. TD-v1.2 CANDIDATE chưa empirical selection/freeze. §6 là provenance Phase2 lúc lập, không live state. Human approval OPEN; E NOT STARTED.

@@ -46,3 +46,33 @@ Nguồn U23: [nguyên văn xác nhận Minh §3](../evidence/advisor-direction/2
 ## Quy tắc cập nhật
 
 Thay đổi ý định đã khóa phải có xác nhận mới của Minh, ID mới, nguồn/ngày và liên kết thay thế; giữ dòng cũ. Không thêm đề xuất reviewer hoặc thiết kế Task D chưa được duyệt vào bảng USER_CONFIRMED. Một quyết định triển khai được giao cho agent không tự là lời Minh xác nhận đúng phương án agent chọn. Không dùng sổ này thay các gate kiến trúc/hợp đồng của bộ hệ thống.
+
+## Redesign trước approval — 26/09/2026
+
+Nguồn U26: [nguyên văn mission](../evidence/project-direction/2026-09-26-rca-task-d-redesign.md). Mỗi dòng dưới: người chốt **Lê Văn Minh**, ngày **2026-09-26**, trạng thái **USER_CONFIRMED**, gate **Task D pre-approval redesign**. Đây là ý định/phạm vi và quyền làm việc; không duyệt các công thức do agent đề xuất. RCA-001–021 được giữ nguyên phía trên.
+
+| ID | Xác nhận nguyên tử | Nguồn | Thay thế / phạm vi |
+|---|---|---|---|
+| RCA-022 | Giữ C1 là Primary Research Question về giá trị observed service relations trong known-window service ranking công bằng. | U26 §3.1 | Tái xác nhận RCA-001 |
+| RCA-023 | C1 không phải toàn bộ graph method của đề tài. | U26 §3.1 | Làm rõ phạm vi C1 |
+| RCA-024 | C5 không thay C1 làm primary; C5 là FIRST-CLASS GRAPH-BASED ANOMALY-DETECTION METHOD TRACK. | U26 §3.2 | Nâng vai trò RCA-009; nghĩa vụ capability cũ còn nguyên |
+| RCA-025 | Thiết kế theo prior-work-first, custom-second, phân loại từng thành phần và giải trình study-specific choices. | U26 §3.3 | Chính sách phương pháp D |
+| RCA-026 | Cho phép dùng root/fault labels trên development để chọn method variant. | U26 §3.4 | Supersede prohibition development selection tại C v1 §4 / TD-v1.1 §§2–3 |
+| RCA-027 | Cho phép dùng root/fault labels trên development để chọn hyperparameter. | U26 §3.4 | Cùng phạm vi supersession RCA-026 |
+| RCA-028 | Cho phép calibration có giám sát trên development nếu phương pháp yêu cầu và được khai báo. | U26 §3.4 | Không xác nhận một thuật toán calibration cụ thể |
+| RCA-029 | Cho phép model selection bằng root/fault development labels. | U26 §3.4 | Không tự duyệt full supervised network hoặc runtime labels |
+| RCA-030 | Cho phép sensitivity-informed selection trên development. | U26 §3.4 | Cùng phạm vi supersession RCA-026 |
+| RCA-031 | Labels không được trở thành runtime input. | U26 §3.4 | Giữ firewall model/evaluator |
+| RCA-032 | Final evaluation data không được dùng để tune. | U26 §3.4 | Giữ final outcomes tách development |
+| RCA-033 | Mọi search space phải định nghĩa trước final evaluation. | U26 §3.4 | Registry và freeze receipts |
+| RCA-034 | Phương pháp phải freeze trước final evaluation. | U26 §3.4 | Không phải đã freeze tại D |
+| RCA-035 | Sensitivity analysis là bắt buộc trước final freeze cho lựa chọn ảnh hưởng materially. | U26 §3.5 | E/F phải thực hiện khi được giao |
+| RCA-036 | Có small pre-registered set backup/robustness mechanisms trước final evaluation. | U26 §3.6 | Không chọn winner sau final outcomes |
+| RCA-037 | Giữ ý tưởng L/O/R nếu independent review thấy hợp lệ; exact R có thể redesign. | U26 §3.7 | Không duyệt exact control algorithm |
+| RCA-038 | RE2-TT tiếp tục primary environment nếu evidence ủng hộ. | U26 §3.8 | Làm rõ điều kiện RCA-012 |
+| RCA-039 | Bắt buộc serious compatibility analysis RE3-TT và xét SS/LEMMA theo task thực tế, không graph giả. | U26 §3.8 | Mở lại public-validation design; không tự cho retrieval campaign |
+| RCA-040 | Một configuration thất bại không đồng nghĩa graph thất bại; phải có failure attribution. | U26 §3.9 | Làm rõ RCA-003; không ép effect dương |
+| RCA-041 | Không bắt đầu Task E trong phiên redesign này; human approval vẫn OPEN. | U26 §3.10 | Quyền execution không sinh từ REVIEW_READY |
+| RCA-042 | Cho phép material revision tài liệu RCA trong scope sau review/reconciliation; lập impact map trước hơn ba tệp, không cần hỏi lại. | U26 §15 | Không gồm application/API/schema, commit/push hoặc destructive Git |
+
+**Supersession theo phạm vi:** chính sách evaluation-only cũ ở C v1 §4, TD-v1.1 §§2–3 và bản digest B ngày22/09 giữ giá trị lịch sử. RCA-026–030 thay đúng lệnh cấm development selection/calibration đã khai báo; giữ nguyên cấm runtime labels và final-test tuning. Dùng supervision name **label-guided development / hyperparameter selection**. Việc dùng development injection-regime labels để chọn threshold/forecast loss trong TD-v1.2 là **CANDIDATE technical interpretation của RCA-028**, không thêm một xác nhận injection-time policy vào lời Minh.
