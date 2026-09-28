@@ -1,3 +1,21 @@
+# Development preflight hoàn tất — 28/09/2026
+
+**PASS WITH LIMITATIONS — scoped Task E development theo TD-v1.3 đã hoàn tất.** C1/C5 development30,9 C1 OFAT,7 C5 OFAT×30,40 event settings, integrated8×30 và RCD30×3seed×3bins đều có kết quả; numerical, leakage/evaluator và scientific reviews đều CLOSED. Scientific closure được lưu trước coordinator verdict. Không còn CRITICAL/MAJOR chưa xử lý trong gói development.
+
+[Báo cáo A–J và16câu falsification](D:/Project/flash-ticket-rca-research/results/task-e/development-preflight-report.md) · [Coordinator adjudication](D:/Project/flash-ticket-rca-research/results/task-e/development-preflight-adjudication.json) · [Checkpoint bàn giao](D:/Project/flash-ticket-rca-research/results/task-e/continuation-live-handoff.md).
+
+C1 MRR L=.744206, O=.702405, R=.678235: **chưa chứng minh graph hơn local**. C5 G-MTL F1=.669994,L=.072555,ALL=.690865; lợi thế G−L gần mất khi bin10/lag3, scale1e−12 chi phối loss; không quy chênh lệch riêng cho graph. Integrated G-MTL plannedMRR=.470935,26/30ca có firstpost diagnosis. RCD primaryMRR=.253367, đủ270/270config SUCCESS,0executionfailures. Giữ mọi negative/failed/interrupted attempts; lần cuối tái dùng264COMPLETE, chỉ chạy bù6raw-empty chunks đã bảo toàn.
+
+TD13 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971` giữ nguyên suốt fullrun; method vẫn CANDIDATE, không human-approved/frozen. Formal five-reviewer assurance/human acceptance, final60/F/G/H/I và kiểm chứng FlashTicket còn ngoài scope. Không commit/push; không sửa app/API/schema/Saga; README ngoài scope giữ nguyên. Không mở lại reviewer hoặc chạy lại COMPLETE trừ hash/input/config/TD drift hay finding mới thực chất.
+
+**Các checkpoint bên dưới là lịch sử trước khi hoàn tất; đọc trạng thái hiện hành ở đầu tệp này.**
+
+# Live D/E continuation — 27/09/2026
+
+TD-v1.3 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971`; CANDIDATE technical amendment for U27R-authorized development. Three independent policy reviews, fresh targeted review and24+34+16 C5 fixtures now qualify automatic scoped E resume. Fresh review found2major/1minor implementation defects, all fixed/rechecked; failed attempts preserved. Evidence: `D:/Project/flash-ticket-rca-research/results/task-e/continuation-resume-receipt.json`. No actual new development outcomes yet. Worker/cache, RCD, full30 data audit, smoke, outcomes and sensitivity remain IN PROGRESS; formal five-reviewer/final freeze/F–I remain unopened.
+
+Historical checkpoint below; do not treat old RETURN TO D/no-execution statements as the live authorized state.
+
 # Task D — Handoff TD-v1.2
 
 Owner: Minh; 26/09/2026. Technical choices vẫn **CANDIDATE**. **REVIEW_READY WITH BLOCKERS — do not start E**. Human approval OPEN; E NOT STARTED / NOT AUTHORIZED. Đây là đặc tả selection/execution, chưa phải cấu hình đã empirical-selected hoặc frozen.

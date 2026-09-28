@@ -2,6 +2,10 @@
 
 Chủ sở hữu: **Minh**. Ngày **2026-09-22**. Loại `CANONICAL_SYNTHESIS` về **định vị/quyền nguồn**, không sở hữu quyết định khoa học hoặc trạng thái chạy. Inventory được lập trước khi tổ chức lại; [snapshot 59 tệp](D:/Project/flash-ticket-rca-research/program-review/pre-change-inventory.json) giữ hash/size của các tài liệu và audit scripts liên quan. Đây không phải inventory/re-audit mọi byte raw trên máy.
 
+**Cập nhật định vị 27/09/2026:** Task E đã có bounded synthetic evidence và [handoff](task-e-handoff.md), verdict **RETURN TO TASK D**; chưa model campaign hoặc empirical performance. Routes mới ở §9; các nhận định trạng thái thuộc snapshot cũ phải đọc cùng [CURRENT](CURRENT-STATE.md). U27/RCA-043–048 đã cấp scoped E, không tự duyệt phương pháp.
+
+**Định vị hiện hành28/09/2026:** scoped development TD13 hoàn tất, verdict PASS WITH LIMITATIONS; trạng thái ở CURRENT. Snapshot RETURN TO D/no-campaign27/09 phía trên và §9 bên dưới chỉ là lịch sử. Xem §10 cho gói hoàn tất; không coi verdict là human approval/final freeze.
+
 ## 1. Hai root và một quyền nguồn cho mỗi loại thông tin
 
 | Logical root | Binding hiện tại | Trách nhiệm |
@@ -93,11 +97,11 @@ Mỗi collection trong bảng là một major artifact có manifest/đường d�
 | D11-REVIEWS | Independent source-first + different fresh delta reviewer · DETAILED_EVIDENCE | `task-d/td-v1.1-source-first-review.md`; `task-d/td-v1.1-delta-review.md` | D → Minh/E revisions | Initial opinions preserved with later closure; not human approval |
 | D11-CHECK | Current document/math/governance receipts · RAW_OR_MACHINE_EVIDENCE | `task-d/td-v1.1-validation.json`; `task-d/td-v1.1-governance-validation.txt`; `task-d/validate_td_v1_1.py` | D → handoff/E fixtures | No dataset/model execution; does not replace D-CHECK historical receipt |
 
-Không có Task D–K experiment outputs được tuyên bố đã sinh ở bảng này. `results/` hiện là nơi dự kiến nhận runs; `EXPERIMENT_OUTPUT` chỉ áp dụng khi có run thật. Reviewer prose/machine audit không phải benchmark results. Không tìm thấy bản duplicate byte-for-byte nào cần xóa trong phạm vi tổ chức; chồng lấn **quyền diễn giải** được xử lý dưới đây, không đồng nhất với trùng file.
+Tại snapshot inventory ban đầu, không có Task D–K experiment outputs được tuyên bố đã sinh ở bảng này. Task E bounded runs nay được định vị riêng tại §9; chúng không phải benchmark/model campaign results. Reviewer prose/machine audit không phải benchmark results. Không tìm thấy bản duplicate byte-for-byte nào cần xóa trong phạm vi tổ chức; chồng lấn **quyền diễn giải** được xử lý dưới đây, không đồng nhất với trùng file.
 
 ## 4. Hợp đồng định vị artifacts tương lai
 
-Các hàng **E–K** dưới đây **PLANNED, NOT CREATED**. Task D documents đã tồn tại và được định vị ở §§2–3; không có Task D baseline/benchmark execution. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
+Các hàng **F–K** dưới đây **PLANNED, NOT CREATED**. E nay có handoff và bounded evidence tại §9, chưa full pipeline/campaign. Task D documents đã tồn tại và được định vị ở §§2–3; không có Task D baseline/benchmark execution. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
 
 | ID / producer | Canonical path, class | Execution path, class | Consumers |
 |---|---|---|---|
@@ -154,7 +158,7 @@ Reviewer không phát hiện fatal structural defect trong draft đã đọc. Đ
 Thêm dataset/run thì ghi manifest ở W và logical ID/version tại handoff; backup/location/access phải kiểm thật trong E/J/K. Bản đồ này không thay giấy phép dữ liệu và không nhận các local paths dùng được trên máy khác khi chưa remap root.
 
 
-## 8. Current TD-v1.2 routes — 26/09/2026
+## 8. TD-v1.2 routes — snapshot 26/09/2026
 
 RCA-001–042, TC-P2-v1.1, MRP-v1.2, TD-v1.2; CURRENT live state. Earlier inventory versions historical. U26 source P: docs/evidence/project-direction/2026-09-26-rca-task-d-redesign.md. D canonical/handoff paths unchanged.
 
@@ -168,3 +172,39 @@ RCA-001–042, TC-P2-v1.1, MRP-v1.2, TD-v1.2; CURRENT live state. Earlier invent
 | D12-CHECK | task-d/validate_td_v1_2.py; task-d/td-v1.2-validation.json; task-d/td-v1.2-governance-validation.txt | Actual document/math/diff/scope receipts |
 
 Năm vai trò và đủ các cạnh phản biện được thực hiện bởi ba distinct agents; chưa đạt năm independent reviewers. E chưa bắt đầu, revision chưa push. Technical candidates không phải human approval.
+
+## 9. Task E evidence routes — 27/09/2026
+
+§8 giữ snapshot trước publication/scoped E; live state thuộc CURRENT. E verdict **RETURN TO TASK D**, không thay TD bytes hoặc xác nhận graph thất bại. RCA-043–048 sở hữu quyền con người; findings C5 còn OPEN.
+
+| ID | Root / path | Purpose / consumer |
+|---|---|---|
+| E-AUTH | P `docs/evidence/project-direction/2026-09-27-rca-development-preflight.md` | U27 mission và exact scope/impact-map approval |
+| E-HANDOFF | P `docs/research-rca/task-e-handoff.md` | Canonical synthesis, limitations và next gate |
+| E-PLAN | W `results/task-e/preflight-plan.md` | Approved map, stop rules, exact development scope |
+| E-CODE | W `scripts/task_e/{contract,acquire,loader,ranking,evaluator,comparators}.py` | Six preflight modules; C5 detector/orchestrator chưa tạo |
+| E-TESTS | W `tests/task_e/{test_math,test_firewall}.py` | Bounded synthetic fixtures; không full E qualification |
+| E-CONFIG | W `configs/task-e-td12-development.json`; `environments/task-e-requirements.lock.txt` | Exact development IDs/finite registry snapshot; existing runtime versions, RCD chưa qualified |
+| E-BASELINE | W `baselines/task-e-source-manifest.json`; `baselines/rcd-td12.patch`; `baselines/upstream/` |20pinned originals+1patchedcopy, source-only provenance |
+| E-ATTEMPTS | W `results/task-e/e27-001-synthetic/`, `e27-002-boundary/`, `e27-003-math-fix/`, `e27-004-math-review/`, `e27-005-math-closure/`, `e27-006-boundary-closure/` | Exact run/source contracts, logs/reports;004failed fixture preserved; latest21math+13boundaryPASS |
+| E-ADJUDICATION | W `results/task-e/e27-001-synthetic/adjudication.md` | Post-run synthesis across all6attempts,14falsification answers, narrow D revision needs |
+| E-REVIEW | W `results/task-e/e27-001-synthetic/review.json`; `failures.jsonl` beside it | Actual reviewer identities/authorship limits, failure attribution and closure |
+| E-DATA | W `results/task-e/e27-001-synthetic/loader-audit.json` | Wave1 two-sample facts+5verifiedhashes; not input/output of synthetic001 or full30qualification |
+| E-INVENTORY | W `results/task-e/e27-001-synthetic/file-inventory.json`; `final-validation.json`; `governance-validation.txt` | Final exact paths/hashes/purposes, preservation and governance audit |
+
+E changes remain local/uncommitted; no new raw telemetry, final outcomes or installed packages. `.gitignore` excludes new raw/virtualenv/cache/large intermediates without untracking historical data. Five formal independent-review assurance is not certified by adding current identities/roles.
+
+## 10. TD13 development complete — 28/09/2026
+
+| W path (root-relative) | Vai trò |
+|---|---|
+| `results/task-e/development-preflight-report.md` | A–J,16falsification answers, results/sensitivity/fidelity/limits |
+| `results/task-e/development-preflight-adjudication.json` | Coordinator verdict sau cả ba review CLOSED; exactreviewhashes |
+| `results/task-e/development-preflight-file-inventory.json` và `.md` | Exactpaths,created/modified,reason,bytes,SHA256 toàn gói local; ignoredraw/numeric cũng ghi |
+| `results/task-e/development-preflight-reproducibility.json` | Commands/config/env/data/source pins và chi phí theo run |
+| `results/task-e/development-preflight-final-verification.json` | Kiểm tra đóng gói/bảo toàn/governance cuối; không chạy lại model |
+| `results/task-e/final-numerical-review.md`, `final-leakage-review.md`, `final-scientific-review.md` | Ba review hoàn tất; checkreceipts bên cạnh giữ từng phạm vi |
+| `results/task-e/e27-033-*`, `e27-035-*`, `e27-036-*`, `e27-037-*`, `e27-038-*`, `e27-041-*` | C1,C5,C1OFAT,C5OFAT,integrated,RCD270 hoàn chỉnh |
+| `results/task-e/continuation-live-handoff.md` | Resume entry: giữ COMPLETE, không mở lại reviews đã đóng |
+
+Đủ scopeddevelopment không cấp quyền F–I hoặc final60; formalassurance/humanacceptance còn OPEN. Giữ nguyên sourceTD13 hash và các failed/interrupted attempts; không commit/push. Gói inventory/repro/finalverification được tạo trong bước đóng gói sau source report/reviews.

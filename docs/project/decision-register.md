@@ -516,3 +516,8 @@ Bản đồ tác động cho lượt ghi nhận: cập nhật metadata và đầ
 
 
 **Đăng ký phân sổ RCA — 26/09/2026:** RCA-022–042 trong [RESEARCH-DECISIONS](../research-rca/RESEARCH-DECISIONS.md) do Lê Văn Minh xác nhận tại U26 mission. Phân sổ sở hữu nội dung nguyên tử; giữ nguyên RCA-001–021. Supersede đúng phạm vi prohibition development selection/calibration; runtime labels và final-test tuning vẫn cấm. C5 first-class, C1 primary; thuật toán TD-v1.2 vẫn CANDIDATE, human approval OPEN, Task E NOT STARTED / NOT AUTHORIZED. Nguồn/hash và impact/review/file inventory ở phân sổ, protocol và review packet. Không thay API/schema/kiến trúc/gate hệ thống hoặc cấp quyền commit/push.
+
+
+**Đăng ký phân sổ RCA — 27/09/2026:** [RCA-043–048](../research-rca/RESEARCH-DECISIONS.md), USER_CONFIRMED bởi Lê Văn Minh, gate Task E development preflight; [nguồn U27](../evidence/project-direction/2026-09-27-rca-development-preflight.md). Cho phép scoped development và impact map đã duyệt, hoãn năm-reviewer assurance riêng cho bước này; giữ assurance formal, cấm final evaluation và tự đổi phạm vi. Phân sổ sở hữu statements nguyên tử; không phê duyệt thuật toán hoặc F/G/H/I.
+
+**Đăng ký continuation D/E — 27/09/2026:** [RCA-049–061](../research-rca/RESEARCH-DECISIONS.md), USER_CONFIRMED bởi Lê Văn Minh tại [U27R](../evidence/project-direction/2026-09-27-rca-c5-amendment-and-e-resume.md). Cho phép phân tích/chọn/sửa hai quy tắc C5, amendment/review và tự động resume scoped E khi gate đạt; explicit approval cho impact map D/E, development acquisition và isolated comparator env. Phân sổ giữ lời xác nhận nguyên tử; exact agent-selected policy không USER_CONFIRMED. Giữ final60/F/G/H/I và app/API/schema/Primary RQ/dataset/phạm vi ngoài quyền sửa.

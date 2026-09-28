@@ -76,3 +76,41 @@ Nguồn U26: [nguyên văn mission](../evidence/project-direction/2026-09-26-rca
 | RCA-042 | Cho phép material revision tài liệu RCA trong scope sau review/reconciliation; lập impact map trước hơn ba tệp, không cần hỏi lại. | U26 §15 | Không gồm application/API/schema, commit/push hoặc destructive Git |
 
 **Supersession theo phạm vi:** chính sách evaluation-only cũ ở C v1 §4, TD-v1.1 §§2–3 và bản digest B ngày22/09 giữ giá trị lịch sử. RCA-026–030 thay đúng lệnh cấm development selection/calibration đã khai báo; giữ nguyên cấm runtime labels và final-test tuning. Dùng supervision name **label-guided development / hyperparameter selection**. Việc dùng development injection-regime labels để chọn threshold/forecast loss trong TD-v1.2 là **CANDIDATE technical interpretation của RCA-028**, không thêm một xác nhận injection-time policy vào lời Minh.
+
+
+## Development preflight — 27/09/2026
+
+Nguồn U27: [mission nguyên văn và hai xác nhận trực tiếp](../evidence/project-direction/2026-09-27-rca-development-preflight.md). Người chốt Lê Văn Minh, ngày2026-09-27, trạng thái USER_CONFIRMED, gate Task E development preflight. Giữ RCA-001–042 và nguồn lịch sử; không phê duyệt công thức hoặc final freeze.
+
+| ID | Xác nhận nguyên tử | Nguồn | Thay thế / phạm vi |
+|---|---|---|---|
+| RCA-043 | Cho phép chuẩn bị và chạy development giới hạn theo TD-v1.2 để kiểm tra thiết kế. | U27 xác nhận trực tiếp | Supersede lệnh cấm bắt đầu E trong snapshot26/09, chỉ phạm vi development |
+| RCA-044 | Cho phép bước development này diễn ra trước khi đủ năm agent phản biện. | U27 xác nhận trực tiếp | Hoãn assurance blocker cho scoped E, không xóa yêu cầu |
+| RCA-045 | Vẫn giữ yêu cầu phản biện cho đánh giá chính thức. | U27 xác nhận trực tiếp | Formal assurance OPEN; không tính vai trò thành identities |
+| RCA-046 | Không chạy tập đánh giá cuối trong phiên development này. | U27 xác nhận trực tiếp | Giữ final outcome firewall; không G |
+| RCA-047 | Không tự thay đổi phạm vi đồ án. | U27 xác nhận trực tiếp | DT18 và C lock giữ nguyên |
+| RCA-048 | Duyệt gói file/phạm vi preflight-plan.md §4–5 và tiếp tục theo các gate đã nêu. | U27 trả lời câu hỏi impact map | Đúng30 development cases khi checks đạt; source/code/artifacts theo map; không commit/push |
+
+Cách triển khai và các công thức tiếp tục là CANDIDATE/engineering choices trong contract. Kết quả xấu hợp lệ có giá trị; ambiguity/fidelity/leakage/coverage/control failure dẫn stop/review theo U27, không tự sửa method để cứu score. CURRENT-STATE sở hữu checkpoint thực thi.
+
+## C5 clarification và tiếp tục E — 27/09/2026
+
+Nguồn [U27R](../evidence/project-direction/2026-09-27-rca-c5-amendment-and-e-resume.md), Lê Văn Minh, USER_CONFIRMED, gate scoped D amendment → E development. Giữ RCA-001–048. Policy kỹ thuật được giao cho agent phân tích/chọn không tự là USER_CONFIRMED.
+
+| ID | Xác nhận nguyên tử | Nguồn | Phạm vi |
+|---|---|---|---|
+| RCA-049 | Cho phép xử lý hai finding C5 đang OPEN. | U27R §1 | D-E27-01 và D-E27-02 |
+| RCA-050 | Cho phép sửa Task D nếu technical review kết luận cần sửa. | U27R §1 | Revision/amendment có rationale, review và fixtures |
+| RCA-051 | Cho phép cập nhật canonical/derived research documents cần thiết. | U27R §1 | Đúng D/E, không hồ sơ hệ thống ngoài registration |
+| RCA-052 | Cho phép sửa hơn ba file và coi mission là explicit approval cho impact map hợp lý trong phạm vi nhiệm vụ. | U27R §1 | [Continuation impact map](D:/Project/flash-ticket-rca-research/results/task-e/continuation-plan.md) |
+| RCA-053 | Sau D clarification/review đạt, tự động resume E theo development scope đã duyệt, không xin confirm lại cùng scope. | U27R §1/12 | Exact automatic gate §12; không mở F/G/H/I |
+| RCA-054 | Cho phép tải development telemetry còn thiếu trong allowlist đã định. | U27R §1 | Chỉ RE2-TT development30 |
+| RCA-055 | Cho phép tạo isolated environment cần cho RCD/BARO qualification. | U27R §1 | Pin/license/fidelity; không upgrade môi trường cũ để ép chạy |
+| RCA-056 | Cho phép synthetic fixtures, loader audit, smoke và toàn authorized development30. | U27R §1 | Giữ gates và predetermined smoke |
+| RCA-057 | Cho phép mandatory development sensitivity đã đăng ký. | U27R §1 | OFAT, không Cartesian/winner-only |
+| RCA-058 | Cho phép sửa implementation bug nếu không đổi scientific method. | U27R §1 | Giữ failed runs và root-cause attribution |
+| RCA-059 | Không mở 60 final evaluation cases. | U27R §1 | Các giới hạn khác vẫn hiệu lực trực tiếp theo nguồn U27R |
+| RCA-060 | Không dùng final outcomes để tune. | U27R §1 | Giữ final outcome firewall |
+| RCA-061 | Không xóa/ghi đè failed runs. | U27R §1/16 | Giữ mọi attempt và negative outputs |
+
+RCA-049/050 thay đúng hạn chế không sửa method ở checkpoint U27 trước. Chưa có exact C5 policy được human-confirmed; candidate được review và dùng cho development theo delegated scope. Yêu cầu phản biện cho đánh giá chính thức ở RCA-045 giữ nguyên.
