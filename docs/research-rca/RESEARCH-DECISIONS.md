@@ -114,3 +114,14 @@ Nguồn [U27R](../evidence/project-direction/2026-09-27-rca-c5-amendment-and-e-r
 | RCA-061 | Không xóa/ghi đè failed runs. | U27R §1/16 | Giữ mọi attempt và negative outputs |
 
 RCA-049/050 thay đúng hạn chế không sửa method ở checkpoint U27 trước. Chưa có exact C5 policy được human-confirmed; candidate được review và dùng cho development theo delegated scope. Yêu cầu phản biện cho đánh giá chính thức ở RCA-045 giữ nguyên.
+
+## Human freeze TD-v1.3 và authorization Task F — 28/09/2026
+
+Nguồn [U28F](../evidence/project-direction/2026-09-28-rca-td13-freeze-and-task-f-authorization.md), Lê Văn Minh, `USER_CONFIRMED`, gate `D/E closure → Task F`. Giữ RCA-001–061 và mọi limitation/evidence lịch sử; canonical TD-v1.3 không được sửa byte.
+
+| ID | Xác nhận nguyên tử | Nguồn | Phạm vi |
+|---|---|---|---|
+| RCA-062 | Human approve/freeze đúng executed TD-v1.3 có SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971`, giữ toàn bộ documented limitations. | U28F — quyết định nguyên văn | Supersede đúng trạng thái human acceptance/freeze `OPEN`; không xác nhận graph superiority, final efficacy hoặc five-reviewer PASS |
+| RCA-063 | Cho phép handoff, bắt đầu và thực hiện Task F theo contract hiện hành trong `MASTER-RESEARCH-PROGRAM.md`. | U28F — quyết định nguyên văn và scope authorization | Task F implementation/validation trong impact map đã cấp; không mở final60, G/H/I, method amendment, FlashTicket application changes hoặc commit/push |
+
+Factual status của yêu cầu five-distinct-independent-reviewer vẫn `OPEN / NOT FACTUALLY CERTIFIED`. Current authorization không rewrite historical reviews và không biến publication-only provenance change thành scientific drift.

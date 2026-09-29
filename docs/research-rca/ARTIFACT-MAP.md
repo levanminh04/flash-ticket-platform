@@ -1,5 +1,7 @@
 # RCA — Artifact map và audit hệ tài liệu
 
+> **Current completion notice — 29/09/2026.** [RCA-062–063](RESEARCH-DECISIONS.md) human-freeze exact executed TD-v1.3 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971` và authorize Task F. Task F nay `COMPLETE — PASS / READY FOR PRE-G REVIEW`; canonical route là [task-f-handoff](task-f-handoff.md), implementation/config/tests và receipts ở W `src/rca/`, `configs/task-f-td13-frozen-release.json`, `tests/task_f/`, `results/task-f/`. PRE-G/G chưa authorized; five-distinct-reviewer còn OPEN; final60/H/I chưa mở. Các bảng snapshot cũ giữ nguyên provenance và phải đọc cùng [CURRENT](CURRENT-STATE.md).
+
 Chủ sở hữu: **Minh**. Ngày **2026-09-22**. Loại `CANONICAL_SYNTHESIS` về **định vị/quyền nguồn**, không sở hữu quyết định khoa học hoặc trạng thái chạy. Inventory được lập trước khi tổ chức lại; [snapshot 59 tệp](D:/Project/flash-ticket-rca-research/program-review/pre-change-inventory.json) giữ hash/size của các tài liệu và audit scripts liên quan. Đây không phải inventory/re-audit mọi byte raw trên máy.
 
 **Cập nhật định vị 27/09/2026:** Task E đã có bounded synthetic evidence và [handoff](task-e-handoff.md), verdict **RETURN TO TASK D**; chưa model campaign hoặc empirical performance. Routes mới ở §9; các nhận định trạng thái thuộc snapshot cũ phải đọc cùng [CURRENT](CURRENT-STATE.md). U27/RCA-043–048 đã cấp scoped E, không tự duyệt phương pháp.
@@ -101,7 +103,7 @@ Tại snapshot inventory ban đầu, không có Task D–K experiment outputs đ
 
 ## 4. Hợp đồng định vị artifacts tương lai
 
-Các hàng **F–K** dưới đây **PLANNED, NOT CREATED**. E nay có handoff và bounded evidence tại §9, chưa full pipeline/campaign. Task D documents đã tồn tại và được định vị ở §§2–3; không có Task D baseline/benchmark execution. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
+Hàng F đã được tạo và đóng `COMPLETE — PASS / READY FOR PRE-G REVIEW`; các hàng **G–K** vẫn **PLANNED, NOT CREATED**. E có handoff và completed scoped-development evidence tại §9; Task D documents ở §§2–3. Producer chỉ tạo khi được giao task. `P/R/` là canonical; W code/run có thể lớn và cần manifest/availability. Fresh session đọc canonical handoff của task hiện hành; mở W chỉ theo run ID.
 
 | ID / producer | Canonical path, class | Execution path, class | Consumers |
 |---|---|---|---|

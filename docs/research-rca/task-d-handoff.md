@@ -1,3 +1,9 @@
+# Current closure — TD-v1.3 frozen; Task F COMPLETE — 29/09/2026
+
+Lê Văn Minh đã human-approve/freeze exact executed TD-v1.3 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971`, retaining all documented limitations, và authorize handoff/start Task F ([RCA-062–063](RESEARCH-DECISIONS.md), [U28F](../evidence/project-direction/2026-09-28-rca-td13-freeze-and-task-f-authorization.md)). Canonical TD giữ byte-identical. Task F nay `COMPLETE — PASS / READY FOR PRE-G REVIEW` theo [Task F handoff](task-f-handoff.md); PRE-G/G chưa authorized. Five-distinct-reviewer factual status vẫn OPEN/NOT FACTUALLY CERTIFIED; final60/H/I chưa mở.
+
+**Các câu human acceptance OPEN / F chưa authorized bên dưới là historical snapshot và đã được supersede đúng phạm vi bởi RCA-062–063; không rewrite chúng.**
+
 # Development preflight hoàn tất — 28/09/2026
 
 **PASS WITH LIMITATIONS — scoped Task E development theo TD-v1.3 đã hoàn tất.** C1/C5 development30,9 C1 OFAT,7 C5 OFAT×30,40 event settings, integrated8×30 và RCD30×3seed×3bins đều có kết quả; numerical, leakage/evaluator và scientific reviews đều CLOSED. Scientific closure được lưu trước coordinator verdict. Không còn CRITICAL/MAJOR chưa xử lý trong gói development.
