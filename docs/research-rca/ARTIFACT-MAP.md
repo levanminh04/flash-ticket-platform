@@ -1,6 +1,8 @@
 # RCA — Artifact map và audit hệ tài liệu
 
-> **Current completion notice — 29/09/2026.** [RCA-062–063](RESEARCH-DECISIONS.md) human-freeze exact executed TD-v1.3 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971` và authorize Task F. Trạng thái mới: `TASK F CORRECTIVE CLOSURE COMPLETE — READY FOR MINH TASK G AUTHORIZATION`; canonical route là [task-f-handoff](task-f-handoff.md). W v1 `configs/task-f-td13-frozen-release.json` giữ nguyên làm bằng chứng phát hành lịch sử; v2 `configs/task-f-td13-frozen-release-v2.json` cùng `results/task-f/task-f-corrective-closure.md`, `task-f-corrective-independent-review.md`, `f07`–`f09` là corrective evidence (f09 PASS sau review). Implementation/tests ở W `src/rca/`, `tests/task_f/`. PRE-G/G chưa được Minh authorize; five-distinct-reviewer còn OPEN; final60/H/I chưa mở. Các bảng snapshot cũ giữ nguyên provenance và phải đọc cùng [CURRENT](CURRENT-STATE.md).
+> **Current corrective notice — 30/09/2026.** [U30PG](../evidence/project-direction/2026-09-29-rca-pre-g-authorization.md)/[RCA-068–070](RESEARCH-DECISIONS.md) authorize hai sửa lỗi PRE-G, review lại Task F và readiness assessment, cùng exact impact map 12 tệp. [Canonical readiness](pre-g-readiness.md) hiện **PASS_METADATA_ONLY_WITH_LIMITATIONS**, PRE-G 25/25, F 70/70, E math/firewall 34/34 và verifier 44 references PASS. Hai blocker origin/qualified seal đã đóng trong phạm vi metadata và cùng interpreter. **Sẵn sàng trình Minh mở G entry validation/preparation; G chưa được cấp quyền, final campaign chưa sẵn sàng chạy ngay.** Raw source/adapter admission, durable provenance trước mở nhãn và independent validity của actual G controller/firewall còn phải kiểm tại gate được authorize. Routes mới ở §12; notice 29/09 và §11 giữ snapshot ban đầu đã bị adversarial finding supersede, không xóa lịch sử. Five-reviewer và historical exposure giữ nguyên.
+
+> **Current completion notice — 29/09/2026.** [RCA-062–063](RESEARCH-DECISIONS.md) human-freeze exact executed TD-v1.3 SHA256 `34fd73f6a84dc6b45834bd7fd4cc7b86e19e54f1011de99735631f027ee18971` và authorize Task F. Task F v2 corrective closure giữ nguyên tại [task-f-handoff](task-f-handoff.md). [RCA-064–067](RESEARCH-DECISIONS.md) chỉ authorize PRE-G: [kết quả PRE-G](pre-g-readiness.md) là **PASS metadata-level với giới hạn**, không phải raw final-scope validation; G chưa được cấp quyền. W v1 `configs/task-f-td13-frozen-release.json` giữ làm bằng chứng lịch sử; v2 `configs/task-f-td13-frozen-release-v2.json`, `results/task-f/task-f-corrective-closure.md`, `task-f-corrective-independent-review.md`, `f07`–`f09` là corrective evidence. PRE-G routes ở §11; five-distinct-reviewer còn OPEN; final60 raw/labels/outcomes và H/I chưa mở. Các bảng snapshot cũ giữ provenance và phải đọc cùng [CURRENT](CURRENT-STATE.md).
 
 Chủ sở hữu: **Minh**. Ngày **2026-09-22**. Loại `CANONICAL_SYNTHESIS` về **định vị/quyền nguồn**, không sở hữu quyết định khoa học hoặc trạng thái chạy. Inventory được lập trước khi tổ chức lại; [snapshot 59 tệp](D:/Project/flash-ticket-rca-research/program-review/pre-change-inventory.json) giữ hash/size của các tài liệu và audit scripts liên quan. Đây không phải inventory/re-audit mọi byte raw trên máy.
 
@@ -210,3 +212,23 @@ E changes remain local/uncommitted; no new raw telemetry, final outcomes or inst
 | `results/task-e/continuation-live-handoff.md` | Resume entry: giữ COMPLETE, không mở lại reviews đã đóng |
 
 Đủ scopeddevelopment không cấp quyền F–I hoặc final60; formalassurance/humanacceptance còn OPEN. Giữ nguyên sourceTD13 hash và các failed/interrupted attempts; không commit/push. Gói inventory/repro/finalverification được tạo trong bước đóng gói sau source report/reviews.
+
+## 11. PRE-G metadata-level readiness — 29/09/2026
+
+| ID | Root / path | Vai trò / giới hạn |
+|---|---|---|
+| PG-AUTH | P `docs/evidence/project-direction/2026-09-29-rca-pre-g-authorization.md`; `RCA-064`–`RCA-067` | Quyền người dùng và exact impact map; không authorize G |
+| PG-CANON | P `docs/research-rca/pre-g-readiness.md` | Canonical synthesis, `PASS` đúng mức metadata, raw final và G còn OPEN |
+| PG-CONTRACT | W `results/pre-g/pre-g-run-contract.json` | Run contract ghi trước qualification; nguồn, seeds, firewall, permitted result |
+| PG-CODE | W `scripts/pre_g/source_qualification.py`, `controller_contract.py` | Metadata/LFS identity và controller-only RCD ba seed; không phải final campaign/adapter raw qualifier |
+| PG-TEST | W `tests/pre_g/test_source_qualification.py`, `test_controller_contract.py` | 21 synthetic/development contract tests; không dùng final raw/labels/outcomes |
+| PG-RECEIPT | W `results/pre-g/pre-g-readiness.json` | Official pinned metadata result, 180 object descriptors, frozen verifier, tests và bounded synthetic Python 3.9 smoke; source SHA/claim limits |
+| PG-REVIEW | W `results/pre-g/pre-g-independent-review.md` | Independent adversarial verdict về phạm vi, implementation và claim; không nâng thành khoa học/final efficacy |
+
+PRE-G không sửa TD, Task E/F frozen artifacts hoặc FlashTicket; mục này không thay `Task G` contract ở MASTER. Các số object/byte là source metadata, không phải kết quả đánh giá RCA. Các dòng lịch sử trước §11 vẫn phải đọc theo notice hiện hành ở đầu tệp.
+
+## 12. Corrective PRE-G và Task F re-review — 30/09/2026
+
+Các path ở §11 giữ nguyên; không tạo gói mới ngoài 12 tệp đã được duyệt. `PG-AUTH` nay chứa corrective authorization U30PG; RCA-068–070 lưu ba xác nhận nguyên tử của Minh. `PG-CONTRACT` và `PG-RECEIPT` v2 giữ exact initial UTF-8 snapshots kèm SHA256, đăng ký hashes code/tests trước requalification và ghi actual checks mới. `PG-CODE` pin official endpoint và ràng buộc qualified seal với issuance trong bộ nhớ; `PG-TEST` hiện 25 tests, số 21 tại §11 là snapshot lịch sử. `PG-REVIEW` chứa separate corrective reviewers, closure hai adversarial findings và Task F re-review; initial PASS vẫn được giữ dưới nhãn superseded.
+
+`PG-CANON` sở hữu kết luận readiness, [CURRENT](CURRENT-STATE.md) dẫn trạng thái. Frozen TD/F/E và ứng dụng không sửa; README/`.idea/` ngoài scope bảo toàn. Ready-for-entry là đánh giá kỹ thuật, không quyền G hay raw final-scope certification. Durable prediction provenance, actual-use raw/adapter checks và independent G validity vẫn là việc tại gate được Minh cấp quyền trước campaign.
