@@ -1,5 +1,7 @@
 # Trạng thái triển khai plan
 
+- **Delta tài liệu 2026-10-03:** Minh xác nhận GOV-149/150 theo sequence trong image: Frontend → Booking freeze → Payment tạo thanh toán, poll Payment; Ticket → Booking commit COMPLETED → Payment kết thúc Saga. B13/B14/B15/READY-v0.2 hiện REVIEW_READY; phê duyệt v0.1 ở mốc 14/09 không tự lan sang hợp đồng sửa. Xem [bảng đối chiếu](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md). Chưa sửa code, DDL, AWS hoặc chạy V21–V25; B13-OPEN-01 giữ câu hỏi định dạng/lưu QR payment độc lập.
+
 - **Cập nhật hiện hành 2026-09-18:** tên/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm **Minh, Sơn, Tuấn, Tuyến** theo [roles.md](roles.md). Minh lead giai đoạn đầu và chính RCA; mobile chỉ làm khi thực sự thừa thời gian (`PRJ-035`).
 - **Giai đoạn hiện tại:** Giai đoạn 5 — đầu hiện thực. `B11-C-v0.3` và baseline B12–B16 đã duyệt (GOV-144). Commit `091fca1` ngày 18/09 đã tạo 5 project nghiệp vụ + API Gateway, Config Server, Discovery Server; mã ứng dụng hiện là bộ khung. Không dùng dòng “chưa tạo application” trong mốc 14/09 bên dưới làm hiện trạng.
 - **Kiểm chứng:** chưa có bằng chứng build/service/E2E/tải/RCA FlashTicket PASS trong lượt cập nhật ngữ cảnh; không kiểm AWS trực tiếp. Kế hoạch được duyệt không đồng nghĩa kết quả đã đạt.
@@ -58,8 +60,8 @@
 | **B11-B — Đối chiếu tính khả thi** | **`APPROVED`** (`B11-B-v0.6`) | Kết luận giữ nguyên: không phương án nào bị loại. `B11-B-OPEN-08` đóng bằng `GOV-091`; `-03` đóng như blocker B11 bằng `GOV-097`/`GOV-098`; chỉ `-02` đi tiếp vào `B12`. |
 | **B11-C — Chốt kiến trúc và ADR** | **`APPROVED`** (`B11-C-v0.3`) — **đã đóng gate** | `PA-6`; năm service `event`/`booking`/`payment`/`ticket`/`user`; một Saga do `payment-service` điều phối; RCA riêng chỉ đọc, lớp giải thích dùng Gemini API; hai máy không HA. `ADR-001`–`ADR-004` đều `Chấp nhận`. Phần tác động B11 của `A6-v0.6` và phép thử độc lập RCA đã được duyệt/hoàn tất. |
 | **B12 — Dữ liệu/schema đích** | **APPROVED B12-v0.2** | 47 bảng SQL/4 collection; dictionary và ERD đồng bộ; quyết định nghiệp vụ tại §9 đã cập nhật. Cấu hình môi trường thật và kiểm service còn thiếu. |
-| B13/B14/B15 | APPROVED v0.1 (GOV-144) | Đã có hợp đồng, sequence và kế hoạch kiểm; Saga/outbox/inbox đã phản ánh trong B12. |
-| B16/readiness | APPROVED v0.1 (GOV-144) | Chuẩn quan sát và danh sách Spring project/dependency/thứ tự code; chưa nghiệm thu telemetry thật. |
+| B13/B14/B15 | REVIEW_READY v0.2, 2026-10-03 | Start qua Booking + poll Payment và success Ticket → Booking → Payment theo GOV-149/150; v0.1 APPROVED là baseline lịch sử. Schema B12 giữ nguyên; phép kiểm mới NOT RUN. |
+| B16 / readiness | B16-v0.1 APPROVED; READY-v0.2 REVIEW_READY | Chuẩn quan sát giữ baseline GOV-144; readiness cập nhật hợp đồng 03/10, chưa nghiệm thu telemetry hoặc runtime. |
 
 > ⚠️ **Cập nhật 2026-08-29, cuối ngày — `B11-A-v0.1` chưa đủ, cần một vòng nữa trước khi duyệt.** Chủ đồ án chốt mục tiêu hình dạng **7 ranh giới nghiệp vụ** với một ranh giới giữ chỗ riêng (`RES-050`, `RES-051`). Tập phương án hiện có **không chứa hình dạng đó**, và nó **chưa dựng được** cho tới khi `Giữ chỗ` thành aggregate root — vì một ranh giới triển khai không được cắt ngang một aggregate.
 >

@@ -1,7 +1,7 @@
 # B15 — Kế hoạch kiểm chứng theo lát dọc
 
-- Phiên bản B15-v0.1; ngày 2026-09-14; APPROVED về kế hoạch; FORMATION; người duyệt Lê Văn Minh, ngày 2026-09-14 (GOV-144).
-- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B13-v0.1/B14-v0.1 và B16-v0.1 APPROVED; không sinh bất biến/ASR/ngưỡng mới.
+- Phiên bản: B15-v0.2; ngày 2026-10-03; trạng thái: REVIEW_READY; FORMATION; người duyệt/ngày duyệt bản này chưa có. B15-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144).
+- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B16-v0.1 APPROVED; B13-v0.2/B14-v0.2 REVIEW_READY theo GOV-149/150; không sinh bất biến/ASR/ngưỡng mới. Duyệt v0.2 sau các đầu vào sửa.
 - Ưu tiên PRJ-016–021: luồng chính đúng → dữ liệu quan sát → thử tải/chèn lỗi/RCA. Không yêu cầu hoàn thiện công cụ tải trước code.
 
 ## 1. Kết quả thật nằm ở đâu?
@@ -32,6 +32,11 @@
 | V18 | Follow lặp, unfollow lặp, count | Một quan hệ, count từ source, không dual-write lệch counter | User |
 | V19 | Payout còn tiền pending, feeconfig thiếu, paid lặp | Từ chối; đúng fee đã duyệt; một lần đánh paid + actor/time/evidence | Payment đọc/đối soát |
 | V20 | Một giao dịch xuyên callback/retry/message, secret/QR mẫu trong input | Correlation nối đủ; log/trace có node/time/outcome; không lộ dữ liệu cấm | Theo B16 từ lát đầu |
+| V21 | POST start qua Booking; crash sau freeze trước publish, mất 202; replay key cũ và key mới khi còn attempt | Freeze/receipt/outbox cùng commit; cùng key cùng requestId/attempt; không hai unfinished attempt; poll chỉ đọc; từ chối/UNKNOWN không giả thành URL thành công | Booking/Payment/Frontend |
+| V22 | Ticket COMPLETED; crash Booking trước/sau commit, mất result/completion/ACK; Payment probe thấy vé trước thấy OrderCompleted | Order COMPLETED trước Saga COMPLETED; replay không phát thêm vé/message/hiệu ứng; probe không bỏ qua Booking; CANCELLED không hồi sinh | Ticket/Booking/Payment |
+| V23 | Buyer cancel PENDING_PAYMENT đã freeze, cancel đồng thời acceptance; ISSUING/COMPLETED; hủy lặp | Còn đủ điều kiện thì trả reservation/limit/promotion một lần; sau acceptance từ chối, rollback không trả một phần; charge tới sau hủy hoàn muộn | Booking/Payment |
+| V24 | Đọc danh sách/chi tiết đơn rồi vé; orderId buyer khác; vé PENDING; QR thanh toán so với QR vé | Backend lọc chủ; GET không tạo/freeze/phát vé; chưa đủ vé trả mảng rỗng; không nhầm QR payment với token Ticket | Booking/Ticket/Frontend |
+| V25 | Start command tới sau hủy/hết hạn; guard HTTP timeout; request bị từ chối; poll trước snapshot; cùng requestId khác order | Không mở attempt mới khi guard từ chối; timeout retry cùng command; kết quả REJECTED lưu bền và poll phân biệt; chưa snapshot không rò quyền; không đọc kết quả command của đơn khác | Booking/Payment/Frontend |
 
 ## 3. Fake gateway có khó không?
 
@@ -51,7 +56,7 @@ Chèn lỗi một thành phần trong môi trường được phép: service sto
 
 Mỗi kết quả: test ID, ngày/commit, môi trường, dữ liệu/seed, lệnh, expected/actual, exit code, log đã lọc, hash bộ dữ liệu và giới hạn. Test concurrency phải có connection độc lập và barrier tạo tranh chấp; không gọi tuần tự rồi gọi đó là race. Restore chạy vào môi trường tách biệt, không đè kho nhóm đang dùng. Thất bại giữ nguyên làm bằng chứng và sửa trong phạm vi được duyệt, không loại ca khó khỏi mẫu.
 
-Phần đưa báo cáo: INV→thiết kế lớp bảo vệ→test thật→kết quả/giới hạn; không đưa toàn bộ trạng thái quản trị hoặc secret vào báo cáo. Chưa có service thì các V01–V20 chưa đạt, dù kiểm tĩnh/SQL bên dưới đã PASS.
+Phần đưa báo cáo: INV→thiết kế lớp bảo vệ→test thật→kết quả/giới hạn; không đưa toàn bộ trạng thái quản trị hoặc secret vào báo cáo. V01–V25 vẫn NOT RUN trong lượt sửa tài liệu 03/10; không đổi kiểm tĩnh thành PASS service.
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 

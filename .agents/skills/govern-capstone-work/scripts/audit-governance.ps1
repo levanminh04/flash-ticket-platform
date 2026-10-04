@@ -83,7 +83,7 @@ try {
     exit 1
 }
 
-$expectedRoot = 'D:\Project\flash-ticket-platform'
+$expectedRoot = 'D:\DATN\flash-ticket-platform'
 if (-not $resolvedRoot.Equals($expectedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     $errors.Add("Canonical workspace mismatch: expected '$expectedRoot', got '$resolvedRoot'.")
 }
@@ -268,7 +268,7 @@ if (Test-Path -LiteralPath $b11APath -PathType Leaf) {
     $formationFiles += Get-Item -LiteralPath $b11APath
 }
 
-$legacyReferencePattern = '(?i)B5\.5|legacy-baseline|flash-ticket-system|core-service|user-service|discovery-service'
+$legacyReferencePattern = '(?i)B5\.5|legacy-baseline|flash-ticket-system|flash-ticker-system|core-service|user-service|discovery-service'
 foreach ($formationFile in @($formationFiles | Sort-Object FullName -Unique)) {
     $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $formationFile.FullName
     if ($text -match $legacyReferencePattern) {

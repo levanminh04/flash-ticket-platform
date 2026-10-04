@@ -509,3 +509,40 @@ Bản đồ tác động cho lượt ghi nhận: cập nhật metadata và đầ
 **Cách áp dụng:** DT18 là nguồn tên/nhiệm vụ hiện hành; DH-* chỉ giữ nghĩa của thư 22/08. Bảng phân công mới ghi trách nhiệm, không chứng nhận SPI, Saga, cổng thanh toán hoặc cache đã được tích hợp. Chi tiết kỹ thuật tiếp tục theo hợp đồng/kiến trúc đã duyệt. Việc mobile trở thành tùy thời gian không tự xóa bất biến check-in và API backend đã duyệt; chưa giao lại người làm mobile.
 
 **Phần phân tích chưa được chốt:** cách ánh xạ toàn bộ nhiệm vụ mới vào ngưỡng tải, khả năng mở rộng, độ đo phát hiện, tập lỗi và giao diện kết quả là `OPEN` cho Minh cùng người phụ trách tại B15/B16 và bộ RCA. Các bản diễn giải A1–A6 được cập nhật để rà soát, không tự kế thừa phê duyệt bản cũ. `RES-049` chỉ còn áp cho dashboard vận hành/cảnh báo nâng cao; không được dùng để bỏ cơ chế giám sát hoặc giao diện minh họa kết quả mà DT18-NV2/NV3 đã yêu cầu. Đóng góp vẫn không được tuyên bố vượt bằng chứng.
+
+## Workspace trên máy hiện tại — 2026-09-27
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng hoặc trích dẫn yêu cầu | Ngày chốt | Gate áp dụng | File chịu ảnh hưởng | Thay thế quyết định |
+|---|---|---|---|---|---|---|---|---|---|
+| GOV-147 | Workspace chuẩn của đồ án trên máy hiện tại là `D:/DATN/flash-ticket-platform`. | Workspace local | `USER_CONFIRMED` | Người dùng phiên 2026-09-27 | “sửa giúp tôi các file agent, skill liên quan cho đúng link workspace chuẩn hiện tại của máy, link cũ là của máy người khác trên github push lên”; cwd của phiên là `D:/DATN/flash-ticket-platform`. | 2026-09-27 | Định tuyến workspace; không thay gate thiết kế | `AGENTS.md`, `$govern-capstone-work`, evaluation-cases, audit-governance | GOV-002/GOV-007 chỉ ở đường dẫn workspace trên máy hiện tại |
+| GOV-148 | Repo dự án cũ được người dùng cung cấp làm nguồn tham khảo là `https://github.com/levanminh04/flash-ticker-system`. | Nguồn tham khảo | `USER_CONFIRMED` | Người dùng phiên 2026-09-27 | “github.com/levanminh04/flash-ticker-system, đây là link repo dự án cũ (gộp nhiều lại thành core-service) có thể đọc ở đây để them khảo khi thực hiện flow theo skill đã tạo”. | 2026-09-27 | Nguồn legacy; quyền đọc vẫn theo gate COMPARISON | `AGENTS.md`, `$govern-capstone-work`, `$flash-ticket-flow-research` | Giả định đường dẫn checkout local `D:/Project/flash-ticket-system` trong hướng dẫn agent/skill |
+
+Các đường dẫn `D:/Project/` trong hồ sơ khảo sát và bản ghi lịch sử giữ nguyên để truy nguồn máy đã khảo sát; chúng không xác nhận thư mục tồn tại trên máy hiện tại. Việc cập nhật đường dẫn không thay ranh giới, bất biến, yêu cầu, kiến trúc hoặc gate cách ly legacy.
+
+## Đồng bộ sequence trong image — 2026-10-03
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng hoặc trích dẫn yêu cầu | Ngày chốt | Gate áp dụng | File chịu ảnh hưởng | Thay thế quyết định |
+|---|---|---|---|---|---|---|---|---|---|
+| GOV-149 | Luồng khởi tạo thanh toán là Frontend → Booking đóng băng đơn → yêu cầu Payment tạo thanh toán; Frontend poll QR/URL ở Payment. | Hợp đồng phối hợp | `USER_CONFIRMED` | Lê Văn Minh | “Áp dụng cả hai theo hình”, trả lời điểm (1) đã trình ngày 03/10; image/UseCase Đặt Vé/Đặt vé.png bước 15–37. | 2026-10-03 | B13/B14, chi tiết v0.2 chờ rà/duyệt | B13, B14, B14-01, B15, readiness, chỉ mục/trạng thái; bảng đối chiếu ảnh | GOV-144 chỉ ở hướng start trực tiếp Payment/freeze đầu tiên do Payment gọi trong B13/B14-v0.1 |
+| GOV-150 | Nhánh phát hành thành công đi Ticket → Booking ghi đơn COMPLETED → báo Payment kết thúc Saga. | Hợp đồng phối hợp | `USER_CONFIRMED` | Lê Văn Minh | “Áp dụng cả hai theo hình”, trả lời điểm (2) đã trình ngày 03/10; image/UseCase Đặt Vé/Đặt vé.png bước 57–66. | 2026-10-03 | B13/B14, chi tiết v0.2 chờ rà/duyệt | B13, B14, B14-01, B15, readiness, chỉ mục/trạng thái; bảng đối chiếu ảnh | GOV-144 chỉ ở hướng Ticket success → Payment → Booking và thứ tự Saga trước order của B13/B14-v0.1 |
+
+**Phạm vi câu hỏi đã trình:** Payment vẫn điều phối Saga; các rule hết hạn, hủy, hoàn tiền và xử lý lặp giữ nguyên vì hình không mô tả những nhánh đó. Không đổi ADR-002, ownership/schema hoặc số service/Saga. Xác nhận hai luồng không phê duyệt toàn văn B13/B14/B15/READY-v0.2 hoặc từng tên route/message/field do agent chọn. Các chi tiết mới là `CANDIDATE`, tài liệu sửa là `REVIEW_READY`; QR payment lưu độc lập là `OPEN` B13-OPEN-01, owner Tuấn/Minh. Không gộp những diễn giải này vào phát biểu USER_CONFIRMED ở bảng.
+
+Bản đồ tác động và đối chiếu từng bước: [2026-10-03-image-docs-comparison.md](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md). Lượt này chỉ sửa tài liệu, không sửa code, DDL hoặc môi trường. Những sửa có sẵn về workspace ngày 27/09 được giữ nguyên.
+
+## Lựa chọn login theme Keycloak — 2026-10-03
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng |
+|---|---|---|---|---|---|---|---|---|
+| GOV-151 | Chọn mẫu 3, Ticket Orange, cho login theme Keycloak. | Giao diện login | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời nguyên văn “3” sau ba mẫu login FlashTicket; [thiết kế](../superpowers/specs/2026-10-03-keycloak-ticket-orange-design.md) | 2026-10-03 | Triển khai theme trong phạm vi PRJ-032; không duyệt lại kiến trúc/luồng xác thực | deploy/keycloak/themes/flash-ticket/login/, deploy/Note.md, spec theme |
+
+Chi tiết CSS, token, version cache và kiểm chứng do agent triển khai theo lựa chọn trên, không gộp thành nội dung người dùng đã xác nhận. Không thay chính sách đăng ký, reset password hoặc Require SSL; không suy màu login thành quyết định màu toàn frontend.
+
+## Email xác minh Keycloak local — 2026-10-04
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng |
+|---|---|---|---|---|---|---|---|---|
+| GOV-152 | Giữ Verify email khi cấu hình SMTP để khôi phục đăng nhập admin. | Cấu hình xác minh email | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời “Giữ Verify email, cấu hình SMTP” khi lựa chọn phương án khôi phục | 2026-10-04 | Realm master local; không suy thành chính sách mọi realm/production | Runtime master, deploy/Note.md |
+| GOV-153 | Dùng Gmail với App Password cho SMTP Keycloak. | Nhà cung cấp email | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời “Gmail với App Password”, sau đó “đã điền” để áp dụng credentials trong .env | 2026-10-04 | Cấu hình SMTP local; không thêm SPI hoặc thay luồng xác thực | deploy/.env (secret, ignored), deploy/.env.example, runtime master, deploy/Note.md |
+
+FACT kiểm chứng: Gmail SMTP STARTTLS/auth thành công; SMTP runtime khớp .env; client recovery tạm đã xóa; Verify email vẫn bật. Email admin vẫn chưa verified, nên không ghi đăng nhập Admin Console đã hoàn tất. Cấu hình không thay username/password hoặc gỡ VERIFY_EMAIL của tài khoản.

@@ -2,14 +2,16 @@
 
 > **Cập nhật ngữ cảnh 18/09:** theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) và [phân công](../project/roles.md). Tám project khung đã có trong commit `091fca1`; chưa có bằng chứng build/E2E đạt. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`); chuẩn kỹ thuật được duyệt 14/09 giữ nguyên.
 
-- Phiên bản: `READY-v0.1`; ngày: 2026-09-14; trạng thái: `APPROVED`.
-- Người duyệt: Lê Văn Minh; ngày duyệt: 2026-09-14 (GOV-144). Phân lớp: `FORMATION`.
-- Đầu vào: B11-C-v0.3 `APPROVED`; quyết định GOV-101–142 và PRJ-010–024 còn hiệu lực; B12/B13/B14/B16 trong đợt hoàn thiện hiện tại. B12-v0.2/B13-v0.1/B14-v0.1/B16-v0.1 đã được Minh duyệt theo thứ tự phụ thuộc tại GOV-144.
+- Phiên bản: `READY-v0.2`; ngày: 2026-10-03; trạng thái: `REVIEW_READY`.
+- Người duyệt/ngày duyệt bản này: chưa có. READY-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144). Phân lớp: `FORMATION`.
+- Đầu vào: B11-C-v0.3/B12-v0.2/B16-v0.1 `APPROVED`; B13-v0.2/B14-v0.2/B15-v0.2 `REVIEW_READY`; GOV-101–142, GOV-149/150 và PRJ-010–024 còn hiệu lực. B13/B14-v0.1 được duyệt tại GOV-144 là lịch sử trước sửa, không thay đầu vào v0.2.
 - Phạm vi: chỉ dẫn chia việc/khởi tạo, không phải bằng chứng build, deploy hoặc đăng nhập thật; việc tạo project khung đã được ghi nhận riêng ngày 18/09.
+
+**Delta 03/10 theo GOV-149/150:** B13-v0.2/B14-v0.2/B15-v0.2 ở REVIEW_READY; luồng khởi tạo mới là Frontend → Booking freeze/outbox → Payment và poll tại Payment. Nhánh success là Ticket → Booking commit order COMPLETED → Payment commit Saga COMPLETED. Các dòng phê duyệt v0.1 ghi lịch sử baseline, không duyệt DTO/route sửa. ADR-002 và schema B12 không đổi; lưu QR payment độc lập còn B13-OPEN-01. Rà/duyệt hợp đồng v0.2 trước tích hợp liên service phần sửa, không chặn công việc độc lập trong baseline còn hiệu lực.
 
 ## 1. Có thể bắt đầu code khi nào?
 
-Không cần thêm một vòng bàn nghiệp vụ Q-01–07. Những lựa chọn đó đã được ghi trong sổ quyết định. Bộ **schema, hợp đồng, sequence và chuẩn quan sát** đã được duyệt tại GOV-144; nhóm có thể bắt đầu lát cắt ở §5. B16 là đầu vào bắt buộc trước hiện thực xuyên service, không đợi cuối mới thêm correlation.
+Không cần thêm một vòng bàn nghiệp vụ Q-01–07. Những lựa chọn đó đã được ghi trong sổ quyết định. Bộ baseline **schema, hợp đồng, sequence và chuẩn quan sát v0.1** được duyệt tại GOV-144; nhóm có thể bắt đầu phần còn giữ baseline ở §5. Riêng hợp đồng phối hợp v0.2 theo delta 03/10 phải rà/duyệt trước tích hợp phần sửa. B16 là đầu vào bắt buộc trước hiện thực xuyên service, không đợi cuối mới thêm correlation.
 
 Các việc không phụ thuộc endpoint AWS — dựng project, unit test tiền/trạng thái, DTO/validation, repository với database local mới — không phải đợi hostname/SMTP hoàn tất. Chưa được coi là sẵn sàng nghiệm thu đăng ký, thanh toán sandbox hay triển khai EC2 khi các đầu vào tương ứng ở §6 còn thiếu.
 
@@ -71,7 +73,7 @@ Startup import bỏ qua realm đã tồn tại; muốn chứng minh cấu hình 
 | 0 — nền chạy | Một bộ version/build; credential theo owner; JWT; error envelope; correlation; outbox/inbox worker theo B13/B14 | Một request có log/trace xuyên HTTP và message; rollback business không phát message; service không truy DB khác |
 | 1 — sự kiện bán được | Event draft→duyệt→công bố; Booking nhận snapshot; User identity/profile tối thiểu; FE adapter seat map | Reload giữ ghế ẩn và loại vé; không bán hidden; cấu hình version cũ không ghi đè mới |
 | 2 — đặt và trả giữ chỗ | Booking tạo đơn, áp mã, hạn mua, expiry/cancel; email đơn | Các ca tranh chấp cuối nguồn cung, trả lặp, deadline đều đạt; money integer/HALF_UP đúng vector B13 |
-| 3 — thu tiền và phát vé | Payment attempt/freeze/verify, Saga; Ticket atomic issuance; hoàn muộn/thừa/thất bại xác định | VNPay sandbox chạy một đơn thật trong sandbox; callback lặp không phát thêm vé; timeout không bị coi thành thất bại cuối |
+| 3 — thu tiền và phát vé | Booking freeze/receipt/outbox start; Payment attempt/verify/Saga và API poll; Ticket atomic issuance → Booking completion → Payment completion; hoàn muộn/thừa/thất bại xác định | Hợp đồng v0.2 được rà/duyệt; V21/V22/V25 đạt; sandbox chạy một đơn; callback lặp không phát thêm vé; timeout không bị coi thành thất bại cuối |
 | 4 — giao vé và check-in | Mail/QR tải lại; kiểm API check-in; hủy event một chiều và refund progress. App mobile scan chỉ làm khi thực sự dư thời gian (PRJ-035) | Gửi lỗi không hoàn tiền; hai scan chỉ một thành công; hủy hội tụ, không mở lại nguồn cung |
 | 5 — phần phạm vi còn lại | Hồ sơ organizer/follow đơn giản; đọc đơn/đối soát/chi trả/CRUD đã duyệt | Không tự bỏ nghiệp vụ đã duyệt vì ít ưu tiên; không chặn lát cắt 1–4 để tô điểm CRUD |
 | 6 — tải, lỗi, RCA | Workload, cổng giả lập, fault injection có kiểm soát và thu evidence | Luồng chính đã đúng; B15/B16 có run manifest, dữ liệu đủ; đánh giá RCA theo bộ RCA |
@@ -107,5 +109,7 @@ Không đưa bootstrap credential trong note vào repo hoặc báo cáo. Nếu g
 ## 8. Kết luận bàn giao
 
 Không còn chờ chốt lại Java/Boot/Cloud family, Q-01–07, profile riêng, ISSUING, ghế ẩn hoặc cách làm tròn. **Review gate đã được Minh duyệt tại GOV-144**; còn các thông tin môi trường ở đúng lát cắt. Bộ phiên bản/cách tổ chức project đã đề xuất được nhận làm baseline; những phiên bản image chưa có giá trị cụ thể vẫn OPEN. Chưa có application build/E2E thì không đánh dấu hoàn thành hiện thực.
+
+Riêng hợp đồng phối hợp sửa ngày 03/10 đang REVIEW_READY theo khối delta ở đầu tài liệu; GOV-144 không thay lượt duyệt các phiên bản v0.2. Đây là cập nhật tài liệu theo biểu đồ đã xác nhận, chưa sửa code/DDL hoặc vận hành.
 
 Nội dung đưa vào báo cáo: kiến trúc đích, lý do cô lập quyền, tính đúng đắn của transaction, thứ tự hiện thực và kết quả kiểm thực tế; không đưa IP/secret hoặc lịch sử chuyển mã thành lập luận thiết kế.

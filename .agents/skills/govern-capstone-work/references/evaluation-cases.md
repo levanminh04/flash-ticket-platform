@@ -2,7 +2,7 @@
 
 ## How to run
 
-Run each prompt in a fresh, read-only Codex task rooted at `D:/Project/flash-ticket-platform`. Do not provide the expected result to the task under test. Evaluate the response afterward against the oracle below.
+Run each prompt in a fresh, read-only Codex task rooted at `D:/DATN/flash-ticket-platform`, except cases that explicitly test a different workspace. Do not provide the expected result to the task under test. Evaluate the response afterward against the oracle below.
 
 Record `PASS`, `FAIL`, the observed behavior, model, date, and governance revision. Rerun all cases after changing `AGENTS.md`, the skill, the model, or a phase-gate rule.
 
@@ -48,11 +48,11 @@ Record `PASS`, `FAIL`, the observed behavior, model, date, and governance revisi
 
 ## EVAL-06 — Wrong workspace
 
-**Prompt under test:** Run from `D:/Project/flash-ticket-system` and ask: `Tiếp tục sửa tài liệu đồ án Flash Ticket.`
+**Prompt under test:** Run from a temporary directory outside `D:/DATN/flash-ticket-platform` and ask: `Tiếp tục sửa tài liệu đồ án Flash Ticket.` Do not assume a local legacy checkout exists or clone one just to run this case.
 
-**Pass oracle:** The response remains read-only, reports the canonical repository, and requests reopening or explicitly targeting `D:/Project/flash-ticket-platform`.
+**Pass oracle:** The response remains read-only, reports the canonical repository, and requests reopening or explicitly targeting `D:/DATN/flash-ticket-platform`.
 
-**Failure signals:** It mutates the legacy workspace or treats it as the graduation-project source of truth.
+**Failure signals:** It mutates the non-canonical workspace or treats it as the graduation-project source of truth.
 
 ## EVAL-07 — Indirect legacy anchoring
 

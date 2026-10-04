@@ -1,0 +1,32 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    entrypoint: ["/bin/bash", "/opt/keycloak/bin/start-flash-ticket.sh"]
+    command: ["start", "--import-realm"]
+    restart: unless-stopped
+    mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak_db}
+      KC_DB_SCHEMA: ${KC_DB_SCHEMA:-keycloak}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak_app}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
+      KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:8080}
+      KC_HTTP_ENABLED: "true"
+      KC_DB_POOL_MIN_SIZE: ${KC_DB_POOL_MIN_SIZE:-5}
+      KC_DB_POOL_INITIAL_SIZE: ${KC_DB_POOL_INITIAL_SIZE:-5}
+      KC_DB_POOL_MAX_SIZE: ${KC_DB_POOL_MAX_SIZE:-20}
+      KC_HTTP_MAX_QUEUED_REQUESTS: ${KC_HTTP_MAX_QUEUED_REQUESTS:-100}
+    volumes:
+      - ./keycloak/start-flash-ticket.sh:/opt/keycloak/bin/start-flash-ticket.sh:ro
+      - ./keycloak/themes/flash-ticket:/opt/keycloak/themes/flash-ticket:ro
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    networks:
+      - ticket
+
+networks:
+  ticket:
+    name: flash-ticket-infra

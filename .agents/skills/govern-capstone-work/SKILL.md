@@ -9,7 +9,7 @@ Apply this workflow to prevent unsupported conclusions, phase-gate violations, a
 
 ## Load the minimum governing context
 
-1. Confirm that the canonical repository is `D:/Project/flash-ticket-platform` and inspect `git status`.
+1. Confirm that the canonical repository on this machine is `D:/DATN/flash-ticket-platform` and inspect `git status`. Historical `D:/Project/` paths belong to another machine; do not use them as current workspace locations. The user-supplied legacy reference is `https://github.com/levanminh04/flash-ticker-system`; verify any local checkout separately and apply the comparison gate before reading it.
 2. Read the root `AGENTS.md` completely, including the section **Đề tài và ranh giới hai bộ tài liệu**.
 3. Read `docs/evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md` — the current title and verbatim mission confirmed by Minh on 2026-09-18 (`DT18-*`, `PRJ-025/026`). For team context read `docs/project/roles.md`: Minh, Sơn, Tuấn, Tuyến; Minh leads the initial phase and owns RCA; mobile is optional only if time truly remains (`PRJ-035`). The 2026-08-22 advisor letter and `DH-*` codes are historical evidence, not the current title/mission. Read that letter only when tracing historical claims; never silently restore its superseded scope. System construction and load/concurrency evaluation are direct mission requirements, alongside graph-based monitoring/diagnosis using log, trace and metrics.
 4. Read [project-authority-and-gates.md](references/project-authority-and-gates.md) for any methodology, domain, architecture, database, ADR, Saga, or legacy comparison task.

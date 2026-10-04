@@ -1,14 +1,16 @@
 # B13 — Hợp đồng API và thông điệp cho luồng chính
 
-- Phiên bản: `B13-v0.1`, ngày 2026-09-14.
-- Trạng thái: `APPROVED`; người duyệt: Lê Văn Minh; ngày duyệt: 2026-09-14 (GOV-144), sau B12-v0.2. Chưa nghiệm thu API chạy thật.
+- Phiên bản: `B13-v0.2`, ngày 2026-10-03.
+- Trạng thái: `REVIEW_READY`; người duyệt/ngày duyệt phiên bản này: chưa có. `B13-v0.1` được Lê Văn Minh duyệt ngày 2026-09-14 (GOV-144), sau B12-v0.2; không chuyển phê duyệt đó sang hợp đồng sửa. Chưa nghiệm thu API chạy thật.
 - Phân lớp: `FORMATION`; riêng §8 là `COMPARISON` về adapter, không sinh ranh giới service.
-- Đầu vào: B11-C-v0.3; B6-v0.15/B7-v0.13/B8-v0.13; B12-v0.2 — APPROVED. Review-v0.6 và các quyết định GOV-122–144, PRJ-024 theo phần còn hiệu lực.
-- Phạm vi được giao: bản đồ `B12-B16-completion-impact-map.md`; năm service, một Saga do Payment điều phối. Hủy sự kiện là phản ứng một chiều có retry.
+- Đầu vào: B11-C-v0.3; B6-v0.15/B7-v0.13/B8-v0.13; B12-v0.2 — APPROVED. Review-v0.6 và GOV-122–144, GOV-149/150, PRJ-024 theo phần còn hiệu lực.
+- Phạm vi cập nhật 03/10: bản đồ trong [đối chiếu ảnh](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md) §4; baseline trước theo B12-B16-completion-impact-map.md. Năm service, một Saga do Payment điều phối; hủy sự kiện là phản ứng một chiều có retry.
 
 ## 1. Cách đọc và mức quyết định
 
 VND nguyên đồng, giảm giá HALF_UP một lần trên tổng đơn, phí HALF_UP một lần trên doanh thu hợp lệ event, freeze từ lần bắt đầu thanh toán đầu tiên, mốc hết hạn tại Booking, email sửa trước tạo đơn và S-01–S-05 là `USER_CONFIRMED`. Tên endpoint/message, cấu trúc dưới đây và cách mã hóa tiền là **baseline kỹ thuật DECIDED theo GOV-144**, dùng để nhóm triển khai thống nhất; không coi đây là kiểm hợp đồng trên service thật.
+
+**Thay đổi 03/10:** `GOV-149` chốt khởi tạo thanh toán qua Booking, rồi poll tại Payment; `GOV-150` chốt nhánh thành công Ticket → Booking → Payment. Hai luồng là `USER_CONFIRMED`; tên route/message và DTO mới/sửa tại §3–5 là `CANDIDATE` kỹ thuật của bản v0.2 để rà tích hợp, không phải người dùng đã chọn từng field. Các phần không chịu tác động tiếp tục giữ baseline GOV-144. [Bảng đối chiếu ảnh](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md) ghi bước nguồn, phạm vi và điểm còn mở.
 
 Các kiểu trong khối `typescript` là **đặc tả wire format**, không phải mã ứng dụng. Mọi trường đều bắt buộc trừ dấu `?`; `null` chỉ dùng nơi khai rõ. Từ chối trường lạ trên command và snapshot v1; không nhận alias. Không dùng `Record<string, unknown>` hoặc chỉ kiểm JSON là object để coi là hợp đồng hoàn tất.
 
@@ -50,9 +52,10 @@ Danh sách `code` không dùng làm enum mở cho trạng thái DB. Mỗi nhóm 
 | POST `/orders` | Booking / BUYER | `CreateOrder` → 201 `OrderView` | Một transaction giữ tất cả nguồn cung/hạn mức và tạo đơn; không nhận giá từ FE |
 | POST `/orders/{orderId}/promotion` | Booking / chủ đơn | `{code:string}` → `OrderView` | Chỉ khi còn giữ chỗ, chưa freeze, chưa có mã; giữ lượt cùng hạn đơn |
 | POST `/orders/{orderId}/cancel` | Booking / chủ đơn | `{}` → `OrderView` | Chỉ PENDING_PAYMENT còn giữ chỗ; sau chấp nhận tiền không cho buyer hủy. Retry CANCELLED trả trạng thái hiện có |
+| GET `/orders` | Booking / BUYER | `{items:OrderView[],nextCursor:string|null}` | Danh sách của subject đã xác thực, phân trang theo §9; không nhận userId để đổi chủ truy vấn |
 | GET `/orders/{orderId}` | Booking / chủ đơn | `OrderView` | `ISSUING` không đổi thành COMPLETED vì trang Return báo thành công |
-| POST `/orders/{orderId}/payment-attempts` | Payment / chủ đơn | `{provider:'VNPAY'}` → 201/200 `PaymentStart` | Xác minh buyer qua Booking; freeze trước mở attempt; cùng key ánh xạ cùng attemptId |
-| GET `/orders/{orderId}/payment` | Payment / chủ đơn | `PaymentView` | Return page chỉ đọc; browser không quyết định đã thu tiền |
+| POST `/orders/{orderId}/payment-attempts` | Booking / chủ đơn | `{provider:'VNPAY'}` → 202 `PaymentRequestAccepted` | Khóa/kiểm owner, state, deadline; freeze + idempotency + outbox tạo thanh toán cùng commit; trả nhận yêu cầu, chưa trả thành công tạo URL |
+| GET `/orders/{orderId}/payment` | Payment / chủ đơn | `PaymentView`; có thể kèm query `requestId` từ lần POST | Poll URL/QR thanh toán và tiến độ; chưa nhận snapshot trả `404 PAYMENT_NOT_READY` không tiết lộ dữ liệu; Return page không quyết định đã thu tiền |
 | GET `/orders/{orderId}/tickets` | Ticket / chủ đơn | `{issuanceState:'PENDING'|'COMPLETED'|'FAILED', tickets:TicketView[]}` | Chỉ trả bộ vé sau issuance COMPLETED; pending trả mảng rỗng; email lỗi không chặn |
 | GET `/tickets/{ticketId}/qr` | Ticket / chủ đơn | ảnh QR hoặc `{qrToken:string}` theo Accept | `Cache-Control: no-store`; organizer/admin không được tải QR buyer |
 | POST `/orders/{orderId}/ticket-deliveries` | Ticket / chủ đơn | `{}` → 202 `{deliveryId:UUID,state:'PENDING'}` | Gửi lại vào email đã lưu theo đơn; không đổi quyền sở hữu; cùng key không tạo hai job |
@@ -77,13 +80,15 @@ type OrderView = {
   expiresAt:Instant; paymentFrozenAt:Instant|null; sourceConfigVersion:UInt64;
   items:OrderItem[];
 };
+type PaymentRequestAccepted = {orderId:UUID;requestId:UUID;expiresAt:Instant};
 type PaymentStart = {
   orderId:UUID; attemptId:UUID; attemptState:'PENDING'|'UNKNOWN'|'SUCCEEDED'|'FAILED';
   amount:Money; currency:'VND'; paymentUrl:string|null; expiresAt:Instant;
 };
 type PaymentView = {
   orderId:UUID; acceptedChargeId:UUID|null;
-  latestAttempt:{attemptId:UUID;state:'PENDING'|'UNKNOWN'|'SUCCEEDED'|'FAILED'}|null;
+  latestAttempt:PaymentStart|null;
+  startRequest:{requestId:UUID;state:'WAITING'|'CREATED'|'REJECTED';failureCode:string|null}|null;
   refunds:{refundId:UUID;chargeId:UUID;amount:Money;
     state:'PENDING'|'PROCESSING'|'SUCCEEDED'|'FAILED';
     reason:'LATE_PAYMENT'|'DUPLICATE_PAYMENT'|'TICKET_ISSUANCE_FAILED'|'EVENT_CANCELLED'}[];
@@ -104,6 +109,14 @@ Promotion: `PROMOTION_NOT_FOUND`, `PROMOTION_OUTSIDE_WINDOW`, `PROMOTION_EXHAUST
 
 `PaymentStart.paymentUrl` chỉ có khi cổng đã cấp URL cho attempt còn PENDING; không tái tạo URL với mã giao dịch khác khi mất response. UNKNOWN trả null và FE theo dõi trạng thái. Provider URL phải nằm trong cấu hình cổng cho phép; không dùng redirect URL tự do từ browser. Đây không phải URL callback/secret được hardcode vào tài liệu.
 
+POST thanh toán chỉ vào Booking; không giữ đồng thời route cùng path vào Payment. `requestId` là ID command outbox được lưu ở `idempotency_requests.resource_id`, operation riêng `START_PAYMENT`, request_hash gồm orderId/provider/actor; cùng key trả cùng requestId và không phát command mới. Receipt 202 được dựng từ request đã lưu và expiresAt bất biến; retry vẫn trả receipt gốc kể cả đơn đã terminal, nhưng **key mới** phải qua guard hiện tại. Payment dùng cùng request_key/hash cho attempt, dedupe bằng inbox trước xét unfinished attempt; key mới khi còn PENDING/UNKNOWN bị từ chối. `CREATED` chỉ nghĩa đã tạo attempt, không nghĩa đã có URL hoặc đã thu tiền. `REJECTED` có failureCode phân biệt; kết quả xử lý command lưu bền ở inbox.response_payload cùng transaction, không để UI chờ vô hạn vì lỗi nghiệp vụ. Có requestId thì poll đọc kết quả đúng command; chưa xử lý là WAITING. Không có requestId thì startRequest=null, latestAttempt vẫn là lần hiện hành của đơn.
+
+StartPayment.requestId phải bằng Envelope.messageId; Payment kiểm requestHash theo cùng quy tắc serialize dữ liệu yêu cầu với Booking. StartPaymentResult CREATED có attemptId và failureCode=null; REJECTED có attemptId=null và failureCode không rỗng. Khi poll có requestId, kết quả trong inbox phải thuộc đúng orderId/subject; không trả response của command khác chỉ vì đoán được ID. Snapshot hợp lệ từ Booking được lưu để kiểm quyền cả khi request bị từ chối; trước snapshot vẫn dùng lỗi chưa sẵn sàng chung. Đây là mở rộng cách dùng bảng idempotency/inbox sẵn có; chưa thay cột B12 hoặc chứng minh DAO hiện thực.
+
+Payment kiểm chủ đơn bằng buyerSubject trong snapshot nguồn Booking. Khi chưa có snapshot, GET trả lỗi chưa sẵn sàng chung, không trả thông tin của orderId đoán được; frontend tiếp tục đọc trạng thái đơn từ Booking và poll có backoff. Đơn hết hạn/hủy không được UI coi là chưa thu tiền ở cổng: callback vẫn xử lý độc lập theo rule hoàn muộn.
+
+**QR thanh toán khác QR vé.** Hình đặt vé bước 26–35 dùng nhãn paymentUrl/QR code. Bản v0.2 đặc tả poll URL đã lưu ở payment_attempts.payment_url; biểu diễn QR từ URL là `CANDIDATE`. `B13-OPEN-01`: cổng trả URL, chuỗi QR hay ảnh QR, và có cần lưu thêm giá trị QR độc lập hay không — owner Tuấn/Minh, chốt adapter ở B13 và tác động B12 trước thay DDL. Không suy từ ảnh rằng đã có cột QR hoặc bỏ quy tắc QR bearer của Ticket.
+
 ## 4. Purchase snapshot cố định và freeze tiền
 
 ```typescript
@@ -123,7 +136,9 @@ Booking lưu full SalesConfiguration ở event_sales_snapshots.configuration_sna
 
 Validator ngoài object/type phải kiểm: sum(quantity × unitPrice)=subtotal; sum(lineSubtotal)=subtotal; total=subtotal-discount>0; promotion null ⇒ discount=0; discount trong promotion bằng discount của đơn; UUID duy nhất; tổng expectedTicketCount bằng tổng quantity; SEATED đúng số seat theo quantity và không trùng; QUANTITY/STANDING không có seat; sector/type khớp selection; `frozenAt < expiresAt`. DB kiểm phần cục bộ; ứng dụng kiểm tổng nhiều dòng trong cùng transaction. Từ chối số nhập lẻ **trước** cast `NUMERIC(19,0)`.
 
-Freeze không gia hạn giữ chỗ. Payment gọi `POST /internal/v1/orders/{id}/freeze-payment` với `{buyerSubject:Subject}` bằng credential nội bộ; Booking khóa đơn, kiểm chủ đơn, trạng thái và deadline; lần đầu lưu payment_frozen_at/payment_snapshot_version, lần sau trả cùng PurchaseSnapshot, không tính lại giá. GET không có tác dụng freeze. Nếu response mất, retry trả snapshot đã lưu nhưng **không cho mở attempt mới** nếu đơn nay đã hết hạn/cancelled; Payment kiểm lỗi Booking mỗi lần start mới. Callback của attempt đã tạo vẫn phải xử lý độc lập, không bị bỏ vì start mới bị từ chối.
+Freeze không gia hạn giữ chỗ. Booking nhận POST công khai, khóa đơn, kiểm chủ đơn, trạng thái và deadline; lần đầu lưu payment_frozen_at/payment_snapshot_version cùng snapshot, idempotency receipt và outbox `payment.start-requested.v1` trong một transaction. Lần sau dùng đúng PurchaseSnapshot đã lưu, không tính lại giá. GET không có tác dụng freeze. Commit trước trả 202 và trước relay gửi Payment; không trả 202 chỉ dựa trên tác vụ trong RAM.
+
+Command có thể tới sau khi đơn hết hạn/hủy. Trước **attempt mới**, Payment gọi `POST /internal/v1/orders/{id}/freeze-payment` với buyerSubject từ snapshot bằng credential nội bộ để Booking kiểm lại điều kiện; đây là guard/retry trên bản đã freeze, không dời lần đóng băng đầu tiên về Payment. Gọi ngoài transaction Payment; không giữ khóa DB khi chờ HTTP. Booking đã terminal trả lỗi không payable, dù snapshot cũ còn lưu. Payment ghi kết quả REJECTED và không gọi cổng; timeout guard chưa được coi là từ chối dứt điểm, retry cùng command. Khoảng đua sau guard với hủy/hết hạn vẫn được phân xử khi accept-payment theo deadline Booking; không hứa atomic commit xuyên DB. Callback của attempt đã tạo vẫn xử lý độc lập, không bị bỏ vì start mới bị từ chối.
 
 Đánh đổi snapshot: thêm dữ liệu sao chép và version nhưng Payment/Ticket có đầu vào bất biến, không lệ thuộc cấu hình Event hiện tại hoặc gọi Booking trong mọi callback/phát vé. Không sao chép toàn bộ user hoặc toàn bộ seat map vào Payment/Ticket.
 
@@ -153,11 +168,13 @@ Publisher confirm chỉ xác nhận broker nhận, không phải consumer đã x
 | `event.access-configured.v1` | Event → Ticket | `AccessConfiguration` | Full snapshot mới hơn, lưu owner/time/status; CANCELLED không hồi sinh bởi bản cũ |
 | `event.finance-configured.v1` | Event → Payment | `FinanceConfiguration` | Phí đã duyệt và thời gian end; không sửa phí đã freeze |
 | `event.cancelled.v1` | Event → Booking, Ticket, Payment | `EventCancellation` | Một nguyên nhân cancellationId; đóng gate từng owner; chạy tiếp tới hội tụ (§B14.5), không Saga mới |
+| `payment.start-requested.v1` | Booking → Payment | `StartPayment` | Sau freeze/outbox commit; cùng requestId/key/hash chỉ một attempt; kiểm lại payable trước attempt mới |
 | `booking.accept-payment.v1` | Payment → Booking | `AcceptPayment` | order lock; chọn accepted_charge_id đúng một lần; phân xử thời gian sau khi lấy khóa |
 | `booking.payment-decision.v1` | Booking → Payment | `PaymentDecision` | Chỉ ACCEPTED mới có quyền điều phối phát vé; LATE/DUPLICATE hội tụ refund |
 | `ticket.issue.v1` | Payment → Ticket | `IssueTickets` | order unique + input hash + terminal fence; chỉ từ Payment sau acceptance |
-| `ticket.issuance-result.v1` | Ticket → Payment | `IssuanceResult` | COMPLETED không dựa email; FAILED chỉ khi terminal fence đã commit |
-| `booking.issuance-result.v1` | Payment → Booking | `BookingIssuanceResult` | Cập nhật ISSUING→COMPLETED hoặc ISSUANCE_FAILED + release đủ điều kiện đúng một lần |
+| `ticket.issuance-result.v1` | Ticket → Booking khi COMPLETED; Ticket → Payment khi FAILED | `IssuanceResult` | Thành công gửi Booking trước; nhánh FAILED giữ Payment điều phối bù trừ theo baseline, không suy từ hình happy path |
+| `booking.order-completed.v1` | Booking → Payment | `OrderCompleted` | Sau commit order COMPLETED; Payment kiểm order/charge/issuance và kết thúc Saga đúng một lần |
+| `booking.issuance-result.v1` | Payment → Booking, chỉ FAILED | `BookingIssuanceResult` | Nhánh lỗi: ISSUING→ISSUANCE_FAILED + release đủ điều kiện đúng một lần; không dùng cho success nữa |
 
 ```typescript
 type AccessConfiguration = {eventId:UUID;organizerSubject:Subject;
@@ -167,6 +184,10 @@ type FinanceConfiguration = {eventId:UUID;organizerSubject:Subject;eventEndsAt:I
 type EventCancellation = {eventId:UUID;cancellationId:UUID;
   sourceConfigVersion:UInt64;cancelledAt:Instant;actorSubject:Subject;
   sales:SalesConfiguration;access:AccessConfiguration};
+type StartPayment = {requestId:UUID;requestKey:UUID;requestHash:string;
+  provider:'VNPAY';purchase:PurchaseSnapshot};
+type StartPaymentResult = {requestId:UUID;orderId:UUID;
+  state:'CREATED'|'REJECTED';attemptId:UUID|null;failureCode:string|null};
 type AcceptPayment = {orderId:UUID;chargeId:UUID;attemptId:UUID;
   amount:Money;currency:'VND';sourceOrderVersion:UInt64};
 type PaymentDecision = {orderId:UUID;chargeId:UUID;decisionAt:Instant;
@@ -174,15 +195,20 @@ type PaymentDecision = {orderId:UUID;chargeId:UUID;decisionAt:Instant;
 type IssueTickets = {orderId:UUID;chargeId:UUID;purchase:PurchaseSnapshot};
 type IssuanceResult = {orderId:UUID;chargeId:UUID;issuanceId:UUID;
   state:'COMPLETED'|'FAILED';ticketCount:number;failureCode:string|null};
+type OrderCompleted = {orderId:UUID;chargeId:UUID;issuanceId:UUID;ticketCount:number};
 type BookingIssuanceResult = {orderId:UUID;chargeId:UUID;issuanceId:UUID;
-  state:'COMPLETED'|'FAILED';failureCode:string|null};
+  state:'FAILED';failureCode:string};
 ```
 
 Cancellation mang full sales/access cùng version và trạng thái CANCELLED để Booking/Ticket áp được ngay cả khi bản cấu hình trước chưa đến. Handler khóa/upsert snapshot và đặt cổng hủy trước fan-out; không reset counters hiện có. Payment lưu cancellation_id/cancelled_at tại event_finance_snapshots kể cả finance config chưa có; khi finance tới sau chỉ bổ sung phí, không xóa marker. DRAFT chưa có loại vé có thể phát snapshot CANCELLED với các mảng rỗng; không dùng nó mở bán. Đây là tradeoff payload lớn hơn nhưng ít nhánh thiếu cấu hình.
 
 PaymentDecision ACCEPTED ⇒ acceptedChargeId=chargeId; DUPLICATE ⇒ acceptedChargeId khác chargeId. Replay cùng charge đã được chấp nhận giữ ACCEPTED dù đồng hồ hiện tại đã quá hạn; kiểm duplicate **trước** kiểm deadline. CANCELLED trả lý do hủy, không đổi order đã terminal; Payment chọn EVENT_CANCELLED nếu có marker hủy event, còn đơn buyer hủy dùng nhánh LATE_PAYMENT. DTO `failureCode` FAILED phải không rỗng; COMPLETED phải null và ticketCount bằng tổng snapshot; FAILED ticketCount=0 vé có hiệu lực. Không mã `TIMEOUT` nào tự biến thành terminal FAILED.
 
-Nội bộ chỉ đọc bổ sung: Ticket `GET /internal/v1/orders/{id}/issuance` trả 404 chưa có hoặc `IssuanceResult`/`{state:'PENDING',orderId,issuanceId}`; Payment có thể probe khi chậm nhưng 404/PENDING/timeout **không** cho quyền refund vì lỗi phát hành. Event có thể đọc Payment `GET /internal/v1/events/{id}/financial-summary` để phân loại hủy trực tiếp/yêu cầu hủy theo FR-11, không được đọc DB; snapshot này không hứa chặn mọi charge xuất hiện sau lúc đọc. Hủy tiếp theo vẫn áp cơ chế hội tụ cho giao dịch lọt trong khoảng trễ đã được chấp nhận.
+Booking nhận result COMPLETED chỉ từ Ticket, kiểm acceptedChargeId, orderId, issuanceId và đủ số vé theo frozen snapshot, rồi ghi ISSUING→COMPLETED + inbox + outbox `booking.order-completed.v1` cùng transaction. Đơn đã CANCELLED không được hồi sinh hoặc phát OrderCompleted. Lặp trên đơn COMPLETED phải khớp charge/issuance và không tạo hiệu ứng mới. Payment chỉ chuyển Saga COMPLETED sau nhận OrderCompleted khớp confirmation; kết quả Ticket COMPLETED tự nó chưa đủ. ACK broker sau commit, không gửi ACK tới database của service khác.
+
+Hai queue Booking/Payment có thể cùng bind ticket.issuance-result.v1 theo routing key chung ở §5.1: Booking chỉ xử lý COMPLETED, Payment chỉ xử lý FAILED; bản còn lại ACK sau kiểm source/schema và không thay nghiệp vụ. Payment không dùng bản COMPLETED nhận qua bind/probe để kết thúc Saga. OrderCompleted chỉ đóng Saga đang WAITING_TICKETS và chưa có marker hủy; replay COMPLETED không có hiệu ứng mới, COMPENSATING/COMPENSATED không hồi sinh bởi completion tới trễ. Hủy event vẫn hội tụ theo B14 §5.
+
+Nội bộ chỉ đọc bổ sung: Ticket `GET /internal/v1/orders/{id}/issuance` trả 404 chưa có hoặc `IssuanceResult`/`{state:'PENDING',orderId,issuanceId}`; Payment có thể probe khi chậm nhưng 404/PENDING/timeout **không** cho quyền refund vì lỗi phát hành. Probe COMPLETED chỉ phục vụ phục hồi/replay Ticket → Booking; không cho Payment tự bỏ qua OrderCompleted. Event có thể đọc Payment `GET /internal/v1/events/{id}/financial-summary` để phân loại hủy trực tiếp/yêu cầu hủy theo FR-11, không được đọc DB; snapshot này không hứa chặn mọi charge xuất hiện sau lúc đọc. Hủy tiếp theo vẫn áp cơ chế hội tụ cho giao dịch lọt trong khoảng trễ đã được chấp nhận.
 
 ### 5.3 Cổng thanh toán
 
@@ -324,6 +350,7 @@ Sau khi nhận payload v1, validate toàn bộ DTO và tính nhất quán rồi 
 | Phiên bản | Ngày | Nội dung |
 |---|---|---|
 | B13-v0.1 | 2026-09-14 | Đặc tả hợp đồng luồng chính và adapter; chưa phê duyệt gate hoặc hiện thực API |
+| B13-v0.2 | 2026-10-03 | Đồng bộ GOV-149/150 theo ảnh: start qua Booking + poll Payment; success Ticket → Booking → Payment. Route/DTO sửa là CANDIDATE, REVIEW_READY; QR thanh toán độc lập còn OPEN; không đổi DDL hoặc nghiệm thu runtime |
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 

@@ -1,8 +1,10 @@
 # B14 — Thứ tự giao dịch, thử lại và hội tụ luồng chính
 
-- Phiên bản: B14-v0.1; ngày 2026-09-14; trạng thái APPROVED; phân lớp FORMATION.
-- Người duyệt: Lê Văn Minh; ngày duyệt 2026-09-14 (GOV-144), sau B13-v0.1. Nguồn: B11-C-v0.3 APPROVED; B6-v0.15/B7-v0.13/B8-v0.13 APPROVED; B12-v0.2/B13-v0.1 APPROVED; GOV-131–143, PRJ-024.
+- Phiên bản: B14-v0.2; ngày 2026-10-03; trạng thái: REVIEW_READY; phân lớp FORMATION.
+- Người duyệt/ngày duyệt bản này: chưa có. B14-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144), sau B13-v0.1. Nguồn: B11-C-v0.3 APPROVED; B6-v0.15/B7-v0.13/B8-v0.13 APPROVED; B12-v0.2 APPROVED; B13-v0.2 REVIEW_READY; GOV-131–143, GOV-149/150, PRJ-024. Bản này không được APPROVED trước B13-v0.2.
 - Chỉ triển khai chi tiết trong năm owner và một Saga Payment đã chọn. Hủy event là phản ứng một chiều có retry. Đây là thiết kế, chưa phải kết quả chạy dịch vụ.
+
+Đối chiếu [ba use case trong image](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md): hai hướng phối hợp sửa theo GOV-149/150 là USER_CONFIRMED; chi tiết hợp đồng mới theo B13-v0.2 là CANDIDATE chờ rà tích hợp. Hình đặt vé là nhánh thành công, không bãi bỏ nhánh lỗi/bù trừ đã duyệt.
 
 ## 1. Ranh giới nguyên tử và thứ tự khóa
 
@@ -26,8 +28,11 @@ Khóa snapshot event độc quyền là lựa chọn đơn giản ban đầu, c�
 3. Đọc cấu hình cục bộ đủ version, kiểm sale window/status. Kiểm mọi item/seat cùng event/sector/type. Upsert purchase_limits bằng unique pair rồi khóa; kiểm held+purchased+quantity <= limit.
 4. QUANTITY giữ pool type; STANDING giữ một pool sector chung; SEATED giữ từng seat có type, không hidden và AVAILABLE. Tạo order/items/reservation/allocations, cập nhật tất cả counter và idempotency row cùng transaction. Lỗi bất kỳ rollback trọn vẹn.
 5. Áp mã là transaction riêng trên đơn còn giữ chỗ, chưa freeze, chưa áp mã. Giữ usage cùng expiry; tính giảm HALF_UP một lần trên subtotal; final total phải >0. Không gia hạn đơn.
-6. Khi Payment nhận yêu cầu start, gọi Booking freeze bằng identity nội bộ, kèm buyer subject đã xác thực. Booking khóa và kiểm lại deadline/state/owner. Lần đầu lưu frozen_purchase_snapshot, payment_frozen_at và payment_snapshot_version cùng transaction; retry trả đúng bản đó. Không đọc cấu hình mới để dựng lại tiền frozen.
-7. Payment upsert immutable snapshot, tạo attempt với request_key/hash trước gọi cổng. Unique unfinished/order chặn cả PENDING và UNKNOWN. Cổng trả URL thì lưu payment_url; mất kết quả là UNKNOWN/query, không tạo mã attempt khác để thử mù.
+6. Frontend gửi start tới Booking. Booking khóa và kiểm deadline/state/owner; lần đầu lưu frozen_purchase_snapshot, payment_frozen_at và payment_snapshot_version cùng idempotency receipt/outbox start-requested trong transaction. Retry cùng key trả cùng requestId; không đọc cấu hình mới để dựng lại tiền frozen. Sau commit trả 202 “đã nhận yêu cầu, đang tạo URL”, relay chuyển PurchaseSnapshot sang Payment (hình đặt vé bước 15–23).
+7. Payment dedupe command; attempt mới phải kiểm lại payable tại Booking ngoài transaction Payment để chặn command tới sau hủy/hết hạn. Guard timeout thì retry, không tự tạo attempt. Snapshot không tính lại. Sau guard, transaction upsert immutable snapshot + attempt + kết quả command/inbox; unique unfinished/order chặn PENDING và UNKNOWN. Guard từ chối thì lưu kết quả REJECTED, không gọi cổng. Khoảng đua sau guard vẫn xử lý qua accept-payment/hoàn muộn. Cổng được gọi sau commit; trả URL thì lưu payment_url, mất kết quả là UNKNOWN/query, không tạo mã attempt khác để thử mù.
+8. Frontend poll Payment theo orderId, có thể kèm requestId để phân biệt yêu cầu đang chờ/bị từ chối/đã tạo attempt. URL chưa có thì tiếp tục chờ có backoff; không POST lại với key mới. Chỉ hiển thị URL/QR thanh toán khi có dữ liệu attempt hợp lệ; GET không freeze hoặc gọi cổng tạo payment. QR độc lập còn B13-OPEN-01, khác QR vé. Hình bước 31–37 là truy vấn chỉ đọc, không phải thu tiền.
+
+Crash sau lưu attempt trước gọi cổng phải được worker phục hồi từ PENDING, dùng cùng attemptId/provider identity; nếu chưa rõ tác động cũ thì query trước retry. Không để inbox đã xử lý làm mất phần gọi cổng chưa xong. Đây là yêu cầu kiểm V09/V21, chưa có bằng chứng worker chạy thật.
 
 Mất response freeze không đồng nghĩa thất bại freeze. Mất response tạo đơn không đồng nghĩa chưa giữ chỗ. Luôn retry cùng khóa. Khóa HTTP không phải thời gian giữ chỗ; không TTL idempotency rồi cho cùng khóa tạo đơn khác trong thời hạn lưu giao dịch.
 
@@ -43,10 +48,11 @@ Sơ đồ: [B14-01](../diagrams/src/B14-01-order-payment-ticket-sequence.puml).
 | B2 | Nếu chưa nhận charge, xét event cancellation/state và deadline. Còn hợp lệ: HELD→COMMITTED, held→purchased/used, order→ISSUING, accepted charge/time; response outbox cùng commit | Hết hạn/hủy không hồi sinh. Nếu worker chưa chạy, xử lý expiry/release đúng một lần trong transaction; trả LATE/CANCELLED |
 | P3 | Payment nhận ACCEPTED: tạo confirmation unique(order,charge) rồi saga WAITING_TICKETS và outbox ticket.issue | Không tạo confirmation trước quyết định Booking. Nếu event đã có marker hủy, chuyển hoàn/hủy hội tụ, không phát mới |
 | T1 | Ticket kiểm source Payment và purchase; khóa snapshot/issuance. Cùng order khác hash từ chối. Cùng input COMPLETED trả cùng tập, FAILED không phát lại | Thiếu config retry; cancellation marker chặn tạo vé hữu hiệu |
-| T2 | Tạo đủ vé với ordinal duy nhất, token mã hóa; kiểm số vé/item; issuance→COMPLETED + outbox result + delivery job trong một transaction | Lỗi giữa chừng rollback, không lộ vé hợp lệ một phần. SMTP không nằm trong transaction |
-| P4 | Nhận COMPLETED hợp lệ: saga COMPLETED + outbox booking.issuance-result | Booking hội tụ ISSUING→COMPLETED khi nhận. Saga COMPLETED nghĩa quyết định đã bền vững và lệnh đã vào outbox, không hứa mọi projection đã nhận |
+| T2 | Tạo đủ vé với ordinal duy nhất, token mã hóa; kiểm số vé/item; issuance→COMPLETED + outbox result **tới Booking** + delivery job trong một transaction | Lỗi giữa chừng rollback, không lộ vé hợp lệ một phần. SMTP không nằm trong transaction |
+| B3 | Booking nhận result Ticket COMPLETED: kiểm charge/issuance/số vé; ghi ISSUING→COMPLETED + inbox + outbox booking.order-completed | Sau commit mới ACK; CANCELLED không hồi sinh và không phát completion. Replay khớp không cập nhật hoặc tạo message mới lần hai |
+| P4 | Payment nhận booking.order-completed khớp confirmation: saga→COMPLETED + inbox cùng commit | Saga chỉ hoàn tất sau Booking đã commit COMPLETED; message/ACK mất thì retry idempotent. Không lấy riêng kết quả Ticket hoặc email làm điều kiện |
 
-Payment chưa thấy Booking response thì giữ WAITING_BOOKING, retry cùng commandId; chưa thấy Ticket result thì giữ WAITING_TICKETS và probe/retry. **Timeout không phải bằng chứng phát hành thất bại.** 404/PENDING không cho phép hoàn vì lỗi phát hành.
+Payment chưa thấy Booking acceptance thì giữ WAITING_BOOKING, retry cùng commandId; chưa thấy Booking completion thì giữ WAITING_TICKETS. Nếu probe Ticket cho thấy COMPLETED, phục hồi/replay result qua Ticket → Booking → Payment; Payment không tự kết thúc Saga từ probe. Crash sau Booking COMPLETED trước relay được khôi phục từ outbox Booking. **Timeout không phải bằng chứng phát hành thất bại.** 404/PENDING không cho phép hoàn vì lỗi phát hành.
 
 Thất bại dứt điểm: Ticket transaction khóa issuance, bảo đảm không có bộ COMPLETED, ghi FAILED/failed_at/failure_code và outbox FAILED. Worker phát vé phải kiểm cùng terminal fence trước commit; vì thế lệnh cũ không thể phát thành công sau FAILED. Chỉ kết quả này cho Payment tạo refund TICKET_ISSUANCE_FAILED và outbox Booking thất bại. Không “sau N retry thì hoàn” nếu chưa có fence.
 
@@ -57,6 +63,7 @@ Booking nhận FAILED: nếu đã hủy event giữ CANCELLED; nếu ISSUING th�
 Sơ đồ: [B14-02](../diagrams/src/B14-02-expiry-refund-cancellation-sequence.puml).
 
 - Worker tìm đơn PENDING_PAYMENT đến hạn theo index, xử lý từng đơn trong transaction ngắn. Batch size/frequency là cấu hình, không phải mốc quyết định hết hạn.
+- Buyer cancel là transaction cục bộ Booking: xác thực chủ đơn → khóa/kiểm PENDING_PAYMENT còn giữ chỗ → CANCELLED + release reservation/allocations, hạn mức và promotion đúng một lần → commit rồi trả thành công. Vi phạm điều kiện rollback, không release một phần. ISSUING/COMPLETED từ chối buyer cancel; payment_frozen_at không tự cấm hủy khi đơn vẫn đủ điều kiện. Hình hủy đơn bước 1–11 khớp rule này. Khoản thu tới sau hủy vẫn đi hoàn muộn, không gọi Payment như điều kiện để commit hủy.
 - Confirm và expire/cancel cùng khóa order/tài nguyên. Bên commit trước quyết định; confirm vẫn xét đồng hồ sau khóa. Không hồi sinh EXPIRED/CANCELLED để cấp ghế đã trả cho buyer khác.
 - Giải phóng chỉ khi đúng reservation ID + generation + expected state. R1 đã trả, R2 giữ lại ghế: message release R1 không được đụng R2.
 - Refund unique(charge_id). Phân xử nguyên nhân: nếu charge khác confirmation thì DUPLICATE_PAYMENT; nếu đúng charge bị hủy event thì EVENT_CANCELLED; lỗi phát hành dứt điểm thì TICKET_ISSUANCE_FAILED; charge không được Booking nhận vì hạn/buyer hủy thì LATE_PAYMENT. Giữ reason đã lưu khi refund tồn tại, các trigger sau chỉ tham chiếu cùng nghĩa vụ; không cần nhiều refund cho nhiều nguyên nhân.
@@ -84,6 +91,12 @@ Delivery là job trong Ticket: requested_by, recipient email frozen, request_key
 Check-in: xác thực actor, lookup token qua hash; khóa snapshot/issuance/ticket, kiểm owner/window/event/issuance COMPLETED/ticket VALID, UPDATE USED và audit cùng commit. Mọi HTTP receipt có audit ID riêng; retry cùng Idempotency-Key tra bản gốc, so hash, ghi replay_of rồi trả kết quả gốc, không thêm một thành công. Scan mới cùng vé trả ALREADY_USED. Cùng ID khác payload không rò kết quả của người khác. Audit không chứa QR/JWT thô.
 
 Không nhầm bản ghi dùng token hash để lookup với bản mã QR để tải lại. Khóa QR ngoài DB phải sống qua restart/restore; thiếu khóa trả lỗi, không phát token mới thay thế âm thầm.
+
+### 6.1 Xem đơn và vé — UC-28
+
+Theo hình `UseCase Xem Đơn Đặt/Sequence.png` bước 1–21: frontend đọc danh sách đơn của buyer hiện tại từ Booking, chọn một đơn rồi đọc chi tiết từ Booking, sau đó đọc vé theo orderId trực tiếp từ Ticket qua API công khai/gateway. Đây là ba truy vấn chỉ đọc; không buộc Booking JOIN/gọi Ticket để trả chi tiết đơn. Booking/Ticket đều kiểm ownership phía backend; biết orderId chưa phải quyền đọc. Ticket chưa phát đủ thì trả PENDING và mảng rỗng theo B13, không tạo vé qua GET. Sau phát hành có thể xem vé dù Payment còn chờ message completion; trạng thái đơn và Saga vẫn hội tụ theo §3.
+
+Tên GetOrdersByUserID/GetOrderDetailByID/GetTicketsByOrderID trong ảnh mô tả truy vấn cục bộ, không cho phép frontend gửi userId tùy ý hoặc đọc database. Route danh sách dự kiến `GET /api/v1/orders` với owner filtering và phân trang theo B13 §9; chi tiết/vé theo B13 §3.
 
 ## 7. Outbox/inbox và phục hồi
 
