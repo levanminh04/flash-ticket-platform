@@ -16,10 +16,19 @@ services:
       KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
       KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:8080}
       KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-}
       KC_DB_POOL_MIN_SIZE: ${KC_DB_POOL_MIN_SIZE:-5}
       KC_DB_POOL_INITIAL_SIZE: ${KC_DB_POOL_INITIAL_SIZE:-5}
       KC_DB_POOL_MAX_SIZE: ${KC_DB_POOL_MAX_SIZE:-20}
       KC_HTTP_MAX_QUEUED_REQUESTS: ${KC_HTTP_MAX_QUEUED_REQUESTS:-100}
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?Set INTERNAL_SERVICE_CLIENT_SECRET in the local env file}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_DISPLAY_NAME: ${SMTP_FROM_DISPLAY_NAME:-FlashTicket}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     volumes:
       - ./keycloak/start-flash-ticket.sh:/opt/keycloak/bin/start-flash-ticket.sh:ro
       - ./keycloak/themes/flash-ticket:/opt/keycloak/themes/flash-ticket:ro

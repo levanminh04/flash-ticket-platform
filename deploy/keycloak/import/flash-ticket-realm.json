@@ -32,7 +32,7 @@
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
   "rememberMe": true,
-  "verifyEmail": true,
+  "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
@@ -85,11 +85,23 @@
         "composites": {
           "realm": [
             "BUYER"
-          ]
+          ],
+          "client": {
+            "account": [
+              "manage-account",
+              "view-profile"
+            ]
+          }
         },
         "clientRole": false,
         "containerId": "443bac7a-5a0e-48c5-aedb-a530dcb35eab",
         "attributes": {}
+      },
+      {
+        "name": "INTERNAL_SERVICE",
+        "description": "Shared machine identity for internal FlashTicket APIs",
+        "composite": false,
+        "clientRole": false
       }
     ],
     "client": {
@@ -342,11 +354,10 @@
           "attributes": {}
         }
       ],
-      "flash-ticket-user-management-client": [],
+      "user-management": [],
       "security-admin-console": [],
       "admin-cli": [],
       "account-console": [],
-      "flash-ticket-backend": [],
       "broker": [
         {
           "id": "4a6845aa-2e8a-4497-89fe-1dd09d59b84f",
@@ -358,7 +369,6 @@
           "attributes": {}
         }
       ],
-      "flash-ticket-frontend": [],
       "account": [
         {
           "id": "a31c708a-431e-4509-878e-88de5c5aa2d7",
@@ -447,7 +457,7 @@
           "attributes": {}
         }
       ],
-      "flash-ticket-android": []
+      "frontend": []
     }
   },
   "groups": [],
@@ -462,6 +472,7 @@
   "requiredCredentials": [
     "password"
   ],
+  "passwordPolicy": "length(6)",
   "otpPolicyType": "totp",
   "otpPolicyAlgorithm": "HmacSHA1",
   "otpPolicyInitialCounter": 0,
@@ -507,18 +518,15 @@
   "webAuthnPolicyPasswordlessExtraOrigins": [],
   "users": [
     {
-      "id": "d2f5b8d9-cf3d-489c-90fc-a9c6ffa2c599",
-      "username": "service-account-flash-ticket-backend",
+      "id": "a99c43a8-c850-4ab1-90dc-bd67c72a2fc4",
+      "username": "service-account-user-management",
       "emailVerified": false,
       "enabled": true,
-      "createdTimestamp": 1771079341401,
+      "createdTimestamp": 1791469199509,
       "totp": false,
-      "serviceAccountClientId": "flash-ticket-backend",
+      "serviceAccountClientId": "user-management",
       "disableableCredentialTypes": [],
       "requiredActions": [],
-      "realmRoles": [
-        "default-roles-flash-ticket"
-      ],
       "clientRoles": {
         "realm-management": [
           "manage-users",
@@ -530,43 +538,13 @@
       "groups": []
     },
     {
-      "id": "70db6e03-bd82-4417-a62c-9d9caf1da449",
-      "username": "service-account-flash-ticket-user-management-client",
-      "emailVerified": false,
+      "username": "service-account-internal-service",
       "enabled": true,
-      "createdTimestamp": 1773559160493,
-      "totp": false,
-      "serviceAccountClientId": "flash-ticket-user-management-client",
-      "disableableCredentialTypes": [],
-      "requiredActions": [],
+      "serviceAccountClientId": "internal-service",
       "realmRoles": [
-        "default-roles-flash-ticket"
+        "INTERNAL_SERVICE"
       ],
-      "clientRoles": {
-        "realm-management": [
-          "manage-users",
-          "query-users",
-          "view-events",
-          "query-realms",
-          "impersonation",
-          "query-groups",
-          "manage-authorization",
-          "query-clients",
-          "manage-clients",
-          "manage-realm",
-          "view-realm",
-          "manage-identity-providers",
-          "manage-events",
-          "view-authorization",
-          "view-clients",
-          "realm-admin",
-          "view-identity-providers",
-          "view-users",
-          "create-client"
-        ]
-      },
-      "notBefore": 0,
-      "groups": []
+      "clientRoles": {}
     }
   ],
   "clientScopeMappings": {
@@ -776,8 +754,8 @@
       ]
     },
     {
-      "id": "0e08f211-78c5-41fe-b44a-bed1b5e749b9",
-      "clientId": "flash-ticket-android",
+      "id": "c9eff67f-b3fc-4b84-bd5f-b23098851cb4",
+      "clientId": "frontend",
       "name": "",
       "description": "",
       "rootUrl": "",
@@ -788,188 +766,9 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "com.flashticket.mobile.staging:/oauth2redirect",
-        "com.flashticket.mobile:/oauth2redirect"
+        "https://oauth.pstmn.io/*"
       ],
       "webOrigins": [],
-      "notBefore": 0,
-      "bearerOnly": false,
-      "consentRequired": false,
-      "standardFlowEnabled": true,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
-      "publicClient": true,
-      "frontchannelLogout": false,
-      "protocol": "openid-connect",
-      "attributes": {
-        "client.introspection.response.allow.jwt.claim.enabled": "false",
-        "post.logout.redirect.uris": "com.flashticket.mobile:/oauth2redirect##com.flashticket.mobile.staging:/oauth2redirect",
-        "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.revoke.offline.tokens": "false",
-        "use.refresh.tokens": "true",
-        "realm_client": "false",
-        "oidc.ciba.grant.enabled": "false",
-        "client.use.lightweight.access.token.enabled": "false",
-        "backchannel.logout.session.required": "true",
-        "client_credentials.use_refresh_token": "false",
-        "tls.client.certificate.bound.access.tokens": "false",
-        "require.pushed.authorization.requests": "false",
-        "acr.loa.map": "{}",
-        "display.on.consent.screen": "false",
-        "pkce.code.challenge.method": "S256",
-        "token.response.type.bearer.lower-case": "false"
-      },
-      "authenticationFlowBindingOverrides": {},
-      "fullScopeAllowed": true,
-      "nodeReRegistrationTimeout": -1,
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "roles",
-        "profile",
-        "basic",
-        "email"
-      ],
-      "optionalClientScopes": [
-        "address",
-        "phone",
-        "offline_access",
-        "organization",
-        "microprofile-jwt"
-      ]
-    },
-    {
-      "id": "f2d43a0b-6106-4915-84f5-e0f36e22fd27",
-      "clientId": "flash-ticket-backend",
-      "name": "flash-ticket-backend",
-      "description": "",
-      "rootUrl": "",
-      "adminUrl": "",
-      "baseUrl": "",
-      "surrogateAuthRequired": false,
-      "enabled": true,
-      "alwaysDisplayInConsole": false,
-      "clientAuthenticatorType": "client-secret",
-      "secret": "**********",
-      "redirectUris": [
-        "/*"
-      ],
-      "webOrigins": [
-        "/*"
-      ],
-      "notBefore": 0,
-      "bearerOnly": false,
-      "consentRequired": false,
-      "standardFlowEnabled": false,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": true,
-      "publicClient": false,
-      "frontchannelLogout": true,
-      "protocol": "openid-connect",
-      "attributes": {
-        "realm_client": "false",
-        "oidc.ciba.grant.enabled": "false",
-        "client.secret.creation.time": "1771079341",
-        "backchannel.logout.session.required": "true",
-        "post.logout.redirect.uris": "+",
-        "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.revoke.offline.tokens": "false"
-      },
-      "authenticationFlowBindingOverrides": {},
-      "fullScopeAllowed": true,
-      "nodeReRegistrationTimeout": -1,
-      "protocolMappers": [
-        {
-          "id": "01dbb6bb-ac6a-4bd9-9dc2-85233d0305cd",
-          "name": "Client ID",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "client_id",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "client_id",
-            "jsonType.label": "String"
-          }
-        },
-        {
-          "id": "0c95e4da-089c-417d-8051-2440fc286255",
-          "name": "Client IP Address",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "clientAddress",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "clientAddress",
-            "jsonType.label": "String"
-          }
-        },
-        {
-          "id": "45258d0c-98f1-40de-8515-7ada5b8716f3",
-          "name": "Client Host",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "clientHost",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "clientHost",
-            "jsonType.label": "String"
-          }
-        }
-      ],
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "roles",
-        "profile",
-        "basic",
-        "email"
-      ],
-      "optionalClientScopes": [
-        "address",
-        "phone",
-        "offline_access",
-        "organization",
-        "microprofile-jwt"
-      ]
-    },
-    {
-      "id": "3ade04a2-f0f3-40ef-ba18-7d7c1981fbce",
-      "clientId": "flash-ticket-frontend",
-      "name": "flash-ticket-frontend",
-      "description": "",
-      "rootUrl": "http://15.134.248.39",
-      "adminUrl": "http://localhost:5173",
-      "baseUrl": "http://15.134.248.39",
-      "surrogateAuthRequired": false,
-      "enabled": true,
-      "alwaysDisplayInConsole": false,
-      "clientAuthenticatorType": "client-secret",
-      "redirectUris": [
-        "https://oauth.pstmn.io/*",
-        "http://localhost:5173/*",
-        "http://localhost:5173/callback",
-        "http://15.134.248.39/*",
-        "https://oauth.pstmn.io/v1/callback"
-      ],
-      "webOrigins": [
-        " http://localhost:5173",
-        "http://15.134.248.39",
-        "+"
-      ],
       "notBefore": 0,
       "bearerOnly": false,
       "consentRequired": false,
@@ -986,8 +785,8 @@
         "client.introspection.response.allow.jwt.claim.enabled": "false",
         "standard.token.exchange.enabled": "false",
         "oauth2.jwt.authorization.grant.enabled": "false",
-        "post.logout.redirect.uris": "+",
         "frontchannel.logout.session.required": "true",
+        "post.logout.redirect.uris": "##",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false",
         "use.refresh.tokens": "true",
@@ -995,8 +794,8 @@
         "oidc.ciba.grant.enabled": "false",
         "client.use.lightweight.access.token.enabled": "false",
         "backchannel.logout.session.required": "true",
-        "client_credentials.use_refresh_token": "false",
         "request.object.required": "not required",
+        "client_credentials.use_refresh_token": "false",
         "access.token.header.type.rfc9068": "false",
         "tls.client.certificate.bound.access.tokens": "false",
         "require.pushed.authorization.requests": "false",
@@ -1015,114 +814,8 @@
         "roles",
         "profile",
         "basic",
-        "email"
-      ],
-      "optionalClientScopes": [
-        "address",
-        "phone",
-        "offline_access",
-        "organization",
-        "microprofile-jwt"
-      ]
-    },
-    {
-      "id": "a927486e-f9d7-4163-8559-9b97613f84bb",
-      "clientId": "flash-ticket-user-management-client",
-      "name": "flash-ticket-user-management-client",
-      "description": "",
-      "rootUrl": "",
-      "adminUrl": "",
-      "baseUrl": "",
-      "surrogateAuthRequired": false,
-      "enabled": true,
-      "alwaysDisplayInConsole": false,
-      "clientAuthenticatorType": "client-secret",
-      "secret": "**********",
-      "redirectUris": [
-        "/*"
-      ],
-      "webOrigins": [
-        "/*"
-      ],
-      "notBefore": 0,
-      "bearerOnly": false,
-      "consentRequired": false,
-      "standardFlowEnabled": false,
-      "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": true,
-      "publicClient": false,
-      "frontchannelLogout": true,
-      "protocol": "openid-connect",
-      "attributes": {
-        "realm_client": "false",
-        "oidc.ciba.grant.enabled": "false",
-        "client.secret.creation.time": "1773559160",
-        "backchannel.logout.session.required": "true",
-        "post.logout.redirect.uris": "+",
-        "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.revoke.offline.tokens": "false"
-      },
-      "authenticationFlowBindingOverrides": {},
-      "fullScopeAllowed": true,
-      "nodeReRegistrationTimeout": -1,
-      "protocolMappers": [
-        {
-          "id": "16307962-53ed-4b05-b10e-07408c3e161e",
-          "name": "Client ID",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "client_id",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "client_id",
-            "jsonType.label": "String"
-          }
-        },
-        {
-          "id": "d5df9ce2-0330-4781-b202-262ceb8a3510",
-          "name": "Client IP Address",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "clientAddress",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "clientAddress",
-            "jsonType.label": "String"
-          }
-        },
-        {
-          "id": "1d2b151e-8e66-4317-a7c4-3fc26f698d00",
-          "name": "Client Host",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usersessionmodel-note-mapper",
-          "consentRequired": false,
-          "config": {
-            "user.session.note": "clientHost",
-            "introspection.token.claim": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "clientHost",
-            "jsonType.label": "String"
-          }
-        }
-      ],
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "roles",
-        "profile",
-        "basic",
-        "email"
+        "email",
+        "flash-ticket-api"
       ],
       "optionalClientScopes": [
         "address",
@@ -1245,6 +938,108 @@
         "organization",
         "microprofile-jwt"
       ]
+    },
+    {
+      "id": "efe24af8-d4dc-4e7d-a4bb-29c4ec8ebeaa",
+      "clientId": "user-management",
+      "name": "",
+      "description": "",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "**********",
+      "redirectUris": [
+        "/*"
+      ],
+      "webOrigins": [
+        "/*"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "logout.confirmation.enabled": "false",
+        "client.secret.creation.time": "1791469199",
+        "standard.token.exchange.enabled": "false",
+        "oauth2.jwt.authorization.grant.enabled": "false",
+        "frontchannel.logout.session.required": "true",
+        "post.logout.redirect.uris": "+",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "realm_client": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "display.on.consent.screen": "false",
+        "dpop.bound.access.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "eb087a20-0eb1-4a85-b699-4ff8e3e4263c",
+          "name": "own-client-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "user-management",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "service_account",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "organization",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "internal-service",
+      "name": "Internal Service",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${INTERNAL_SERVICE_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [
+        "basic",
+        "roles",
+        "flash-ticket-api"
+      ],
+      "optionalClientScopes": [],
+      "attributes": {
+        "dpop.bound.access.tokens": "false"
+      }
     }
   ],
   "clientScopes": [
@@ -1315,6 +1110,34 @@
           "config": {
             "introspection.token.claim": "true",
             "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "7b38c379-ebeb-4eaa-8ff6-a6cc73a4ed3e",
+      "name": "flash-ticket-api-audience",
+      "description": "",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "include.in.openid.provider.metadata": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "id": "302b377a-f7ca-4cd1-9948-bbee5eb72114",
+          "name": "aud-flash-ticket-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "false",
+            "lightweight.claim": "false",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "included.custom.audience": "flash-ticket-api",
+            "userinfo.token.claim": "false"
           }
         }
       ]
@@ -1409,8 +1232,9 @@
           "consentRequired": false,
           "config": {
             "user.session.note": "clientHost",
-            "id.token.claim": "true",
             "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
             "access.token.claim": "true",
             "claim.name": "clientHost",
             "jsonType.label": "String"
@@ -1424,8 +1248,9 @@
           "consentRequired": false,
           "config": {
             "user.session.note": "client_id",
-            "id.token.claim": "true",
             "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
             "access.token.claim": "true",
             "claim.name": "client_id",
             "jsonType.label": "String"
@@ -1439,8 +1264,9 @@
           "consentRequired": false,
           "config": {
             "user.session.note": "clientAddress",
-            "id.token.claim": "true",
             "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
             "access.token.claim": "true",
             "claim.name": "clientAddress",
             "jsonType.label": "String"
@@ -1945,6 +1771,29 @@
           }
         }
       ]
+    },
+    {
+      "name": "flash-ticket-api",
+      "description": "Audience chung cho API FlashTicket; khong cap role.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "flash-ticket-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "flash-ticket-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "defaultDefaultClientScopes": [
@@ -1976,18 +1825,14 @@
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
   "smtpServer": {
-    "allowutf8": "",
-    "replyToDisplayName": "",
     "debug": "false",
     "starttls": "true",
     "auth": "true",
     "writeTimeout": "10000",
-    "envelopeFrom": "",
     "ssl": "false",
     "timeout": "10000",
     "password": "**********",
     "port": "587",
-    "replyTo": "",
     "host": "smtp.gmail.com",
     "from": "daongocson12022004@gmail.com",
     "fromDisplayName": "FlashTicket",
@@ -2098,7 +1943,35 @@
   ],
   "adminEventsEnabled": true,
   "adminEventsDetailsEnabled": true,
-  "identityProviders": [],
+  "identityProviders": [
+    {
+      "alias": "facebook",
+      "displayName": "Flash Ticket",
+      "internalId": "f729cc46-a893-46bb-89af-9c950fa2f3d8",
+      "providerId": "facebook",
+      "enabled": true,
+      "config": {
+        "clientSecret": "**********",
+        "clientId": "639375768955190"
+      },
+      "types": []
+    },
+    {
+      "alias": "google",
+      "displayName": "Flash Ticket",
+      "internalId": "d14702a2-c992-4149-9b75-f6052f4107e7",
+      "providerId": "google",
+      "enabled": true,
+      "config": {
+        "clientSecret": "**********",
+        "clientId": "567381700445-7gr2kvq4posh4f1fhca0fu3pv5qsvdmn.apps.googleusercontent.com",
+        "jwtAuthorizationGrantEnabled": "false",
+        "issuer": "https://accounts.google.com",
+        "jwtAuthorizationGrantMaxAllowedAssertionExpiration": "3600"
+      },
+      "types": []
+    }
+  ],
   "identityProviderMappers": [],
   "components": {
     "org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy": [
@@ -2169,14 +2042,14 @@
         "subComponents": {},
         "config": {
           "allowed-protocol-mapper-types": [
-            "saml-user-property-mapper",
-            "oidc-full-name-mapper",
             "oidc-sha256-pairwise-sub-mapper",
             "saml-user-attribute-mapper",
+            "oidc-full-name-mapper",
             "oidc-usermodel-property-mapper",
-            "oidc-usermodel-attribute-mapper",
             "oidc-address-mapper",
-            "saml-role-list-mapper"
+            "saml-role-list-mapper",
+            "oidc-usermodel-attribute-mapper",
+            "saml-user-property-mapper"
           ]
         }
       },
@@ -2188,14 +2061,14 @@
         "subComponents": {},
         "config": {
           "allowed-protocol-mapper-types": [
-            "saml-user-attribute-mapper",
+            "saml-role-list-mapper",
+            "oidc-sha256-pairwise-sub-mapper",
             "oidc-usermodel-attribute-mapper",
             "saml-user-property-mapper",
             "oidc-usermodel-property-mapper",
-            "saml-role-list-mapper",
-            "oidc-sha256-pairwise-sub-mapper",
-            "oidc-address-mapper",
-            "oidc-full-name-mapper"
+            "oidc-full-name-mapper",
+            "saml-user-attribute-mapper",
+            "oidc-address-mapper"
           ]
         }
       },
@@ -3048,5 +2921,13 @@
   },
   "clientPolicies": {
     "policies": []
-  }
+  },
+  "scopeMappings": [
+    {
+      "client": "internal-service",
+      "roles": [
+        "INTERNAL_SERVICE"
+      ]
+    }
+  ]
 }

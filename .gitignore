@@ -109,6 +109,9 @@ docs/projectd
 /services/keycloak-spi/mvnw.cmd
 /services/keycloak-spi/.gitattributes
 /deploy/.env
+
+# Postman local environments contain Keycloak client secrets.
+/deploy/keycloak/postman/environments/*.local.postman_environment.json
 /spec/
 /docs/superpowers/
 /deploy/Note.md
@@ -116,3 +119,4 @@ docs/projectd
 
 /AGENTS.md
 /CLAUDE.md
+/.superpowers/
