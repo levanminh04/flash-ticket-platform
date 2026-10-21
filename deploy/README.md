@@ -57,3 +57,14 @@ MongoDB cũng dùng `.env` gốc:
 ```powershell
 docker compose --env-file .env -f services/user-service/compose.db.yaml up -d --wait user-db
 ```
+
+## Redis local
+
+Chạy từ root với `.env` gốc:
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.redis.yml up -d --wait redis
+```
+
+Redis chỉ publish trên loopback, password bắt buộc và có healthcheck. Hướng dẫn
+Spring Boot, env, lệnh kiểm tra và kết quả: [redis/handoff.md](redis/handoff.md).
