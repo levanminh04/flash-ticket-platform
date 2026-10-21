@@ -1,0 +1,29 @@
+name: flash-ticket-user-local
+
+services:
+  user-db:
+    # MongoDB 8.0.28; pin the locally verified official image.
+    image: mongo:8.0@sha256:98605bfa1bb2a15dd82109e1d78ad31527a9a744909fab4606076fa71a0ae515
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: user_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${USER_DB_ADMIN_PASSWORD:?Set USER_DB_ADMIN_PASSWORD}
+      MONGO_INITDB_DATABASE: user_db
+      USER_DB_VIEWER_PASSWORD: ${USER_DB_VIEWER_PASSWORD:?Set USER_DB_VIEWER_PASSWORD}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${USER_DB_PORT:-27017}:27017"
+    volumes:
+      - user-data:/data/db
+      - ./database/10-user.js:/docker-entrypoint-initdb.d/10-user.js:ro
+      - ./database/99-collection-prefix.js:/docker-entrypoint-initdb.d/99-collection-prefix.js:ro
+      - ../../docs/architecture/data/mongodb/schema.cjs:/opt/flash-ticket/schema.cjs:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--host", "127.0.0.1", "--eval", "quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  user-data:

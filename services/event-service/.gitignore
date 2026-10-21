@@ -1,4 +1,6 @@
 HELP.md
+.env.event-db
+!.env.event-db.example
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

@@ -1,4 +1,8 @@
 HELP.md
+.env.booking-db
+!.env.booking-db.example
+/database/booking-db-erd.vpp*
+/database/.booking-db-erd.vpp.lck
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

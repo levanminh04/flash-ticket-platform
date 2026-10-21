@@ -1,4 +1,6 @@
 HELP.md
+.env.payment-db
+!.env.payment-db.example
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

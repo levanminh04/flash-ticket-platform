@@ -120,3 +120,9 @@ docs/projectd
 /AGENTS.md
 /CLAUDE.md
 /.superpowers/
+
+# One-file Postman import contains local client secrets.
+/deploy/keycloak/postman/import.json
+
+# Local database consolidation backups.
+/deploy/postgres/backups/

@@ -19,15 +19,25 @@ services:
       - password_encryption=scram-sha-256
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456789a}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
+    env_file:
+      - ../services/event-service/.env.event-db
+      - ../services/booking-service/.env.booking-db
+      - ../services/payment-service/.env.payment-db
+      - ../services/ticket-service/.env.ticket-db
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres/init/10-keycloak.sh:/docker-entrypoint-initdb.d/10-keycloak.sh:ro
+      - ./postgres/00-business-databases.sh:/docker-entrypoint-initdb.d/00-business-databases.sh:ro
+      - ../docs/architecture/data/postgres:/opt/flash-ticket/postgres:ro
+      - ../services/99-table-prefix.sql:/opt/flash-ticket/99-table-prefix.sql:ro
+      - ../services/event-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/event.sql:ro
+      - ../services/booking-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/booking.sql:ro
+      - ../services/payment-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/payment.sql:ro
+      - ../services/ticket-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/ticket.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s

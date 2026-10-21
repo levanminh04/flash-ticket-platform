@@ -546,3 +546,19 @@ Chi tiết CSS, token, version cache và kiểm chứng do agent triển khai th
 | GOV-153 | Dùng Gmail với App Password cho SMTP Keycloak. | Nhà cung cấp email | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời “Gmail với App Password”, sau đó “đã điền” để áp dụng credentials trong .env | 2026-10-04 | Cấu hình SMTP local; không thêm SPI hoặc thay luồng xác thực | deploy/.env (secret, ignored), deploy/.env.example, runtime master, deploy/Note.md |
 
 FACT kiểm chứng: Gmail SMTP STARTTLS/auth thành công; SMTP runtime khớp .env; client recovery tạm đã xóa; Verify email vẫn bật. Email admin vẫn chưa verified, nên không ghi đăng nhập Admin Console đã hoàn tất. Cấu hình không thay username/password hoặc gỡ VERIFY_EMAIL của tài khoản.
+
+## Kênh admin quản lý user — 2026-10-07
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng | Thay thế |
+|---|---|---|---|---|---|---|---|---|---|
+| GOV-154 | Admin quản lý user qua giao diện FlashTicket gọi User Service. | Kênh quản lý user | USER_CONFIRMED | Người dùng phiên dev/son | Trả lời nguyên văn “Giao diện FlashTicket gọi User Service” khi chọn kênh admin cho spec cấu hình Keycloak. | 2026-10-07 | Kênh giao diện; chưa phê duyệt thao tác/field CRUD, scope/role, client hoặc code cụ thể | docs/superpowers/specs/2026-10-07-keycloak-identity-configuration-design.md; hợp đồng User Service khi được duyệt | — |
+
+Phương án provisioning, cơ chế loại quyền BUYER khỏi machine, bộ client/audience và quyền Admin API trong spec là CANDIDATE của agent; không gộp chúng vào phát biểu USER_CONFIRMED ở trên. Spec DRAFT không thay trạng thái B12/B13 hoặc cho phép triển khai runtime.
+
+## Phạm vi cấu hình Keycloak hiện tại — 2026-10-07
+
+| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng | Thay thế |
+|---|---|---|---|---|---|---|---|---|---|
+| GOV-155 | Phạm vi hiện tại chỉ ở Keycloak; chưa code hoặc sửa các service FlashTicket. | Phạm vi triển khai hiện tại | USER_CONFIRMED | Người dùng phiên dev/son | Nguyên văn: “pham vi hiện tại sẽ chỉ là ở keycloak thôi, chưa code hay sửa ở các service flashticket”. | 2026-10-07 | Task cấu hình Keycloak hiện tại; không bỏ yêu cầu tích hợp đã duyệt | docs/superpowers/specs/2026-10-07-keycloak-identity-configuration-design.md | — |
+
+Spec KC-ID-v0.2 nhận phạm vi này: nghiệm thu ở Keycloak, các phụ thuộc frontend/Gateway/User Service và service-to-service để tích hợp sau. Chi tiết client/role/scope và cách provisioning vẫn CANDIDATE; GOV-155 không phê duyệt spec hoặc runtime configuration. GOV-154 giữ nguyên đích kênh admin tương lai.
