@@ -34,12 +34,20 @@ Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệ
 
 ## Cấu hình môi trường local
 
-Chỉ dùng hai file env local:
+Chỉ dùng một file env local là `.env` ở thư mục gốc. Tạo từ `.env.example` rồi
+điền cấu hình ứng dụng, Keycloak và PostgreSQL/MongoDB Compose vào cùng file.
+File `.env` bị Git bỏ qua; chỉ commit `.env.example`.
 
-- `.env` ở thư mục gốc: cấu hình chung cho tất cả ứng dụng và Keycloak Compose. Copy từ `.env.example`, điền các giá trị còn trống và cấu hình IDE/runtime nạp cùng file này cho mỗi ứng dụng. Spring không tự đọc `.env`.
-- `deploy/.env.dev`: chỉ dùng khi setup PostgreSQL/MongoDB bằng Compose. Copy từ `deploy/.env.example`; hướng dẫn tại [deploy/README.md](deploy/README.md).
+Spring không tự đọc `.env`; cấu hình IDE/runtime nạp file này khi chạy ứng dụng.
+Khi chạy Compose từ thư mục gốc, truyền rõ `--env-file .env`, ví dụ:
 
-Không tạo env riêng trong từng service hoặc `deploy/.env`. Mật khẩu kết nối DB trong `.env` phải khớp mật khẩu khởi tạo trong `deploy/.env.dev`; đổi env không đổi mật khẩu trong volume đã có. Hai file local đều bị Git ignore; các file `.env.example` chỉ là mẫu.
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
+```
+
+Mật khẩu kết nối ứng dụng (`<SERVICE>_DB_PASSWORD`) phải khớp mật khẩu quản trị
+được khởi tạo (`<SERVICE>_DB_ADMIN_PASSWORD`) trong cùng file. Thay đổi các biến
+khởi tạo không cập nhật tài khoản hoặc database đã tồn tại trong volume.
 
 ## Build và CI
 

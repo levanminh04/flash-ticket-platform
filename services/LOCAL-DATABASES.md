@@ -7,16 +7,16 @@ continues serving the existing Keycloak database. MongoDB remains a separate ser
 
 All connections use host `127.0.0.1`.
 
-| Service | Engine | Port | Database | Schema / authSource | Read-only username | Local password file |
+| Service | Engine | Port | Database | Schema / authSource | Read-only username | Local password variable |
 | --- | --- | --- | --- | --- | --- | --- |
-| Booking | PostgreSQL 16.15 | 5432 | booking_db | booking_schema | booking_erd | [deploy/.env.dev](../deploy/.env.dev) |
-| Event | PostgreSQL 16.15 | 5432 | event_db | event_schema | event_erd | [deploy/.env.dev](../deploy/.env.dev) |
-| Payment | PostgreSQL 16.15 | 5432 | payment_db | payment_schema | payment_erd | [deploy/.env.dev](../deploy/.env.dev) |
-| Ticket | PostgreSQL 16.15 | 5432 | ticket_db | ticket_schema | ticket_erd | [deploy/.env.dev](../deploy/.env.dev) |
-| User | MongoDB 8.0.28 | 27017 | user_db | user_db (authSource) | user_erd | [deploy/.env.dev](../deploy/.env.dev) |
+| Booking | PostgreSQL 16.15 | 5432 | booking_db | booking_schema | booking_erd | `BOOKING_DB_VIEWER_PASSWORD` in root `.env` |
+| Event | PostgreSQL 16.15 | 5432 | event_db | event_schema | event_erd | `EVENT_DB_VIEWER_PASSWORD` in root `.env` |
+| Payment | PostgreSQL 16.15 | 5432 | payment_db | payment_schema | payment_erd | `PAYMENT_DB_VIEWER_PASSWORD` in root `.env` |
+| Ticket | PostgreSQL 16.15 | 5432 | ticket_db | ticket_schema | ticket_erd | `TICKET_DB_VIEWER_PASSWORD` in root `.env` |
+| User | MongoDB 8.0.28 | 27017 | user_db | user_db (authSource) | user_erd | `USER_DB_VIEWER_PASSWORD` in root `.env` |
 
 Passwords remain unchanged after consolidation. Use `<SERVICE>_DB_VIEWER_PASSWORD`
-from `deploy/.env.dev`. PostgreSQL accounts can connect
+from the root `.env`. PostgreSQL accounts can connect
 only to their own business database; reader accounts have SELECT access.
 PostgreSQL publishes one shared port, `5432`, in the deployment Compose file.
 
@@ -25,28 +25,26 @@ PostgreSQL publishes one shared port, `5432`, in the deployment Compose file.
 From the repository root, start the shared PostgreSQL service:
 
 ```powershell
-docker compose --env-file deploy/.env.dev -f deploy/docker-compose.postgresql.yml up -d --wait
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
 ```
 
-For a fresh checkout, copy `deploy/.env.example` to `deploy/.env.dev` and fill in
-the database passwords. This is the only env file used by database Compose setup.
-Application runtime and Keycloak use the root `.env`, copied from `.env.example`;
-its connection passwords must match the initialization passwords in `deploy/.env.dev`.
-There are no per-service env files. The initializer creates
+For a fresh checkout, copy `.env.example` to `.env` and fill in the application
+and database passwords. This one file supplies both database Compose setup and
+application runtime. The initializer creates
 separate owner, maintenance and reader roles for each database, applies canonical
 B12 DDL, grants read access and adds the `tbl_` table prefix.
 
 MongoDB starts separately:
 
 ```powershell
-docker compose --env-file deploy/.env.dev -f services/user-service/compose.db.yaml up -d --wait
+docker compose --env-file .env -f services/user-service/compose.db.yaml up -d --wait user-db
 ```
 
 Stop PostgreSQL with the shared Compose service; this also stops DB access for
 all four business services and Keycloak:
 
 ```powershell
-docker compose --env-file deploy/.env.dev -f deploy/docker-compose.postgresql.yml stop postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml stop postgres
 ```
 
 There are no per-service PostgreSQL Compose files. Data persist in the shared
