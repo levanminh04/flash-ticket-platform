@@ -11,11 +11,11 @@ stay the same.
 No synthetic data or Keycloak data are inserted.
 This local database does not configure the User application runtime.
 
-From `services/user-service`, copy `.env.user-db.example` to `.env.user-db`,
-replace both passwords, then run:
+From the repository root, copy `deploy/.env.example` to `deploy/.env.dev`,
+set `USER_DB_ADMIN_PASSWORD` and `USER_DB_VIEWER_PASSWORD`, then run:
 
 ```powershell
-docker compose --env-file .env.user-db -f compose.db.yaml up -d --wait
+docker compose --env-file deploy/.env.dev -f services/user-service/compose.db.yaml up -d --wait
 ```
 
 ## Connection (MongoDB Compass or another MongoDB client)
@@ -24,7 +24,7 @@ docker compose --env-file .env.user-db -f compose.db.yaml up -d --wait
 - Port: `27017` (or `USER_DB_PORT`)
 - Database: `user_db`
 - Username: `user_erd` (read only)
-- Password: `USER_DB_VIEWER_PASSWORD` in the ignored `.env.user-db`
+- Password: `USER_DB_VIEWER_PASSWORD` in the ignored `deploy/.env.dev`
 - Authentication database / authSource: `user_db`
 - URI template: `mongodb://user_erd:<password>@127.0.0.1:27017/user_db?authSource=user_db`
 
@@ -42,5 +42,5 @@ or rerun initialization to apply schema changes.
 To stop without removing data:
 
 ```powershell
-docker compose --env-file .env.user-db -f compose.db.yaml stop
+docker compose --env-file deploy/.env.dev -f services/user-service/compose.db.yaml stop
 ```

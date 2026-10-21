@@ -12,7 +12,7 @@ There is no PostgreSQL container or Compose file for this service alone.
 - Database: `event_db`
 - Schema: `event_schema`
 - Read-only username: `event_erd`
-- Password: `EVENT_DB_VIEWER_PASSWORD` in `.env.event-db`
+- Password: `EVENT_DB_VIEWER_PASSWORD` in `deploy/.env.dev` at the repository root
 - JDBC URL: `jdbc:postgresql://127.0.0.1:5432/event_db`
 
 Credentials are unchanged after consolidation. This account is restricted to its

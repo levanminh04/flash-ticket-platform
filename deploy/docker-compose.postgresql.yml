@@ -22,11 +22,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456789a}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
-    env_file:
-      - ../services/event-service/.env.event-db
-      - ../services/booking-service/.env.booking-db
-      - ../services/payment-service/.env.payment-db
-      - ../services/ticket-service/.env.ticket-db
+      EVENT_DB_ADMIN_PASSWORD: ${EVENT_DB_ADMIN_PASSWORD:?Set EVENT_DB_ADMIN_PASSWORD in deploy/.env.dev}
+      EVENT_DB_VIEWER_PASSWORD: ${EVENT_DB_VIEWER_PASSWORD:?Set EVENT_DB_VIEWER_PASSWORD in deploy/.env.dev}
+      BOOKING_DB_ADMIN_PASSWORD: ${BOOKING_DB_ADMIN_PASSWORD:?Set BOOKING_DB_ADMIN_PASSWORD in deploy/.env.dev}
+      BOOKING_DB_VIEWER_PASSWORD: ${BOOKING_DB_VIEWER_PASSWORD:?Set BOOKING_DB_VIEWER_PASSWORD in deploy/.env.dev}
+      PAYMENT_DB_ADMIN_PASSWORD: ${PAYMENT_DB_ADMIN_PASSWORD:?Set PAYMENT_DB_ADMIN_PASSWORD in deploy/.env.dev}
+      PAYMENT_DB_VIEWER_PASSWORD: ${PAYMENT_DB_VIEWER_PASSWORD:?Set PAYMENT_DB_VIEWER_PASSWORD in deploy/.env.dev}
+      TICKET_DB_ADMIN_PASSWORD: ${TICKET_DB_ADMIN_PASSWORD:?Set TICKET_DB_ADMIN_PASSWORD in deploy/.env.dev}
+      TICKET_DB_VIEWER_PASSWORD: ${TICKET_DB_VIEWER_PASSWORD:?Set TICKET_DB_VIEWER_PASSWORD in deploy/.env.dev}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:

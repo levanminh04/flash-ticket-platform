@@ -12,7 +12,7 @@ There is no PostgreSQL container or Compose file for this service alone.
 - Database: `payment_db`
 - Schema: `payment_schema`
 - Read-only username: `payment_erd`
-- Password: `PAYMENT_DB_VIEWER_PASSWORD` in `.env.payment-db`
+- Password: `PAYMENT_DB_VIEWER_PASSWORD` in `deploy/.env.dev` at the repository root
 - JDBC URL: `jdbc:postgresql://127.0.0.1:5432/payment_db`
 
 Credentials are unchanged after consolidation. This account is restricted to its

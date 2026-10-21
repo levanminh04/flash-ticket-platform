@@ -12,7 +12,7 @@ There is no PostgreSQL container or Compose file for this service alone.
 - Database: `booking_db`
 - Schema: `booking_schema`
 - Read-only username: `booking_erd`
-- Password: `BOOKING_DB_VIEWER_PASSWORD` in `.env.booking-db`
+- Password: `BOOKING_DB_VIEWER_PASSWORD` in `deploy/.env.dev` at the repository root
 - JDBC URL: `jdbc:postgresql://127.0.0.1:5432/booking_db`
 
 Credentials are unchanged after consolidation. This account is restricted to its

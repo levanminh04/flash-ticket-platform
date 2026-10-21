@@ -22,13 +22,13 @@ Không truyền `--realm` để export tất cả realm, gồm `flash-ticket` v�
 
 ```powershell
 New-Item -ItemType Directory -Force -Path ./keycloak/export | Out-Null
-docker compose --env-file .env -f docker-compose.keycloak.yml stop keycloak
+docker compose --env-file ../.env -f docker-compose.keycloak.yml stop keycloak
 if ($LASTEXITCODE -ne 0) { throw "Không dừng được Keycloak" }
 try {
-    docker compose --env-file .env -f docker-compose.keycloak.yml run --rm --no-deps -v "${PWD}/keycloak/export:/opt/keycloak/data/export" keycloak export --dir /opt/keycloak/data/export --users realm_file
+    docker compose --env-file ../.env -f docker-compose.keycloak.yml run --rm --no-deps -v "${PWD}/keycloak/export:/opt/keycloak/data/export" keycloak export --dir /opt/keycloak/data/export --users realm_file
     if ($LASTEXITCODE -ne 0) { throw "Export thất bại" }
 } finally {
-    docker compose --env-file .env -f docker-compose.keycloak.yml up -d keycloak
+    docker compose --env-file ../.env -f docker-compose.keycloak.yml up -d keycloak
 }
 ```
 

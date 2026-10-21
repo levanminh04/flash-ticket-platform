@@ -12,7 +12,7 @@ There is no PostgreSQL container or Compose file for this service alone.
 - Database: `ticket_db`
 - Schema: `ticket_schema`
 - Read-only username: `ticket_erd`
-- Password: `TICKET_DB_VIEWER_PASSWORD` in `.env.ticket-db`
+- Password: `TICKET_DB_VIEWER_PASSWORD` in `deploy/.env.dev` at the repository root
 - JDBC URL: `jdbc:postgresql://127.0.0.1:5432/ticket_db`
 
 Credentials are unchanged after consolidation. This account is restricted to its
