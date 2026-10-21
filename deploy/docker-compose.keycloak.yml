@@ -9,7 +9,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       KC_DB: postgres
-      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/${POSTGRES_DB:-postgres}}
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keycloak_db}}
       KC_DB_USERNAME: ${POSTGRES_USER:-postgres}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root .env}
       KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:8080}

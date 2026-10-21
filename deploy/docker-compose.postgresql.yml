@@ -20,7 +20,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root .env}
-      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak_db}
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
       EVENT_DB_ADMIN_PASSWORD: ${EVENT_DB_ADMIN_PASSWORD:?Set EVENT_DB_ADMIN_PASSWORD in the repository-root .env}
       EVENT_DB_VIEWER_PASSWORD: ${EVENT_DB_VIEWER_PASSWORD:?Set EVENT_DB_VIEWER_PASSWORD in the repository-root .env}

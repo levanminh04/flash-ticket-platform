@@ -5,8 +5,9 @@ từ `.env.example` rồi điền cấu hình ứng dụng, PostgreSQL/MongoDB v
 File local bị Git bỏ qua; không tạo env riêng trong `deploy` hoặc từng service.
 
 PostgreSQL tự tạo tài khoản và database từ `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-`POSTGRES_DB` trong `.env` khi volume dữ liệu còn trống. Keycloak dùng chung các giá trị này,
-mặc định kết nối tới database `POSTGRES_DB` với schema `public`; không cần script init.
+`POSTGRES_DB` trong `.env` khi volume dữ liệu còn trống. Mặc định `POSTGRES_DB=keycloak_db`,
+nên PostgreSQL tự tạo database riêng cho Keycloak trước khi chạy các script init nghiệp vụ.
+Keycloak dùng chung tài khoản PostgreSQL và kết nối tới database này với schema `public`.
 
 Keycloak khởi động trực tiếp bằng entrypoint của image. Compose truyền mật khẩu qua
 biến chuẩn `KC_DB_PASSWORD`, không cần script khởi động riêng.
@@ -16,11 +17,11 @@ qua Compose. Secret của client `internal-service` trong realm là placeholder
 `${INTERNAL_SERVICE_CLIENT_SECRET}`, nên Compose vẫn truyền biến này từ file env
 để import trên database mới. Realm đã tồn tại sẽ không được import lại khi restart.
 
-Nếu đang dùng dữ liệu Keycloak cũ trong `keycloak_db`, giữ
-`KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak_db` trong `.env` (thêm
-`?currentSchema=keycloak` vào URL nếu dùng schema `keycloak`). Compose dùng
-`POSTGRES_USER`/`POSTGRES_PASSWORD` từ cùng `.env` để Keycloak kết nối DB.
-Đổi `POSTGRES_*` không cập nhật tài khoản/database đã tồn tại trong volume.
+Trong `.env`, giữ `POSTGRES_DB=keycloak_db` và
+`KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak_db` đồng bộ với nhau (thêm
+`?currentSchema=keycloak` vào URL nếu dữ liệu cũ dùng schema `keycloak`).
+Đổi `POSTGRES_*` không cập nhật tài khoản/database đã tồn tại trong volume;
+với volume cũ chưa có database đích, cần tạo database trước khi chạy Keycloak.
 
 Chạy PostgreSQL trước, đợi container healthy rồi chạy Keycloak:
 
