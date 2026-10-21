@@ -9,7 +9,7 @@ PostgreSQL tự tạo tài khoản và database từ `POSTGRES_USER`, `POSTGRES_
 mặc định kết nối tới database `POSTGRES_DB` với schema `public`; không cần script init.
 
 Keycloak khởi động trực tiếp bằng entrypoint của image. Compose truyền mật khẩu qua
-`KCRAW_DB_PASSWORD` để giữ nguyên ký tự `$`, không cần script khởi động riêng.
+biến chuẩn `KC_DB_PASSWORD`, không cần script khởi động riêng.
 
 SMTP được cấu hình trong `keycloak/import/flash-ticket-realm.json`, không truyền
 qua Compose. Secret của client `internal-service` trong realm là placeholder
