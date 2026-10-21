@@ -1,0 +1,88 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.3.6-management
+    hostname: rabbitmq
+    restart: unless-stopped
+    mem_limit: ${RABBITMQ_MEMORY_LIMIT:-1g}
+    stop_grace_period: 30s
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+      RABBITMQ_ADMIN_USERNAME: ${RABBITMQ_ADMIN_USERNAME:-flash_ticket_admin}
+      RABBITMQ_ADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in the repository-root .env}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-flash_ticket_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the repository-root .env}
+      RABBITMQ_IDENTITY_USERNAME: ${RABBITMQ_IDENTITY_USERNAME:-flash_ticket_identity}
+      RABBITMQ_IDENTITY_PASSWORD: ${RABBITMQ_IDENTITY_PASSWORD:?Set RABBITMQ_IDENTITY_PASSWORD in the repository-root .env}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    post_start:
+      - user: rabbitmq
+        command:
+          - sh
+          - -ec
+          - |
+            rm -f /tmp/rabbitmq-users-ready
+            validate() {
+              if [ "$$1" = guest ]; then
+                echo 'Use a dedicated RabbitMQ username instead of guest' >&2; exit 1
+              fi
+              [ "$$(printf '%s\n' "$$1" | wc -l)" -eq 1 ] &&
+              printf '%s\n' "$$1" | LC_ALL=C grep -Eq '^[A-Za-z][A-Za-z0-9_-]{0,63}$$' || {
+                echo 'Invalid RabbitMQ username' >&2; exit 1;
+              }
+              if [ -z "$$2" ] || [ "$$(printf '%s\n' "$$2" | wc -l)" -ne 1 ] ||
+                 printf '%s' "$$2" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+                echo 'RabbitMQ passwords must be nonempty without control characters' >&2; exit 1
+              fi
+            }
+            validate "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD"
+            validate "$$RABBITMQ_USERNAME" "$$RABBITMQ_PASSWORD"
+            validate "$$RABBITMQ_IDENTITY_USERNAME" "$$RABBITMQ_IDENTITY_PASSWORD"
+            if [ "$$RABBITMQ_ADMIN_USERNAME" = "$$RABBITMQ_USERNAME" ] ||
+               [ "$$RABBITMQ_ADMIN_USERNAME" = "$$RABBITMQ_IDENTITY_USERNAME" ] ||
+               [ "$$RABBITMQ_USERNAME" = "$$RABBITMQ_IDENTITY_USERNAME" ]; then
+              echo 'RabbitMQ usernames must be distinct' >&2; exit 1
+            fi
+            rabbitmqctl wait --pid 1 --timeout 120
+            users=$$(rabbitmqctl -q list_users --no-table-headers)
+            upsert_user() {
+              if printf '%s\n' "$$users" | cut -f1 | grep -Fxq "$$1"; then
+                rabbitmqctl -q change_password "$$1" "$$2"
+              else
+                rabbitmqctl -q add_user "$$1" "$$2"
+              fi
+            }
+            upsert_user "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD"
+            rabbitmqctl -q set_user_tags "$$RABBITMQ_ADMIN_USERNAME" administrator
+            rabbitmqctl -q set_permissions -p / "$$RABBITMQ_ADMIN_USERNAME" '.*' '.*' '.*'
+            upsert_user "$$RABBITMQ_USERNAME" "$$RABBITMQ_PASSWORD"
+            rabbitmqctl -q set_user_tags "$$RABBITMQ_USERNAME"
+            rabbitmqctl -q set_permissions -p / "$$RABBITMQ_USERNAME" '^$$' '^(business|dlx)\.ex$$' '^(booking\.(sales-configured|event-cancelled|accept-payment|tickets-issued|issuance-failed)|payment\.(finance-configured|event-cancelled|start|decision|ticket-issuance-failed|order-completed)|ticket\.(access-configured|event-cancelled|issuance)|user\.identity)\.q$$'
+            upsert_user "$$RABBITMQ_IDENTITY_USERNAME" "$$RABBITMQ_IDENTITY_PASSWORD"
+            rabbitmqctl -q set_user_tags "$$RABBITMQ_IDENTITY_USERNAME"
+            rabbitmqctl -q set_permissions -p / "$$RABBITMQ_IDENTITY_USERNAME" '^$$' '^identity\.ex$$' '^$$'
+            rabbitmqctl -q authenticate_user "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD" >/dev/null
+            if printf '%s\n' "$$users" | cut -f1 | grep -Fxq guest; then
+              rabbitmqctl -q delete_user guest
+            fi
+            touch /tmp/rabbitmq-users-ready
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/rabbitmq-users-ready && rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - ticket
+
+volumes:
+  rabbitmq-data:
+
+networks:
+  ticket:
+    name: flash-ticket-infra

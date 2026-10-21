@@ -1,4 +1,4 @@
-# Chạy PostgreSQL và Keycloak
+# Chạy hạ tầng local
 
 Chạy các lệnh từ thư mục gốc repository. Chỉ dùng `.env` ở thư mục gốc; tạo
 từ `.env.example` rồi điền cấu hình ứng dụng, PostgreSQL/MongoDB và Keycloak.
@@ -26,11 +26,59 @@ với volume cũ chưa có database đích, cần tạo database trước khi ch
 Chạy PostgreSQL trước, đợi container healthy rồi chạy Keycloak:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait keycloak
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait keycloak
 ```
 
 Admin Console: http://localhost:8080/admin/flash-ticket/console/
+
+## RabbitMQ
+
+Điền ba cặp tài khoản trong `.env` gốc: `RABBITMQ_ADMIN_USERNAME/PASSWORD`,
+`RABBITMQ_USERNAME/PASSWORD` cho ứng dụng và `RABBITMQ_IDENTITY_USERNAME/PASSWORD`
+cho publisher Keycloak. Username phải khác nhau, không dùng `guest`; bắt đầu bằng chữ,
+tối đa 64 ký tự chữ, số, `_`, `-`. Password không rỗng hoặc chứa ký tự điều khiển.
+Compose yêu cầu phiên bản từ 2.30 để chạy lifecycle hook.
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait rabbitmq
+```
+
+Lệnh này tự tạo topology và tài khoản ngay lần đầu, không cần init thủ công.
+Các lệnh dùng cùng bộ Compose file để tránh cảnh báo orphan; mỗi lệnh chỉ target
+service cần chạy. Management UI mặc định: http://localhost:15672, đăng nhập tài khoản admin.
+Ứng dụng từ IDE dùng `RABBITMQ_HOST=localhost`, cổng `RABBITMQ_PORT` mặc định 5672;
+Nếu cổng mặc định bị chiếm, đổi cả hai biến port trong root env rồi dùng port mới;
+container cùng network dùng host `rabbitmq`, cổng 5672. Management port cấu hình qua
+`RABBITMQ_MANAGEMENT_PORT`; memory limit qua `RABBITMQ_MEMORY_LIMIT` (mặc định `1g`).
+
+`rabbitmq/rabbitmq.conf` bật import native từ `rabbitmq/definitions.json` khi broker
+boot: vhost `/`, `business.ex` (topic), `identity.ex` (direct), `dlx.ex` (direct),
+15 queue xử lý đơn nhiệm và 15 DLQ, toàn bộ durable/quorum. Mỗi main queue có một
+routing key đầu vào và policy DLX riêng. JSON không chứa tài khoản hoặc secret.
+RabbitMQ bỏ qua bước tạo default user khi boot import trên node mới, nên hook
+`post_start` ngay trong Compose dùng `rabbitmqctl` để tạo/cập nhật user và quyền từ env.
+
+Admin có toàn quyền và Management UI. App chỉ publish `business.ex`/`dlx.ex`, consume
+15 main queue; identity chỉ publish `identity.ex`. Hai tài khoản này không có quyền
+Management UI hoặc tự khai báo topology. Listener ứng dụng cần dùng topology đã tạo,
+không tự declare/bind. Đây là tài khoản app dùng chung cho local, chưa tách theo service.
+
+Reject/nack không requeue đưa message sang DLQ tương ứng. Policy dùng dead-letter
+`at-least-once`, `reject-publish`, delivery-limit 20; không phải retry có backoff.
+DLQ không có TTL, không tự phát lại và chưa có consumer xử lý lỗi. Broker một node
+không có HA; volume `rabbitmq-data` giữ message/tài khoản khi restart.
+
+Docker daemon tự restart container không chạy lại hook Compose; tài khoản đã provision
+được lưu trong volume. Khi đổi credentials hoặc hook lỗi, sửa `.env`/config rồi chạy:
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --force-recreate --wait rabbitmq
+```
+
+Lệnh giữ nguyên volume và cập nhật ba tài khoản. Import không xóa tài nguyên cũ;
+đổi type/argument queue đã có cần kế hoạch chuyển riêng. Không dùng `down -v`, purge
+hoặc `--remove-orphans` để xử lý lỗi vì có thể mất dữ liệu hạ tầng.
 
 ## PostgreSQL dùng chung cho các service
 
