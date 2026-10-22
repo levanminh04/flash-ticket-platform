@@ -13,6 +13,9 @@ import tools.jackson.databind.JsonNode;
 @Getter
 @NoArgsConstructor(access=AccessLevel.PROTECTED)
 public class OrderPaymentSnapshot {
+public OrderPaymentSnapshot(UUID orderId, UUID eventId, String buyerSubject, BigDecimal expectedAmount, String currency, Instant expiresAt, Long sourceOrderVersion, JsonNode purchaseSnapshot, String snapshotHash, Instant receivedAt) {
+this.orderId=orderId;this.eventId=eventId;this.buyerSubject=buyerSubject;this.expectedAmount=expectedAmount;this.currency=currency;this.expiresAt=expiresAt;this.sourceOrderVersion=sourceOrderVersion;this.purchaseSnapshot=purchaseSnapshot;this.snapshotHash=snapshotHash;this.receivedAt=receivedAt;
+}
 @Setter
 @Id
 @Column(name="order_id", nullable=false)
