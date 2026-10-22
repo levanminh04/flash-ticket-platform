@@ -1,0 +1,32 @@
+{
+  "schemaVersion":1,
+  "orderId":"10000000-0000-0000-0000-000000000001",
+  "eventId":"10000000-0000-0000-0000-000000000002",
+  "buyerSubject":"buyer-1",
+  "customerEmail":"buyer@example.test",
+  "sourceConfigVersion":"1",
+  "sourceOrderVersion":"9223372036854775807",
+  "frozenAt":"2030-01-01T01:00:00Z",
+  "expiresAt":"2030-01-01T01:10:00Z",
+  "currency":"VND",
+  "eventTitle":"Fixture concert",
+  "eventStartsAt":"2030-01-02T01:00:00Z",
+  "eventEndsAt":"2030-01-02T03:00:00Z",
+  "venueName":null,
+  "mode":"QUANTITY",
+  "sectorId":null,
+  "subtotal":"9999999999999999999",
+  "discount":"0",
+  "total":"9999999999999999999",
+  "promotion":null,
+  "items":[{
+    "orderItemId":"10000000-0000-0000-0000-000000000003",
+    "ticketTypeId":"10000000-0000-0000-0000-000000000004",
+    "ticketTypeName":"General",
+    "quantity":1,
+    "unitPrice":"9999999999999999999",
+    "lineSubtotal":"9999999999999999999",
+    "sectorId":null,
+    "seats":[]
+  }]
+}
