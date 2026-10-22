@@ -15,6 +15,8 @@ final class PaymentEntityFixtures {
   final Charge charge;
   final Refund refund;
   final EventRefundRun run;
+  final OutboxMessage outbox;
+  final InboxMessage inbox;
 
   PaymentEntityFixtures(EntityManager em) {
     var eventId = UUID.randomUUID();
@@ -98,8 +100,16 @@ final class PaymentEntityFixtures {
             BigDecimal.valueOf(9)));
     em.persist(
         make(PaymentSaga.class, "orderId", snapshot.getOrderId(), "chargeId", charge.getId()));
-    em.persist(make(OutboxMessage.class));
-    em.persist(make(InboxMessage.class, "id", new InboxMessageId("fixture", UUID.randomUUID())));
+    outbox = make(OutboxMessage.class);
+    em.persist(outbox);
+    inbox =
+        make(
+            InboxMessage.class,
+            "id",
+            new InboxMessageId("fixture", UUID.randomUUID()),
+            "responsePayload",
+            JsonMapper.builder().build().readTree("{\"result\":\"fixture\"}"));
+    em.persist(inbox);
     em.flush();
   }
 

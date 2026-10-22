@@ -95,7 +95,11 @@ public final class ContractCodec {
     }
     if (raw == Instant.class) {
       require(node.isString() && node.asString().endsWith("Z"), path);
-      Instant.parse(node.asString());
+      try {
+        Instant.parse(node.asString());
+      } catch (java.time.format.DateTimeParseException ex) {
+        throw invalid(path, "INVALID_VALUE");
+      }
       return;
     }
     if (raw == UUID.class) {
@@ -117,6 +121,10 @@ public final class ContractCodec {
     }
     if (raw.isEnum()) {
       require(node.isString(), path);
+      boolean known =
+          Arrays.stream(raw.getEnumConstants())
+              .anyMatch(value -> ((Enum<?>) value).name().equals(node.asString()));
+      if (!known) throw invalid(path, "INVALID_VALUE");
       return;
     }
     if (type.isCollectionLikeType()) {

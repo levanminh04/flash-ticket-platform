@@ -39,6 +39,47 @@ class EntityMappingTest {
   @Test
   void mapsAllThirteenPaymentTables() {
     assertThat(em.getMetamodel().getEntities()).hasSize(13);
+    int versions = 0;
+    int embeddedIds = 0;
+    int owningJoins = 0;
+    for (var entity : em.getMetamodel().getEntities()) {
+      var type = entity.getJavaType();
+      var table = type.getAnnotation(Table.class);
+      assertThat(table.schema()).isEqualTo("payment_schema");
+      assertThat(table.name()).startsWith("tbl_");
+      for (var field : type.getDeclaredFields()) {
+        if (field.isAnnotationPresent(Version.class)) versions++;
+        if (field.isAnnotationPresent(EmbeddedId.class)) embeddedIds++;
+        var many = field.getAnnotation(ManyToOne.class);
+        var one = field.getAnnotation(OneToOne.class);
+        var collection = field.getAnnotation(OneToMany.class);
+        if (many != null) {
+          assertThat(many.fetch()).isEqualTo(FetchType.LAZY);
+          assertThat(many.cascade()).isEmpty();
+        }
+        if (one != null) {
+          assertThat(one.fetch()).isEqualTo(FetchType.LAZY);
+          assertThat(one.cascade()).isEmpty();
+          assertThat(one.orphanRemoval()).isFalse();
+        }
+        if (collection != null) {
+          assertThat(collection.fetch()).isEqualTo(FetchType.LAZY);
+          assertThat(collection.cascade()).isEmpty();
+          assertThat(collection.orphanRemoval()).isFalse();
+          assertThat(collection.mappedBy()).isNotBlank();
+        }
+        var joins = field.getAnnotationsByType(JoinColumn.class);
+        if (joins.length > 0) owningJoins++;
+        for (var join : joins) {
+          assertThat(join.insertable()).isFalse();
+          assertThat(join.updatable()).isFalse();
+          assertThat(join.referencedColumnName()).isNotBlank();
+        }
+      }
+    }
+    assertThat(versions).isEqualTo(5);
+    assertThat(embeddedIds).isEqualTo(2);
+    assertThat(owningJoins).isEqualTo(12);
   }
 
   @Test
@@ -83,6 +124,20 @@ class EntityMappingTest {
     assertThat(finance.getOrganizerSubject()).isNull();
     assertThat(finance.getCancelledAt()).isEqualTo(NOW);
     assertThat(s.getPurchaseSnapshot().get("schemaVersion").asInt()).isEqualTo(1);
+    assertThat(s.getPurchaseSnapshot()).isEqualTo(f.snapshot.getPurchaseSnapshot());
+    assertThat(em.find(OutboxMessage.class, f.outbox.getMessageId()).getPayload())
+        .isEqualTo(f.outbox.getPayload());
+    assertThat(em.find(InboxMessage.class, f.inbox.getId()).getResponsePayload())
+        .isEqualTo(f.inbox.getResponsePayload());
+    var otherInbox =
+        make(
+            InboxMessage.class,
+            "id",
+            new InboxMessageId("other-consumer", f.inbox.getId().getMessageId()));
+    em.persist(otherInbox);
+    em.flush();
+    assertThat(em.find(InboxMessage.class, otherInbox.getId()).getPayloadHash())
+        .isNotEqualTo(f.inbox.getPayloadHash());
     assertThat(s.getExpectedAmount()).isEqualByComparingTo("10");
     assertThat(em.createQuery("from InboxMessage", InboxMessage.class).getResultList())
         .isNotEmpty();
@@ -117,7 +172,16 @@ class EntityMappingTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"provider", "confirmationAmount", "refundUnique", "unfinishedAttempt"})
+      strings = {
+        "provider",
+        "refundAmount",
+        "refundUnique",
+        "unfinishedAttempt",
+        "confirmationAmount",
+        "confirmationUnique",
+        "crossOrder",
+        "currency"
+      })
   @org.springframework.transaction.annotation.Transactional
   void enforcesFinancialForeignKeysAndUniqueness(String scenario) {
     var f = new PaymentEntityFixtures(em);
@@ -132,7 +196,7 @@ class EntityMappingTest {
                   f.snapshot.getOrderId(),
                   "provider",
                   "wrong-provider");
-          case "confirmationAmount" ->
+          case "refundAmount" ->
               make(
                   Refund.class,
                   "chargeId",
@@ -143,22 +207,53 @@ class EntityMappingTest {
                   new BigDecimal("9"));
           case "refundUnique" ->
               make(Refund.class, "chargeId", f.charge.getId(), "orderId", f.snapshot.getOrderId());
+          case "confirmationAmount", "confirmationUnique" ->
+              make(
+                  PaymentConfirmation.class,
+                  "chargeId",
+                  f.charge.getId(),
+                  "amount",
+                  scenario.equals("confirmationAmount") ? new BigDecimal("9") : BigDecimal.TEN);
+          case "crossOrder" ->
+              make(Charge.class, "attemptId", f.attempt.getId(), "orderId", UUID.randomUUID());
+          case "currency" ->
+              make(PaymentAttempt.class, "orderId", f.snapshot.getOrderId(), "currency", "USD");
           default -> make(PaymentAttempt.class, "orderId", f.snapshot.getOrderId());
         };
     // The amount test uses a different charge without an existing refund to isolate the FK.
-    if (scenario.equals("confirmationAmount")) {
+    if (scenario.equals("refundAmount")) {
       var charge =
           make(Charge.class, "attemptId", f.attempt.getId(), "orderId", f.snapshot.getOrderId());
       em.persist(charge);
       em.flush();
       ((Refund) invalid).setChargeId(charge.getId());
     }
+    if (scenario.startsWith("confirmation")) {
+      var other = make(OrderPaymentSnapshot.class);
+      em.persist(other);
+      em.flush();
+      ((PaymentConfirmation) invalid).setOrderId(other.getOrderId());
+      if (scenario.equals("confirmationAmount")) {
+        var attempt = make(PaymentAttempt.class, "orderId", other.getOrderId());
+        em.persist(attempt);
+        em.flush();
+        var charge =
+            make(Charge.class, "attemptId", attempt.getId(), "orderId", other.getOrderId());
+        em.persist(charge);
+        em.flush();
+        ((PaymentConfirmation) invalid).setChargeId(charge.getId());
+      }
+    }
     assertSqlState(
         () -> {
           em.persist(invalid);
           em.flush();
         },
-        scenario.equals("provider") || scenario.equals("confirmationAmount") ? "23503" : "23505");
+        switch (scenario) {
+          case "provider", "refundAmount", "confirmationAmount", "crossOrder" -> "23503";
+          case "currency" -> "23514";
+          default -> "23505";
+        });
   }
 
   @Test
@@ -209,7 +304,8 @@ class EntityMappingTest {
       first.getTransaction().commit();
       two.setPaymentUrl("https://fixture.example/second");
       assertThatThrownBy(() -> second.getTransaction().commit())
-          .isInstanceOf(RollbackException.class);
+          .isInstanceOf(RollbackException.class)
+          .hasCauseInstanceOf(OptimisticLockException.class);
     }
   }
 }

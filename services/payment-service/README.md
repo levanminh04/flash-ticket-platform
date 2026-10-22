@@ -67,8 +67,10 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 
 Kiểm tại worktree scaffold ngày 2026-10-23 với Java 21 và PostgreSQL 16.15 tách biệt:
 
-- `verify -Pmapping-tests`: 50 test, 0 failure/error/skip; Spotless và SpotBugs PASS.
+- `verify -Pmapping-tests`: 55 test, gồm 14 test PostgreSQL, 0 failure/error/skip; Spotless và SpotBugs PASS.
 - Config Server `verify`: PASS; endpoint thật `/payment-service/default` trả cấu hình `ddl-auto=validate`.
 - JAR Payment chạy profile `local-foundation` với Config Server và PostgreSQL test: khởi tạo EntityManager thành công, `/actuator/health` trả `UP`.
 
 Các kết quả này chỉ xác nhận scaffold và các kiểm đã mô tả, chưa nghiệm thu thanh toán/E2E. Khi thiếu PostgreSQL/JDK đúng, báo NOT_RUN cùng nguyên nhân. Test mock không thay được kiểm mapping trên PostgreSQL thật.
+
+Review độc lập đã rà mô hình/quan hệ, contract và profile. Sau review đã bổ sung lỗi timestamp/enum có đường dẫn field, metadata cho 2 EmbeddedId/5 version/12 association, confirmation mismatch/unique, khóa ngoại khác order/currency, JSONB reload và nguyên nhân optimistic lock cụ thể. Các phần nghiệp vụ ở ngoài scope vẫn giữ nguyên; decoder hiện dùng hành vi last-value của Jackson cho JSON trùng tên field, chưa có canonical hashing hoặc thỏa thuận liên parser trong scaffold.

@@ -11,6 +11,22 @@ import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.node.ObjectNode;
 
 class ContractValidationTest {
+  @Test
+  void malformedTimestampAndEnumIdentifyTheirField() throws Exception {
+    String json = ContractCodecTest.purchaseJson();
+    for (String[] sample :
+        new String[][] {
+          {json.replace("2030-01-02T03:00:00Z", "invalidZ"), "$.eventEndsAt"},
+          {json.replace("QUANTITY", "WRONG"), "$.mode"}
+        }) {
+      var failure =
+          catchThrowable(() -> ContractCodecTest.CODEC.read(sample[0], PurchaseSnapshot.class));
+      assertThat(failure).isInstanceOf(ContractValidationException.class);
+      assertThat(((ContractValidationException) failure).field()).isEqualTo(sample[1]);
+      assertThat(((ContractValidationException) failure).code()).isEqualTo("INVALID_VALUE");
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"-1", "1.5", "1e2", "+1", "01", "10000000000000000000", " 1", ""})
   void rejectsNonCanonicalMoney(String money) throws Exception {
