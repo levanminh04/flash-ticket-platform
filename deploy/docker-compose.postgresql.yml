@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:16.15
     restart: unless-stopped
-    mem_limit: ${POSTGRES_MEMORY_LIMIT:-2g}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-4g}
     shm_size: 256m
     stop_grace_period: 60s
     command:

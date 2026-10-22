@@ -3,7 +3,7 @@ services:
     image: rabbitmq:4.3.6-management
     hostname: rabbitmq
     restart: unless-stopped
-    mem_limit: ${RABBITMQ_MEMORY_LIMIT:-1g}
+    mem_limit: ${RABBITMQ_MEMORY_LIMIT:-2g}
     stop_grace_period: 30s
     environment:
       RABBITMQ_NODENAME: rabbit@rabbitmq
@@ -14,8 +14,8 @@ services:
       RABBITMQ_IDENTITY_USERNAME: ${RABBITMQ_IDENTITY_USERNAME:-flash_ticket_identity}
       RABBITMQ_IDENTITY_PASSWORD: ${RABBITMQ_IDENTITY_PASSWORD:?Set RABBITMQ_IDENTITY_PASSWORD in the repository-root .env}
     ports:
-      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
-      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "0.0.0.0:${RABBITMQ_PORT:-5672}:5672"
+      - "0.0.0.0:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro

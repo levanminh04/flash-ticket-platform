@@ -13,7 +13,7 @@ docker compose --env-file .env -f deploy/docker-compose.redis.yml ps
 ```
 
 Mong đợi `redis` báo `healthy`. Compose dùng image `redis:7.4.11-alpine`,
-chỉ publish port trên `127.0.0.1`, network `flash-ticket-infra` và volume
+publish port trên `0.0.0.0` (mọi interface IPv4 của host), network `flash-ticket-infra` và volume
 `redis-data`. Nếu port đang được dùng, đổi `REDIS_PORT` trong `.env` rồi chạy lại.
 Khi chạy riêng file Redis, Compose có thể báo orphan với container cùng project;
 không dùng `--remove-orphans` để xử lý cảnh báo đó.

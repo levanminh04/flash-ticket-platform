@@ -4,6 +4,11 @@ Chạy các lệnh từ thư mục gốc repository. Chỉ dùng `.env` ở thư
 từ `.env.example` rồi điền cấu hình ứng dụng, PostgreSQL/MongoDB và Keycloak.
 File local bị Git bỏ qua; không tạo env riêng trong `deploy` hoặc từng service.
 
+PostgreSQL và MongoDB chỉ publish cổng trên `127.0.0.1`; từ máy khác dùng SSH
+tunnel tới host chạy database. RabbitMQ (AMQP và Management UI), Redis và Keycloak
+publish trên `0.0.0.0`; khả năng truy cập từ xa còn phụ thuộc firewall/Security Group.
+Khi truy cập Keycloak từ xa, đặt `KC_HOSTNAME` trong `.env` thành URL thực tế.
+
 PostgreSQL tự tạo tài khoản và database từ `POSTGRES_USER`, `POSTGRES_PASSWORD`,
 `POSTGRES_DB` trong `.env` khi volume dữ liệu còn trống. Mặc định `POSTGRES_DB=keycloak_db`,
 nên PostgreSQL tự tạo database riêng cho Keycloak trước khi chạy các script init nghiệp vụ.
@@ -114,5 +119,5 @@ Chạy từ root với `.env` gốc:
 docker compose --env-file .env -f deploy/docker-compose.redis.yml up -d --wait redis
 ```
 
-Redis chỉ publish trên loopback, password bắt buộc và có healthcheck. Hướng dẫn
+Redis publish trên mọi interface IPv4 của host, password bắt buộc và có healthcheck. Hướng dẫn
 Spring Boot, env, lệnh kiểm tra và kết quả: [redis/handoff.md](redis/handoff.md).
