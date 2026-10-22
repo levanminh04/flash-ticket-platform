@@ -1,2 +1,6 @@
 package com.flashticket.payment_service.dto.message;
-public enum StartPaymentResultState {CREATED,REJECTED}
+
+public enum StartPaymentResultState {
+  CREATED,
+  REJECTED
+}

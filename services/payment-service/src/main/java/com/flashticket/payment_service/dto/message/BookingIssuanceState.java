@@ -1,2 +1,5 @@
 package com.flashticket.payment_service.dto.message;
-public enum BookingIssuanceState {FAILED}
+
+public enum BookingIssuanceState {
+  FAILED
+}

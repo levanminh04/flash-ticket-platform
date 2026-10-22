@@ -1,2 +1,5 @@
 package com.flashticket.payment_service.dto.message;
-public enum PaymentProvider {VNPAY}
+
+public enum PaymentProvider {
+  VNPAY
+}

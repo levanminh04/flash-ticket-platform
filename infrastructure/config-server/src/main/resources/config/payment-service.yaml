@@ -2,6 +2,20 @@ server:
   port: ${PAYMENT_SERVICE_PORT:8083}
 
 spring:
+  sql:
+    init:
+      mode: never
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        jdbc:
+          time_zone: UTC
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
   datasource:
     url: ${PAYMENT_DB_URL}
     username: ${PAYMENT_DB_USERNAME}
