@@ -65,4 +65,10 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 
 ## Kết quả kiểm
 
-Kết quả thực tế và giới hạn môi trường được ghi trong phần bàn giao của task; không coi ví dụ lệnh ở đây là bằng chứng PASS. Khi thiếu PostgreSQL/JDK đúng, báo NOT_RUN cùng nguyên nhân. Test mock không thay được kiểm mapping trên PostgreSQL thật.
+Kiểm tại worktree scaffold ngày 2026-10-23 với Java 21 và PostgreSQL 16.15 tách biệt:
+
+- `verify -Pmapping-tests`: 50 test, 0 failure/error/skip; Spotless và SpotBugs PASS.
+- Config Server `verify`: PASS; endpoint thật `/payment-service/default` trả cấu hình `ddl-auto=validate`.
+- JAR Payment chạy profile `local-foundation` với Config Server và PostgreSQL test: khởi tạo EntityManager thành công, `/actuator/health` trả `UP`.
+
+Các kết quả này chỉ xác nhận scaffold và các kiểm đã mô tả, chưa nghiệm thu thanh toán/E2E. Khi thiếu PostgreSQL/JDK đúng, báo NOT_RUN cùng nguyên nhân. Test mock không thay được kiểm mapping trên PostgreSQL thật.
