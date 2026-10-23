@@ -150,3 +150,6 @@ Path JDK trên đã tồn tại khi lập plan; máy khác dùng JDK 21 tương 
 - Các giá trị canonical encoding/selection/ticketCount được cụ thể hóa trong plan để review. Nếu Booking đang dùng rule khác, lưu bằng chứng và thống nhất contract trước P4/P8; không tự sửa code Booking hoặc gắn nhãn APPROVED cho B13.
 - Sau review plan: thực hiện trực tiếp trong chat này theo từng task trên `codex/payment-runtime`, giữ checkpoint P1. Trước sửa code phải có phản hồi duyệt tài liệu plan này theo gate brainstorming/writing-plans. Không yêu cầu chọn lại worktree.
 
+## Kết quả triển khai P1
+
+Đã hoàn thành các task trên nhánh codex/payment-runtime. Constructor thực tế của CanonicalContractSerializer nhận Jakarta Validator thay ContractCodec vì chỉ cần Bean Validation trước encoder độc lập; API byte/hash giữ nguyên. Full verify: 62 test PASS, Spotless PASS, SpotBugs 0. PostgreSQL/RabbitMQ/E2E chưa chạy trong phạm vi P1. Golden fixture còn chờ đối chiếu Booking.
