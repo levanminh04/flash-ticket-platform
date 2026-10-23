@@ -39,7 +39,7 @@ class GatewayRouteConfigurationTests {
     assertEquals("lb://booking-service", routes.get("booking-promote-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-cancel-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-read-order").getUri().toString());
-    assertEquals("lb://payment-service", routes.get("payment-create-attempt").getUri().toString());
+    assertEquals("lb://booking-service", routes.get("payment-create-attempt").getUri().toString());
     assertEquals("lb://payment-service", routes.get("payment-read-order").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-order-tickets").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-qr").getUri().toString());
@@ -67,6 +67,37 @@ class GatewayRouteConfigurationTests {
   @Test
   void registersTheRedisRateLimiterBean() {
     assertNotNull(redisRateLimiter);
+  }
+
+  @Test
+  void separatesStartPostFromPaymentGetByMethodAndPath() {
+    var routes = routesById();
+    var start = routes.get("payment-create-attempt");
+    var read = routes.get("payment-read-order");
+    var post =
+        org.springframework.mock.web.server.MockServerWebExchange.from(
+            org.springframework.mock.http.server.reactive.MockServerHttpRequest.post(
+                "/api/v1/orders/10000000-0000-0000-0000-000000000001/payment-attempts"));
+    var get =
+        org.springframework.mock.web.server.MockServerWebExchange.from(
+            org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(
+                "/api/v1/orders/10000000-0000-0000-0000-000000000001/payment"));
+    assertEquals(
+        Boolean.TRUE,
+        reactor.core.publisher.Mono.from(start.getPredicate().apply(post))
+            .block(Duration.ofSeconds(5)));
+    assertEquals(
+        Boolean.FALSE,
+        reactor.core.publisher.Mono.from(read.getPredicate().apply(post))
+            .block(Duration.ofSeconds(5)));
+    assertEquals(
+        Boolean.TRUE,
+        reactor.core.publisher.Mono.from(read.getPredicate().apply(get))
+            .block(Duration.ofSeconds(5)));
+    assertEquals(
+        Boolean.FALSE,
+        reactor.core.publisher.Mono.from(start.getPredicate().apply(get))
+            .block(Duration.ofSeconds(5)));
   }
 
   private Map<String, Route> routesById() {

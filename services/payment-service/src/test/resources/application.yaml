@@ -17,3 +17,10 @@ spring:
 eureka:
   client:
     enabled: false
+
+flashticket:
+  payment:
+    jwt:
+      issuer-uri: https://issuer.example.test
+      jwk-set-uri: http://127.0.0.1:1/not-used-by-smoke-tests
+      audience: payment

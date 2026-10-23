@@ -1,6 +1,6 @@
-# Payment Service — scaffold và contract boundary P1
+# Payment Service — payment status API P2
 
-Scaffold gồm 13 JPA entity, 2 composite ID, enum, DTO theo B13-v0.2, mapper MapStruct dạng Spring bean và cấu hình. Chưa có endpoint, repository nghiệp vụ, consumer, relay, Saga handler hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
+Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Chưa có consumer, outbox relay, StartPayment handler, Saga runtime hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
 
 ## Build
 
@@ -73,7 +73,7 @@ Inject validator/serializer/hash service bằng constructor. `purchaseHash` ki�
 
 Canonical v1 dùng UTF-8 strict (từ chối surrogate lẻ bằng INVALID_UNICODE), control escape hex lowercase, key sắp thứ tự, null tường minh, UUID lowercase, Instant UTC Z và wire money/version dạng chuỗi. Chỉ items/seats của purchase được sắp theo ID; array hợp đồng khác giữ thứ tự. Encoder riêng không nhận cấu hình formatting của global JsonMapper. Golden bytes và SHA-256 ở `src/test/resources/contracts/canonical-v1` được tính độc lập bằng Python stdlib; đây là candidate cần Booking review, chưa chứng minh hash liên service đã khớp.
 
-Snapshot chưa có sector kind hoặc seat→ticketType mapping. Validator kiểm tính nhất quán nội bộ: QUANTITY không sector/seat; SEAT_MAP một sector, toàn bộ items có seats đủ quantity hoặc toàn bộ không có seats. Booking vẫn chịu trách nhiệm xác nhận selection khớp cấu hình nguồn. P1 chưa thêm controller/repository, RabbitMQ/inbox/outbox runtime, provider hoặc Saga.
+Snapshot chưa có sector kind hoặc seat→ticketType mapping. Validator kiểm tính nhất quán nội bộ: QUANTITY không sector/seat; SEAT_MAP một sector, toàn bộ items có seats đủ quantity hoặc toàn bộ không có seats. Booking vẫn chịu trách nhiệm xác nhận selection khớp cấu hình nguồn. Ở checkpoint P1 chưa có controller/repository; P2 đã bổ sung query API. RabbitMQ/inbox/outbox runtime, provider và Saga vẫn thuộc các gói sau.
 
 ## Kết quả kiểm
 
@@ -90,3 +90,34 @@ Review độc lập trước P1 đã rà mô hình/quan hệ, contract và profi
 ### Kiểm P1 trên nhánh codex/payment-runtime — 23/10/2026
 
 Maven verify bằng JDK 21/UTC: 64 test, 0 failure/error/skip; Spotless và SpotBugs PASS. Có golden byte/hash độc lập, kiểm Spring bean thật và regression cho Unicode surrogate/control escaping từ review độc lập. Không chạy lại PostgreSQL mapping/RabbitMQ/VNPay/E2E trong P1; chưa có thay đổi runtime các phần đó.
+
+## API đọc trạng thái P2
+
+`GET /api/v1/orders/{orderId}/payment?requestId={requestId}` yêu cầu bearer JWT có chữ ký, issuer, audience, expiry hợp lệ, subject không rỗng và role BUYER trong realm_access.roles. Payment tự kiểm token, không chỉ tin Gateway. Không có quyền bypass ownership cho ADMIN. Cấu hình runtime từ Config Server cần KEYCLOAK_ISSUER_URI, KEYCLOAK_JWK_SET_URI và KEYCLOAK_AUDIENCE; thiếu cấu hình phải fail startup. Không dùng URI test trong production.
+
+Controller gọi PaymentQueryService, năm repository cục bộ và các mapper. Một response dùng transaction REPEATABLE_READ chỉ đọc; latestAttempt theo startedAt/id giảm dần, refunds theo createdAt/id tăng dần. Không truy cập datastore Booking, gọi provider hoặc ghi state từ GET.
+
+- Chưa snapshot: 404 PAYMENT_NOT_READY; khác owner: 404 RESOURCE_NOT_FOUND.
+- Không requestId: startRequest=null. Request chưa có inbox: WAITING, dù latestAttempt đã tồn tại.
+- Có result bền: đọc đúng requestId/orderId từ inbox consumer `payment.start-requested.v1`. CREATED kiểm attempt thuộc order; REJECTED giữ failureCode.
+- Inbox hỏng/không nhất quán: 503 PAYMENT_STATE_UNAVAILABLE; không bịa CREATED hoặc log payload.
+- HTTP lỗi dùng Problem; response có X-Correlation-Id và Cache-Control: no-store. orderId hợp lệ ưu tiên làm correlationId, header sai không được echo.
+
+Gateway POST `/api/v1/orders/{id}/payment-attempts` đã sửa về Booking với breaker/fallback Booking. GET `/api/v1/orders/{id}/payment` vẫn về Payment. P2 không mở POST start/refund hay route nội bộ/management/callback. Kết quả health UP trong lịch sử scaffold không có nghĩa actuator đang public ở P2.
+
+### Kiểm P2
+
+Từ thư mục Payment, dùng JDK 21/UTC như phần Build:
+
+```powershell
+.\mvnw.cmd verify -B -ntp
+.\mvnw.cmd -Pquery-tests verify -B -ntp
+```
+
+Suite mặc định: 79 test, không cần DB/Keycloak thật. Smoke context chỉ import repository mocks từ test configuration; product code không có fallback mock. JWT HTTP tests dùng RSA token ký thật, JWK server loopback tạm và decoder/filter thật; không dùng mock JWT để kết luận chữ ký/audience đúng.
+
+Profile query-tests: 98 test, gồm 14 mapping test và 5 repository/transaction test trên PostgreSQL 16.15 riêng; cần PAYMENT_TEST_DB_URL/USERNAME/PASSWORD theo hướng dẫn mapping test. Profile mapping-tests cũng mở cùng nhóm DB tests; không chạy hai profile lặp để tăng số kiểm. Missing DB là lỗi, không tự skip. Đã kiểm tie ordering, scalar projection không load graph, PK inbox, response nhất quán khi insert đồng thời, và so toàn bộ dữ liệu 13 bảng trước/sau GET.
+
+Maven verify của Payment, Gateway và Config Server đều PASS cùng Spotless/SpotBugs. Gateway có test predicate method/path cho start POST và payment GET. Test fixture không cần thông tin user thật; không lưu credential/token production vào repository.
+
+Chạy thử Payment JAR qua HTTP ngoài bộ test: NOT_RUN vì automatic approval review từ chối script chạy thử với thông báo “blocked by policy”, không có lý do chi tiết. Config Server test process đã khởi động; các helper do lượt này tạo đã dừng. Kết quả ký JWT/HTTP và PostgreSQL ở trên là bằng chứng kiểm riêng, chưa phải end-to-end qua Gateway/Keycloak/Booking/Ticket thật. RabbitMQ/VNPay/Saga E2E chưa triển khai ở P2.

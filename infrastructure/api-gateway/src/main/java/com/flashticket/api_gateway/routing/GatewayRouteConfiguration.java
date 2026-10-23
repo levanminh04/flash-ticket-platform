@@ -208,10 +208,10 @@ public class GatewayRouteConfiguration {
                                 filters,
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
-                                "paymentServiceBreaker",
-                                "payment",
+                                "bookingServiceBreaker",
+                                "booking",
                                 false))
-                    .uri("lb://payment-service"))
+                    .uri("lb://booking-service"))
         .route(
             "payment-read-order",
             route ->

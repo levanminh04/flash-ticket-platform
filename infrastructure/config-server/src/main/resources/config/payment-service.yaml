@@ -25,3 +25,10 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+
+flashticket:
+  payment:
+    jwt:
+      issuer-uri: ${KEYCLOAK_ISSUER_URI}
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+      audience: ${KEYCLOAK_AUDIENCE}

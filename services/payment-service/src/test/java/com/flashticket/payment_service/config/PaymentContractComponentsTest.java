@@ -16,7 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import tools.jackson.core.type.TypeReference;
 
-@org.springframework.context.annotation.Import(com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
+@org.springframework.context.annotation.Import(
+    com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
 @SpringBootTest
 class PaymentContractComponentsTest {
   @Autowired ContractCodec codec;
