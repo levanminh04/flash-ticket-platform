@@ -152,4 +152,6 @@ Path JDK trên đã tồn tại khi lập plan; máy khác dùng JDK 21 tương 
 
 ## Kết quả triển khai P1
 
-Đã hoàn thành các task trên nhánh codex/payment-runtime. Constructor thực tế của CanonicalContractSerializer nhận Jakarta Validator thay ContractCodec vì chỉ cần Bean Validation trước encoder độc lập; API byte/hash giữ nguyên. Full verify: 62 test PASS, Spotless PASS, SpotBugs 0. PostgreSQL/RabbitMQ/E2E chưa chạy trong phạm vi P1. Golden fixture còn chờ đối chiếu Booking.
+Đã hoàn thành các task trên nhánh codex/payment-runtime. Constructor thực tế của CanonicalContractSerializer nhận Jakarta Validator thay ContractCodec vì chỉ cần Bean Validation trước encoder độc lập; API byte/hash giữ nguyên. Full verify cuối sau review: 64 test PASS, Spotless PASS, SpotBugs 0. PostgreSQL/RabbitMQ/E2E chưa chạy trong phạm vi P1. Golden fixture còn chờ đối chiếu Booking.
+
+Review độc lập phát hiện surrogate Unicode lẻ gây mất phân biệt hash và control escape hex khác Python reference. Đã tái hiện cả hai bằng test đỏ, sửa strict UTF-8 encoding (INVALID_UNICODE) và lowercase control escape, cập nhật golden U+001B; full suite 64 test xanh, không còn finding cần sửa hoặc minor trì hoãn.

@@ -9,7 +9,7 @@
   "frozenAt": "2030-01-01T01:00:00.000Z",
   "expiresAt": "2030-01-01T01:10:00Z",
   "currency": "VND",
-  "eventTitle": "Đêm \"nhạc\" / \\ \n\u0001",
+  "eventTitle": "Đêm \"nhạc\" / \\ \n\u0001\u001b",
   "eventStartsAt": "2030-01-02T01:00:00Z",
   "eventEndsAt": "2030-01-02T03:00:00Z",
   "venueName": null,

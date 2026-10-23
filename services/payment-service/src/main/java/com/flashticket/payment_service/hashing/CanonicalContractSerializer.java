@@ -7,12 +7,16 @@ import com.flashticket.payment_service.dto.message.PaymentProvider;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import jakarta.validation.Validator;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -20,7 +24,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** Canonical v1 encoding; callers validate semantic invariants before encoding. */
 @Component
 public final class CanonicalContractSerializer {
-  private static final JsonMapper JSON = JsonMapper.builder().build();
+  private static final JsonMapper JSON =
+      JsonMapper.builder().disable(JsonWriteFeature.WRITE_HEX_UPPER_CASE).build();
   private final Validator validator;
 
   public CanonicalContractSerializer(Validator validator) {
@@ -79,7 +84,19 @@ public final class CanonicalContractSerializer {
   }
 
   private static byte[] bytes(JsonNode node) {
-    return JSON.writeValueAsString(sortedKeys(node)).getBytes(StandardCharsets.UTF_8);
+    try {
+      var encoded =
+          StandardCharsets.UTF_8
+              .newEncoder()
+              .onMalformedInput(CodingErrorAction.REPORT)
+              .onUnmappableCharacter(CodingErrorAction.REPORT)
+              .encode(CharBuffer.wrap(JSON.writeValueAsString(sortedKeys(node))));
+      var bytes = new byte[encoded.remaining()];
+      encoded.get(bytes);
+      return bytes;
+    } catch (CharacterCodingException ex) {
+      throw new ContractValidationException("$", "INVALID_UNICODE");
+    }
   }
 
   private static JsonNode sortedKeys(JsonNode node) {

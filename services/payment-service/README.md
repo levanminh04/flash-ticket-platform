@@ -71,7 +71,7 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 
 Inject validator/serializer/hash service bằng constructor. `purchaseHash` kiểm invariant snapshot trước khi hash; `requestHash` chỉ hash actor/orderId/provider, không trim/đổi case subject. `envelopeHash` yêu cầu envelope typed đã qua shape và invariant validation, hash toàn bộ metadata/data; producer retry giữ nguyên envelope, retry count nằm trong transport header.
 
-Canonical v1 dùng UTF-8, key sắp thứ tự, null tường minh, UUID lowercase, Instant UTC Z và wire money/version dạng chuỗi. Chỉ items/seats của purchase được sắp theo ID; array hợp đồng khác giữ thứ tự. Encoder riêng không nhận cấu hình formatting của global JsonMapper. Golden bytes và SHA-256 ở `src/test/resources/contracts/canonical-v1` được tính độc lập bằng Python stdlib; đây là candidate cần Booking review, chưa chứng minh hash liên service đã khớp.
+Canonical v1 dùng UTF-8 strict (từ chối surrogate lẻ bằng INVALID_UNICODE), control escape hex lowercase, key sắp thứ tự, null tường minh, UUID lowercase, Instant UTC Z và wire money/version dạng chuỗi. Chỉ items/seats của purchase được sắp theo ID; array hợp đồng khác giữ thứ tự. Encoder riêng không nhận cấu hình formatting của global JsonMapper. Golden bytes và SHA-256 ở `src/test/resources/contracts/canonical-v1` được tính độc lập bằng Python stdlib; đây là candidate cần Booking review, chưa chứng minh hash liên service đã khớp.
 
 Snapshot chưa có sector kind hoặc seat→ticketType mapping. Validator kiểm tính nhất quán nội bộ: QUANTITY không sector/seat; SEAT_MAP một sector, toàn bộ items có seats đủ quantity hoặc toàn bộ không có seats. Booking vẫn chịu trách nhiệm xác nhận selection khớp cấu hình nguồn. P1 chưa thêm controller/repository, RabbitMQ/inbox/outbox runtime, provider hoặc Saga.
 
@@ -86,3 +86,7 @@ Kiểm tại worktree scaffold ngày 2026-10-23 với Java 21 và PostgreSQL 16.
 Các kết quả này chỉ xác nhận scaffold và các kiểm đã mô tả, chưa nghiệm thu thanh toán/E2E. Khi thiếu PostgreSQL/JDK đúng, báo NOT_RUN cùng nguyên nhân. Test mock không thay được kiểm mapping trên PostgreSQL thật.
 
 Review độc lập trước P1 đã rà mô hình/quan hệ, contract và profile. Sau review đã bổ sung lỗi timestamp/enum có đường dẫn field, metadata cho 2 EmbeddedId/5 version/12 association, confirmation mismatch/unique, khóa ngoại khác order/currency, JSONB reload và nguyên nhân optimistic lock cụ thể. P1 thay hành vi last-value bằng từ chối duplicate JSON key trong ContractCodec và bổ sung canonical hashing; thỏa thuận liên parser/hash với Booking vẫn cần kiểm tích hợp riêng.
+
+### Kiểm P1 trên nhánh codex/payment-runtime — 23/10/2026
+
+Maven verify bằng JDK 21/UTC: 64 test, 0 failure/error/skip; Spotless và SpotBugs PASS. Có golden byte/hash độc lập, kiểm Spring bean thật và regression cho Unicode surrogate/control escaping từ review độc lập. Không chạy lại PostgreSQL mapping/RabbitMQ/VNPay/E2E trong P1; chưa có thay đổi runtime các phần đó.

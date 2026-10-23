@@ -17,6 +17,23 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.node.ObjectNode;
 
 class CanonicalContractSerializerTest {
+  @Test
+  void keepsValidSurrogatePairsAndUsesLowercaseControlEscapes() {
+    var id = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    String actor = "buyer-" + Character.toString(0x1F3AB);
+    assertThat(
+            new String(
+                serializer.requestBytes(id, PaymentProvider.VNPAY, actor), StandardCharsets.UTF_8))
+        .contains(actor);
+    String control = "buyer-" + (char) 0x001B;
+    assertThat(
+            new String(
+                serializer.requestBytes(id, PaymentProvider.VNPAY, control),
+                StandardCharsets.UTF_8))
+        .isEqualTo(
+            "{\"actor\":\"buyer-\\u001b\",\"orderId\":\"10000000-0000-0000-0000-000000000001\",\"provider\":\"VNPAY\"}");
+  }
+
   static final PaymentContractFixtures F = new PaymentContractFixtures();
   final CanonicalContractSerializer serializer =
       new CanonicalContractSerializer(F.factory.getValidator());

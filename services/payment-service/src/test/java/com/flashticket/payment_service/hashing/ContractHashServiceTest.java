@@ -16,6 +16,34 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.node.ObjectNode;
 
 class ContractHashServiceTest {
+  @Test
+  void rejectsMalformedUnicodeAcrossAllHashDomains() throws Exception {
+    for (String malformed :
+        new String[] {
+          "buyer-" + (char) 0xD800, "buyer-" + (char) 0xDC00, "buyer-" + (char) 0xD800 + "x"
+        }) {
+      var purchase = F.quantity();
+      purchase.put("buyerSubject", malformed);
+      var envelope = (ObjectNode) F.mapper.readTree(fixture("start-envelope.input.json"));
+      ((ObjectNode) envelope.get("data").get("purchase")).put("buyerSubject", malformed);
+      var typed = F.codec.fromTree(envelope, new TypeReference<Envelope<StartPayment>>() {});
+      unicodeFailure(
+          () ->
+              hashes.requestHash(
+                  UUID.fromString("10000000-0000-0000-0000-000000000001"),
+                  PaymentProvider.VNPAY,
+                  malformed));
+      unicodeFailure(() -> hashes.purchaseHash(F.purchase(purchase)));
+      unicodeFailure(() -> hashes.envelopeHash(typed));
+    }
+  }
+
+  static void unicodeFailure(Runnable action) {
+    var failure = catchThrowable(action::run);
+    assertThat(failure).isInstanceOf(ContractValidationException.class);
+    assertThat(((ContractValidationException) failure).code()).isEqualTo("INVALID_UNICODE");
+  }
+
   static final PaymentContractFixtures F = new PaymentContractFixtures();
   final ContractHashService hashes =
       new ContractHashService(
