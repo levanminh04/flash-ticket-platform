@@ -1,6 +1,6 @@
 # Payment Service scaffold
 
-Scaffold gồm 13 JPA entity, 2 composite ID, enum, DTO theo B13-v0.2, mapper thủ công và cấu hình. Chưa có endpoint, repository nghiệp vụ, consumer, relay, Saga handler hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
+Scaffold gồm 13 JPA entity, 2 composite ID, enum, DTO theo B13-v0.2, mapper MapStruct dạng Spring bean và cấu hình. Chưa có endpoint, repository nghiệp vụ, consumer, relay, Saga handler hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
 
 ## Build
 
@@ -56,10 +56,12 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 
 ## Dùng entity, DTO và mapper
 
-- Entity tương ứng `payment_schema.tbl_*`; association chỉ điều hướng đọc. Gán scalar FK trước persist, không chỉ thêm vào collection. Không cascade hoặc orphanRemoval. Sau thay FK của entity đã load, reload trước dùng association cũ.
+- Entity tương ứng `payment_schema.tbl_*`; Lombok `@Getter`/`@Setter` ở cấp class, `@Setter(AccessLevel.NONE)` ở các association. Association chỉ điều hướng đọc. Gán scalar FK trước persist, không chỉ thêm vào collection. Không cascade hoặc orphanRemoval. Sau thay FK của entity đã load, reload trước dùng association cũ.
 - Để `rowVersion` null khi persist entity mới có `@Version`; Hibernate sẽ khởi tạo và quản lý version. ID/time/state khác do phía gọi cung cấp. Constructor JPA protected; entity có setter scalar để task nghiệp vụ sau dùng factory có chủ ý.
 - `ContractCodec` nhận JsonMapper và Jakarta Validator, không thay global mapper của ứng dụng. Dùng codec tại biên nhận command/snapshot để kiểm required field kể cả nullable, unknown field lồng nhau, wire token và Bean Validation. Dùng TypeReference cho Envelope có payload cụ thể.
-- DTO là record bất biến, collection được copy. Money/version trên wire là String; Instant xuất UTC Z. Mapper là lớp Java thuần, khởi tạo bằng constructor; wiring Spring thực hiện khi có application handler thật.
+- DTO là record bất biến, collection được copy. Money/version trên wire là String; Instant xuất UTC Z. DTO HTTP trả về nằm ở `dto/response` (gồm Problem/Violation); contract liên service ở `dto/message`, snapshot ở `dto/snapshot`, codec/validation chung ở `dto/common`. `dto/request` dành cho request HTTP khi có endpoint cần body có cấu trúc; chưa tạo public StartPayment request vì POST khởi tạo thanh toán thuộc Booking.
+- PaymentStartMapper, RefundMapper, PaymentViewMapper và OrderPaymentSnapshotMapper dùng MapStruct. `PaymentMapperConfig` chọn Spring component model, constructor injection và báo lỗi build khi có field đích chưa map. MapStruct processor cùng Lombok binding được cấu hình trong Maven; không commit các lớp `*Impl` sinh trong target.
+- MoneyMapper/VersionMapper và hai converter JSON là Spring component với các hàm chuyển đổi tường minh. Chúng giữ kiểm tiền/version chính xác và contract codec; `MappingConfiguration` tạo codec từ JsonMapper/Validator của Spring. Có thể inject mapper qua constructor, không cần tự `new` hoặc dùng Mappers.getMapper khi chạy ứng dụng.
 - Mapper không query association, chọn accepted charge/latest attempt, tính phí/hash hoặc tạo ID/thời gian. Snapshot hash do caller cung cấp. JSON serialization thông thường không phải canonical serializer.
 - Chưa có validator bất biến nhiều dòng/tổng tiền/ghế trùng/ownership/state transition. DTO hợp lệ hình dạng không đồng nghĩa đủ điều kiện thực hiện thanh toán.
 
@@ -67,7 +69,7 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 
 Kiểm tại worktree scaffold ngày 2026-10-23 với Java 21 và PostgreSQL 16.15 tách biệt:
 
-- `verify -Pmapping-tests`: 55 test, gồm 14 test PostgreSQL, 0 failure/error/skip; Spotless và SpotBugs PASS.
+- `verify -Pmapping-tests`: 57 test, gồm 14 test PostgreSQL và kiểm Spring inject mapper, 0 failure/error/skip; Spotless và SpotBugs PASS.
 - Config Server `verify`: PASS; endpoint thật `/payment-service/default` trả cấu hình `ddl-auto=validate`.
 - JAR Payment chạy profile `local-foundation` với Config Server và PostgreSQL test: khởi tạo EntityManager thành công, `/actuator/health` trả `UP`.
 

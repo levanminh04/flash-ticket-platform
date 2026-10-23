@@ -1,41 +1,53 @@
 package com.flashticket.payment_service.entity;
 
-import com.flashticket.payment_service.entity.enums.*;
-import jakarta.persistence.*;
+import com.flashticket.payment_service.entity.enums.PaymentAttemptState;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.*;
-import lombok.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "tbl_payment_attempts", schema = "payment_schema")
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentAttempt {
-  @Setter
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;
 
-  @Setter
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
-  @Setter
   @Column(
       name = "provider",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String provider;
 
-  @Setter
   @Column(
       name = "merchant_account",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String merchantAccount;
 
-  @Setter
   @Column(
       name = "expected_amount",
       nullable = false,
@@ -44,46 +56,39 @@ public class PaymentAttempt {
       columnDefinition = "\"payment_schema\".\"money_amount\"")
   private BigDecimal expectedAmount;
 
-  @Setter
   @Column(
       name = "currency",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"currency_code\"")
   private String currency;
 
-  @Setter
   @Column(name = "started_at", nullable = false)
   private Instant startedAt;
 
-  @Setter
   @Column(name = "finished_at", nullable = true)
   private Instant finishedAt;
 
-  @Setter
   @Enumerated(EnumType.STRING)
   @Column(name = "state", nullable = false)
   private PaymentAttemptState state;
 
-  @Setter
   @Column(name = "request_key", nullable = false)
   private UUID requestKey;
 
-  @Setter
   @Column(
       name = "request_hash",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String requestHash;
 
-  @Setter
   @Column(name = "payment_url", nullable = true)
   private String paymentUrl;
 
-  @Setter
   @Version
   @Column(name = "row_version", nullable = false)
   private Long rowVersion;
 
+  @Setter(AccessLevel.NONE)
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumns({
     @JoinColumn(
@@ -104,6 +109,7 @@ public class PaymentAttempt {
   })
   private OrderPaymentSnapshot orderSnapshot;
 
+  @Setter(AccessLevel.NONE)
   @OneToMany(mappedBy = "attempt", fetch = FetchType.LAZY)
   private List<Charge> charges = new ArrayList<>();
 }

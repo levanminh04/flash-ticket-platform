@@ -2,9 +2,10 @@ package com.flashticket.payment_service.dto;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.message.*;
-import com.flashticket.payment_service.dto.snapshot.*;
+import com.flashticket.payment_service.dto.common.ContractCodec;
+import com.flashticket.payment_service.dto.common.Envelope;
+import com.flashticket.payment_service.dto.message.StartPayment;
+import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import jakarta.validation.Validation;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.*;

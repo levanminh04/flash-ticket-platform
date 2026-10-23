@@ -1,4 +1,4 @@
-package com.flashticket.payment_service.dto.payment;
+package com.flashticket.payment_service.dto.response;
 
 public enum StartRequestState {
   WAITING,

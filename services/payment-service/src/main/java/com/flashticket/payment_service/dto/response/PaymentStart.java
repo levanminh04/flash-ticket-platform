@@ -1,13 +1,13 @@
-package com.flashticket.payment_service.dto.payment;
+package com.flashticket.payment_service.dto.response;
 
-import com.fasterxml.jackson.annotation.*;
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.message.*;
-import com.flashticket.payment_service.dto.snapshot.*;
-import com.flashticket.payment_service.entity.enums.*;
-import jakarta.validation.constraints.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.flashticket.payment_service.dto.common.WireMoney;
+import com.flashticket.payment_service.entity.enums.PaymentAttemptState;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.time.Instant;
-import java.util.*;
+import java.util.UUID;
 
 public record PaymentStart(
     @NotNull UUID orderId,

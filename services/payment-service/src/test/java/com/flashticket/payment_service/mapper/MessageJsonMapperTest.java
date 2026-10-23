@@ -2,8 +2,10 @@ package com.flashticket.payment_service.mapper;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.message.*;
+import com.flashticket.payment_service.dto.common.ContractCodec;
+import com.flashticket.payment_service.dto.common.Envelope;
+import com.flashticket.payment_service.dto.message.StartPaymentResult;
+import com.flashticket.payment_service.dto.message.StartPaymentResultState;
 import jakarta.validation.Validation;
 import java.time.Instant;
 import java.util.UUID;

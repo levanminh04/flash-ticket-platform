@@ -1,20 +1,17 @@
 package com.flashticket.payment_service.mapper;
 
-import com.flashticket.payment_service.dto.common.*;
+import com.flashticket.payment_service.dto.common.ContractCodec;
+import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.StartPaymentResult;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 
+@Component
+@RequiredArgsConstructor
 public final class MessageJsonMapper {
   private final ContractCodec codec;
-
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      justification =
-          "ContractCodec has no mutators; its private JsonMapper is immutable and Validator is thread-safe.")
-  public MessageJsonMapper(ContractCodec codec) {
-    this.codec = codec;
-  }
 
   public <T> JsonNode toEnvelopeJson(Envelope<T> value) {
     return codec.toTree(value);

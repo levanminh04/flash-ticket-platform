@@ -1,12 +1,11 @@
 package com.flashticket.payment_service.dto.message;
 
-import com.fasterxml.jackson.annotation.*;
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.payment.*;
-import com.flashticket.payment_service.dto.snapshot.*;
-import com.flashticket.payment_service.entity.enums.*;
-import jakarta.validation.constraints.*;
-import java.util.*;
+import com.flashticket.payment_service.dto.common.WireMoney;
+import com.flashticket.payment_service.dto.common.WireVersion;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import java.util.UUID;
 
 public record TicketTypeConfig(
     @NotNull UUID ticketTypeId,

@@ -1,14 +1,18 @@
 package com.flashticket.payment_service.dto.snapshot;
 
-import com.fasterxml.jackson.annotation.*;
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.message.*;
-import com.flashticket.payment_service.dto.payment.*;
-import com.flashticket.payment_service.entity.enums.*;
+import com.flashticket.payment_service.dto.common.WireMoney;
+import com.flashticket.payment_service.dto.common.WireVersion;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
 public record PurchaseSnapshot(
     @NotNull @Min(1) @Max(1) Integer schemaVersion,

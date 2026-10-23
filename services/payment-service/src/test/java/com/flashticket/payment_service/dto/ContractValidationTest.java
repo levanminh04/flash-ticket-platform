@@ -2,9 +2,10 @@ package com.flashticket.payment_service.dto;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.flashticket.payment_service.dto.common.*;
-import com.flashticket.payment_service.dto.message.*;
-import com.flashticket.payment_service.dto.snapshot.*;
+import com.flashticket.payment_service.dto.common.ContractValidationException;
+import com.flashticket.payment_service.dto.message.SectorConfig;
+import com.flashticket.payment_service.dto.message.StartPaymentResult;
+import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

@@ -1,7 +1,10 @@
 package com.flashticket.payment_service.entity;
 
-import com.flashticket.payment_service.entity.id.*;
-import jakarta.persistence.*;
+import com.flashticket.payment_service.entity.id.EventRefundItemId;
+import com.flashticket.payment_service.entity.id.InboxMessageId;
+import jakarta.persistence.Column;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Version;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;

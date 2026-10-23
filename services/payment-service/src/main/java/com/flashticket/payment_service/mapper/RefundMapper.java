@@ -1,21 +1,13 @@
 package com.flashticket.payment_service.mapper;
 
-import com.flashticket.payment_service.dto.payment.RefundView;
+import com.flashticket.payment_service.dto.response.RefundView;
 import com.flashticket.payment_service.entity.Refund;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-public final class RefundMapper {
-  private final MoneyMapper money;
-
-  public RefundMapper(MoneyMapper money) {
-    this.money = money;
-  }
-
-  public RefundView toDto(Refund refund) {
-    return new RefundView(
-        refund.getId(),
-        refund.getChargeId(),
-        money.toWire(refund.getAmount()),
-        refund.getState(),
-        refund.getReason());
-  }
+@Mapper(config = PaymentMapperConfig.class, uses = MoneyMapper.class)
+public interface RefundMapper {
+  @Mapping(target = "refundId", source = "id")
+  @Mapping(target = "amount", source = "amount", qualifiedByName = "moneyToWire")
+  RefundView toDto(Refund refund);
 }

@@ -1,51 +1,59 @@
 package com.flashticket.payment_service.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.*;
-import lombok.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "tbl_charges", schema = "payment_schema")
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Charge {
-  @Setter
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;
 
-  @Setter
   @Column(name = "attempt_id", nullable = false)
   private UUID attemptId;
 
-  @Setter
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
-  @Setter
   @Column(
       name = "provider",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String provider;
 
-  @Setter
   @Column(
       name = "merchant_account",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String merchantAccount;
 
-  @Setter
   @Column(
       name = "provider_charge_id",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"nonempty_text\"")
   private String providerChargeId;
 
-  @Setter
   @Column(
       name = "amount",
       nullable = false,
@@ -54,21 +62,19 @@ public class Charge {
       columnDefinition = "\"payment_schema\".\"money_amount\"")
   private BigDecimal amount;
 
-  @Setter
   @Column(
       name = "currency",
       nullable = false,
       columnDefinition = "\"payment_schema\".\"currency_code\"")
   private String currency;
 
-  @Setter
   @Column(name = "charged_at", nullable = false)
   private Instant chargedAt;
 
-  @Setter
   @Column(name = "recorded_at", nullable = false)
   private Instant recordedAt;
 
+  @Setter(AccessLevel.NONE)
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumns({
     @JoinColumn(
@@ -94,12 +100,15 @@ public class Charge {
   })
   private PaymentAttempt attempt;
 
+  @Setter(AccessLevel.NONE)
   @OneToOne(mappedBy = "charge", fetch = FetchType.LAZY)
   private PaymentConfirmation confirmation;
 
+  @Setter(AccessLevel.NONE)
   @OneToOne(mappedBy = "charge", fetch = FetchType.LAZY)
   private Refund refund;
 
+  @Setter(AccessLevel.NONE)
   @OneToMany(mappedBy = "charge", fetch = FetchType.LAZY)
   private List<PaymentSaga> sagas = new ArrayList<>();
 }
