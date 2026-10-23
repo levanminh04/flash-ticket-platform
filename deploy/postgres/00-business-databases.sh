@@ -49,7 +49,7 @@ REVOKE ALL ON DATABASE :"database" FROM PUBLIC;
 GRANT CONNECT ON DATABASE :"database" TO :"admin", :"viewer";
 ALTER ROLE :"admin" SET search_path = :"schema", pg_catalog;
 ALTER ROLE :"viewer" SET search_path = :"schema", pg_catalog;
-ALTER ROLE :"viewer" SET timezone = 'UTC';
+ALTER ROLE :"viewer" SET timezone = 'Asia/Ho_Chi_Minh';
 ALTER ROLE :"viewer" SET default_transaction_read_only = on;
 SQL
 

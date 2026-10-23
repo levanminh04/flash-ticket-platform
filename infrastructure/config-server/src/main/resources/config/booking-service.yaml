@@ -4,10 +4,42 @@ server:
 spring:
   datasource:
     url: ${BOOKING_DB_URL}
-    username: ${BOOKING_DB_USERNAME}
+    username: ${BOOKING_DB_USERNAME:booking_admin}
     password: ${BOOKING_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE booking_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: booking_schema
+        jdbc:
+          time_zone: UTC
   rabbitmq:
     host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          audiences:
+            - ${KEYCLOAK_AUDIENCE:flash-ticket-api}
