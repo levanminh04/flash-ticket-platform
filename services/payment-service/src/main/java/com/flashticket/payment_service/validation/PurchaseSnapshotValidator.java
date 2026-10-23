@@ -1,8 +1,8 @@
 package com.flashticket.payment_service.validation;
 
-import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
-import com.flashticket.payment_service.dto.snapshot.PurchaseMode;
 import com.flashticket.payment_service.dto.common.ContractValidationException;
+import com.flashticket.payment_service.dto.snapshot.PurchaseMode;
+import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.util.Comparator;
@@ -16,13 +16,18 @@ public final class PurchaseSnapshotValidator {
   private static final BigDecimal MAX_MONEY = new BigDecimal("9999999999999999999");
   private final Validator validator;
 
-  public PurchaseSnapshotValidator(Validator validator) { this.validator = Objects.requireNonNull(validator); }
+  public PurchaseSnapshotValidator(Validator validator) {
+    this.validator = Objects.requireNonNull(validator);
+  }
 
   public void validate(PurchaseSnapshot purchase) {
     if (purchase == null) fail("$", "CONSTRAINT_VIOLATION");
     var errors = validator.validate(purchase);
     if (!errors.isEmpty()) {
-      var first = errors.stream().min(Comparator.comparing(e -> e.getPropertyPath().toString())).orElseThrow();
+      var first =
+          errors.stream()
+              .min(Comparator.comparing(e -> e.getPropertyPath().toString()))
+              .orElseThrow();
       fail("$." + first.getPropertyPath(), "CONSTRAINT_VIOLATION");
     }
     boolean quantity = purchase.mode() == PurchaseMode.QUANTITY;
@@ -38,29 +43,40 @@ public final class PurchaseSnapshotValidator {
       if (!itemIds.add(item.orderItemId())) fail(path + ".orderItemId", "DUPLICATE_ID");
       var amount = new BigDecimal(item.unitPrice()).multiply(BigDecimal.valueOf(item.quantity()));
       bound(amount, path + ".lineSubtotal");
-      if (amount.compareTo(new BigDecimal(item.lineSubtotal())) != 0) fail(path + ".lineSubtotal", "LINE_TOTAL_MISMATCH");
+      if (amount.compareTo(new BigDecimal(item.lineSubtotal())) != 0)
+        fail(path + ".lineSubtotal", "LINE_TOTAL_MISMATCH");
       subtotal = subtotal.add(amount);
       bound(subtotal, "$.subtotal");
       count += item.quantity();
       if (count > Integer.MAX_VALUE) fail("$.items", "TICKET_COUNT_OUT_OF_RANGE");
-      if (!Objects.equals(item.sectorId(), purchase.sectorId())) fail(path + ".sectorId", "INVALID_SELECTION");
+      if (!Objects.equals(item.sectorId(), purchase.sectorId()))
+        fail(path + ".sectorId", "INVALID_SELECTION");
       boolean hasSeats = !item.seats().isEmpty();
       if (quantity && hasSeats) fail(path + ".seats", "INVALID_SELECTION");
       if (!quantity) {
         if (seated == null) seated = hasSeats;
-        if (seated != hasSeats || hasSeats && item.seats().size() != item.quantity()) fail(path + ".seats", "INVALID_SELECTION");
+        if (seated != hasSeats || hasSeats && item.seats().size() != item.quantity())
+          fail(path + ".seats", "INVALID_SELECTION");
       }
       for (int j = 0; j < item.seats().size(); j++) {
-        if (!seatIds.add(item.seats().get(j).seatId())) fail(path + ".seats[" + j + "].seatId", "DUPLICATE_ID");
+        if (!seatIds.add(item.seats().get(j).seatId()))
+          fail(path + ".seats[" + j + "].seatId", "DUPLICATE_ID");
       }
     }
-    if (subtotal.compareTo(new BigDecimal(purchase.subtotal())) != 0) fail("$.subtotal", "SUBTOTAL_MISMATCH");
+    if (subtotal.compareTo(new BigDecimal(purchase.subtotal())) != 0)
+      fail("$.subtotal", "SUBTOTAL_MISMATCH");
     var discount = new BigDecimal(purchase.discount());
-    if (discount.compareTo(subtotal) > 0 || purchase.promotion() == null && discount.signum() != 0) fail("$.discount", "DISCOUNT_MISMATCH");
-    if (purchase.promotion() != null && discount.compareTo(new BigDecimal(purchase.promotion().discount())) != 0) fail("$.promotion.discount", "DISCOUNT_MISMATCH");
-    if (subtotal.subtract(discount).compareTo(new BigDecimal(purchase.total())) != 0) fail("$.total", "TOTAL_MISMATCH");
-    if (!purchase.frozenAt().isBefore(purchase.expiresAt())) fail("$.frozenAt", "INVALID_TIME_RANGE");
-    if (!purchase.eventStartsAt().isBefore(purchase.eventEndsAt())) fail("$.eventStartsAt", "INVALID_TIME_RANGE");
+    if (discount.compareTo(subtotal) > 0 || purchase.promotion() == null && discount.signum() != 0)
+      fail("$.discount", "DISCOUNT_MISMATCH");
+    if (purchase.promotion() != null
+        && discount.compareTo(new BigDecimal(purchase.promotion().discount())) != 0)
+      fail("$.promotion.discount", "DISCOUNT_MISMATCH");
+    if (subtotal.subtract(discount).compareTo(new BigDecimal(purchase.total())) != 0)
+      fail("$.total", "TOTAL_MISMATCH");
+    if (!purchase.frozenAt().isBefore(purchase.expiresAt()))
+      fail("$.frozenAt", "INVALID_TIME_RANGE");
+    if (!purchase.eventStartsAt().isBefore(purchase.eventEndsAt()))
+      fail("$.eventStartsAt", "INVALID_TIME_RANGE");
   }
 
   public int expectedTicketCount(PurchaseSnapshot purchase) {
@@ -72,5 +88,7 @@ public final class PurchaseSnapshotValidator {
     if (amount.compareTo(MAX_MONEY) > 0) fail(path, "AMOUNT_OUT_OF_RANGE");
   }
 
-  private static void fail(String field, String code) { throw new ContractValidationException(field,code); }
+  private static void fail(String field, String code) {
+    throw new ContractValidationException(field, code);
+  }
 }

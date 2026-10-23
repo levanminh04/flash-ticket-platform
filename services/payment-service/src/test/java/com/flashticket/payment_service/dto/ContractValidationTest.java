@@ -15,10 +15,14 @@ class ContractValidationTest {
   @Test
   void rejectsDuplicateJsonKeysBeforeBuildingTree() throws Exception {
     String json = ContractCodecTest.purchaseJson();
-    for (String bad : new String[] {
-        json.replace("\"buyerSubject\":\"buyer-1\"", "\"buyerSubject\":\"buyer-1\",\"buyerSubject\":\"other\""),
-        json.replace("\"quantity\":1", "\"quantity\":1,\"quantity\":1"),
-        json.replace("\"seats\":[]", "\"seats\":[{\"seatId\":\"a\",\"seatId\":\"b\"}]")}) {
+    for (String bad :
+        new String[] {
+          json.replace(
+              "\"buyerSubject\":\"buyer-1\"",
+              "\"buyerSubject\":\"buyer-1\",\"buyerSubject\":\"other\""),
+          json.replace("\"quantity\":1", "\"quantity\":1,\"quantity\":1"),
+          json.replace("\"seats\":[]", "\"seats\":[{\"seatId\":\"a\",\"seatId\":\"b\"}]")
+        }) {
       var failure = catchThrowable(() -> ContractCodecTest.CODEC.read(bad, PurchaseSnapshot.class));
       assertThat(failure).isInstanceOf(ContractValidationException.class);
       assertThat(((ContractValidationException) failure).field()).isEqualTo("$");
@@ -29,8 +33,9 @@ class ContractValidationTest {
   @Test
   void doesNotChangeApplicationJsonMapper() {
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
-    new com.flashticket.payment_service.dto.common.ContractCodec(mapper,
-        jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator());
+    try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+      new com.flashticket.payment_service.dto.common.ContractCodec(mapper, factory.getValidator());
+    }
     assertThat(mapper.readTree("{\"x\":1,\"x\":2}").get("x").asInt()).isEqualTo(2);
   }
 

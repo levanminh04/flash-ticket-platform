@@ -1,4 +1,4 @@
-# Payment Service scaffold
+# Payment Service — scaffold và contract boundary P1
 
 Scaffold gồm 13 JPA entity, 2 composite ID, enum, DTO theo B13-v0.2, mapper MapStruct dạng Spring bean và cấu hình. Chưa có endpoint, repository nghiệp vụ, consumer, relay, Saga handler hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
 
@@ -63,7 +63,17 @@ YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAM
 - PaymentStartMapper, RefundMapper, PaymentViewMapper và OrderPaymentSnapshotMapper dùng MapStruct. `PaymentMapperConfig` chọn Spring component model, constructor injection và báo lỗi build khi có field đích chưa map. MapStruct processor cùng Lombok binding được cấu hình trong Maven; không commit các lớp `*Impl` sinh trong target.
 - MoneyMapper/VersionMapper và hai converter JSON là Spring component với các hàm chuyển đổi tường minh. Chúng giữ kiểm tiền/version chính xác và contract codec; `MappingConfiguration` tạo codec từ JsonMapper/Validator của Spring. Có thể inject mapper qua constructor, không cần tự `new` hoặc dùng Mappers.getMapper khi chạy ứng dụng.
 - Mapper không query association, chọn accepted charge/latest attempt, tính phí/hash hoặc tạo ID/thời gian. Snapshot hash do caller cung cấp. JSON serialization thông thường không phải canonical serializer.
-- Chưa có validator bất biến nhiều dòng/tổng tiền/ghế trùng/ownership/state transition. DTO hợp lệ hình dạng không đồng nghĩa đủ điều kiện thực hiện thanh toán.
+- `PurchaseSnapshotValidator` kiểm tổng nhiều dòng, discount/promotion, item/seat trùng, mode/sector, quantity và khoảng thời gian; `expectedTicketCount` giới hạn int32. Không kiểm hạn hiện tại để snapshot cũ vẫn đọc được khi retry. Ownership, payable và state transition thuộc application use case ở các gói sau.
+
+## Contract boundary P1
+
+Đường đi cho command start: `ContractCodec.read` với `TypeReference<Envelope<StartPayment>>` → `MessageInvariantValidator.validateStartPayment` → `ContractHashService.envelopeHash` → application use case. Codec chỉ kiểm shape/Bean Validation, không tự áp nghiệp vụ snapshot trong mapper hoặc đổi trách nhiệm các fixture shape cũ. `fromTree` không thể phát hiện key trùng đã bị parser trước đó làm mất; raw JSON phải đi qua codec strict.
+
+Inject validator/serializer/hash service bằng constructor. `purchaseHash` kiểm invariant snapshot trước khi hash; `requestHash` chỉ hash actor/orderId/provider, không trim/đổi case subject. `envelopeHash` yêu cầu envelope typed đã qua shape và invariant validation, hash toàn bộ metadata/data; producer retry giữ nguyên envelope, retry count nằm trong transport header.
+
+Canonical v1 dùng UTF-8, key sắp thứ tự, null tường minh, UUID lowercase, Instant UTC Z và wire money/version dạng chuỗi. Chỉ items/seats của purchase được sắp theo ID; array hợp đồng khác giữ thứ tự. Encoder riêng không nhận cấu hình formatting của global JsonMapper. Golden bytes và SHA-256 ở `src/test/resources/contracts/canonical-v1` được tính độc lập bằng Python stdlib; đây là candidate cần Booking review, chưa chứng minh hash liên service đã khớp.
+
+Snapshot chưa có sector kind hoặc seat→ticketType mapping. Validator kiểm tính nhất quán nội bộ: QUANTITY không sector/seat; SEAT_MAP một sector, toàn bộ items có seats đủ quantity hoặc toàn bộ không có seats. Booking vẫn chịu trách nhiệm xác nhận selection khớp cấu hình nguồn. P1 chưa thêm controller/repository, RabbitMQ/inbox/outbox runtime, provider hoặc Saga.
 
 ## Kết quả kiểm
 
@@ -75,4 +85,4 @@ Kiểm tại worktree scaffold ngày 2026-10-23 với Java 21 và PostgreSQL 16.
 
 Các kết quả này chỉ xác nhận scaffold và các kiểm đã mô tả, chưa nghiệm thu thanh toán/E2E. Khi thiếu PostgreSQL/JDK đúng, báo NOT_RUN cùng nguyên nhân. Test mock không thay được kiểm mapping trên PostgreSQL thật.
 
-Review độc lập đã rà mô hình/quan hệ, contract và profile. Sau review đã bổ sung lỗi timestamp/enum có đường dẫn field, metadata cho 2 EmbeddedId/5 version/12 association, confirmation mismatch/unique, khóa ngoại khác order/currency, JSONB reload và nguyên nhân optimistic lock cụ thể. Các phần nghiệp vụ ở ngoài scope vẫn giữ nguyên; decoder hiện dùng hành vi last-value của Jackson cho JSON trùng tên field, chưa có canonical hashing hoặc thỏa thuận liên parser trong scaffold.
+Review độc lập trước P1 đã rà mô hình/quan hệ, contract và profile. Sau review đã bổ sung lỗi timestamp/enum có đường dẫn field, metadata cho 2 EmbeddedId/5 version/12 association, confirmation mismatch/unique, khóa ngoại khác order/currency, JSONB reload và nguyên nhân optimistic lock cụ thể. P1 thay hành vi last-value bằng từ chối duplicate JSON key trong ContractCodec và bổ sung canonical hashing; thỏa thuận liên parser/hash với Booking vẫn cần kiểm tích hợp riêng.

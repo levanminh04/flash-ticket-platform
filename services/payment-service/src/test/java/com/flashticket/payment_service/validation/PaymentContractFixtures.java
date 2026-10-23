@@ -61,5 +61,8 @@ public final class PaymentContractFixtures implements AutoCloseable {
     return codec.fromTree(tree, PurchaseSnapshot.class);
   }
 
-  @Override public void close() { factory.close(); }
+  @Override
+  public void close() {
+    factory.close();
+  }
 }
