@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "orderId": "10000000-0000-0000-0000-00000000000A",
+  "eventId": "10000000-0000-0000-0000-000000000002",
+  "buyerSubject": "buyer-1",
+  "customerEmail": "buyer@example.test",
+  "sourceConfigVersion": "1",
+  "sourceOrderVersion": "9223372036854775807",
+  "frozenAt": "2030-01-01T01:00:00.000Z",
+  "expiresAt": "2030-01-01T01:10:00Z",
+  "currency": "VND",
+  "eventTitle": "Đêm \"nhạc\" / \\ \n\u0001",
+  "eventStartsAt": "2030-01-02T01:00:00Z",
+  "eventEndsAt": "2030-01-02T03:00:00Z",
+  "venueName": null,
+  "mode": "SEAT_MAP",
+  "sectorId": "10000000-0000-0000-0000-000000000007",
+  "subtotal": "250",
+  "discount": "25",
+  "total": "225",
+  "promotion": {
+    "promotionId": "10000000-0000-0000-0000-000000000008",
+    "code": "SAVE",
+    "discount": "25"
+  },
+  "items": [
+    {
+      "orderItemId": "10000000-0000-0000-0000-00000000000B",
+      "ticketTypeId": "10000000-0000-0000-0000-000000000004",
+      "ticketTypeName": "General",
+      "quantity": 2,
+      "unitPrice": "100",
+      "lineSubtotal": "200",
+      "sectorId": "10000000-0000-0000-0000-000000000007",
+      "seats": [
+        {
+          "seatId": "10000000-0000-0000-0000-00000000000D",
+          "seatLabel": "Ghế D",
+          "rowName": "A",
+          "seatNumber": "D"
+        },
+        {
+          "seatId": "10000000-0000-0000-0000-00000000000C",
+          "seatLabel": "Ghế C",
+          "rowName": "A",
+          "seatNumber": "C"
+        }
+      ]
+    },
+    {
+      "orderItemId": "10000000-0000-0000-0000-00000000000A",
+      "ticketTypeId": "10000000-0000-0000-0000-000000000004",
+      "ticketTypeName": "General",
+      "quantity": 1,
+      "unitPrice": "50",
+      "lineSubtotal": "50",
+      "sectorId": "10000000-0000-0000-0000-000000000007",
+      "seats": [
+        {
+          "seatId": "10000000-0000-0000-0000-00000000000E",
+          "seatLabel": "Ghế E",
+          "rowName": "A",
+          "seatNumber": "E"
+        }
+      ]
+    }
+  ]
+}
