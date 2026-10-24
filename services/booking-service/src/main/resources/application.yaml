@@ -3,3 +3,12 @@ spring:
     name: booking-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.booking_service.observability.BookingLogCustomizer
+      stacktrace:
+        printer: com.flashticket.booking_service.observability.SafeStackTracePrinter

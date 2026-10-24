@@ -1,8 +1,8 @@
 package com.flashticket.booking_service.dto.snapshot;
 
-import java.util.UUID;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 
 public record SeatSelectionSnapshot(
     @NotNull UUID seatId,

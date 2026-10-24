@@ -3,25 +3,25 @@ package com.flashticket.booking_service.dto.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "mode")
-@JsonSubTypes({
-  @JsonSubTypes.Type(value = OrderSelection.QuantitySelection.class, name = "QUANTITY"),
-  @JsonSubTypes.Type(value = OrderSelection.SeatMapSelection.class, name = "SEAT_MAP")
-})
 public sealed interface OrderSelection
     permits OrderSelection.QuantitySelection, OrderSelection.SeatMapSelection {
+  @JsonProperty(value = "mode", access = JsonProperty.Access.READ_ONLY)
+  default String getMode() {
+    return this instanceof QuantitySelection ? "QUANTITY" : "SEAT_MAP";
+  }
+
   @Getter
   final class QuantityItem {
     @NotNull private final UUID ticketTypeId;
@@ -43,7 +43,7 @@ public sealed interface OrderSelection
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public QuantitySelection(
         @JsonProperty(value = "items", required = true) List<@NotNull @Valid QuantityItem> items) {
-      this.items = items;
+      this.items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
     }
 
     @AssertTrue
@@ -55,13 +55,13 @@ public sealed interface OrderSelection
     }
   }
 
-  @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
-  @JsonSubTypes({
-    @JsonSubTypes.Type(value = SeatedSelection.class, name = "SEATED"),
-    @JsonSubTypes.Type(value = StandingSelection.class, name = "STANDING")
-  })
   sealed interface SeatMapSelection extends OrderSelection
-      permits SeatedSelection, StandingSelection {}
+      permits SeatedSelection, StandingSelection {
+    @JsonProperty(value = "kind", access = JsonProperty.Access.READ_ONLY)
+    default String getKind() {
+      return this instanceof SeatedSelection ? "SEATED" : "STANDING";
+    }
+  }
 
   @Getter
   final class SeatedSelection implements SeatMapSelection {
@@ -73,7 +73,8 @@ public sealed interface OrderSelection
         @JsonProperty(value = "sectorId", required = true) UUID sectorId,
         @JsonProperty(value = "seatIds", required = true) List<@NotNull UUID> seatIds) {
       this.sectorId = sectorId;
-      this.seatIds = seatIds;
+      this.seatIds =
+          seatIds == null ? null : Collections.unmodifiableList(new ArrayList<>(seatIds));
     }
 
     @AssertTrue
@@ -95,7 +96,7 @@ public sealed interface OrderSelection
         @JsonProperty(value = "sectorId", required = true) UUID sectorId,
         @JsonProperty(value = "items", required = true) List<@NotNull @Valid QuantityItem> items) {
       this.sectorId = sectorId;
-      this.items = items;
+      this.items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
     }
 
     @AssertTrue

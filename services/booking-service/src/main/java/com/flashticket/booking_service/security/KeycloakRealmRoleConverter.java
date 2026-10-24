@@ -12,7 +12,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 public final class KeycloakRealmRoleConverter
     implements Converter<Jwt, Collection<GrantedAuthority>> {
 
-  private static final Set<String> BUSINESS_ROLES = Set.of("BUYER", "ORGANIZER", "ADMIN");
+  private static final Set<String> SUPPORTED_ROLES =
+      Set.of("BUYER", "ORGANIZER", "ADMIN", "INTERNAL_SERVICE");
 
   @Override
   public Collection<GrantedAuthority> convert(Jwt jwt) {
@@ -29,7 +30,7 @@ public final class KeycloakRealmRoleConverter
     return roles.stream()
         .filter(String.class::isInstance)
         .map(String.class::cast)
-        .filter(BUSINESS_ROLES::contains)
+        .filter(SUPPORTED_ROLES::contains)
         .distinct()
         .<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role))
         .toList();

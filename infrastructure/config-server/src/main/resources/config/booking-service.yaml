@@ -17,6 +17,8 @@ spring:
     properties:
       hibernate:
         default_schema: booking_schema
+        type:
+          json_format_mapper: jackson3
         jdbc:
           time_zone: UTC
   data:
@@ -44,9 +46,39 @@ spring:
         prefetch: 20
   security:
     oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: ${INTERNAL_SERVICE_CLIENT_SECRET}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URI}
       resourceserver:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI}
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
           audiences:
             - ${KEYCLOAK_AUDIENCE:flash-ticket-api}
+  cloud:
+    openfeign:
+      oauth2:
+        enabled: false
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 5000
+            loggerLevel: none
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.booking_service.observability.BookingLogCustomizer
+      stacktrace:
+        printer: com.flashticket.booking_service.observability.SafeStackTracePrinter

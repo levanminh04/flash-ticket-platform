@@ -2,6 +2,7 @@ package com.flashticket.booking_service.mapper;
 
 import com.flashticket.booking_service.dto.snapshot.SeatSelectionSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SelectionSnapshot;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -10,6 +11,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
+@SuppressFBWarnings(
+    value = "EI_EXPOSE_REP2",
+    justification = "Jackson JsonMapper is a configured, thread-safe Spring singleton dependency.")
 public class MappingValueConverter {
   private final JsonMapper objectMapper;
 

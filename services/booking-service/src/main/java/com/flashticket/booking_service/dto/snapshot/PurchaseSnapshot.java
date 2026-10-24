@@ -12,6 +12,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,13 +23,9 @@ public record PurchaseSnapshot(
     @NotNull UUID eventId,
     @NotBlank String buyerSubject,
     @NotBlank @Email String customerEmail,
-    @NotBlank
-        @Pattern(regexp = "^[1-9][0-9]{0,18}$")
-        @DecimalMax("9223372036854775807")
+    @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") @DecimalMax("9223372036854775807")
         String sourceConfigVersion,
-    @NotBlank
-        @Pattern(regexp = "^[1-9][0-9]{0,18}$")
-        @DecimalMax("9223372036854775807")
+    @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") @DecimalMax("9223372036854775807")
         String sourceOrderVersion,
     @NotNull Instant frozenAt,
     @NotNull Instant expiresAt,
@@ -43,6 +41,10 @@ public record PurchaseSnapshot(
     @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") String total,
     @Valid AppliedPromotionSnapshot promotion,
     @NotNull @Valid List<@NotNull @Valid Item> items) {
+  public PurchaseSnapshot {
+    items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
+  }
+
   @AssertTrue
   @JsonIgnore
   public boolean isValidSnapshot() {
@@ -62,5 +64,9 @@ public record PurchaseSnapshot(
       @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") String unitPrice,
       @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") String lineSubtotal,
       UUID sectorId,
-      @NotNull @Valid List<@NotNull @Valid SeatSelectionSnapshot> seats) {}
+      @NotNull @Valid List<@NotNull @Valid SeatSelectionSnapshot> seats) {
+    public Item {
+      seats = seats == null ? null : Collections.unmodifiableList(new ArrayList<>(seats));
+    }
+  }
 }

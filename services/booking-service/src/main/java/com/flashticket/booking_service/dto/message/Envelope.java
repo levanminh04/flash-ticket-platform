@@ -15,9 +15,7 @@ public record Envelope<T>(
     @NotBlank String messageType,
     @NotNull @jakarta.validation.constraints.Positive Integer schemaVersion,
     @NotNull UUID aggregateId,
-    @NotBlank
-        @Pattern(regexp = "^[1-9][0-9]{0,18}$")
-        @DecimalMax("9223372036854775807")
+    @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") @DecimalMax("9223372036854775807")
         String aggregateVersion,
     @NotNull Instant occurredAt,
     @NotNull UUID correlationId,

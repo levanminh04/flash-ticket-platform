@@ -22,14 +22,26 @@ public final class OrderView {
   @NotNull private final OrderState state;
   @NotBlank @Email private final String customerEmail;
   @NotNull private final Currency currency;
-  @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") private final String subtotal;
-  @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") private final String discount;
-  @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") private final String total;
+
+  @NotBlank
+  @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$")
+  private final String subtotal;
+
+  @NotBlank
+  @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$")
+  private final String discount;
+
+  @NotBlank
+  @Pattern(regexp = "^[1-9][0-9]{0,18}$")
+  private final String total;
+
   @NotNull private final Instant expiresAt;
   private final Instant paymentFrozenAt;
+
   @NotBlank
   @Pattern(regexp = "^[1-9][0-9]{0,18}$")
   @DecimalMax("9223372036854775807")
   private final String sourceConfigVersion;
+
   @NotNull @Valid private final List<@NotNull @Valid OrderItemView> items;
 }

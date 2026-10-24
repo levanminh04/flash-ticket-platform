@@ -18,8 +18,15 @@ public final class OrderItemView {
   @NotNull private final UUID ticketTypeId;
   @NotBlank private final String ticketTypeName;
   @Positive private final int quantity;
-  @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") private final String unitPrice;
-  @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") private final String lineSubtotal;
+
+  @NotBlank
+  @Pattern(regexp = "^[1-9][0-9]{0,18}$")
+  private final String unitPrice;
+
+  @NotBlank
+  @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$")
+  private final String lineSubtotal;
+
   private final UUID sectorId;
   @NotNull @Valid private final List<@NotNull @Valid SeatSelectionSnapshot> seats;
 }

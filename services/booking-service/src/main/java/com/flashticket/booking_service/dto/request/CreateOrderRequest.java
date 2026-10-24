@@ -13,7 +13,12 @@ import lombok.Getter;
 @Getter
 public final class CreateOrderRequest {
   @NotNull private final UUID eventId;
-  @NotBlank @Email @Size(max = 254) private final String customerEmail;
+
+  @NotBlank
+  @Email
+  @Size(max = 254)
+  private final String customerEmail;
+
   @NotNull @Valid private final OrderSelection selection;
 
   @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)

@@ -10,8 +10,7 @@ public final class StartPaymentRequest {
   @NotNull private final Provider provider;
 
   @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
-  public StartPaymentRequest(
-      @JsonProperty(value = "provider", required = true) Provider provider) {
+  public StartPaymentRequest(@JsonProperty(value = "provider", required = true) Provider provider) {
     this.provider = provider;
   }
 

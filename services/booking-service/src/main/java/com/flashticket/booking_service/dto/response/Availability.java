@@ -16,10 +16,12 @@ import lombok.Getter;
 @AllArgsConstructor
 public final class Availability {
   @NotNull private final UUID eventId;
+
   @NotNull
   @Pattern(regexp = "^[1-9][0-9]{0,18}$")
   @DecimalMax("9223372036854775807")
   private final String sourceConfigVersion;
+
   @NotNull private final Instant asOf;
   @NotNull @Valid private final List<@NotNull @Valid TicketTypeAvailability> ticketTypes;
   @NotNull @Valid private final List<@NotNull @Valid SectorAvailability> sectors;
@@ -29,6 +31,7 @@ public final class Availability {
   @AllArgsConstructor
   public static final class TicketTypeAvailability {
     @NotNull private final UUID ticketTypeId;
+
     @NotNull
     @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$")
     @DecimalMax("9223372036854775807")
@@ -40,6 +43,7 @@ public final class Availability {
   public static final class SectorAvailability {
     @NotNull private final UUID sectorId;
     @NotNull private final SectorType kind;
+
     @NotNull
     @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$")
     @DecimalMax("9223372036854775807")

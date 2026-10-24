@@ -1,5 +1,7 @@
 package com.flashticket.booking_service.config;
 
+import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -12,5 +14,12 @@ public class RabbitMqConfig {
   @Bean
   MessageConverter rabbitMessageConverter(JsonMapper jsonMapper) {
     return new JacksonJsonMessageConverter(jsonMapper);
+  }
+
+  @Bean
+  ContainerCustomizer<SimpleMessageListenerContainer> bookingRabbitContainerCustomizer() {
+    return container ->
+        container.setErrorHandler(
+            new com.flashticket.booking_service.messaging.BookingRabbitErrorHandler());
   }
 }

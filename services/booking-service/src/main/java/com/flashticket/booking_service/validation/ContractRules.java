@@ -85,7 +85,7 @@ public final class ContractRules {
             .allMatch(
                 seat ->
                     value.sectors().stream()
-                        .anyMatch(s -> Objects.equals(s.sectorId(), seat.sectorId()))
+                            .anyMatch(s -> Objects.equals(s.sectorId(), seat.sectorId()))
                         && value.ticketTypes().stream()
                             .anyMatch(t -> Objects.equals(t.ticketTypeId(), seat.ticketTypeId())))
         && value.ticketTypes().stream()
