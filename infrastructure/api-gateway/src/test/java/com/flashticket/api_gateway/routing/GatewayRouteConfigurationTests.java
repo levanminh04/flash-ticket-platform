@@ -30,7 +30,7 @@ class GatewayRouteConfigurationTests {
   void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
     Map<String, Route> routes = routesById();
 
-    assertEquals(14, routes.size());
+    assertEquals(15, routes.size());
     assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
@@ -39,7 +39,8 @@ class GatewayRouteConfigurationTests {
     assertEquals("lb://booking-service", routes.get("booking-promote-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-cancel-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-read-order").getUri().toString());
-    assertEquals("lb://payment-service", routes.get("payment-create-attempt").getUri().toString());
+    assertEquals("lb://booking-service", routes.get("booking-start-payment").getUri().toString());
+    assertEquals("lb://booking-service", routes.get("booking-list-orders").getUri().toString());
     assertEquals("lb://payment-service", routes.get("payment-read-order").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-order-tickets").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-qr").getUri().toString());

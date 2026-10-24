@@ -65,8 +65,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "bookingServiceBreaker",
-                                "booking",
-                                true))
+                                "booking"))
                     .uri("lb://booking-service"))
         .route(
             "ticket-check-in",
@@ -83,8 +82,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "ticketServiceBreaker",
-                                "ticket",
-                                false))
+                                "ticket"))
                     .uri("lb://ticket-service"))
         .route(
             "event-public-detail",
@@ -101,8 +99,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "eventServiceBreaker",
-                                "event",
-                                true))
+                                "event"))
                     .uri("lb://event-service"))
         .route(
             "event-organizer-seat-map",
@@ -119,8 +116,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "eventServiceBreaker",
-                                "event",
-                                true))
+                                "event"))
                     .uri("lb://event-service"))
         .route(
             "booking-create-order",
@@ -137,8 +133,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "bookingServiceBreaker",
-                                "booking",
-                                false))
+                                "booking"))
                     .uri("lb://booking-service"))
         .route(
             "booking-promote-order",
@@ -155,8 +150,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "bookingServiceBreaker",
-                                "booking",
-                                false))
+                                "booking"))
                     .uri("lb://booking-service"))
         .route(
             "booking-cancel-order",
@@ -173,8 +167,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "bookingServiceBreaker",
-                                "booking",
-                                false))
+                                "booking"))
                     .uri("lb://booking-service"))
         .route(
             "booking-read-order",
@@ -191,11 +184,27 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "bookingServiceBreaker",
-                                "booking",
-                                true))
+                                "booking"))
                     .uri("lb://booking-service"))
         .route(
-            "payment-create-attempt",
+            "booking-list-orders",
+            route ->
+                route
+                    .order(75)
+                    .path("/api/v1/orders")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "bookingServiceBreaker",
+                                "booking"))
+                    .uri("lb://booking-service"))
+        .route(
+            "booking-start-payment",
             route ->
                 route
                     .order(80)
@@ -208,10 +217,9 @@ public class GatewayRouteConfiguration {
                                 filters,
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
-                                "paymentServiceBreaker",
-                                "payment",
-                                false))
-                    .uri("lb://payment-service"))
+                                "bookingServiceBreaker",
+                                "booking"))
+                    .uri("lb://booking-service"))
         .route(
             "payment-read-order",
             route ->
@@ -227,8 +235,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "paymentServiceBreaker",
-                                "payment",
-                                true))
+                                "payment"))
                     .uri("lb://payment-service"))
         .route(
             "ticket-order-tickets",
@@ -245,8 +252,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "ticketServiceBreaker",
-                                "ticket",
-                                true))
+                                "ticket"))
                     .uri("lb://ticket-service"))
         .route(
             "ticket-qr",
@@ -263,8 +269,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "ticketServiceBreaker",
-                                "ticket",
-                                true))
+                                "ticket"))
                     .uri("lb://ticket-service"))
         .route(
             "ticket-delivery",
@@ -281,8 +286,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "ticketServiceBreaker",
-                                "ticket",
-                                false))
+                                "ticket"))
                     .uri("lb://ticket-service"))
         .route(
             "user-current-user",
@@ -297,8 +301,7 @@ public class GatewayRouteConfiguration {
                                 redisRateLimiter,
                                 remoteAddressKeyResolver,
                                 "userServiceBreaker",
-                                "user",
-                                false))
+                                "user"))
                     .uri("lb://user-service"))
         .build();
   }
@@ -308,12 +311,7 @@ public class GatewayRouteConfiguration {
       RedisRateLimiter redisRateLimiter,
       KeyResolver remoteAddressKeyResolver,
       String circuitBreakerName,
-      String fallbackService,
-      boolean retryGet) {
-    if (retryGet) {
-      filters.retry(retry -> retry.setRetries(3).setMethods(HttpMethod.GET));
-    }
-
+      String fallbackService) {
     return filters
         .requestRateLimiter(
             rateLimit ->
