@@ -3,9 +3,31 @@ server:
 
 spring:
   mongodb:
-    uri: ${MONGO_URI}
+    uri: ${USER_MONGO_URI:${MONGO_URI}}
+  data:
+    mongodb:
+      auto-index-creation: false
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
+    host: ${USER_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${USER_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${USER_RABBITMQ_USERNAME:${RABBITMQ_USERNAME}}
+    password: ${USER_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    connection-timeout: 5s
+    dynamic: false
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${USER_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${USER_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${USER_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+logging:
+  structured:
+    format:
+      console: logstash
