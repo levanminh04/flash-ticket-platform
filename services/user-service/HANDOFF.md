@@ -1,76 +1,69 @@
-# Handoff — User Service
+# Handoff — User Service scaffold
 
-## 1. Mở tunnel khi chạy service từ máy local
+## Đã có
 
-```bash
-ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:17017:127.0.0.1:27017 ft119
+Scaffold theo Booking Service: bốn Mongo document/repository, DTO và MapStruct,
+strict JSON, Problem/exception boundary, safe JSON log, JWT resource server,
+constructor DI feature shells và Rabbit converter/error handler.
+Controller/service chưa có business method. Chưa có consumer/publisher hoặc Keycloak Admin client.
+Kết quả và lệnh kiểm chứng: [TESTING](TESTING.md).
+
+Runtime YAML đã áp dụng tại [user-service.yaml](../../infrastructure/config-server/src/main/resources/config/user-service.yaml).
+Boot 4.1.1 dùng `spring.mongodb.uri`; `auto-index-creation=false`, collection `tbl_*` do deploy quản lý.
+Rabbit dùng manual ACK, prefetch 20, connection timeout 2s, `dynamic=false`; không tự tạo topology.
+Common Eureka/management lấy từ central `application.yaml`. Không có mail, Redis, Feign hoặc OAuth2 Client mới.
+
+## Chạy local với hạ tầng hiện có
+
+1. Cấu hình JDK 21; chạy Config Server và Eureka. Nếu đổi central YAML thì build/chạy lại Config Server.
+2. Nếu dùng Mongo trên 119, mở hoặc dùng lại tunnel:
+
+   ```bash
+   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:17017:127.0.0.1:27017 ft119
+   ```
+
+   `ft119` là alias SSH của máy thành viên; giữ terminal tunnel mở.
+3. Nạp env vào **process** User bằng IDE/shell; Spring không tự đọc `.env` gốc.
+
+| Env | Ý nghĩa / mặc định |
+|---|---|
+| `CONFIG_SERVER_URL` | Mặc định `http://localhost:8888`; production import bắt buộc |
+| `EUREKA_SERVER_URL` | URL Eureka theo common config |
+| `USER_SERVICE_PORT` | Mặc định 8085 |
+| `MONGO_URI` | URI database `user_db`, authSource đúng tài khoản; URL-encode password |
+| `KEYCLOAK_ISSUER_URI` | Issuer realm flash-ticket |
+| `KEYCLOAK_JWK_SET_URI` | JWKS của cùng realm |
+| `KEYCLOAK_AUDIENCE` | Mặc định `flash-ticket-api` |
+| `RABBITMQ_HOST`, `RABBITMQ_PASSWORD` | Host và secret broker hiện có |
+| `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_VHOST` | Mặc định 5672, `flash_ticket_app`, `/` |
+| `USER_SERVICE_VERSION`, `USER_INSTANCE_ID`, `USER_ENVIRONMENT` | Metadata log tùy chọn |
+
+Ví dụ cấu trúc Mongo URI, thay placeholder bằng secret ngoài Git:
+`mongodb://USER:URL_ENCODED_PASSWORD@127.0.0.1:17017/user_db?authSource=admin&maxPoolSize=5`.
+Chọn `authSource` theo nơi tạo user: `user_erd` chỉ đọc ở `user_db`, không dùng làm tài khoản ghi của service.
+
+```powershell
+# Từ services/user-service, sau khi env đã được nạp
+rtk proxy .\mvnw.cmd -B -ntp spring-boot:run
 ```
 
-Giữ terminal mở. Nếu tunnel MongoDB đã chạy thì dùng lại.
-`ft119` là alias SSH; thành viên khác cấu hình
-alias tới `ubuntu@3.106.109.119` bằng key của mình.
+Kiểm tên `user-service`, port 8085 (hoặc override), config được tải và đăng ký Eureka;
+gọi `GET /actuator/health`. Health có thể báo DOWN khi dependency chưa sẵn sàng.
+Smoke hạ tầng chỉ đọc: Mongo `ping`/list metadata, Rabbit mở/đóng connection,
+không declare/publish/consume hoặc ghi fixture vào server119. API business chưa có handler để smoke.
+Smoke này **chưa chạy** trong đợt scaffold vì Config Server/Eureka local chưa mở.
 
-## 2. YAML kết nối
+## Mongo deploy và phần tiếp theo
 
-Gộp block dưới vào [user-service.yaml](../../infrastructure/config-server/src/main/resources/config/user-service.yaml),
-không tạo hai key `spring` trong cùng file. Đây là mẫu để tích hợp, chưa được áp dụng vào code/config runtime.
-
-```yaml
-spring:
-  mongodb:
-    uri: ${MONGO_URI}
-  rabbitmq:
-    host: 3.106.109.119
-    port: 5672
-    username: flash_ticket_app
-    password: ${RABBITMQ_PASSWORD}
-    listener:
-      simple:
-        acknowledge-mode: manual
-        prefetch: 20
-  data:
-    redis:
-      host: 3.106.109.119
-      port: 6379
-      password: ${REDIS_PASSWORD}
-      connect-timeout: 2s
-      timeout: 2s
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://3.106.109.119:8080/realms/flash-ticket
-          jwk-set-uri: http://3.106.109.119:8080/realms/flash-ticket/protocol/openid-connect/certs
-          audiences:
-            - flash-ticket-api
-```
-
-## 3. Điền biến môi trường
-
-Điền trong `.env` gốc, rồi cấu hình IDE/runtime nạp biến vào process User:
-
-```dotenv
-CONFIG_SERVER_URL=http://localhost:8888
-EUREKA_SERVER_URL=http://localhost:8761/eureka/
-MONGO_URI=mongodb://user_admin:DIEN_PASSWORD_DA_URL_ENCODE@127.0.0.1:17017/user_db?authSource=admin&maxPoolSize=5
-RABBITMQ_PASSWORD=DIEN_RABBITMQ_PASSWORD_TREN_SERVER
-REDIS_PASSWORD=DIEN_REDIS_PASSWORD_TREN_SERVER
-```
-
-- Mật khẩu MongoDB là `USER_DB_ADMIN_PASSWORD` trên server; URL-encode trước khi đặt
-  vào URI nếu có ký tự đặc biệt. Không commit secret; Spring không tự đọc `.env`.
-- `user_admin` hiện là tài khoản bootstrap root. `user_erd` chỉ đọc, dùng `authSource=user_db`.
-- Boot **4.1.1** dùng `spring.mongodb.uri`. Collection có tiền tố `tbl_`.
-- Chạy Eureka và Config Server trước User; sửa YAML thì build/chạy lại Config Server.
-- Redis cần thêm `spring-boot-starter-data-redis`; bỏ block Redis nếu không dùng.
-- Listen `user.identity.q` bằng `@RabbitListener(queues = "user.identity.q")`, không tự declare
-  topology. Với `manual`, ACK sau khi lưu DB thành công. Publisher identity từ Keycloak chưa được triển khai.
-- JWT còn cần `SecurityFilterChain` và mapping `realm_access.roles`.
-  Gọi Admin REST dùng client `user-management` và secret từ quản trị;
-  chi tiết OAuth client xem link Keycloak bên dưới.
-
-Nguồn: [MongoDB Compose](../../deploy/mongodb/compose.yaml),
-[MongoDB init](../../deploy/mongodb/10-user.js), [collection prefix](../../deploy/mongodb/99-collection-prefix.js),
-[topology RabbitMQ](../../deploy/rabbitmq/definitions.json),
-[Keycloak/Spring](../../deploy/keycloak/postman/INTERNAL-SERVICE-HANDOFF.md),
-[Spring Boot properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html).
+- [Compose](../../deploy/mongodb/compose.yaml), [init](../../deploy/mongodb/10-user.js),
+  [prefix](../../deploy/mongodb/99-collection-prefix.js),
+  [schema chuẩn](../../docs/architecture/data/mongodb/schema.cjs).
+- Mongo trên server119 đã được kiểm tra chỉ đọc và healthy ngày 25/10/2026;
+  việc chuyển file sang `deploy/mongodb/` mới áp dụng trong repository, chưa đồng bộ path trên server.
+  Scaffold không chạy lại init hoặc sửa dữ liệu/validator trên server.
+- [Guide Keycloak Admin API cho task sau](../../docs/guides/user-service-keycloak-admin-integration.md):
+  có dependency/config/code mẫu, chưa đưa vào runtime và chưa yêu cầu secret `user-management`.
+- Gateway anonymous profile, identity publisher và payload, B13 runtime approval/recovery,
+  B15 V17/V18 và RCA end-to-end còn để task sau. JWT route policy đã có nhưng không thay business implementation.
+- Tham khảo [Rabbit topology](../../deploy/rabbitmq/definitions.json) và
+  [Keycloak internal handoff](../../deploy/keycloak/postman/INTERNAL-SERVICE-HANDOFF.md).
