@@ -4,11 +4,29 @@ server:
 spring:
   mongodb:
     uri: ${MONGO_URI}
+  data:
+    mongodb:
+      auto-index-creation: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          audiences:
+            - ${KEYCLOAK_AUDIENCE:flash-ticket-api}
   rabbitmq:
     host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 2s
+    dynamic: false
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
 
 logging:
   charset:
