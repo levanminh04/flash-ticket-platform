@@ -9,6 +9,6 @@ import org.mapstruct.*;
     unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface OrganizerProfileMapper {
   @Mapping(target = "organizerSubject", source = "profile.identitySubject")
-  @Mapping(target = "followerCount", source = "followerCount")
-  OrganizerPublicView toPublicView(OrganizerProfileDocument profile, long followerCount);
+  @Mapping(target = "followerCount", expression = "java(followerCount)")
+  OrganizerPublicView toPublicView(OrganizerProfileDocument profile, @Context long followerCount);
 }
