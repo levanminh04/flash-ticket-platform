@@ -42,6 +42,7 @@ Config Server vẫn bắt buộc, mặc định `http://localhost:8888`; Payment
 | PAYMENT_SERVICE_PORT | Cổng Payment; mặc định 8083 |
 | PAYMENT_DB_URL / PAYMENT_DB_USERNAME / PAYMENT_DB_PASSWORD | Kết nối runtime có quyền app, không dùng payment_erd hoặc mặc định maintenance login |
 | RABBITMQ_HOST / RABBITMQ_PORT / RABBITMQ_USERNAME / RABBITMQ_PASSWORD | Cấu hình broker được phân phối từ Config Server |
+| RABBITMQ_VHOST / RABBITMQ_BUSINESS_EXCHANGE | Mặc định `/` và `business.ex`, thống nhất với Booking trên `dev/son` |
 | SPRING_PROFILES_ACTIVE | Đặt local-foundation khi chỉ kiểm nền DB, chưa dùng broker/Eureka |
 | JAVA_TOOL_OPTIONS | Đặt -Duser.timezone=UTC cho JVM chạy ứng dụng |
 
@@ -53,6 +54,10 @@ $env:SPRING_PROFILES_ACTIVE = 'local-foundation'
 Đặt credential trong environment trước chạy. Spring không tự đọc file `.env`. Local-foundation tắt Eureka, simple/direct listener auto-start và Rabbit health; không ngăn mã tương lai chủ động gọi broker. Không bỏ security hoặc mở thêm actuator để kiểm ứng dụng.
 
 YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAML riêng Payment tại Config Server chứa datasource/JPA/RabbitMQ/port; shared config không bị thay đổi. JPA luôn validate, Open Session in View tắt, SQL init tắt. JSONB dùng Jackson3JsonFormatMapper để thống nhất JsonNode với Boot 4; các domain SQL được ghi rõ trong Column mapping.
+
+RabbitMQ dùng cùng cấu hình Booking trên `dev/son`: cổng mặc định 5672, user `flash_ticket_app`, publisher confirm `correlated`, publisher returns và mandatory publish. Simple listener dùng ACK thủ công, prefetch 20; consumer phải ACK sau khi transaction commit. JSON converter dùng JsonMapper của ứng dụng. Message lỗi chuyển đổi bị reject không requeue, kể cả khi có `x-death`, để broker đưa vào DLQ theo policy; log chỉ ghi loại exception, không ghi payload/header.
+
+`spring.rabbitmq.dynamic=false`: Payment không tự khai báo exchange/queue/binding. Dùng broker đã provision bằng bộ `deploy/docker-compose.rabbitmq.yml` và `deploy/rabbitmq/definitions.json` trên `dev/son`; bộ này đã có các queue `payment.finance-configured.q`, `payment.event-cancelled.q`, `payment.start.q`, `payment.decision.q`, `payment.ticket-issuance-failed.q`, `payment.order-completed.q` cùng DLQ/binding/policy. Thay đổi này chuẩn bị cấu hình messaging, chưa bổ sung consumer/outbox hoặc xác minh kết nối broker thật.
 
 ## Dùng entity, DTO và mapper
 
