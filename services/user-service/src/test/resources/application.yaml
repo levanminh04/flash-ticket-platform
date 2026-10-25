@@ -1,4 +1,8 @@
 spring:
+  data:
+    mongodb:
+      repositories:
+        type: none
   application:
     name: user-service
   config:
