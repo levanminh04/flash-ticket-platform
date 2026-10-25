@@ -69,7 +69,8 @@ REDIS_PASSWORD=DIEN_REDIS_PASSWORD_TREN_SERVER
   Gọi Admin REST dùng client `user-management` và secret từ quản trị;
   chi tiết OAuth client xem link Keycloak bên dưới.
 
-Nguồn: [MongoDB init](database/10-user.js), [collection prefix](database/99-collection-prefix.js),
+Nguồn: [MongoDB Compose](../../deploy/mongodb/compose.yaml),
+[MongoDB init](../../deploy/mongodb/10-user.js), [collection prefix](../../deploy/mongodb/99-collection-prefix.js),
 [topology RabbitMQ](../../deploy/rabbitmq/definitions.json),
 [Keycloak/Spring](../../deploy/keycloak/postman/INTERNAL-SERVICE-HANDOFF.md),
 [Spring Boot properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html).

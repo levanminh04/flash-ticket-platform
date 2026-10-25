@@ -21,7 +21,7 @@ Scaffold hoàn tất nghĩa là cấu trúc bean, mapping, wire DTO và các bou
 | Cách scaffold, package, dependency, phạm vi | `docs/guides/agent-service-scaffold-playbook.md` |
 | Mongo ownership và field | `docs/architecture/B12-data-ownership-and-schema.md` §4.5, §13 |
 | BSON validator và index | `docs/architecture/data/mongodb/schema.cjs` |
-| Collection vật lý | `services/user-service/database/10-user.js`, `99-collection-prefix.js` |
+| Collection vật lý | `deploy/mongodb/10-user.js`, `deploy/mongodb/99-collection-prefix.js`; Compose tại `deploy/mongodb/compose.yaml` |
 | REST và quy tắc organizer/follow | `docs/architecture/B13-api-and-event-contracts.md` §2, §9 |
 | Kiểm chứng và quan sát | B15, B16; giới hạn scaffold theo playbook và source Booking |
 | Runtime | User POM, bootstrap YAML, Config Server YAML, `services/user-service/HANDOFF.md` |
@@ -57,7 +57,7 @@ document/     UserDocument, OrganizerApplicationDocument, OrganizerProfileDocume
               UserFollowDocument, RoleGrant
 enums/        OrganizerApplicationStatus, RoleGrantStatus và enum cần cho mapping
 dto/request/  OrganizerApplicationRequest, RejectOrganizerApplicationRequest
-dto/response/ MeView, OrganizerApplicationView, OrganizerPublicView, CursorPage, Problem
+dto/response/ MeView, OrganizerApplicationView, OrganizerPublicView, OrganizerApplicationPage, Problem
 mapper/       UserMapper, OrganizerApplicationMapper, OrganizerProfileMapper
 validation/   Chỉ helper/rule có nhu cầu tái sử dụng thực tế
 security/     KeycloakRealmRoleConverter
@@ -114,7 +114,7 @@ Hợp đồng cố định từ B13:
 - `RejectOrganizerApplicationRequest`: đúng `reason`, `@NotBlank`.
 - `OrganizerPublicView`: đúng `organizerSubject`, `organizationName`, `shortDescription`, `followerCount` dạng JSON number không âm; không tự đưa logo/banner/audit vào wire DTO cố định này.
 - `Problem`: `code`, `message`, `correlationId`, `violations[{field,code}]`.
-- `CursorPage<T>`: `items`, `nextCursor` nullable; page size của API danh sách sau là 1..100. Chưa cài cursor algorithm hoặc repository paging query.
+- `OrganizerApplicationPage`: `items` là danh sách `OrganizerApplicationView`, `nextCursor` nullable, tương tự `OrderPage` cụ thể của Booking; page size của API danh sách sau là 1..100. Chưa cài cursor algorithm hoặc repository paging query.
 
 Chi tiết DTO phụ do người viết spec đề xuất cho scaffold, chưa phải endpoint đã hoạt động:
 
@@ -141,7 +141,7 @@ User vẫn là JWT Resource Server dù chưa tích hợp Admin API. Dùng Spring
 | `/actuator/health`, các health subpath | Public, không trả chi tiết nhạy cảm |
 | `/internal/v1/**`, actuator khác và route còn lại | Deny; User chưa có internal HTTP contract cần mở |
 
-Root controller tương ứng với các nhóm route trên; controller follow đặt ở feature follow. Không thêm handler cho bảng policy. Security tests dùng fixture controller chỉ trong test để kiểm matcher, token và status; không biến fixture thành API production. Machine token chỉ có INTERNAL_SERVICE không được vào API hồ sơ người dùng hoặc quản trị.
+Root controller tương ứng với các nhóm route trên; controller follow đặt ở feature follow. Không thêm handler cho bảng policy. Security tests dùng fixture controller chỉ trong test để kiểm matcher, token và status; không biến fixture thành API production. Giữ JWT/JWKS helper private trong SecurityConfigTests như Booking. Machine token chỉ có INTERNAL_SERVICE không được vào API hồ sơ người dùng hoặc quản trị.
 
 401/403 đi qua `HandlerExceptionResolver` vào global advice như Booking, giữ Bearer challenge. Error dispatch của Boot cần được xử lý để giữ status gốc như mẫu hiện tại.
 
@@ -192,7 +192,7 @@ Người viết guide phải kiểm API/library và quyền tối thiểu theo p
 | Security | JWT ký bằng key fixture; đúng/sai signature/issuer/audience/expiry, role, machine token, route public/admin/buyer; 401/403 và Bearer challenge qua global advice |
 | HTTP errors | Business/validation/framework/unexpected statuses; return validation 500; correlation body/header/log khớp; thông tin nhạy cảm không xuất ra |
 | Log/Rabbit/config | Kiểm actual JSON formatter với sentinel secret; converter và error handler wiring; safe fatal disposition, dynamic=false, không declare topology hoặc tạo listener nghiệp vụ |
-| Context | Bean graph feature và repository wiring khởi tạo được với dependency test cô lập; không vô tình thêm scheduler/client Admin API |
+| Context | Dùng UserServiceApplicationTests/contextLoads hiện có để kiểm bean graph feature với repository mock như Booking; repository thật được kiểm ở integration; không vô tình thêm scheduler/client Admin API |
 
 Không chỉ mock repository rồi coi persistence đã được kiểm. Tests phải kiểm ứng xử mapping/security/error có ý nghĩa; không kiểm cấu trúc class cho đủ số lượng. Có thể tổ chức suite theo tên tương tự Booking, nhưng không copy số test/kết quả Booking sang User.
 
@@ -202,7 +202,7 @@ Integration test dùng MongoDB dùng riêng cho test, áp đúng schema/index v�
 
 Smoke runtime khi dependency sẵn sàng: Config Server trả config User, Eureka đăng ký User, Mongo ping/read không ghi dữ liệu nghiệp vụ, Rabbit connection kiểm không declare/publish/consume và health phù hợp. Không sửa broker/realm/DB để smoke vượt qua. Không có consumer thì không tuyên bố đã ACK sau commit; không có handler thì không dùng 404 làm bằng chứng API nghiệp vụ chạy.
 
-Chạy `rtk proxy .\mvnw.cmd -B -ntp verify` trong `services/user-service` với Java 21. Integration profile có lệnh và prerequisites riêng trong TESTING.md. Nếu chỉ có JDK khác, ghi rõ blocker; không sửa Enforcer hoặc gọi lần chạy skip Enforcer là đã qua Java 21 gate. Chạy lại chỉ những kiểm tra cần thiết sau khi sửa lỗi.
+Chọn một gate cuối trong `services/user-service` với Java 21: có Docker thì `rtk proxy .\mvnw.cmd -B -ntp -Pintegration verify` để kiểm cả fast suite và IT; thiếu Docker thì `rtk proxy .\mvnw.cmd -B -ntp verify` và báo rõ IT chưa chạy. Integration profile có prerequisites riêng trong TESTING.md. Nếu chỉ có JDK khác, ghi rõ blocker; không sửa Enforcer hoặc gọi lần chạy skip Enforcer là đã qua Java 21 gate. Chạy lại chỉ những kiểm tra cần thiết sau khi sửa lỗi.
 
 Chấp nhận scaffold khi fast suite và quality gate đạt, mapping/policy/config/documentation đầy đủ, mọi lần kiểm integration/smoke được báo đúng đã chạy hoặc chưa chạy và lý do. Chưa chạy Mongo thật thì phần persistence chỉ được kết luận ở mức converter, chưa nghiệm thu lưu/đọc và index enforcement. B15 V17/V18 và RCA end-to-end vẫn dành cho task nghiệp vụ/tích hợp tương ứng.
 

@@ -105,10 +105,10 @@ Các DB local trước đây đã được chuyển bằng `pg_dump`/`pg_restore
 dùng chung. Bản sao lưu nằm trong `postgres/backups/` (không đưa vào Git).
 Thông tin kết nối chi tiết: [services/LOCAL-DATABASES.md](../services/LOCAL-DATABASES.md).
 
-MongoDB cũng dùng `.env` gốc:
+MongoDB có Compose và script khởi tạo riêng trong `deploy/mongodb/`, dùng `.env` gốc:
 
 ```powershell
-docker compose --env-file .env -f services/user-service/compose.db.yaml up -d --wait user-db
+docker compose --env-file .env -f deploy/mongodb/compose.yaml up -d --wait user-db
 ```
 
 ## Redis local

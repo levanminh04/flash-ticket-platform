@@ -53,7 +53,7 @@ là nghiệp vụ hoàn chỉnh. Chỉ commit/push/merge khi người giao việ
 | Log, trace, correlation và RCA | [B16](../architecture/B16-observability-baseline.md) |
 | Runtime local/AWS hiện hành | [Runtime baseline](../architecture/aws-runtime-baseline.md) |
 | SQL thật | [PostgreSQL DDL](../architecture/data/postgres/) |
-| Mongo validator/index | [schema.cjs](../architecture/data/mongodb/schema.cjs), [initializer User](../../services/user-service/database/) |
+| Mongo validator/index | [schema.cjs](../architecture/data/mongodb/schema.cjs), [MongoDB deploy/init](../../deploy/mongodb/) |
 | Tên bảng/collection thực tế | [LOCAL-DATABASES.md](../../services/LOCAL-DATABASES.md), [script prefix SQL](../../services/99-table-prefix.sql) |
 | Broker được provision | [definitions.json](../../deploy/rabbitmq/definitions.json) |
 
