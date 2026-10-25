@@ -1,0 +1,12 @@
+package com.flashticket.payment_service.repository;
+
+import com.flashticket.payment_service.entity.PaymentAttempt;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, UUID> {
+  Optional<PaymentAttempt> findFirstByOrderIdOrderByStartedAtDescIdDesc(UUID orderId);
+
+  Optional<PaymentAttempt> findByIdAndOrderId(UUID id, UUID orderId);
+}

@@ -26,6 +26,8 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.springframework.context.annotation.Import(
+    com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
 @SpringBootTest
 @ExtendWith(OutputCaptureExtension.class)
 class PaymentServiceApplicationTests {

@@ -19,6 +19,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.springframework.context.annotation.Import(
+    com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
 @org.springframework.boot.test.context.SpringBootTest
 class PaymentMappersTest {
   @org.springframework.beans.factory.annotation.Autowired OrderPaymentSnapshotMapper snapshotMapper;

@@ -12,6 +12,8 @@ import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+@org.springframework.context.annotation.Import(
+    com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
 @SpringBootTest
 class MapperBeansTest {
   @Test

@@ -23,6 +23,7 @@ spring:
 
 flashticket:
   gateway:
+    vnpay-callbacks-enabled: ${PAYMENT_VNPAY_CALLBACKS_ENABLED:false}
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
