@@ -6,10 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.flashticket.booking_service.config.BookingJsonConfig;
 import com.flashticket.booking_service.config.SecurityConfig;
-import com.flashticket.booking_service.web.error.BookingErrorController;
-import com.flashticket.booking_service.web.error.CorrelationFilter;
-import com.flashticket.booking_service.web.error.GlobalExceptionHandler;
-import com.flashticket.booking_service.web.error.ProblemResponses;
+import com.flashticket.booking_service.exception.GlobalExceptionHandler;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.*;
@@ -37,10 +34,7 @@ import org.springframework.web.bind.annotation.*;
   SecurityConfig.class,
   SecurityConfigTests.ProbeController.class,
   BookingJsonConfig.class,
-  ProblemResponses.class,
-  CorrelationFilter.class,
   GlobalExceptionHandler.class,
-  BookingErrorController.class
 })
 class SecurityConfigTests {
   static final RSAKey KEY;
@@ -120,7 +114,7 @@ class SecurityConfigTests {
             .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
             .andExpect(jsonPath("$.violations").isArray())
             .andExpect(header().exists("X-Correlation-Id"))
-            .andExpect(header().exists("X-Request-Id"))
+            .andExpect(header().doesNotExist("X-Request-Id"))
             .andReturn();
     assertThat(result.getResponse().getHeader("WWW-Authenticate")).startsWith("Bearer");
     assertThat(result.getRequest().getSession(false)).isNull();
@@ -229,7 +223,7 @@ class SecurityConfigTests {
                       return request;
                     }))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
+        .andExpect(jsonPath("$.status").value(404));
   }
 
   private static String token(String role) throws Exception {

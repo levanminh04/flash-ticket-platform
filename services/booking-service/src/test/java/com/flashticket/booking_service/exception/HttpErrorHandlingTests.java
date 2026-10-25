@@ -1,17 +1,11 @@
-package com.flashticket.booking_service.web.error;
+package com.flashticket.booking_service.exception;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.flashticket.booking_service.config.BookingJsonConfig;
-import com.flashticket.booking_service.exception.BusinessErrorCode;
-import com.flashticket.booking_service.exception.BusinessException;
-import com.flashticket.booking_service.observability.BookingContext;
 import com.flashticket.booking_service.support.LogCapture;
-import jakarta.servlet.DispatcherType;
-import jakarta.servlet.Filter;
-import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -19,10 +13,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.io.IOException;
 import java.net.SocketException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,7 +28,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -57,7 +46,52 @@ import tools.jackson.databind.json.JsonMapper;
 class HttpErrorHandlingTests {
   @Autowired MockMvc mvc;
   @Autowired JsonMapper mapper;
-  @Autowired Environment environment;
+
+  @Test
+  void successfulRequestsDoNotNeedAnErrorTrackingFilter() throws Exception {
+    mvc.perform(get("/error-probe/get"))
+        .andExpect(status().isOk())
+        .andExpect(header().doesNotExist("X-Correlation-Id"))
+        .andExpect(header().doesNotExist("X-Request-Id"));
+  }
+
+  @Test
+  void rejectionLogExplainsTheFailureAndCarriesRcaContext() throws Exception {
+    String correlation = UUID.randomUUID().toString();
+    try (var logs = new LogCapture()) {
+      mvc.perform(
+              get("/error-probe/business/ORDER_EXPIRED").header("X-Correlation-Id", correlation))
+          .andExpect(status().isConflict());
+      var entry =
+          logs.events().stream()
+              .filter(
+                  event ->
+                      event.getKeyValuePairs() != null
+                          && event.getKeyValuePairs().stream()
+                              .anyMatch(pair -> pair.key.equals("errorCode")))
+              .findFirst()
+              .orElseThrow();
+      assertThat(entry.getFormattedMessage()).contains(ErrorCode.ORDER_EXPIRED.message());
+      assertThat(entry.getKeyValuePairs())
+          .anySatisfy(
+              pair -> {
+                assertThat(pair.key).isEqualTo("correlationId");
+                assertThat(pair.value).isEqualTo(correlation);
+              });
+      assertThat(entry.getKeyValuePairs())
+          .anySatisfy(
+              pair -> {
+                assertThat(pair.key).isEqualTo("httpStatus");
+                assertThat(pair.value).isEqualTo(409);
+              });
+      assertThat(entry.getKeyValuePairs())
+          .anySatisfy(
+              pair -> {
+                assertThat(pair.key).isEqualTo("httpMethod");
+                assertThat(pair.value).isEqualTo("GET");
+              });
+    }
+  }
 
   @ParameterizedTest
   @CsvSource({
@@ -89,8 +123,6 @@ class HttpErrorHandlingTests {
     assertThat(body.get("violations").isArray()).isTrue();
     assertThat(body.get("correlationId").asString())
         .isEqualTo(result.getResponse().getHeader("X-Correlation-Id"));
-    assertThat(BookingContext.parseUuid(result.getResponse().getHeader("X-Request-Id")))
-        .isNotNull();
     assertThat(MDC.get("correlationId")).isNull();
   }
 
@@ -167,75 +199,29 @@ class HttpErrorHandlingTests {
                     .header("X-Correlation-Id", header)
                     .header("X-Request-Id", "client-id"))
             .andReturn();
-    assertThat(BookingContext.parseUuid(result.getResponse().getHeader("X-Correlation-Id")))
-        .isNotNull();
+    assertThat(UUID.fromString(result.getResponse().getHeader("X-Correlation-Id"))).isNotNull();
     assertThat(result.getResponse().getHeader("X-Request-Id")).isNotEqualTo("client-id");
     assertThat(result.getResponse().getContentAsString()).doesNotContain("SENTINEL");
   }
 
   @Test
-  void correlationDoesNotClaimOrderOwnershipAndVerifiedBindingUpdatesHeader() throws Exception {
-    String correlation = UUID.randomUUID().toString();
-    try (var logs = new LogCapture()) {
-      mvc.perform(
-              get("/error-probe/business/ORDER_EXPIRED").header("X-Correlation-Id", correlation))
-          .andExpect(header().string("X-Correlation-Id", correlation))
-          .andExpect(jsonPath("$.correlationId").value(correlation));
-      var failure =
-          logs.events().stream()
-              .filter(e -> e.getMessage().equals("Booking operation rejected."))
-              .findFirst()
-              .orElseThrow();
-      assertThat(failure.getMDCPropertyMap()).doesNotContainKey("orderId");
-    }
-    String order = UUID.randomUUID().toString();
-    mvc.perform(get("/error-probe/bind/" + order))
-        .andExpect(header().string("X-Correlation-Id", order))
-        .andExpect(jsonPath("$.correlationId").value(order));
-  }
-
-  @Test
-  void errorDispatchKeepsIdsAndLogsOnce() throws Exception {
-    UUID correlation = UUID.randomUUID();
-    UUID requestId = UUID.randomUUID();
-    var failure = new IllegalStateException("SENTINEL-message");
-    var request = new org.springframework.mock.web.MockHttpServletRequest();
-    request.setAttribute(BookingContext.CORRELATION_ATTRIBUTE, correlation);
-    request.setAttribute(BookingContext.REQUEST_ATTRIBUTE, requestId);
-    request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, failure);
-    request.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
-    var responses = new ProblemResponses(mapper);
-    try (var logs = new LogCapture()) {
-      try (var ignored =
-          BookingContext.open(
-              Map.of("correlationId", correlation.toString(), "requestId", requestId.toString()))) {
-        responses.response(
-            request,
-            org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-            com.flashticket.booking_service.exception.ErrorClassifier.classify(failure),
-            List.of());
-        var controller = new BookingErrorController(responses);
-        controller.error(request, new org.springframework.mock.web.MockHttpServletResponse());
-      }
-      assertThat(
-              logs.events().stream()
-                  .filter(e -> e.getMessage().equals("Booking operation failed."))
-                  .count())
-          .isEqualTo(1);
-    }
+  void nestedValidationReportsOnlyRootFieldsWithoutEchoingMapKeys() throws Exception {
     mvc.perform(
-            get("/error")
-                .with(
-                    r -> {
-                      r.setDispatcherType(DispatcherType.ERROR);
-                      r.setAttribute(BookingContext.CORRELATION_ATTRIBUTE, correlation);
-                      r.setAttribute(BookingContext.REQUEST_ATTRIBUTE, requestId);
-                      r.setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 404);
-                      return r;
-                    }))
-        .andExpect(status().isNotFound())
-        .andExpect(header().string("X-Request-Id", requestId.toString()))
-        .andExpect(jsonPath("$.correlationId").value(correlation.toString()));
+            post("/error-probe/nested")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"items\":[{\"email\":\"bad\",\"quantity\":1}],"
+                        + "\"labels\":{\"SENTINEL-private@example.test\":\"\"}}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(
+            jsonPath(
+                "$.violations[*].field",
+                org.hamcrest.Matchers.containsInAnyOrder("items", "labels")))
+        .andExpect(
+            content()
+                .string(
+                    org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("SENTINEL"))));
   }
 
   @Test
@@ -245,36 +231,9 @@ class HttpErrorHandlingTests {
     mvc.perform(get("/error-probe/disconnect")).andExpect(content().string(""));
   }
 
-  @Test
-  void actualServletErrorDispatchUsesProblem() throws Exception {
-    int port = environment.getRequiredProperty("local.server.port", Integer.class);
-    try (var client = HttpClient.newHttpClient()) {
-      var response =
-          client.send(
-              HttpRequest.newBuilder(
-                      URI.create("http://127.0.0.1:" + port + "/error-probe/send-error"))
-                  .GET()
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertThat(response.statusCode()).isEqualTo(503);
-      JsonNode body = mapper.readTree(response.body());
-      assertThat(body.size()).isEqualTo(4);
-      assertThat(body.get("correlationId").asString())
-          .isEqualTo(response.headers().firstValue("X-Correlation-Id").orElseThrow());
-      assertThat(response.body()).doesNotContain("SENTINEL-container");
-    }
-  }
-
   @Configuration(proxyBeanMethods = false)
   @EnableAutoConfiguration
-  @Import({
-    BookingJsonConfig.class,
-    CorrelationFilter.class,
-    ProblemResponses.class,
-    GlobalExceptionHandler.class,
-    BookingErrorController.class,
-    ProbeController.class
-  })
+  @Import({BookingJsonConfig.class, GlobalExceptionHandler.class, ProbeController.class})
   static class ProbeApplication {
     @Bean
     SecurityFilterChain probeSecurity(HttpSecurity http) throws Exception {
@@ -282,30 +241,26 @@ class HttpErrorHandlingTests {
           .authorizeHttpRequests(a -> a.anyRequest().permitAll())
           .build();
     }
-
-    @Bean
-    Filter sendErrorProbe() {
-      return (request, response, chain) -> {
-        if (((jakarta.servlet.http.HttpServletRequest) request)
-            .getRequestURI()
-            .equals("/error-probe/send-error")) {
-          ((HttpServletResponse) response).sendError(503, "SENTINEL-container");
-        } else chain.doFilter(request, response);
-      };
-    }
   }
 
   record ProbeInput(@NotBlank @Email String email, @Min(1) int quantity) {}
 
+  record NestedInput(List<@Valid ProbeInput> items, Map<String, @NotBlank String> labels) {}
+
   @RestController
   static class ProbeController {
     @GetMapping(value = "/error-probe/business/{code}", produces = "application/json")
-    String business(@PathVariable BusinessErrorCode code) {
+    String business(@PathVariable ErrorCode code) {
       throw new BusinessException(code);
     }
 
     @PostMapping(value = "/error-probe/input", consumes = "application/json")
     ProbeInput input(@Valid @RequestBody ProbeInput input) {
+      return input;
+    }
+
+    @PostMapping("/error-probe/nested")
+    NestedInput nested(@Valid @RequestBody NestedInput input) {
       return input;
     }
 
@@ -333,12 +288,6 @@ class HttpErrorHandlingTests {
     @GetMapping("/error-probe/constraint")
     String constraint() {
       throw new DataIntegrityViolationException("SENTINEL-SQL-email");
-    }
-
-    @GetMapping("/error-probe/bind/{id}")
-    String bind(@PathVariable UUID id) {
-      BookingContext.bindOrder(id);
-      throw new BusinessException(BusinessErrorCode.ORDER_EXPIRED);
     }
 
     @GetMapping("/error-probe/committed")

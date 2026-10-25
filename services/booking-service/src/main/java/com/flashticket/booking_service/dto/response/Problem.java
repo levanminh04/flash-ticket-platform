@@ -8,6 +8,7 @@ import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+/** JSON lỗi trả cho client, gồm mã lỗi, message, ID tra cứu và lỗi validation. */
 @Getter
 @AllArgsConstructor
 public final class Problem {
@@ -16,6 +17,7 @@ public final class Problem {
   @NotNull private final UUID correlationId;
   @NotNull @Valid private final List<@NotNull @Valid Violation> violations;
 
+  /** Mô tả một field không hợp lệ bằng tên field và mã lỗi, không chứa giá trị input. */
   @Getter
   @AllArgsConstructor
   public static final class Violation {

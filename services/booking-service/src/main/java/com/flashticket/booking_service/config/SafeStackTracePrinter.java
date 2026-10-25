@@ -1,4 +1,4 @@
-package com.flashticket.booking_service.observability;
+package com.flashticket.booking_service.config;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -7,8 +7,9 @@ import java.util.IdentityHashMap;
 import java.util.Set;
 import org.springframework.boot.logging.StackTracePrinter;
 
-/** Keeps code locations and exception types; never writes throwable messages. */
+/** Giữ loại exception và vị trí code, bỏ message có thể chứa secret. */
 public final class SafeStackTracePrinter implements StackTracePrinter {
+  /** In stack/cause có giới hạn độ dài và chống duyệt lặp khi cause tạo vòng. */
   @Override
   public void printStackTrace(Throwable exception, Appendable output) throws IOException {
     if (exception == null) return;

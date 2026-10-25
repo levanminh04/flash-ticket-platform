@@ -11,8 +11,10 @@ import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.module.SimpleModule;
 import tools.jackson.databind.type.LogicalType;
 
+/** Cấu hình đọc JSON chặt chẽ và chọn đúng kiểu OrderSelection. */
 @Configuration(proxyBeanMethods = false)
 public class BookingJsonConfig {
+  /** Đăng ký deserializer; từ chối field lạ, thiếu tham số constructor và ép kiểu sai. */
   @Bean
   JsonMapperBuilderCustomizer bookingJsonMapperCustomizer() {
     return builder ->

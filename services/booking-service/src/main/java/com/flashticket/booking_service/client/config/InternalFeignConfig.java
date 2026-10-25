@@ -1,7 +1,7 @@
 package com.flashticket.booking_service.client.config;
 
-import com.flashticket.booking_service.observability.BookingContext;
 import feign.RequestInterceptor;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.openfeign.security.OAuth2AccessTokenInterceptor;
 import org.springframework.context.annotation.Bean;
@@ -18,17 +18,20 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.web.client.RestClient;
 
-/** Opt in through @FeignClient(configuration = InternalFeignConfig.class), never component scan. */
+/** Cấu hình Feign nội bộ; chỉ bật qua thuộc tính configuration của @FeignClient. */
 public class InternalFeignConfig {
+  /** Chuyển correlation UUID hợp lệ trong MDC, thay giá trị caller tự gán. */
   @Bean
   public RequestInterceptor internalCorrelationInterceptor() {
     return template -> {
       template.removeHeader("X-Correlation-Id");
-      var correlation = BookingContext.correlationId();
-      if (correlation != null) template.header("X-Correlation-Id", correlation.toString());
+      String correlation = MDC.get("correlationId");
+      if (correlation != null && correlation.matches("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"))
+        template.header("X-Correlation-Id", correlation);
     };
   }
 
+  /** Tự lấy và gắn Bearer token client_credentials bằng danh tính của Booking. */
   @Bean
   public OAuth2AccessTokenInterceptor internalOAuth2AccessTokenInterceptor(
       ClientRegistrationRepository registrations,
@@ -46,6 +49,7 @@ public class InternalFeignConfig {
                         tokenResponseClient(connectTimeoutMillis, readTimeoutMillis)))
             .build());
 
+    // Cache token theo Booking, không theo user đang gửi request.
     OAuth2AuthorizedClientManager machineManager =
         ignored ->
             delegate.authorize(
@@ -55,6 +59,7 @@ public class InternalFeignConfig {
     return new OAuth2AccessTokenInterceptor("internal", machineManager);
   }
 
+  /** Tạo HTTP client lấy token với timeout hữu hạn và bộ xử lý lỗi OAuth2. */
   private static RestClientClientCredentialsTokenResponseClient tokenResponseClient(
       int connectTimeoutMillis, int readTimeoutMillis) {
     var factory = new SimpleClientHttpRequestFactory();

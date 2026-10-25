@@ -27,17 +27,15 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 
-class ErrorClassifierTests {
+class ErrorCodeTests {
   @Test
-  void businessFailureRetainsCauseAndSafeMessage() {
+  void businessFailureKeepsItsCodeAndSafeMessage() {
     var cause = new IllegalStateException("SENTINEL-secret");
-    var ex = new BusinessException(BusinessErrorCode.ORDER_EXPIRED, cause);
-    var result = ErrorClassifier.classify(ex);
-    assertThat(result.code()).isEqualTo("ORDER_EXPIRED");
+    var ex = new BusinessException(ErrorCode.ORDER_EXPIRED, cause);
+    var result = ErrorCode.from(ex);
+    assertThat(result.name()).isEqualTo("ORDER_EXPIRED");
     assertThat(result.message()).isEqualTo("Đơn hàng đã hết thời hạn giữ chỗ.");
-    assertThat(result.exception()).isSameAs(ex);
     assertThat(ex.getCause()).isSameAs(cause);
-    assertThat(result.errorType()).isEqualTo(BusinessException.class.getName());
   }
 
   static Stream<Arguments> nativeFailures() {
@@ -66,20 +64,17 @@ class ErrorClassifierTests {
   @ParameterizedTest
   @MethodSource("nativeFailures")
   void nativeFailuresKeepTheirClassification(Throwable error, String code) {
-    var result = ErrorClassifier.classify(error);
-    assertThat(result.code()).isEqualTo(code);
-    assertThat(result.exception()).isSameAs(error);
+    var result = ErrorCode.from(error);
+    assertThat(result.name()).isEqualTo(code);
     assertThat(result.message()).doesNotContain("secret");
   }
 
   @Test
-  void wrappersKeepOriginalExceptionAndRelevantType() {
+  void knownWrappersKeepTheNativeClassification() {
     var nativeFailure = new QueryTimeoutException("secret");
     var wrapper = new CompletionException(nativeFailure);
-    var result = ErrorClassifier.classify(wrapper);
-    assertThat(result.code()).isEqualTo("DATASTORE_TIMEOUT");
-    assertThat(result.errorType()).isEqualTo(QueryTimeoutException.class.getName());
-    assertThat(result.exception()).isSameAs(wrapper);
+    var result = ErrorCode.from(wrapper);
+    assertThat(result.name()).isEqualTo("DATASTORE_TIMEOUT");
   }
 
   @Test
@@ -91,16 +86,11 @@ class ErrorClassifierTests {
             return this;
           }
         };
-    assertThat(ErrorClassifier.classify(cycle).code()).isEqualTo("INTERNAL_ERROR");
-    Throwable deep = new BusinessException(BusinessErrorCode.SEAT_UNAVAILABLE);
+    assertThat(ErrorCode.from(cycle).name()).isEqualTo("INTERNAL_ERROR");
+    Throwable deep = new BusinessException(ErrorCode.SEAT_UNAVAILABLE);
     for (int i = 0; i < 20; i++) deep = new CompletionException(deep);
-    assertThat(ErrorClassifier.classify(deep).code()).isEqualTo("INTERNAL_ERROR");
-    var result = ErrorClassifier.of("ROUTE_NOT_FOUND", null);
-    assertThat(result.code()).isEqualTo("ROUTE_NOT_FOUND");
-    assertThat(result.errorType()).isEqualTo("ROUTE_NOT_FOUND");
-    assertThat(result.exception()).isNull();
-    assertThat(ErrorClassifier.of("arbitrary-secret", null).code()).isEqualTo("INTERNAL_ERROR");
-    assertThat(ErrorClassifier.classify(null).code()).isEqualTo("INTERNAL_ERROR");
+    assertThat(ErrorCode.from(deep).name()).isEqualTo("INTERNAL_ERROR");
+    assertThat(ErrorCode.from(null)).isEqualTo(ErrorCode.INTERNAL_ERROR);
   }
 
   private static Request request() {

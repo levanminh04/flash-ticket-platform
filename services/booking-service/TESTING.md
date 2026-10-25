@@ -202,15 +202,94 @@ BookingJsonConfig, OrderSelection, OrderSelectionDeserializer and PromotionConfi
 Run the focused suites or the complete fast suite with Java 21:
 
 ```powershell
-rtk .\mvnw.cmd "-Dtest=ErrorClassifierTests,ObservabilityTests,HttpErrorHandlingTests,SecurityConfigTests,InternalFeignConfigTests,BookingRabbitErrorHandlerTests,RuntimeConfigurationTests,WorkerErrorConfigTests" test
+rtk .\mvnw.cmd "-Dtest=ErrorCodeTests,RcaLoggingTests,HttpErrorHandlingTests,SecurityConfigTests,InternalFeignConfigTests,BookingRabbitErrorHandlerTests,RuntimeConfigurationTests" test
 rtk .\mvnw.cmd test
 ```
 
-Verification on 2026-10-24: the full fast suite ran **342 tests: 342 passed, 0 failures, 0 errors, 0 skipped**. Scoped Spotless apply/check passed for the 25 Java files in this implementation. Tests exercise the actual Boot JSON formatter and assert sentinels are absent from emitted JSON, HTTP error/security responses, Rabbit fatal logging and the worker error boundary. They also check Booking Rabbit queue/DLX definitions and policies statically.
+Verification on 2026-10-24: the full fast suite ran **342 tests: 342 passed, 0 failures, 0 errors, 0 skipped**. Scoped Spotless apply/check passed for the 25 Java files in this implementation. Tests exercise the actual Boot JSON formatter and assert sentinels are absent from emitted JSON, HTTP error/security responses, Rabbit fatal logging. They also check Booking Rabbit queue/DLX definitions and policies statically.
 
 The final full-suite output is recorded in
 `.superpowers/sdd/2026-10-24-booking-error-handling/task8-done.log`;
 the Task 6/7 targeted runs are in `task6-done.log` and `task7-done.log` in the
 same execution ledger directory.
 
-This run did not contact RabbitMQ, PostgreSQL, Redis, Config Server, Keycloak, an HTTP dependency or a log collector. The Rabbit test does not prove broker-side DLX routing or a real consumer's ACK-after-commit behavior. Booking still has no business consumer/outbox relay/retry worker; their examples in the RCA guide are TARGET. Publisher and worker fixtures check safe failure classification and specified ordering, not durable retry or settlement against a broker. Collector export/masking, tracing agent propagation, performance overhead, whole-module SpotBugs and production fault-injection RCA were not run.
+This run did not contact RabbitMQ, PostgreSQL, Redis, Config Server, Keycloak, an HTTP dependency or a log collector. The Rabbit test does not prove broker-side DLX routing or a real consumer's ACK-after-commit behavior. Booking still has no business consumer/outbox relay/retry worker; their examples in the RCA guide are TARGET. Historical publisher/worker fixtures were synthetic; they were removed during simplification because those production flows do not exist yet. Collector export/masking, tracing agent propagation, performance overhead, whole-module SpotBugs and production fault-injection RCA were not run.
+
+## Error handling simplification — 2026-10-25
+
+`ErrorCode` replaces `BusinessErrorCode` and centralizes safe messages and default
+HTTP statuses. Classification accepts enum values; logging uses that result directly.
+HTTP error logging uses one request flag, including wrapped error redispatches.
+Nested validation reports only DTO root fields; client-controlled map keys are not echoed.
+Malformed parameters now use the common `INVALID_REQUEST` message as well as its code.
+The unused scheduler configuration and its synthetic worker tests were removed;
+add a scheduler error handler when an actual scheduled job is implemented.
+
+The refactor keeps the Problem JSON shape, business codes/statuses, 401/403 Bearer
+responses, correlation/MDC handling and secret/stack-trace filtering. Two added HTTP
+regression tests first failed against the old implementation (duplicate logging and
+nested-field output) and passed after the change.
+
+Verification command: `rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" verify`.
+The machine had JDK 23; compilation still targeted Java 21. Java 21 Enforcer was
+explicitly skipped, so this run does not prove the Java 21 runtime gate passed.
+Full results: **341 tests passed, 0 failures, 0 errors, 0 skipped**; Spotless passed;
+SpotBugs reported **0 findings**. Output: `target/errors-verify.log` (local build artifact).
+No live database/broker/identity service, collector or business worker was exercised.
+
+### ShopApp-style advice and direct RCA logging — earlier iteration
+
+`GlobalExceptionHandler` is now a plain `@RestControllerAdvice` with direct
+business, validation and fallback handlers. It no longer extends Spring's
+`ResponseEntityExceptionHandler`. The `observability` package, `FailureLog`,
+`ErrorClassifier` and its `Failure` record were removed. Native error mapping
+is `ErrorCode.from(Throwable)`; HTTP and Rabbit boundaries use SLF4J directly.
+`RequestCorrelation` contains only HTTP ID helpers; the filter restores MDC in
+`finally`, and Feign forwards the current canonical UUID.
+
+JSON filtering/renaming/metadata use native Spring Boot YAML settings. Two small
+config hooks retain numeric schemaVersion/UTC timestamps and safe stack frames.
+Console encoding is explicitly UTF-8 so Vietnamese reasons survive Windows output.
+The new tests cover meaningful rejection reasons, HTTP method/status/correlation,
+MDC restoration/trace normalization and the actual JSON output, including duplicate
+field and secret-leak checks. Synthetic publisher/worker fixtures were removed;
+those production flows have not been implemented.
+
+Current verification (2026-10-25):
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" verify
+```
+
+**340 tests passed, 0 failures, 0 errors, 0 skipped.** Whole-module Spotless passed;
+SpotBugs reported **0 findings**, and Maven reported **BUILD SUCCESS**.
+Output: `target/simple-errors-verify.log` (local build artifact).
+This machine used JDK 23 with Java 21 compilation target and the Java 21 Enforcer
+check explicitly skipped. No live database, broker, Keycloak or collector was used;
+the Feign tests use disposable loopback HTTP servers. This verifies the scaffold
+boundaries, not production business flows or RCA end-to-end.
+
+### Advice-only HTTP errors — current implementation
+
+The approved scope is now one `exception/GlobalExceptionHandler`. The complete
+`web.error` package was removed: no `ProblemResponses`, `CorrelationFilter`,
+`RequestCorrelation` or custom `BookingErrorController`. The advice creates Problem
+responses and logs errors directly. Security callbacks delegate to Spring MVC's
+`HandlerExceptionResolver`; signed JWT/role tests still verify 401/403 and Bearer
+challenges. No RCA message publisher was added; Rabbit consumer disposition is unchanged.
+
+Success responses no longer receive request/correlation headers from a Booking
+filter. Error responses still have a safe correlation UUID matching their body/header
+and log. Invalid optional tracing headers cannot prevent the original response.
+Tests for removed context/filter/error-controller behavior were dropped; native
+Boot `/error` responses are no longer required to have the application Problem shape.
+The remaining tests verify business/validation/framework statuses, header safety,
+security, local JSON logs and the absence of the removed success-response headers.
+
+Verification on 2026-10-25: `rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" verify`
+completed with **336 tests passed, 0 failures/errors/skips**, whole-module Spotless
+passed, **0 SpotBugs findings**, and **BUILD SUCCESS**.
+Output: `target/advice-only-verify.log` (local build artifact).
+JDK 23 compiled for Java 21; the Java 21 Enforcer gate was explicitly skipped.
+Tests used local fixtures/loopback servers; no deployed DB, broker, Keycloak or
+RCA collector was exercised. The RCA publishing/integration pipeline remains deferred.

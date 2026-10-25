@@ -1,6 +1,6 @@
 # Hướng dẫn agent setup scaffold các service FlashTicket
 
-Ngày đối chiếu: **24/10/2026**. Áp dụng cho `payment-service`, `user-service`,
+Ngày đối chiếu: **24/10/2026**, cập nhật phần error handling **25/10/2026**. Áp dụng cho `payment-service`, `user-service`,
 `event-service`, `ticket-service`. Mẫu tham khảo là Booking hiện tại và Gateway
 ở commit `68b6e32`; khi thực hiện phải đọc lại source tại branch đang làm.
 
@@ -124,7 +124,7 @@ entity, DTO và các cấu hình dùng trong owner ở cấp service:
 ```text
 com/flashticket/<service>_service/
   <Service>ServiceApplication.java
-  config/                 # JSON, MVC security, Rabbit và worker boundary cần thiết
+  config/                 # JSON, MVC security, Rabbit; worker config khi có job thật
   entity/                 # SQL owners; User có thể dùng document/
   enums/
   dto/request/            # Input REST; không phải entity
@@ -135,8 +135,6 @@ com/flashticket/<service>_service/
   validation/
   security/
   exception/
-  observability/
-  web/error/
   client/config/          # Chỉ khi cần HTTP client
   client/internal/        # Chỉ client nội bộ có hợp đồng
   <feature>/controller/
@@ -522,7 +520,7 @@ nếu chưa có method được giao. Giới hạn `@EnableFeignClients` vào pa
 nội bộ cần thiết. Đặt `spring.cloud.openfeign.oauth2.enabled=false` nếu dùng cấu
 hình opt-in như Booking để tránh auto interceptor gắn token cho client ngoài.
 Không copy JWT người dùng từ SecurityContext để gọi nội bộ; không tự cache/refresh
-token bằng static field. Forward correlation UUID từ context đang xử lý.
+token bằng static field. Chỉ forward correlation UUID khi ứng dụng đã đặt trong MDC; scaffold Booking hiện không có HTTP correlation filter.
 
 Chỉ `@FeignClient(name=...)` không tự chứng minh load balancing có đủ dependency;
 kiểm effective dependencies, ServiceInstance/Eureka và test HTTP. Không tắt TLS,
@@ -585,56 +583,37 @@ Không copy rate limiter reactive của Gateway vào các service MVC.
 
 ## 12. Global exception, logging và RCA
 
-Đọc [hướng dẫn error handling Booking](booking-error-handling-and-rca.md) trước khi
-adapt; không chỉ thêm `@RestControllerAdvice` rồi coi là đủ boundary.
+Phạm vi scaffold được chốt lại 25/10/2026: làm như ShopApp, chỉ một
+`exception/GlobalExceptionHandler` dùng `@RestControllerAdvice` và các
+`@ExceptionHandler`. Service ném business/native exception; handler tạo response và
+ghi log trực tiếp. Không thêm `web.error`, `ProblemResponses`, `CorrelationFilter`,
+`RequestCorrelation`, custom error controller hoặc framework `observability`.
+Chưa triển khai publisher gửi log/error event qua RabbitMQ để xử lý RCA.
 
 | Thành phần Booking làm mẫu | Việc phải đổi/giữ đúng |
 |---|---|
-| BusinessErrorCode/BusinessException | Bộ code/message tiếng Việt của owner, không giữ lỗi ghế trong User |
-| ErrorClassifier | Giữ native cause; chỉ classify dependency mà owner thực sự dùng |
-| GlobalExceptionHandler + ProblemResponses | Map status, giữ headers framework, message an toàn |
-| Security entry point/access denied handler | Cùng Problem cho 401/403, Bearer challenge cố định |
-| CorrelationFilter + Context | UUID canonical, context riêng từng request/item, luôn restore MDC |
-| Log customizer + SafeStackTracePrinter | Đổi serviceName, env metadata, allowlist operation/event; bỏ raw message/secret |
-| Rabbit error handler / WorkerErrorConfig | Chỉ adapter cần thiết; không tự tạo consumer/job nghiệp vụ |
+| ErrorCode/BusinessException | Một enum chứa code/message/status của owner; service ném lỗi đúng nghĩa |
+| ErrorCode.from(Throwable) | Nhận diện native exception thực tế của owner, không cần classifier/Failure DTO riêng |
+| GlobalExceptionHandler | Trả Problem trực tiếp, validation input 400/output 500, giữ headers framework |
+| Security callbacks | Đặt Bearer challenge và chuyển 401/403 vào global advice qua HandlerExceptionResolver của Spring |
+| YAML logging và config nhỏ | JSON native, metadata owner, UTC timestamp và stack trace đã lọc |
 
-Không tạo bộ exception wrapper cho mỗi lỗi JPA/Feign/Mongo/AMQP có sẵn. ErrorClassifier
-của Booking có phân loại datastore thiên về SQL; User phải kiểm thêm exception
-Mongo native thay vì đổi tên rồi để Mongo timeout thành INTERNAL_ERROR không rõ nguồn.
+Không copy raw exception message hoặc fallback 404 cho mọi lỗi từ ShopApp. Problem
+là DTO JSON cho client; không phải helper hoặc message gửi broker. Giữ code/message/
+correlationId/violations theo B13. Message log nêu lý do an toàn, kèm status/method/code/
+correlation để điều tra sau này; không log JWT, email, SQL, body hay secret.
 
-Response lỗi cùng shape B13:
+Booking hiện chỉ tạo/nhận correlation khi trả lỗi. Không tự cấp request ID trên mọi
+HTTP request, không tự bind order hoặc tạo context framework. Native `/error` của
+Boot dùng response mặc định, ngoài phạm vi global advice. Các agent phải ghi rõ
+giới hạn này, không tự thêm toàn bộ B16 hoặc pipeline RCA khi task chỉ là scaffold.
 
-```json
-{
-  "code": "UNAUTHENTICATED",
-  "message": "Bạn cần xác thực để thực hiện yêu cầu này.",
-  "correlationId": "00000000-0000-4000-8000-000000000001",
-  "violations": []
-}
-```
+Không catch-log-rethrow ở mọi tầng. User dùng Mongo cần kiểm tra exception native
+tương ứng thay vì copy nguyên phân loại SQL. Chỉ thêm xử lý scheduler, retry hoặc
+publisher khi flow thật được giao và có kiểm tra transaction/disposition.
 
-API không trả `exception.getMessage()`, SQL, URL chứa secret hoặc stack trace.
-HTTP 400/401/403/404/409/422/503 theo contract; invariant server/return-value
-validation là 500. Không bắt mọi lỗi kỹ thuật rồi trả 200 hoặc business rejection.
-
-Log JSON một dòng theo B16: metadata service/build/instance/environment, thời
-điểm UTC, severity, eventName, operation, outcome, errorCode/errorType, correlation
-và request/message/order/payment/issuance ID khi có chứng cứ. Không giữ prefix
-`booking.*`, `BOOKING_SERVICE_VERSION` hoặc allowlist order operation trong service khác.
-Không log-and-rethrow ở mọi tầng; boundary sở hữu kết quả ghi một lần. Giữ type/frame
-và cause để RCA nhưng dùng safe stack printer; không in JWT, email, raw QR,
-payload, callback body/signature, client secret hoặc thông tin tài khoản thanh toán.
-
-Correlation giao dịch mua = orderId sau khi đã xác minh dữ liệu/ownership. Event
-và User không được gọi helper bindOrder dựa trên ID bất kỳ để có một correlation.
-TraceId, HTTP requestId, command requestId trong StartPayment, messageId và
-idempotency key là những định danh khác nhau. Không tự bịa trace/span chưa được
-instrumentation cấp. Scope context phải đóng khi thành công lẫn exception, gồm
-cả mỗi message/job item trên thread pool.
-
-`RETRY` chỉ log sau khi lưu được retry bền vững; timeout gọi cổng/SMTP có thể đã
-gây tác dụng, không ghi FAILED dứt điểm hoặc tự gọi lại với ID mới. Cấu hình log
-đúng chưa chứng minh collector export, trace propagation hoặc RCA end-to-end.
+Đọc [hướng dẫn global exception Booking](booking-error-handling-and-rca.md) và source
+`exception/GlobalExceptionHandler.java` để làm theo cấu trúc hiện tại.
 
 ## 13. Tương thích Gateway
 
@@ -686,7 +665,7 @@ chỉ kiểm getter/constructor injection, không copy số lượng test Bookin
 | Fixture JSON/validation | Money/version/schema, enum, missing/unknown fields và message tương thích |
 | Security HTTP tests | Public route, 401/403 cùng Problem, role/audience, internal bị kiểm đúng |
 | Mapping/persistence test phù hợp | JSONB/Mongo type, FK ghép, metadata/version và association cần thiết |
-| Error/log boundary tests | Không lộ secret, correlation header/body khớp, context được restore |
+| Error/log boundary tests | Không lộ secret, correlation lỗi header/body/log khớp, HTTP status đúng; không yêu cầu correlation filter |
 | Config/Rabbit tests | Converter, timeout, MANUAL ACK, dynamic=false; chưa chứng minh broker live |
 | Smoke chạy thật | Config Server load, Eureka đăng ký và dependency reachable trong lần chạy đó |
 
@@ -715,7 +694,7 @@ test persistence dùng môi trường cô lập hoặc rollback rõ ràng.
 - [Booking config](../../services/booking-service/src/main/java/com/flashticket/booking_service/config/), [runtime YAML](../../infrastructure/config-server/src/main/resources/config/booking-service.yaml).
 - [Entity](../../services/booking-service/src/main/java/com/flashticket/booking_service/entity/), [DTO](../../services/booking-service/src/main/java/com/flashticket/booking_service/dto/), [mapper](../../services/booking-service/src/main/java/com/flashticket/booking_service/mapper/).
 - [Order feature](../../services/booking-service/src/main/java/com/flashticket/booking_service/order/), [internal Feign config](../../services/booking-service/src/main/java/com/flashticket/booking_service/client/config/InternalFeignConfig.java).
-- [HTTP error boundaries](../../services/booking-service/src/main/java/com/flashticket/booking_service/web/error/), [observability](../../services/booking-service/src/main/java/com/flashticket/booking_service/observability/).
+- [Global exception](../../services/booking-service/src/main/java/com/flashticket/booking_service/exception/GlobalExceptionHandler.java), [logging config](../../services/booking-service/src/main/resources/application.yaml).
 - [Booking test evidence/limits](../../services/booking-service/TESTING.md), [hướng dẫn kiểu dữ liệu và ví dụ Booking](shopapp-be-to-flash-ticket-backend.md).
 - [Gateway route](../../infrastructure/api-gateway/src/main/java/com/flashticket/api_gateway/routing/GatewayRouteConfiguration.java), [Gateway security](../../infrastructure/api-gateway/src/main/java/com/flashticket/api_gateway/security/GatewaySecurityConfiguration.java), [Gateway HTTP tests](../../infrastructure/api-gateway/src/test/java/com/flashticket/api_gateway/GatewayHttpTests.java).
 
