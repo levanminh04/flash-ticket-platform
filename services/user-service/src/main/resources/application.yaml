@@ -3,3 +3,26 @@ spring:
     name: user-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+user:
+  mongodb:
+    collection-prefix: ${USER_MONGO_COLLECTION_PREFIX:tbl_}
+  keycloak-admin:
+    base-url: ${USER_KEYCLOAK_ADMIN_BASE_URL:}
+    realm: ${USER_KEYCLOAK_ADMIN_REALM:}
+    client-id: ${USER_KEYCLOAK_ADMIN_CLIENT_ID:user-management}
+    client-secret: ${USER_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    timeout: ${USER_KEYCLOAK_ADMIN_TIMEOUT:5s}
+  identity:
+    enabled: ${USER_IDENTITY_ENABLED:true}
+    queue: ${USER_IDENTITY_QUEUE:user.identity.q}
+    max-message-bytes: ${USER_IDENTITY_MAX_MESSAGE_BYTES:65536}
+  recovery:
+    enabled: ${USER_RECOVERY_ENABLED:true}
+    delay: ${USER_RECOVERY_DELAY:30s}
+    batch-size: ${USER_RECOVERY_BATCH_SIZE:20}
+
+logging:
+  structured:
+    json:
+      customizer: com.flashticket.user_service.observability.UserLogCustomizer
