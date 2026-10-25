@@ -59,3 +59,11 @@ Reports tái tạo tại `target/surefire-reports`, `target/failsafe-reports`,
 Chưa chứng minh B13 approve/reject, B15 V17/V18, identity flow hoặc RCA end-to-end.
 Gateway chưa mở anonymous organizer profile. Xem [HANDOFF](HANDOFF.md) để chạy runtime và
 [guide Admin API](../../docs/guides/user-service-keycloak-admin-integration.md) cho bước sau.
+
+## Review cuối
+
+Đã tự review toàn bộ diff sau bảy task (phiên không có subagent): đối chiếu năm Review Focus,
+scope feature shells, BSON/validator, security matcher, safe log, test isolation và runtime YAML.
+Không phát hiện lỗi Critical/Important trong code. Guide đã bổ sung refresh/login lại của
+người dùng sau grant theo B13; phần này chưa được nghiệm thu trên realm thật.
+Tự review của tác giả yếu hơn review độc lập. Chưa merge/push vào nhánh dùng chung.

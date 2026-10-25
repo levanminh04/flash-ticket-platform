@@ -182,8 +182,13 @@ thiếu hoặc timeout thì kết quả còn unknown, không chuyển ACTIVE.
    projection thất bại thì retry/rebuild từ application, không gọi grant lại mù quáng.
 5. Không dùng Mongo multi-document transaction trên standalone, không tạo saga/framework mới.
    Retry/recovery worker cụ thể và ownership phải được thiết kế/test ở task B13.
+6. Access token đã phát hành không tự đổi role. Sau khi grant thành công, client refresh
+   token hoặc đăng nhập lại rồi kiểm token mới có ORGANIZER và vẫn giữ BUYER theo
+   [B13 §9](../architecture/B13-api-and-event-contracts.md). User Service không sửa token cũ
+   hoặc giả role ở response để vượt JWT validation.
 
 Test ở lần tích hợp: duplicate grant giữ BUYER; timeout sau side effect rồi query confirm;
 concurrent approve/approve và approve/reject; role lookup/query bị 403/404; expired token;
-projection lỗi rồi rebuild; retry sourceVersion cũ. Dùng realm test hoặc HTTP stub trước khi
+projection lỗi rồi rebuild; retry sourceVersion cũ; refresh/login lại của người dùng sau grant
+và kiểm token mới giữ BUYER, thêm ORGANIZER. Dùng realm test hoặc HTTP stub trước khi
 smoke trên realm thật. Không coi 204 của POST là bằng chứng đủ để ACTIVE.
