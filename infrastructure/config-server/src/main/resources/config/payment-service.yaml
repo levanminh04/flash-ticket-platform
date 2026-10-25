@@ -22,12 +22,38 @@ spring:
     password: ${PAYMENT_DB_PASSWORD}
   rabbitmq:
     host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
 
 flashticket:
   payment:
+    vnpay:
+      enabled: ${PAYMENT_VNPAY_ENABLED:false}
+      callbacks-enabled: ${PAYMENT_VNPAY_CALLBACKS_ENABLED:false}
+      environment: ${PAYMENT_VNPAY_ENVIRONMENT:sandbox}
+      tmn-code: ${PAYMENT_VNPAY_TMN_CODE:}
+      hash-secret: ${PAYMENT_VNPAY_HASH_SECRET:}
+      payment-url: ${PAYMENT_VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      api-url: ${PAYMENT_VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+      return-url: ${PAYMENT_VNPAY_RETURN_URL:}
+      ipn-url: ${PAYMENT_VNPAY_IPN_URL:}
+      sandbox-payer-ip: ${PAYMENT_VNPAY_SANDBOX_PAYER_IP:}
+      api-client-ip: ${PAYMENT_VNPAY_API_CLIENT_IP:}
+      connect-timeout: ${PAYMENT_VNPAY_CONNECT_TIMEOUT:2s}
+      read-timeout: ${PAYMENT_VNPAY_READ_TIMEOUT:5s}
+      refund-enabled: ${PAYMENT_VNPAY_REFUND_ENABLED:false}
     jwt:
       issuer-uri: ${KEYCLOAK_ISSUER_URI}
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}

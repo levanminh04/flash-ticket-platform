@@ -7,7 +7,8 @@ import static org.mockito.Mockito.*;
 import com.flashticket.payment_service.dto.message.StartPaymentResultState;
 import com.flashticket.payment_service.dto.response.StartRequestState;
 import com.flashticket.payment_service.entity.enums.PaymentAttemptState;
-import com.flashticket.payment_service.exception.PaymentQueryException;
+import com.flashticket.payment_service.exception.PaymentErrorCode;
+import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.*;
 import com.flashticket.payment_service.repository.*;
 import com.flashticket.payment_service.service.payment.PaymentQueryService;
@@ -114,13 +115,21 @@ class PaymentQueryServiceTest {
     var broken = inbox(request, order, StartPaymentResultState.REJECTED, null);
     broken.setResponsePayload(F.mapper.readTree("{}"));
     when(inbox.findById(any())).thenReturn(Optional.of(broken));
-    failure(() -> service.getPayment(order, request, "buyer"), 503, "PAYMENT_STATE_UNAVAILABLE");
+    var error =
+        failure(
+            () -> service.getPayment(order, request, "buyer"), 503, "PAYMENT_STATE_UNAVAILABLE");
+    assertThat(error)
+        .hasCauseInstanceOf(
+            com.flashticket.payment_service.dto.common.ContractValidationException.class);
   }
 
-  static void failure(Runnable action, int status, String code) {
+  static PaymentException failure(Runnable action, int status, String code) {
     var e = catchThrowable(action::run);
-    assertThat(e).isInstanceOf(PaymentQueryException.class);
-    assertThat(((PaymentQueryException) e).status().value()).isEqualTo(status);
-    assertThat(((PaymentQueryException) e).code()).isEqualTo(code);
+    assertThat(e).isInstanceOf(PaymentException.class);
+    var payment = (PaymentException) e;
+    assertThat(payment.status().value()).isEqualTo(status);
+    assertThat(payment.code()).isEqualTo(code);
+    assertThat(payment.errorCode()).isEqualTo(PaymentErrorCode.valueOf(code));
+    return payment;
   }
 }

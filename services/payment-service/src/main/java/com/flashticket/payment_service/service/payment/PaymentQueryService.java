@@ -7,13 +7,13 @@ import com.flashticket.payment_service.dto.response.PaymentView;
 import com.flashticket.payment_service.dto.response.StartRequestState;
 import com.flashticket.payment_service.dto.response.StartRequestView;
 import com.flashticket.payment_service.entity.id.InboxMessageId;
-import com.flashticket.payment_service.exception.PaymentQueryException;
+import com.flashticket.payment_service.exception.PaymentErrorCode;
+import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.*;
 import com.flashticket.payment_service.repository.*;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +36,13 @@ public class PaymentQueryService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public PaymentView getPayment(UUID orderId, UUID requestId, String buyerSubject) {
     if (buyerSubject == null || buyerSubject.isBlank())
-      throw error(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED");
+      throw new PaymentException(PaymentErrorCode.AUTHENTICATION_REQUIRED);
     var access =
         snapshots
             .findAccessByOrderId(orderId)
-            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "PAYMENT_NOT_READY"));
+            .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_READY));
     if (!buyerSubject.equals(access.getBuyerSubject()))
-      throw error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND");
+      throw new PaymentException(PaymentErrorCode.RESOURCE_NOT_FOUND);
     var request = requestId == null ? null : requestResult(orderId, requestId);
     var latest =
         attempts
@@ -66,9 +66,10 @@ public class PaymentQueryService {
     try {
       result = messages.fromResultJson(received.get().getResponsePayload());
     } catch (ContractValidationException ex) {
-      throw unavailable(orderId, requestId);
+      throw unavailable(orderId, requestId, ex);
     }
-    if (!orderId.equals(result.orderId())) throw error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND");
+    if (!orderId.equals(result.orderId()))
+      throw new PaymentException(PaymentErrorCode.RESOURCE_NOT_FOUND);
     if (!requestId.equals(result.requestId())) throw unavailable(orderId, requestId);
     if (result.state() == StartPaymentResultState.CREATED) {
       if (attempts.findByIdAndOrderId(result.attemptId(), orderId).isEmpty())
@@ -78,12 +79,12 @@ public class PaymentQueryService {
     return new StartRequestView(requestId, StartRequestState.REJECTED, result.failureCode());
   }
 
-  private PaymentQueryException unavailable(UUID orderId, UUID requestId) {
-    log.warn("Payment request state unavailable orderId={} requestId={}", orderId, requestId);
-    return error(HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_STATE_UNAVAILABLE");
+  private PaymentException unavailable(UUID orderId, UUID requestId) {
+    return unavailable(orderId, requestId, null);
   }
 
-  private static PaymentQueryException error(HttpStatus status, String code) {
-    return new PaymentQueryException(status, code);
+  private PaymentException unavailable(UUID orderId, UUID requestId, Throwable cause) {
+    log.warn("Payment request state unavailable orderId={} requestId={}", orderId, requestId);
+    return new PaymentException(PaymentErrorCode.PAYMENT_STATE_UNAVAILABLE, cause);
   }
 }

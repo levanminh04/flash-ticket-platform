@@ -31,9 +31,10 @@ public final class PaymentExceptionHandler {
         });
   }
 
-  @ExceptionHandler(PaymentQueryException.class)
-  ResponseEntity<Problem> query(PaymentQueryException e, HttpServletRequest request) {
-    return ResponseEntity.status(e.status()).body(problems.problem(request, e.code(), List.of()));
+  @ExceptionHandler(PaymentException.class)
+  ResponseEntity<Problem> payment(PaymentException e, HttpServletRequest request) {
+    return ResponseEntity.status(e.status())
+        .body(problems.problem(request, e.errorCode(), List.of()));
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -42,7 +43,9 @@ public final class PaymentExceptionHandler {
     return ResponseEntity.badRequest()
         .body(
             problems.problem(
-                request, "INVALID_REQUEST", List.of(new Violation(e.getName(), "INVALID_UUID"))));
+                request,
+                PaymentErrorCode.INVALID_REQUEST,
+                List.of(new Violation(e.getName(), "INVALID_UUID"))));
   }
 
   @ExceptionHandler(ContractValidationException.class)
@@ -50,7 +53,9 @@ public final class PaymentExceptionHandler {
     return ResponseEntity.unprocessableContent()
         .body(
             problems.problem(
-                request, "INVALID_REQUEST", List.of(new Violation(e.field(), e.code()))));
+                request,
+                PaymentErrorCode.INVALID_REQUEST,
+                List.of(new Violation(e.field(), e.code()))));
   }
 
   @ExceptionHandler(Exception.class)
@@ -60,6 +65,6 @@ public final class PaymentExceptionHandler {
         PaymentCorrelationFilter.correlationId(request),
         e.getClass().getSimpleName());
     return ResponseEntity.internalServerError()
-        .body(problems.problem(request, "INTERNAL_ERROR", List.of()));
+        .body(problems.problem(request, PaymentErrorCode.INTERNAL_ERROR, List.of()));
   }
 }

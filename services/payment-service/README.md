@@ -1,6 +1,6 @@
 # Payment Service — payment status API P2
 
-Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Chưa có consumer, outbox relay, StartPayment handler, Saga runtime hoặc adapter VNPay. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service.
+Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Đã bổ sung cấu hình/adapter VNPay Sandbox và callback được bật có điều kiện; xem [hướng dẫn VNPay](docs/vnpay-sandbox.md). Chưa có consumer, outbox relay, StartPayment handler hoặc Saga runtime; callback mặc định tắt và yêu cầu handler lưu bền trước khi bật. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service hoặc giao dịch VNPay thật.
 
 ## Build
 
@@ -42,6 +42,7 @@ Config Server vẫn bắt buộc, mặc định `http://localhost:8888`; Payment
 | PAYMENT_SERVICE_PORT | Cổng Payment; mặc định 8083 |
 | PAYMENT_DB_URL / PAYMENT_DB_USERNAME / PAYMENT_DB_PASSWORD | Kết nối runtime có quyền app, không dùng payment_erd hoặc mặc định maintenance login |
 | RABBITMQ_HOST / RABBITMQ_PORT / RABBITMQ_USERNAME / RABBITMQ_PASSWORD | Cấu hình broker được phân phối từ Config Server |
+| RABBITMQ_VHOST / RABBITMQ_BUSINESS_EXCHANGE | Mặc định `/` và `business.ex`, thống nhất với Booking trên `dev/son` |
 | SPRING_PROFILES_ACTIVE | Đặt local-foundation khi chỉ kiểm nền DB, chưa dùng broker/Eureka |
 | JAVA_TOOL_OPTIONS | Đặt -Duser.timezone=UTC cho JVM chạy ứng dụng |
 
@@ -53,6 +54,10 @@ $env:SPRING_PROFILES_ACTIVE = 'local-foundation'
 Đặt credential trong environment trước chạy. Spring không tự đọc file `.env`. Local-foundation tắt Eureka, simple/direct listener auto-start và Rabbit health; không ngăn mã tương lai chủ động gọi broker. Không bỏ security hoặc mở thêm actuator để kiểm ứng dụng.
 
 YAML bootstrap của Payment chỉ chọn tên app và import Config Server. YAML riêng Payment tại Config Server chứa datasource/JPA/RabbitMQ/port; shared config không bị thay đổi. JPA luôn validate, Open Session in View tắt, SQL init tắt. JSONB dùng Jackson3JsonFormatMapper để thống nhất JsonNode với Boot 4; các domain SQL được ghi rõ trong Column mapping.
+
+RabbitMQ dùng cùng cấu hình Booking trên `dev/son`: cổng mặc định 5672, user `flash_ticket_app`, publisher confirm `correlated`, publisher returns và mandatory publish. Simple listener dùng ACK thủ công, prefetch 20; consumer phải ACK sau khi transaction commit. JSON converter dùng JsonMapper của ứng dụng. Message lỗi chuyển đổi bị reject không requeue, kể cả khi có `x-death`, để broker đưa vào DLQ theo policy; log chỉ ghi loại exception, không ghi payload/header.
+
+`spring.rabbitmq.dynamic=false`: Payment không tự khai báo exchange/queue/binding. Dùng broker đã provision bằng bộ `deploy/docker-compose.rabbitmq.yml` và `deploy/rabbitmq/definitions.json` trên `dev/son`; bộ này đã có các queue `payment.finance-configured.q`, `payment.event-cancelled.q`, `payment.start.q`, `payment.decision.q`, `payment.ticket-issuance-failed.q`, `payment.order-completed.q` cùng DLQ/binding/policy. Thay đổi này chuẩn bị cấu hình messaging, chưa bổ sung consumer/outbox hoặc xác minh kết nối broker thật.
 
 ## Dùng entity, DTO và mapper
 
@@ -105,6 +110,45 @@ Controller gọi PaymentQueryService, năm repository cục bộ và các mapper
 
 Gateway POST `/api/v1/orders/{id}/payment-attempts` đã sửa về Booking với breaker/fallback Booking. GET `/api/v1/orders/{id}/payment` vẫn về Payment. P2 không mở POST start/refund hay route nội bộ/management/callback. Kết quả health UP trong lịch sử scaffold không có nghĩa actuator đang public ở P2.
 
+## Throw lỗi Payment
+
+`exception.PaymentErrorCode` tập trung mã lỗi, thông báo an toàn và HTTP status mặc định.
+Service throw `PaymentException` thay cho việc tự ghép status và chuỗi mã lỗi:
+
+```java
+throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_READY);
+```
+
+Khi bọc lỗi gốc, truyền cause để giữ thông tin chẩn đoán:
+
+```java
+throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_UNAVAILABLE, cause);
+```
+
+`PaymentExceptionHandler` chuyển exception thành `Problem` với `code`, `message`,
+`correlationId` và `violations`. Response chỉ dùng thông báo trong enum, không đưa
+message hoặc cause nội bộ ra client. Security cũng dùng cùng enum.
+
+| Error code | HTTP | Khi dùng |
+| --- | --- | --- |
+| `PAYMENT_NOT_READY` | 404 | Chưa có snapshot thanh toán cho order |
+| `RESOURCE_NOT_FOUND` | 404 | Tài nguyên không thuộc người dùng/order đang truy cập |
+| `AUTHENTICATION_REQUIRED` | 401 | Thiếu hoặc không có xác thực hợp lệ |
+| `ACCESS_DENIED` | 403 | Không đủ quyền truy cập |
+| `INVALID_REQUEST` | 400 | Tham số yêu cầu không hợp lệ |
+| `PAYMENT_STATE_UNAVAILABLE` | 503 | Kết quả lưu bị hỏng hoặc trạng thái thanh toán không nhất quán |
+| `INTERNAL_ERROR` | 500 | Lỗi không dự kiến |
+
+`ContractValidationException` tiếp tục giữ field và mã vi phạm chi tiết như
+`TOTAL_MISMATCH`; handler giữ HTTP 422 với `Problem.code=INVALID_REQUEST` cho loại
+lỗi này. `StartRequestView.failureCode` là kết quả command liên service và được giữ
+nguyên, không tự chuyển thành exception HTTP. Khi thêm lỗi nghiệp vụ mới, thêm vào
+enum và throw `PaymentException`; không cần thêm switch thông báo trong factory.
+
+Kiểm ngày 24/10/2026 bằng JDK 21/UTC: `clean verify` chạy 88 test mặc định,
+0 failure/error/skip; Spotless và SpotBugs PASS. Gồm 9 test HTTP mới cho bộ mã lỗi;
+chưa chạy lại profile kiểm PostgreSQL trong thay đổi này.
+
 ### Kiểm P2
 
 Từ thư mục Payment, dùng JDK 21/UTC như phần Build:
@@ -114,7 +158,7 @@ Từ thư mục Payment, dùng JDK 21/UTC như phần Build:
 .\mvnw.cmd -Pquery-tests verify -B -ntp
 ```
 
-Suite mặc định: 79 test, không cần DB/Keycloak thật. Smoke context chỉ import repository mocks từ test configuration; product code không có fallback mock. JWT HTTP tests dùng RSA token ký thật, JWK server loopback tạm và decoder/filter thật; không dùng mock JWT để kết luận chữ ký/audience đúng.
+Suite mặc định tại checkpoint P2: 79 test, không cần DB/Keycloak thật. Smoke context chỉ import repository mocks từ test configuration; product code không có fallback mock. JWT HTTP tests dùng RSA token ký thật, JWK server loopback tạm và decoder/filter thật; không dùng mock JWT để kết luận chữ ký/audience đúng.
 
 Profile query-tests: 98 test, gồm 14 mapping test và 5 repository/transaction test trên PostgreSQL 16.15 riêng; cần PAYMENT_TEST_DB_URL/USERNAME/PASSWORD theo hướng dẫn mapping test. Profile mapping-tests cũng mở cùng nhóm DB tests; không chạy hai profile lặp để tăng số kiểm. Missing DB là lỗi, không tự skip. Đã kiểm tie ordering, scalar projection không load graph, PK inbox, response nhất quán khi insert đồng thời, và so toàn bộ dữ liệu 13 bảng trước/sau GET.
 
