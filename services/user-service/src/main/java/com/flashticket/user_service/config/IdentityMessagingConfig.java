@@ -5,12 +5,14 @@ import com.mongodb.MongoSocketException;
 import com.mongodb.MongoTimeoutException;
 import com.mongodb.MongoWriteConcernException;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.mongodb.autoconfigure.MongoClientSettingsBuilderCustomizer;
 import org.springframework.context.annotation.*;
 import org.springframework.core.retry.*;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -21,6 +23,16 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "user.identity.enabled", matchIfMissing = true)
 public class IdentityMessagingConfig {
+  @Bean
+  MongoClientSettingsBuilderCustomizer identityMongoTimeouts() {
+    return builder ->
+        builder
+            .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(2, TimeUnit.SECONDS))
+            .applyToSocketSettings(
+                socket ->
+                    socket.connectTimeout(2, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS));
+  }
+
   @Bean(initMethod = "verifyIdentityIndex")
   IdentityUserRegistrar identityUserRegistrar(MongoTemplate template) {
     return new IdentityUserRegistrar(template);
