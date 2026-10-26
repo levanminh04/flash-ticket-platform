@@ -1,5 +1,9 @@
 spring:
   application:
     name: payment-service
+---
+spring:
   config:
+    activate:
+      on-profile: "!payment-simulator"
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"

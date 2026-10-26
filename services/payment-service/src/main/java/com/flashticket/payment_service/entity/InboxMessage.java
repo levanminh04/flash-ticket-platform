@@ -20,6 +20,16 @@ import tools.jackson.databind.JsonNode;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InboxMessage {
+  public static InboxMessage processed(
+      InboxMessageId id, String hash, Instant processedAt, JsonNode response) {
+    var message = new InboxMessage();
+    message.id = id;
+    message.payloadHash = hash;
+    message.processedAt = processedAt;
+    message.responsePayload = response;
+    return message;
+  }
+
   @EmbeddedId @Setter private InboxMessageId id;
 
   @Column(

@@ -134,11 +134,19 @@
 
 	<profiles>
 		<profile>
+			<id>simulator-tests</id>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration><excludes combine.self="override"><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude></excludes></configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
 			<id>mapping-tests</id>
 			<build><plugins><plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration><excludes combine.self="override"/></configuration>
+				<configuration><excludes combine.self="override"><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes></configuration>
 			</plugin></plugins></build>
 		</profile>
 		<profile>
@@ -146,7 +154,7 @@
 			<build><plugins><plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration><excludes combine.self="override"/></configuration>
+				<configuration><excludes combine.self="override"><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes></configuration>
 			</plugin></plugins></build>
 		</profile>
 	</profiles>
@@ -156,13 +164,14 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude></excludes>
+					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes>
 					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
 				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration><mainClass>com.flashticket.payment_service.PaymentServiceApplication</mainClass></configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

@@ -1,6 +1,11 @@
 # Payment Service — payment status API P2
 
-Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Đã bổ sung cấu hình/adapter VNPay Sandbox và callback được bật có điều kiện; xem [hướng dẫn VNPay](docs/vnpay-sandbox.md). Chưa có consumer, outbox relay, StartPayment handler hoặc Saga runtime; callback mặc định tắt và yêu cầu handler lưu bền trước khi bật. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service hoặc giao dịch VNPay thật.
+Có thêm [Booking simulator qua RabbitMQ](docs/booking-simulator.md) để phát triển
+luồng tạo attempt/URL khi Booking chưa chạy. Chế độ `payment-simulator` dùng
+DB/broker riêng và guard Booking giả; không mở runtime này trong profile mặc
+định hoặc production. API GET hiện có vẫn kiểm JWT và chủ đơn.
+
+Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Đã bổ sung cấu hình/adapter VNPay Sandbox và callback được bật có điều kiện; xem [hướng dẫn VNPay](docs/vnpay-sandbox.md). Runtime nghiệp vụ ngoài profile simulator chưa có consumer, outbox relay, StartPayment handler hoặc Saga; callback mặc định tắt và yêu cầu handler lưu bền trước khi bật. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service hoặc giao dịch VNPay thật.
 
 ## Build
 
