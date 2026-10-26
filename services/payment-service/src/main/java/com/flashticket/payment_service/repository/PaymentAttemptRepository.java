@@ -6,6 +6,10 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, UUID> {
+  Optional<PaymentAttempt> findByOrderIdAndRequestKey(UUID orderId, UUID requestKey);
+
+  boolean existsByOrderIdAndFinishedAtIsNull(UUID orderId);
+
   Optional<PaymentAttempt> findFirstByOrderIdOrderByStartedAtDescIdDesc(UUID orderId);
 
   Optional<PaymentAttempt> findByIdAndOrderId(UUID id, UUID orderId);

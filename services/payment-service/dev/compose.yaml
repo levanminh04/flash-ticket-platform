@@ -1,0 +1,36 @@
+name: payment-simulator
+services:
+  postgres:
+    image: postgres:16.15
+    environment:
+      POSTGRES_PASSWORD: simulator-bootstrap-only
+    ports:
+      - "127.0.0.1:5443:5432"
+    volumes:
+      - simulator-postgres:/var/lib/postgresql/data
+      - ./init-payment.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ../../../docs/architecture/data/postgres/30-payment.sql:/simulator/payment.sql:ro
+      - ../../99-table-prefix.sql:/simulator/prefix.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d payment_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: payment_simulator
+      RABBITMQ_DEFAULT_PASS: simulator-local-only
+    ports:
+      - "127.0.0.1:5679:5672"
+      - "127.0.0.1:15679:15672"
+    volumes:
+      - simulator-rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  simulator-postgres:
+  simulator-rabbitmq:

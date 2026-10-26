@@ -29,6 +29,30 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentAttempt {
+  public static PaymentAttempt pending(
+      UUID id,
+      UUID orderId,
+      String provider,
+      String merchantAccount,
+      BigDecimal amount,
+      String currency,
+      Instant startedAt,
+      UUID requestKey,
+      String requestHash) {
+    var attempt = new PaymentAttempt();
+    attempt.id = id;
+    attempt.orderId = orderId;
+    attempt.provider = provider;
+    attempt.merchantAccount = merchantAccount;
+    attempt.expectedAmount = amount;
+    attempt.currency = currency;
+    attempt.startedAt = startedAt;
+    attempt.state = PaymentAttemptState.PENDING;
+    attempt.requestKey = requestKey;
+    attempt.requestHash = requestHash;
+    return attempt;
+  }
+
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;
