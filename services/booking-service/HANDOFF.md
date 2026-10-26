@@ -1,5 +1,9 @@
 # Booking Service handoff
 
+Current build/test uses **JDK 23**, compile release 23 and Enforcer `[23,24)`.
+Run `mvnw.cmd -B -ntp verify` from this service directory without skipping Enforcer.
+Earlier acceptance results below retain their original Java 21/23 caveats.
+
 ## Runtime configuration
 
 The service imports configuration from Config Server using `CONFIG_SERVER_URL` (default `http://localhost:8888`). Spring does not load `.env` files automatically; inject the required values into the Booking process through the IDE, container, or deployment environment.

@@ -1,7 +1,16 @@
 # Booking Service tests
 
-Run commands from this service directory with Java 21. The Maven Enforcer still requires
-Java [21,22). On the author's machine the IntelliJ Community 2024.3 JBR supplies Java 21.
+Run commands from this service directory with JDK 23. Compilation targets Java 23;
+Maven Enforcer requires Java [23,24). Keep Enforcer enabled for verification.
+Older results below retain the Java version and Enforcer exceptions used at the time.
+
+## JDK 23 verification — 2026-10-26
+
+`clean verify` passed with Maven 3.9.16 and JDK 23.0.1, Enforcer enabled:
+**336 tests, 0 failures/errors/skips**, Spotless clean and **0 SpotBugs findings**.
+Clean compilation produced Java 23 bytecode (class major version 67).
+Local output: `.superpowers/jdk23/booking-service.log` at repo root.
+This run used test fixtures/loopback servers, not live infrastructure or the integration profile.
 
 ## Fast suite
 
@@ -163,7 +172,7 @@ resource call. HTTP errors propagate to the caller; 401 does not automatically
 evict/reacquire a token or replay the request. Keep the default NEVER_RETRY policy,
 especially for POST requests. Do not perform HTTP while holding database locks.
 
-Run on Java 21 from this service directory:
+Run on JDK 23 from this service directory:
 
 ```powershell
 rtk .\mvnw.cmd "-Dtest=InternalFeignConfigTests,RuntimeConfigurationTests" test
@@ -199,7 +208,7 @@ BookingJsonConfig, OrderSelection, OrderSelectionDeserializer and PromotionConfi
 
 ## Error handling and RCA boundaries
 
-Run the focused suites or the complete fast suite with Java 21:
+Run the focused suites or the complete fast suite with JDK 23:
 
 ```powershell
 rtk .\mvnw.cmd "-Dtest=ErrorCodeTests,RcaLoggingTests,HttpErrorHandlingTests,SecurityConfigTests,InternalFeignConfigTests,BookingRabbitErrorHandlerTests,RuntimeConfigurationTests" test

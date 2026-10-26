@@ -148,7 +148,9 @@ hàng loạt. Không bắt mọi service có cùng danh sách feature của Book
 
 Baseline lúc đối chiếu: **Java 21, Spring Boot 4.1.1, Spring Cloud 2025.1.3,
 MapStruct 1.6.3, lombok-mapstruct-binding 0.2.0**. Đọc POM hiện tại trước khi thêm;
-không tự nâng/hạ phiên bản cả repo trong task scaffold. Giữ Enforcer Java 21,
+không tự nâng/hạ phiên bản cả repo trong task scaffold. Từ 26/10/2026, theo yêu cầu
+người dùng, **Booking/Ticket/User dùng JDK 23**, compile release 23 và Enforcer
+`[23,24)`; các module khác giữ Java 21. Giữ Enforcer theo POM của từng module,
 Spotless, JaCoCo và SpotBugs đã có.
 
 - Service nghiệp vụ dùng Spring MVC: `spring-boot-starter-webmvc`, validation,
@@ -641,7 +643,8 @@ chưa tự bao phủ mọi API Event/User trong B13.
 4. Cấu hình MapStruct, repositories và service/impl/controller rỗng có constructor.
 5. Setup YAML/JSON/security/error/logging; Rabbit/Feign/Redis đúng nhu cầu owner.
 6. Kiểm mapper generated, JSON round-trip, security boundary và các config cần thiết.
-7. Chạy Maven verify với JDK 21. Smoke boot khi có hạ tầng; ghi điều kiện môi trường.
+7. Chạy Maven verify với JDK đúng POM (Booking/Ticket/User: 23; module khác: 21).
+   Smoke boot khi có hạ tầng; ghi điều kiện môi trường.
 8. Tự review diff, link tài liệu, bàn giao kết quả/giới hạn; không tự commit/merge.
 
 Từ module cần kiểm:
@@ -651,9 +654,10 @@ Từ module cần kiểm:
 .\mvnw.cmd -B -ntp verify
 ```
 
-Không tự chạy Spotless cả repo rồi đưa file ngoài scope vào commit. Nếu máy chỉ
-có JDK 23, có thể chạy kiểm tra chẩn đoán với `"-Denforcer.skip=true"`, vẫn giữ
-compile release 21 và ghi rõ ngoại lệ; **không gọi đó là bằng chứng gate Java 21 đã qua**.
+Không tự chạy Spotless cả repo rồi đưa file ngoài scope vào commit. Chạy JDK khớp
+Enforcer của từng module; Booking/Ticket/User không cần bỏ gate khi dùng JDK 23.
+Với module còn target 21, nếu chẩn đoán bằng JDK 23 và `"-Denforcer.skip=true"`,
+ghi rõ ngoại lệ; **không gọi đó là bằng chứng gate Java 21 đã qua**.
 Không sửa POM bỏ gate hoặc suppress SpotBugs hàng loạt để đổi test đỏ thành xanh.
 
 Các kiểm tra phải có ý nghĩa với thay đổi, dùng framework sẵn có; không viết test
