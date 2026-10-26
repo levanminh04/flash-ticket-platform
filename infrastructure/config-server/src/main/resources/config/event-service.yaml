@@ -51,3 +51,22 @@ spring:
           jwk-set-uri: ${EVENT_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
           audiences:
             - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+event:
+  outbox:
+    enabled: ${EVENT_OUTBOX_ENABLED:true}
+    poll-delay: ${EVENT_OUTBOX_POLL_DELAY:1s}
+    batch-size: ${EVENT_OUTBOX_BATCH_SIZE:20}
+    lease: ${EVENT_OUTBOX_LEASE:30s}
+    confirm-timeout: ${EVENT_OUTBOX_CONFIRM_TIMEOUT:5s}
+    initial-retry: ${EVENT_OUTBOX_INITIAL_RETRY:1s}
+    maximum-retry: ${EVENT_OUTBOX_MAXIMUM_RETRY:5m}
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.event_service.observability.EventLogCustomizer
+      stacktrace:
+        printer: com.flashticket.event_service.observability.SafeStackTracePrinter

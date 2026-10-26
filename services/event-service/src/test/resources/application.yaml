@@ -23,3 +23,7 @@ spring:
 eureka:
   client:
     enabled: false
+
+event:
+  outbox:
+    enabled: false

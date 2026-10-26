@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
       "spring.security.oauth2.client.provider.keycloak.token-uri=http://127.0.0.1:1/token"
     })
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(IsolatedInfrastructure.class)
 class InfrastructureSecurityTests {
   @Autowired MockMvc mvc;
   @MockitoBean JwtDecoder decoder;
@@ -49,13 +50,13 @@ class InfrastructureSecurityTests {
   }
 
   @Test
-  void verifiedBearerTokenReachesTheScaffoldDespiteOutboundOAuthClient() throws Exception {
+  void verifiedBearerTokenCannotAccessUnmappedEndpoints() throws Exception {
     Jwt token =
         Jwt.withTokenValue("verified-token").header("alg", "RS256").subject("test-service").build();
     when(decoder.decode("verified-token")).thenReturn(token);
     mvc.perform(
             get("/infrastructure-smoke/protected")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer verified-token"))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isForbidden());
   }
 }
