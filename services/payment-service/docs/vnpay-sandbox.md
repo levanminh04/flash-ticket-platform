@@ -17,6 +17,31 @@ Có adapter Java/Spring cho tạo URL PAY, kiểm IPN, querydr và yêu cầu re
 
 Spring không tự đọc `.env`. Điền environment của tiến trình Payment qua IDE/terminal/secret store. Config Server giữ placeholder và không nhận secret merchant vào environment của nó.
 
+### Nạp cấu hình Sandbox cục bộ trên `dev/tuan`
+
+Lưu thông tin merchant được cấp trong `.env` tại gốc repository (được Git bỏ qua),
+không điền khóa thật vào `.env.example` hoặc YAML. Từ gốc repository, nạp các biến
+VNPAY vào đúng terminal sẽ chạy Payment:
+
+```powershell
+Get-Content -LiteralPath .env | ForEach-Object {
+    if ($_ -match '^(PAYMENT_VNPAY_[A-Z_]+)=(.*)$') {
+        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+    }
+}
+```
+
+Nếu dùng IDE, cấu hình IDE nạp file `.env` này cho tiến trình Payment. File local
+không được chuyển theo khi clone, checkout hoặc push nhánh.
+
+Khi chưa có HTTPS public, để trống `PAYMENT_VNPAY_RETURN_URL` và
+`PAYMENT_VNPAY_IPN_URL`, giữ `PAYMENT_VNPAY_ENABLED=false` cùng
+`PAYMENT_VNPAY_CALLBACKS_ENABLED=false`. Các IP `127.0.0.1` chỉ dành cho kiểm local.
+Khi có domain/tunnel, điền hai URL theo bảng bên dưới và IP phù hợp; gửi IPN URL
+cho VNPAY đăng ký. Chỉ bật adapter sau khi đủ cấu hình; chỉ bật callback ở cả
+Payment/Gateway sau khi có handler lưu bền như phần Điều kiện bật IPN.
+Chưa có domain/handler thì chưa thể kiểm giao dịch Sandbox đầu cuối.
+
 ## Biến môi trường
 
 | Biến | Giá trị |
