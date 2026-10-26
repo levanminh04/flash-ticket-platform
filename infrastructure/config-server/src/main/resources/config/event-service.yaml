@@ -1,13 +1,53 @@
 server:
-  port: ${EVENT_SERVICE_PORT:8081}
+  port: ${EVENT_SERVICE_PORT:8086}
 
 spring:
   datasource:
     url: ${EVENT_DB_URL}
-    username: ${EVENT_DB_USERNAME}
+    username: ${EVENT_DB_USERNAME:event_admin}
     password: ${EVENT_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE event_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: event_schema
+        jdbc:
+          time_zone: UTC
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
+    host: ${EVENT_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${EVENT_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${EVENT_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
+    password: ${EVENT_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    virtual-host: ${EVENT_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 5s
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${EVENT_RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+  security:
+    oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: ${EVENT_INTERNAL_SERVICE_CLIENT_SECRET:${INTERNAL_SERVICE_CLIENT_SECRET}}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${EVENT_KEYCLOAK_TOKEN_URI:${KEYCLOAK_TOKEN_URI}}
+      resourceserver:
+        jwt:
+          issuer-uri: ${EVENT_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${EVENT_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
