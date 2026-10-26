@@ -18,6 +18,10 @@ spring:
       - org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
 
+user:
+  identity:
+    enabled: false
+
 eureka:
   client:
     enabled: false
