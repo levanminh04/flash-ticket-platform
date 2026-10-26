@@ -1,6 +1,8 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.0
+    image: flash-ticket/keycloak:26.8.0-registration-outbox
+    build:
+      context: ../services/keycloak-spi
     command: ["start", "--import-realm"]
     restart: unless-stopped
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
@@ -14,6 +16,13 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root .env}
       KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:8080}
       KC_HTTP_ENABLED: "true"
+      FT_IDENTITY_OUTBOX_ENABLED: ${FT_IDENTITY_OUTBOX_ENABLED:-true}
+      FT_IDENTITY_OUTBOX_INTERVAL_MS: ${FT_IDENTITY_OUTBOX_INTERVAL_MS:-2000}
+      FT_IDENTITY_RABBITMQ_HOST: ${FT_IDENTITY_RABBITMQ_HOST:-rabbitmq}
+      FT_IDENTITY_RABBITMQ_PORT: ${FT_IDENTITY_RABBITMQ_PORT:-5672}
+      FT_IDENTITY_RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      FT_IDENTITY_RABBITMQ_USERNAME: ${RABBITMQ_IDENTITY_USERNAME:-flash_ticket_identity}
+      FT_IDENTITY_RABBITMQ_PASSWORD: ${RABBITMQ_IDENTITY_PASSWORD:?Set RABBITMQ_IDENTITY_PASSWORD in the repository-root .env}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?Set KC_BOOTSTRAP_ADMIN_PASSWORD in the repository-root .env}
       KC_DB_POOL_MIN_SIZE: ${KC_DB_POOL_MIN_SIZE:-5}

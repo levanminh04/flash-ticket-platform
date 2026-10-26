@@ -28,6 +28,19 @@ Trong `.env`, giữ `POSTGRES_DB=keycloak_db` và
 Đổi `POSTGRES_*` không cập nhật tài khoản/database đã tồn tại trong volume;
 với volume cũ chưa có database đích, cần tạo database trước khi chạy Keycloak.
 
+Keycloak hiện dùng provider đăng ký qua native outbox. Trước khi build image, chạy
+`mvn -B -ntp clean verify` tại `services/keycloak-spi`; Compose build image từ hai
+artifact đã chuẩn bị (provider và RabbitMQ client), không chạy một ứng dụng Spring
+riêng trong Keycloak. Runtime cần `RABBITMQ_IDENTITY_USERNAME/PASSWORD` trong `.env`.
+User Service cần `KEYCLOAK_IDENTITY_REALM_ID` của đúng realm và unique index
+`identitySubject` đã có trên `tbl_users`. Xem
+[hướng dẫn provider](../services/keycloak-spi/HANDOFF.md).
+
+Trên server119 đã triển khai, override `deploy/compose.registration-outbox.yml`
+được thêm sau `compose.ft119.yml`; giữ override này trong các lệnh recreate để
+không quay về image Keycloak thiếu provider. Realm tồn tại cần cập nhật listener
+qua Admin API/UI; `--import-realm` không ghi đè realm hiện có.
+
 Chạy PostgreSQL trước, đợi container healthy rồi chạy Keycloak:
 
 ```powershell
