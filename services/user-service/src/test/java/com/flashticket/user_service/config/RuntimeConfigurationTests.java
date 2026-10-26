@@ -42,7 +42,6 @@ class RuntimeConfigurationTests {
             "RABBITMQ_USERNAME=user-test",
             "MONGO_URI=mongodb://127.0.0.1:1/user_db",
             "KEYCLOAK_ISSUER_URI=https://issuer.example.test/realms/user",
-            "KEYCLOAK_JWK_SET_URI=http://127.0.0.1:1/jwks",
             "USER_SERVICE_PORT=8085");
   }
 

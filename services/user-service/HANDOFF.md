@@ -15,15 +15,20 @@ Common Eureka/management lấy từ central `application.yaml`. Không có mail,
 
 ## Chạy local với hạ tầng hiện có
 
-1. Cấu hình JDK 21; chạy Config Server và Eureka. Nếu đổi central YAML thì build/chạy lại Config Server.
-2. Nếu dùng Mongo trên 119, mở hoặc dùng lại tunnel:
+1. Cấu hình JDK 23; chạy Config Server và Eureka. Nếu đổi central YAML thì build/chạy lại Config Server.
+2. Khi dùng hạ tầng 119, mở hoặc dùng lại tunnel Mongo/Rabbit đúng port của root `.env`:
 
    ```bash
-   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:17017:127.0.0.1:27017 ft119
+   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:17017:127.0.0.1:27017 -L 127.0.0.1:5672:127.0.0.1:5672 ft119
    ```
 
    `ft119` là alias SSH của máy thành viên; giữ terminal tunnel mở.
+   Mongo dùng `127.0.0.1:17017`, Rabbit dùng `localhost:5672` qua tunnel.
+   Dừng RabbitMQ local trước khi mở tunnel nếu Windows service này đang giữ cổng `5672`.
+   Keycloak issuer discovery truy cập trực tiếp địa chỉ119, không cần tunnel Keycloak.
+   Chọn local Mongo port `17017` vì máy hiện tại từ chối bind `27017` (Windows error 10013).
 3. Nạp env vào **process** User bằng IDE/shell; Spring không tự đọc `.env` gốc.
+   Trong IntelliJ, thêm `.env` ở root repo bằng plugin EnvFile; không tạo bản sao secret theo từng service.
 
 | Env | Ý nghĩa / mặc định |
 |---|---|
@@ -32,11 +37,16 @@ Common Eureka/management lấy từ central `application.yaml`. Không có mail,
 | `USER_SERVICE_PORT` | Mặc định 8085 |
 | `MONGO_URI` | URI database `user_db`, authSource đúng tài khoản; URL-encode password |
 | `KEYCLOAK_ISSUER_URI` | Issuer realm flash-ticket |
-| `KEYCLOAK_JWK_SET_URI` | JWKS của cùng realm |
 | `KEYCLOAK_AUDIENCE` | Mặc định `flash-ticket-api` |
 | `RABBITMQ_HOST`, `RABBITMQ_PASSWORD` | Host và secret broker hiện có |
 | `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_VHOST` | Mặc định 5672, `flash_ticket_app`, `/` |
 | `USER_SERVICE_VERSION`, `USER_INSTANCE_ID`, `USER_ENVIRONMENT` | Metadata log tùy chọn |
+
+JWT dùng issuer discovery: Spring tự đọc metadata và tìm JWKS, không cần
+`KEYCLOAK_JWK_SET_URI` cho User. Khi dùng Keycloak119, đặt
+`KEYCLOAK_ISSUER_URI=http://3.106.109.119:8080/realms/flash-ticket`.
+JVM phải truy cập được issuer và endpoint JWKS được công bố; bỏ JWKS override nghĩa là
+việc tải khóa không còn được chuyển riêng qua tunnel localhost.
 
 Ví dụ cấu trúc Mongo URI, thay placeholder bằng secret ngoài Git:
 `mongodb://USER:URL_ENCODED_PASSWORD@127.0.0.1:17017/user_db?authSource=admin&maxPoolSize=5`.
@@ -51,7 +61,13 @@ Kiểm tên `user-service`, port 8085 (hoặc override), config được tải v
 gọi `GET /actuator/health`. Health có thể báo DOWN khi dependency chưa sẵn sàng.
 Smoke hạ tầng chỉ đọc: Mongo `ping`/list metadata, Rabbit mở/đóng connection,
 không declare/publish/consume hoặc ghi fixture vào server119. API business chưa có handler để smoke.
-Smoke này **chưa chạy** trong đợt scaffold vì Config Server/Eureka local chưa mở.
+Smoke bổ sung sau khi sửa root env: User `health=UP`, Mongo/Rabbit health đều UP,
+đăng ký Eureka UP tại port8085, anonymous `/api/v1/me` trả401 Problem; issuer discovery
+và JWKS của Keycloak119 truy cập được. Chạy bằng JDK21 với tunnel và bộ env thật.
+Smoke mới nhất ngày 26/10/2026 dùng Rabbit `localhost:5672` sau khi dừng Windows service
+`RabbitMQ` đang giữ cổng này. Các process User/Config Server/Eureka tạo để kiểm tra đã đóng;
+tunnel Mongo17017/Rabbit5672 được giữ mở để chạy IDE. Khi mở lại phiên làm việc, kiểm tra
+listener/tunnel và nạp root env theo hướng dẫn trên.
 
 ## Mongo deploy và phần tiếp theo
 

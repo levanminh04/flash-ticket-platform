@@ -2,8 +2,8 @@
 
 ## Chạy lại
 
-Dùng JDK **21** (`JAVA_HOME` trỏ tới JDK 21), Maven Wrapper trong `services/user-service`.
-Enforcer vẫn bật. Spring Boot 4.1.1; không cần credential production cho hai gate dưới.
+Dùng JDK **23** (`JAVA_HOME` trỏ tới JDK 23), Maven Wrapper trong `services/user-service`.
+Enforcer `[23,24)` vẫn bật. Spring Boot 4.1.1; không cần credential production cho hai gate dưới.
 
 ```powershell
 # Fast tests + Spotless + JaCoCo + SpotBugs; không chạy *IT
@@ -29,7 +29,7 @@ Gate integration chạy bằng Java **21.0.12.1**, Docker **28.0.4**, tại comm
 | Spotless | Pass, 61 Java files | Định dạng Java |
 | SpotBugs | 0 findings, 0 analysis errors | Phân tích tĩnh, gồm mã mapper sinh ra |
 | JaCoCo | `target/site/jacoco/index.html` được tạo | Báo cáo coverage; không đặt coverage threshold mới |
-| Runtime Config Server/Eureka/Mongo119/Rabbit | Chưa chạy | Local không có listener 8888/8761; chưa chạy process với bộ env runtime |
+| Runtime Config Server/Eureka/Mongo119/Rabbit | Đã smoke bổ sung, tất cả health UP | User chạy bằng root env thật; tunnel Mongo17017/Rabbit5672; đăng ký Eureka UP |
 | Keycloak Admin API | Chưa tích hợp/chưa gọi realm | Guide chỉ là mã minh họa cho task sau |
 
 Reports tái tạo tại `target/surefire-reports`, `target/failsafe-reports`,
@@ -67,3 +67,34 @@ scope feature shells, BSON/validator, security matcher, safe log, test isolation
 Không phát hiện lỗi Critical/Important trong code. Guide đã bổ sung refresh/login lại của
 người dùng sau grant theo B13; phần này chưa được nghiệm thu trên realm thật.
 Tự review của tác giả yếu hơn review độc lập. Chưa merge/push vào nhánh dùng chung.
+
+## Smoke đầu tiên với server119 sau khi sửa env (Rabbit5673)
+
+- Root env thực tế: Mongo `127.0.0.1:17017`, Rabbit `localhost:5673`,
+  issuer `http://3.106.109.119:8080/realms/flash-ticket`. Chỉ đổi issuer và local Mongo port,
+  giữ nguyên credential. Windows từ chối bind27017 (error10013), bind17017 và5673 thành công.
+- SSH forwards `17017 -> 119:27017`, `5673 -> 119:5672`. Không cần tunnel Keycloak.
+- JDK21 chạy Config Server/Eureka/User thật, không dùng profile test hoặc mock repository.
+  Config Server dùng native search-location trỏ tới YAML hiện tại trong worktree.
+  Xác minh cấu hình trả về không có explicit `jwk-set-uri` cho User.
+- User port8085: `/actuator/health` trả UP; `mongo` và `rabbit` đều UP.
+  Chỉ bật hiển thị tên/status component cho smoke trên loopback; production vẫn ẩn chi tiết.
+- Eureka có `USER-SERVICE` trạng thái UP tại port8085. Anonymous `/api/v1/me` trả401
+  với Problem `UNAUTHENTICATED`.
+- Keycloak119 discovery trả issuer khớp env và JWKS có public keys. Không lấy token quản trị,
+  không nghiệm thu token người dùng hoặc Admin API workflow trong smoke này.
+- User chưa dùng Redis: không có dependency/config/health contributor Redis, đúng scope scaffold.
+- Không ghi fixture vào DB, không declare/publish/consume message trên broker119.
+  Toàn bộ process/tunnel do smoke tạo đã được đóng sau kiểm chứng.
+
+## Smoke ngày 26/10/2026 với Rabbit local5672
+
+- Dừng Windows service `RabbitMQ` đang giữ cổng5672 qua quyền Administrator;
+  không gỡ cài đặt hoặc xóa dữ liệu RabbitMQ local.
+- Root `.env` dùng `RABBITMQ_HOST=localhost`, `RABBITMQ_PORT=5672`.
+  Tunnel hiện tại: `127.0.0.1:5672 -> 119:5672`, Mongo giữ `17017 -> 119:27017`.
+- Chạy lại User thật bằng JDK21, Config Server và Eureka: User/Mongo/Rabbit health đều UP,
+  `USER-SERVICE` đăng ký UP tại8085, anonymous `/api/v1/me` trả401 Problem,
+  Keycloak119 discovery/JWKS PASS.
+- Sau smoke chỉ dừng các process User/Config Server/Eureka; giữ SSH tunnel mở cho IDE.
+  Không ghi fixture DB hoặc publish/consume message trên server119.

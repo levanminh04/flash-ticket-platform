@@ -38,12 +38,29 @@ import org.springframework.web.bind.annotation.*;
 class SecurityConfigTests {
   static final RSAKey KEY;
   static final HttpServer JWK_SERVER;
-  static final String ISSUER = "https://issuer.example.test/realms/user";
+  static final String ISSUER;
 
   static {
     try {
       KEY = new RSAKeyGenerator(2048).keyID("test-key").generate();
       JWK_SERVER = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      ISSUER = "http://127.0.0.1:" + JWK_SERVER.getAddress().getPort() + "/realms/user";
+      byte[] metadata =
+          ("{\"issuer\":\""
+                  + ISSUER
+                  + "\",\"jwks_uri\":\"http://127.0.0.1:"
+                  + JWK_SERVER.getAddress().getPort()
+                  + "/jwks\"}")
+              .getBytes(StandardCharsets.UTF_8);
+      JWK_SERVER.createContext(
+          "/realms/user/.well-known/openid-configuration",
+          exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, metadata.length);
+            try (var output = exchange.getResponseBody()) {
+              output.write(metadata);
+            }
+          });
       byte[] keys = new JWKSet(KEY.toPublicJWK()).toString().getBytes(StandardCharsets.UTF_8);
       JWK_SERVER.createContext(
           "/jwks",
@@ -63,9 +80,6 @@ class SecurityConfigTests {
   @DynamicPropertySource
   static void jwtProperties(DynamicPropertyRegistry properties) {
     properties.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> ISSUER);
-    properties.add(
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-        () -> "http://127.0.0.1:" + JWK_SERVER.getAddress().getPort() + "/jwks");
     properties.add("spring.security.oauth2.resourceserver.jwt.audiences", () -> "flash-ticket-api");
   }
 
