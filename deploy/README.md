@@ -121,3 +121,52 @@ docker compose --env-file .env -f deploy/docker-compose.redis.yml up -d --wait r
 
 Redis publish trên mọi interface IPv4 của host, password bắt buộc và có healthcheck. Hướng dẫn
 Spring Boot, env, lệnh kiểm tra và kết quả: [redis/handoff.md](redis/handoff.md).
+
+## Build Booking, Ticket, User trên server 119
+
+Mỗi service có Dockerfile riêng: [Booking](../services/booking-service/Dockerfile),
+[Ticket](../services/ticket-service/Dockerfile), [User](../services/user-service/Dockerfile).
+Cache Maven, runtime JRE 21, non-root, heap tối đa 75% giới hạn 768 MiB/container,
+UTC và log rotation 10 MiB × 3. Mỗi build context chỉ gửi POM và source của service đó.
+
+Từ root repo trên **server 119 Linux**, dùng `.env` gốc đã điền credential:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.services.yml build
+docker compose --env-file .env -f deploy/docker-compose.services.yml up -d
+```
+
+Host network truy cập DB bind loopback; port mặc định Booking/Ticket/User là 8082/8084/8085.
+Config Server (8888) và Eureka (8761) phải chạy trên host; Config Server phục vụ YAML mới nhất.
+DB dùng `127.0.0.1:5432`, Mongo `127.0.0.1:27017/user_db`; điền `MONGO_URI` có credential
+URL-encode và `authSource=admin`. Rabbit/Redis/JWKS/token endpoint có thể dùng localhost;
+`KEYCLOAK_ISSUER_URI` khớp issuer public. Booking cần `INTERNAL_SERVICE_CLIENT_SECRET` thật
+và `KEYCLOAK_TOKEN_URI`; SMTP Ticket theo cấu hình hiện có. Host network này dành cho Linux 119.
+
+Build image bỏ test; chạy Maven verify riêng trước deploy.
+
+### Chỉ build/chạy service vừa sửa
+
+Chạy từ root repo trên server 119; chọn **một** lệnh tương ứng:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps ticket-service
+docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps booking-service
+docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps user-service
+```
+
+Compose chỉ build và tạo/cập nhật container của service được chọn. Các service còn lại
+giữ nguyên trạng thái; service chưa chạy sẽ không tự bật. Config Server, Eureka và các
+tài nguyên service cần phải chạy sẵn. Không cần tách Compose hoặc thêm profile/script.
+
+Xem log hoặc dừng riêng Ticket (thay tên tương tự cho Booking/User):
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.services.yml logs -f --tail 100 ticket-service
+docker compose --env-file .env -f deploy/docker-compose.services.yml stop ticket-service
+```
+
+Khi cập nhật một service, dùng `up` như trên; `down` sẽ dừng toàn bộ project Compose.
+Các lệnh này build từ source trên server. Khi CI build/push image lên registry,
+thêm `image:` cho từng service rồi deploy bằng `pull <service>` và
+`up -d --no-deps --no-build <service>`.
