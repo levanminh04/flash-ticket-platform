@@ -259,3 +259,8 @@ Phần review này không tự mở rộng triển khai sang 5 bảng cuối. En
 - Đã viết transaction đồng bộ snapshot/inventory/inbox, hash/version guard, bảo toàn counter/reservation và chống hồi sinh CANCELLED; chỉ dùng repository save()/saveAll().
 - InboxMessage thêm @Version/ColumnDefault theo yêu cầu trực tiếp của user; bỏ đề xuất insertIfAbsent. Đã thêm review 15 bảng ở §9, không tự thêm version cho các bảng chỉ đang đề xuất.
 - Compile JDK 23 và 67 ContractRulesTests pass; log local target/sales-config-phase2.log. Chưa kết luận transaction đúng cho tới khi chạy D* trên PostgreSQL test thật ở giai đoạn 4.
+
+### Kết quả giai đoạn 3
+
+- Đã thêm SalesConfigurationListener AUTO ACK, concurrency 1, gọi service qua interface; reject lỗi contract/hash/version vĩnh viễn và để lỗi DB/commit đi ra container.
+- Không Channel/delivery tag, không thêm retry/template/factory. Compile JDK 23 pass, log local target/sales-config-phase3.log; xác minh unit/broker tiếp tục ở giai đoạn 4.
