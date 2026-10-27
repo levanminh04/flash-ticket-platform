@@ -14,6 +14,7 @@ CREATE TABLE event_sales_snapshots (
   purchase_limit integer NOT NULL CHECK (purchase_limit > 0),
   configuration_snapshot jsonb NOT NULL CHECK (jsonb_typeof(configuration_snapshot) = 'object' AND configuration_snapshot @> '{"schemaVersion":1}'),
   source_config_version bigint NOT NULL CHECK (source_config_version > 0), received_at timestamptz NOT NULL,
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   CHECK (sale_starts_at < sale_ends_at), UNIQUE (event_id, sales_mode)
 );
 CREATE TABLE orders (

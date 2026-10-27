@@ -25,6 +25,8 @@ import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 public enum ErrorCode {
   ORDER_NOT_FOUND(NOT_FOUND, "Không tìm thấy đơn hàng."),
   CONFIG_NOT_READY(SERVICE_UNAVAILABLE, "Cấu hình bán vé chưa sẵn sàng."),
+  SALES_CONFIGURATION_CONFLICT(CONFLICT, "Cấu hình bán vé mâu thuẫn với dữ liệu đã lưu."),
+  MESSAGE_ID_CONFLICT(CONFLICT, "Mã thông điệp đã được dùng với nội dung khác."),
   SEAT_UNAVAILABLE(CONFLICT, "Ghế đã chọn hiện không còn khả dụng."),
   INSUFFICIENT_QUANTITY(CONFLICT, "Số lượng vé còn lại không đủ."),
   PURCHASE_LIMIT_EXCEEDED(CONFLICT, "Yêu cầu vượt quá giới hạn mua vé."),
