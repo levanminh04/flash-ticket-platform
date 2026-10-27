@@ -38,7 +38,7 @@ class RegistrationEventListenerTests {
   }
 
   @Test void capturesRegistrationInCurrentSessionAndNormalizesDisplayName() throws Exception {
-    new RegistrationEventListener(session, store).onEvent(event);
+    new RegistrationEventListener(session, store, true).onEvent(event);
     var payload = ArgumentCaptor.forClass(String.class);
     verify(store).enqueuePending(eq("flash-ticket-registration"), eq("realm"), eq("realm"),
         isNull(), eq(event.getId()), eq("identity.user-created.v1"), payload.capture(), isNull());
@@ -51,18 +51,20 @@ class RegistrationEventListenerTests {
   }
 
   @Test void ignoresOtherEventsAndNonFormRegistrations() {
-    var listener = new RegistrationEventListener(session, store);
+    var listener = new RegistrationEventListener(session, store, true);
     for (EventType type : List.of(EventType.LOGIN, EventType.REGISTER_ERROR, EventType.UPDATE_PROFILE)) {
       event.setType(type); listener.onEvent(event);
     }
     event.setType(EventType.REGISTER); event.setDetails(Map.of()); listener.onEvent(event);
     event.setDetails(Map.of(Details.REGISTER_METHOD, "broker")); listener.onEvent(event);
     event.setDetails(null); listener.onEvent(event);
-    verifyNoInteractions(store);
+    event.setDetails(Map.of(Details.REGISTER_METHOD, "form"));
+    new RegistrationEventListener(session, store, false).onEvent(event);
+    verifyNoInteractions(store, session, tx);
   }
 
   @Test void ignoresErrorsAndOtherRealms() {
-    var listener = new RegistrationEventListener(session, store);
+    var listener = new RegistrationEventListener(session, store, true);
     event.setError("failure"); listener.onEvent(event);
     event.setError(null); when(realm.getName()).thenReturn("master"); listener.onEvent(event);
     verifyNoInteractions(store);
@@ -71,19 +73,19 @@ class RegistrationEventListenerTests {
   @Test void enqueueFailureMarksRollbackOnlyEvenIfKeycloakCatchesListenerException() {
     when(store.enqueuePending(anyString(), anyString(), anyString(), isNull(),
         anyString(), anyString(), anyString(), isNull())).thenThrow(new IllegalStateException("db failed"));
-    assertThrows(IllegalStateException.class, () -> new RegistrationEventListener(session, store).onEvent(event));
+    assertThrows(IllegalStateException.class, () -> new RegistrationEventListener(session, store, true).onEvent(event));
     verify(tx).setRollbackOnly();
   }
 
   @Test void missingUserOrInvalidIdCannotCommitWithoutOutbox() {
     event.setId("invalid");
-    assertThrows(IllegalStateException.class, () -> new RegistrationEventListener(session, store).onEvent(event));
+    assertThrows(IllegalStateException.class, () -> new RegistrationEventListener(session, store, true).onEvent(event));
     verify(tx).setRollbackOnly(); verifyNoInteractions(store);
   }
 
   @Test void missingNameIsOmittedRatherThanNull() throws Exception {
     when(user.getFirstName()).thenReturn(null); when(user.getLastName()).thenReturn(" ");
-    new RegistrationEventListener(session, store).onEvent(event);
+    new RegistrationEventListener(session, store, true).onEvent(event);
     var payload = ArgumentCaptor.forClass(String.class);
     verify(store).enqueuePending(anyString(), anyString(), anyString(), isNull(),
         anyString(), anyString(), payload.capture(), isNull());

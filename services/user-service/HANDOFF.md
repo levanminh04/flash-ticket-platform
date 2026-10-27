@@ -10,7 +10,7 @@ Kết quả và lệnh kiểm chứng: [TESTING](TESTING.md).
 
 Runtime YAML đã áp dụng tại [user-service.yaml](../../infrastructure/config-server/src/main/resources/config/user-service.yaml).
 Boot 4.1.1 dùng `spring.mongodb.uri`; `auto-index-creation=false`, collection `tbl_*` do deploy quản lý.
-Rabbit dùng manual ACK, prefetch 20, connection timeout 2s, `dynamic=false`; không tự tạo topology.
+Rabbit mặc định dùng manual ACK, prefetch 20, connection timeout 2s, `dynamic=false`; không tự tạo topology. Listener identity dùng factory riêng với Spring AUTO ACK và prefetch 1.
 Common Eureka/management lấy từ central `application.yaml`. Không có mail, Redis, Feign hoặc OAuth2 Client mới.
 
 ## Chạy local với hạ tầng hiện có
@@ -81,5 +81,37 @@ listener/tunnel và nạp root env theo hướng dẫn trên.
   có dependency/config/code mẫu, chưa đưa vào runtime và chưa yêu cầu secret `user-management`.
 - Gateway anonymous profile, identity publisher và payload, B13 runtime approval/recovery,
   B15 V17/V18 và RCA end-to-end còn để task sau. JWT route policy đã có nhưng không thay business implementation.
+
+## Identity consumer — ObjectMapper (27/10/2026)
+
+`IdentityUserCreatedListener` dùng `ObjectMapper.readValue(body, UserCreatedV1.class)` trực tiếp,
+không còn hàm decode hoặc kiểm từng JsonNode bằng tay. Mapper kế thừa cấu hình chung để từ chối
+field lạ và dữ liệu sai kiểu; routing key, giới hạn64KiB và realm vẫn được kiểm trước khi ghi Mongo.
+Theo lựa chọn user, consumer nhận cả displayName null/không có, UUID Base64 và timestamp có offset
+do Jackson hỗ trợ. SPI vẫn phát UUID canonical, UTC Z và bỏ displayName khi không có; schema/fixture
+producer không đổi. ACK sau ghi, retry DB, DLQ và idempotency giữ nguyên. Test listener/registrar
+6/6 đạt; chưa deploy thay đổi consumer này lên119.
+
+Property `KEYCLOAK_IDENTITY_REALM_ID` được nạp trực tiếp tại field `realmId` của Listener bằng
+`@Value`, theo mẫu `JwtTokenUtil`/`JwtTokenFilter` trong Shop App. Listener vẫn nhận dependency
+bằng constructor; Spring inject field sau khi tạo bean từ `IdentityMessagingConfig`.
+
+Listener identity dùng Spring `AcknowledgeMode.AUTO`, không nhận `Channel`: Spring ACK khi method
+trả về thành công. Dữ liệu không hợp lệ hoặc hết retry ném `AmqpRejectAndDontRequeueException`;
+message được đưa vào DLQ nếu queue có cấu hình DLX. Chưa kiểm tra thay đổi AUTO với broker thật.
+
+`ensureRegistered` dùng `@Retryable` của Spring Framework 7, được bật bởi
+`@EnableResilientMethods` trong `IdentityMessagingConfig`. Registrar là Spring bean không `final`
+để Spring tạo proxy; lỗi DB trong danh sách được thử lại tối đa 2 lần, chờ 1s rồi 5s. Listener gọi
+registrar qua proxy và xử lý lỗi sau khi retry hết; không dùng `RetryTemplate` trong listener.
+
+`IdentityUserRegistrar` dùng `UserRepository.findByIdentitySubject` rồi `save` khi chưa có user.
+Unique index chặn ghi trùng; nếu save gặp duplicate, registrar tìm lại user cùng subject: có thì
+coi là thành công, không có thì ném lỗi tiếp. Theo yêu cầu user, không kiểm `keyPattern` hoặc
+từng field của hồ sơ trong nhánh này. Repository identity được tạo từ template riêng có write concern
+journal/w1/timeout5s. Test MongoDB119 đã kiểm 8 lượt
+đồng thời và redelivery; code mới chưa được deploy lên server.
+Unique index `uq_users_identity_subject` do setup MongoDB quản lý; registrar không kiểm index lúc
+khởi động, nên cần bảo đảm setup index đã chạy trên từng môi trường.
 - Tham khảo [Rabbit topology](../../deploy/rabbitmq/definitions.json) và
   [Keycloak internal handoff](../../deploy/keycloak/postman/INTERNAL-SERVICE-HANDOFF.md).

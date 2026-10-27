@@ -21,7 +21,6 @@ class RabbitMqOutboxDeliveryHandlerTests {
     when(factory.newConnection()).thenReturn(connection);
     when(connection.isOpen()).thenReturn(true);
     when(connection.createChannel()).thenReturn(channel);
-    when(channel.waitForConfirms(2000)).thenReturn(true);
     when(row.getPayload()).thenReturn("{\"eventId\":\"test\"}");
     when(row.getCorrelationId()).thenReturn("stable-event-id");
   }
@@ -35,6 +34,8 @@ class RabbitMqOutboxDeliveryHandlerTests {
     assertEquals(2, properties.getValue().getDeliveryMode());
     assertEquals("stable-event-id", properties.getValue().getMessageId());
     assertEquals("application/json", properties.getValue().getContentType());
+    verify(channel).waitForConfirmsOrDie(2000);
+    verify(channel).close();
     handler.close();
   }
 
@@ -51,11 +52,18 @@ class RabbitMqOutboxDeliveryHandlerTests {
   }
 
   @Test void negativeConfirmAndTimeoutRemainRetryable() throws Exception {
-    when(channel.waitForConfirms(2000)).thenReturn(false);
+    doThrow(new IOException("NACK")).when(channel).waitForConfirmsOrDie(2000);
     var handler = new RabbitMqOutboxDeliveryHandler(factory);
     assertEquals(OutboxDeliveryOutcome.RETRY, handler.deliver(null, row).outcome());
-    when(channel.waitForConfirms(2000)).thenThrow(new TimeoutException());
+    doThrow(new TimeoutException()).when(channel).waitForConfirmsOrDie(2000);
     assertEquals(OutboxDeliveryOutcome.RETRY, handler.deliver(null, row).outcome());
+    verify(channel, times(2)).close();
+  }
+
+  @Test void channelCloseFailureRemainsRetryable() throws Exception {
+    doThrow(new IOException("close failed")).when(channel).close();
+    assertEquals(OutboxDeliveryOutcome.RETRY,
+        new RabbitMqOutboxDeliveryHandler(factory).deliver(null, row).outcome());
   }
 
   @Test void initialConnectionFailureIsRetriedOnNextDelivery() throws Exception {

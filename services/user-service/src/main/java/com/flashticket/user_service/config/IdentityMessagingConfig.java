@@ -1,30 +1,29 @@
 package com.flashticket.user_service.config;
 
 import com.flashticket.user_service.messaging.identity.*;
-import com.mongodb.MongoSocketException;
-import com.mongodb.MongoTimeoutException;
-import com.mongodb.MongoWriteConcernException;
-import java.time.Duration;
+import com.flashticket.user_service.user.repository.UserRepository;
+import com.mongodb.WriteConcern;
 import java.util.concurrent.TimeUnit;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.mongodb.autoconfigure.MongoClientSettingsBuilderCustomizer;
 import org.springframework.context.annotation.*;
-import org.springframework.core.retry.*;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import tools.jackson.databind.json.JsonMapper;
+import org.springframework.data.mongodb.repository.support.MongoRepositoryFactory;
+import org.springframework.resilience.annotation.EnableResilientMethods;
+import tools.jackson.databind.ObjectMapper;
 
+/** Ghép consumer identity với MongoDB, retry DB và listener container riêng của queue identity. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "user.identity.enabled", matchIfMissing = true)
+@EnableResilientMethods
 public class IdentityMessagingConfig {
   @Bean
   MongoClientSettingsBuilderCustomizer identityMongoTimeouts() {
+    // Không để một thao tác mạng treo mãi, khiến listener không thể retry hoặc kết thúc delivery.
     return builder ->
         builder
             .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(2, TimeUnit.SECONDS))
@@ -33,30 +32,22 @@ public class IdentityMessagingConfig {
                     socket.connectTimeout(2, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS));
   }
 
-  @Bean(initMethod = "verifyIdentityIndex")
+  @Bean
   IdentityUserRegistrar identityUserRegistrar(MongoTemplate template) {
-    return new IdentityUserRegistrar(template);
+    // Template riêng để không thay write concern của các chức năng User khác.
+    MongoTemplate identityTemplate =
+        new MongoTemplate(template.getMongoDatabaseFactory(), template.getConverter());
+    identityTemplate.setWriteConcern(
+        WriteConcern.JOURNALED.withW(1).withWTimeout(5, TimeUnit.SECONDS));
+    UserRepository identityRepository =
+        new MongoRepositoryFactory(identityTemplate).getRepository(UserRepository.class);
+    return new IdentityUserRegistrar(identityRepository);
   }
 
   @Bean
   IdentityUserCreatedListener identityUserCreatedListener(
-      JsonMapper mapper,
-      IdentityUserRegistrar registrar,
-      @Value("${KEYCLOAK_IDENTITY_REALM_ID}") String realmId) {
-    RetryPolicy policy =
-        RetryPolicy.builder()
-            .maxRetries(2)
-            .delay(Duration.ofSeconds(1))
-            .multiplier(5)
-            .maxDelay(Duration.ofSeconds(5))
-            .includes(
-                TransientDataAccessException.class,
-                DataAccessResourceFailureException.class,
-                MongoSocketException.class,
-                MongoTimeoutException.class,
-                MongoWriteConcernException.class)
-            .build();
-    return new IdentityUserCreatedListener(mapper, registrar, realmId, new RetryTemplate(policy));
+      ObjectMapper objectMapper, IdentityUserRegistrar registrar) {
+    return new IdentityUserCreatedListener(objectMapper, registrar);
   }
 
   @Bean
@@ -64,10 +55,12 @@ public class IdentityMessagingConfig {
       SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connection) {
     var factory = new SimpleRabbitListenerContainerFactory();
     configurer.configure(factory, connection);
-    factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+    // Spring ACK sau khi listener xử lý thành công; mỗi consumer giữ tối đa một delivery chưa ACK.
+    factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
     factory.setPrefetchCount(1);
     factory.setConcurrentConsumers(1);
     factory.setMaxConcurrentConsumers(1);
+    // Tránh message lỗi bị trả về queue chính liên tục; dùng DLQ đã khai trong broker.
     factory.setDefaultRequeueRejected(false);
     return factory;
   }

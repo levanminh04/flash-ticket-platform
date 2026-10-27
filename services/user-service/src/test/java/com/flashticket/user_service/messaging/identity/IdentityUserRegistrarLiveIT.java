@@ -2,7 +2,9 @@ package com.flashticket.user_service.messaging.identity;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.flashticket.user_service.user.repository.UserRepository;
 import com.mongodb.ConnectionString;
+import com.mongodb.WriteConcern;
 import com.mongodb.client.*;
 import java.time.Instant;
 import java.util.*;
@@ -11,6 +13,9 @@ import org.bson.Document;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.convert.DefaultMongoTypeMapper;
+import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
+import org.springframework.data.mongodb.repository.support.MongoRepositoryFactory;
 
 /** Opt-in only: creates and deletes its own uniquely scoped test document on the configured DB. */
 @EnabledIfEnvironmentVariable(named = "IDENTITY_LIVE_TEST", matches = "true")
@@ -23,8 +28,12 @@ class IdentityUserRegistrarLiveIT {
     String subject = "identity-it-" + UUID.randomUUID();
     try (MongoClient client = MongoClients.create(uri)) {
       var template = new MongoTemplate(client, "user_db");
-      var registrar = new IdentityUserRegistrar(template);
-      registrar.verifyIdentityIndex();
+      template.setWriteConcern(WriteConcern.JOURNALED.withW(1).withWTimeout(5, TimeUnit.SECONDS));
+      ((MappingMongoConverter) template.getConverter())
+          .setTypeMapper(new DefaultMongoTypeMapper(null));
+      UserRepository repository =
+          new MongoRepositoryFactory(template).getRepository(UserRepository.class);
+      var registrar = new IdentityUserRegistrar(repository);
       var collection = template.getCollection("tbl_users");
       var filter = new Document("identitySubject", subject);
       var event =
@@ -52,7 +61,7 @@ class IdentityUserRegistrarLiveIT {
         assertThat(original).isNotNull();
         assertThat(original.containsKey("displayName")).isFalse();
         assertThat(original.containsKey("_class")).isFalse();
-        assertThat(original.getInteger("version")).isZero();
+        assertThat(((Number) original.get("version")).longValue()).isZero();
         collection.updateOne(
             filter,
             new Document("$set", new Document("displayName", "Edited").append("version", 7)));
@@ -60,7 +69,7 @@ class IdentityUserRegistrarLiveIT {
         Document redelivered = collection.find(filter).first();
         assertThat(redelivered.getString("_id")).isEqualTo(original.getString("_id"));
         assertThat(redelivered.getString("displayName")).isEqualTo("Edited");
-        assertThat(redelivered.getInteger("version")).isEqualTo(7);
+        assertThat(((Number) redelivered.get("version")).longValue()).isEqualTo(7);
         assertThat(redelivered.getDate("createdAt")).isEqualTo(original.getDate("createdAt"));
       } finally {
         collection.deleteOne(filter);

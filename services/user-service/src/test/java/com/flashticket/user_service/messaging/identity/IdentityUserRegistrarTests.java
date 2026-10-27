@@ -4,27 +4,19 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.mongodb.client.*;
-import com.mongodb.client.model.UpdateOptions;
-import com.mongodb.client.result.UpdateResult;
+import com.flashticket.user_service.document.UserDocument;
+import com.flashticket.user_service.user.repository.UserRepository;
 import java.time.Instant;
 import java.util.*;
-import org.bson.Document;
-import org.bson.conversions.Bson;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.dao.DuplicateKeyException;
 
 class IdentityUserRegistrarTests {
-  @SuppressWarnings("unchecked")
   @Test
   void emitsAtomicInsertOnlyWriteCompatibleWithClosedValidator() {
-    var template = mock(MongoTemplate.class);
-    MongoCollection<Document> collection = mock(MongoCollection.class);
-    when(template.getCollection("tbl_users")).thenReturn(collection);
-    when(collection.withWriteConcern(any())).thenReturn(collection);
-    when(collection.updateOne(any(Bson.class), any(Bson.class), any(UpdateOptions.class)))
-        .thenReturn(UpdateResult.acknowledged(0, 0L, null));
+    var repository = mock(UserRepository.class);
+    when(repository.findByIdentitySubject("subject")).thenReturn(Optional.empty());
     var event =
         new UserCreatedV1(
             1,
@@ -34,19 +26,36 @@ class IdentityUserRegistrarTests {
             "realm",
             "subject",
             null);
-    new IdentityUserRegistrar(template).ensureRegistered(event);
-    var query = ArgumentCaptor.forClass(Bson.class);
-    var update = ArgumentCaptor.forClass(Bson.class);
-    var options = ArgumentCaptor.forClass(UpdateOptions.class);
-    verify(collection).updateOne(query.capture(), update.capture(), options.capture());
-    assertThat(query.getValue()).isEqualTo(new Document("identitySubject", "subject"));
-    Document changed = (Document) update.getValue();
-    assertThat(changed.keySet()).containsExactly("$setOnInsert");
-    Document inserted = changed.get("$setOnInsert", Document.class);
-    assertThat(inserted.keySet())
-        .containsExactlyInAnyOrder("_id", "identitySubject", "createdAt", "updatedAt", "version");
-    assertThat(inserted.getInteger("version")).isZero();
-    assertThat(UUID.fromString(inserted.getString("_id"))).isNotNull();
-    assertThat(options.getValue().isUpsert()).isTrue();
+    var registrar = new IdentityUserRegistrar(repository);
+    registrar.ensureRegistered(event);
+    var user = ArgumentCaptor.forClass(UserDocument.class);
+    verify(repository).save(user.capture());
+    assertThat(user.getValue().getIdentitySubject()).isEqualTo("subject");
+    assertThat(user.getValue().getCreatedAt()).isEqualTo(event.occurredAt());
+    assertThat(user.getValue().getUpdatedAt()).isEqualTo(event.occurredAt());
+    assertThat(user.getValue().getDisplayName()).isNull();
+    assertThat(user.getValue().getVersion()).isNull();
+    assertThat(UUID.fromString(user.getValue().getId())).isNotNull();
+
+    // Khi hai lượt xử lý cùng subject, kiểm tra user đã được tạo trước khi bỏ qua lỗi.
+    UserDocument existing = new UserDocument();
+    existing.setId(UUID.randomUUID().toString());
+    existing.setCreatedAt(event.occurredAt());
+    existing.setUpdatedAt(event.occurredAt());
+    existing.setVersion(0L);
+    when(repository.findByIdentitySubject("subject"))
+        .thenReturn(Optional.empty(), Optional.of(existing));
+    when(repository.save(any(UserDocument.class)))
+        .thenThrow(new DuplicateKeyException("duplicate"));
+    registrar.ensureRegistered(event);
+
+    when(repository.findByIdentitySubject("subject")).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> registrar.ensureRegistered(event))
+        .isInstanceOf(DuplicateKeyException.class);
+
+    reset(repository);
+    when(repository.findByIdentitySubject("subject")).thenReturn(Optional.of(existing));
+    registrar.ensureRegistered(event);
+    verify(repository, never()).save(any(UserDocument.class));
   }
 }

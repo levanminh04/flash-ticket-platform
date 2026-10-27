@@ -6,6 +6,11 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Contract JSON dùng giữa SPI và User Service. eventId nhận diện sự kiện khi gửi lại;
+ * identitySubject nhận diện user trong Keycloak. schemaVersion/eventType khóa phiên bản; occurredAt
+ * là thời điểm đăng ký theo UTC. displayName tùy chọn: khi không có thì bỏ field khỏi JSON.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record UserCreatedV1(
     int schemaVersion,

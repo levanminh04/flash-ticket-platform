@@ -1,66 +1,63 @@
 package com.flashticket.user_service.messaging.identity;
 
-import com.mongodb.MongoWriteException;
-import com.mongodb.WriteConcern;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.UpdateOptions;
-import java.util.Date;
+import com.flashticket.user_service.document.UserDocument;
+import com.flashticket.user_service.user.repository.UserRepository;
+import com.mongodb.MongoSocketException;
+import com.mongodb.MongoTimeoutException;
+import com.mongodb.MongoWriteConcernException;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import org.bson.Document;
-import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.resilience.annotation.Retryable;
 
-/** An insert-only single-document operation; no cross-document transaction needed. */
-public final class IdentityUserRegistrar {
-  private final MongoCollection<Document> users;
+/**
+ * Tạo hồ sơ nếu chưa có, dùng identitySubject làm khóa chống xử lý trùng. Chỉ ghi một document nên
+ * dùng tính nguyên tử của MongoDB, không cần transaction nhiều document.
+ */
+public class IdentityUserRegistrar {
+  private final UserRepository userRepository;
 
-  public IdentityUserRegistrar(MongoTemplate template) {
-    this.users =
-        template
-            .getCollection("tbl_users")
-            .withWriteConcern(WriteConcern.JOURNALED.withW(1).withWTimeout(5, TimeUnit.SECONDS));
+  public IdentityUserRegistrar(UserRepository userRepository) {
+    this.userRepository = userRepository;
   }
 
-  public void verifyIdentityIndex() {
-    for (Document index : users.listIndexes()) {
-      Document keys = index.get("key", Document.class);
-      if (Boolean.TRUE.equals(index.getBoolean("unique"))
-          && keys != null
-          && keys.size() == 1
-          && keys.containsKey("identitySubject")) return;
-    }
-    throw new IllegalStateException(
-        "Missing unique identitySubject index; identity listener cannot start");
-  }
-
+  // Một lần đầu và tối đa hai lần thử lại sau 1s/5s cho lỗi DB tạm thời.
+  @Retryable(
+      includes = {
+        TransientDataAccessException.class,
+        DataAccessResourceFailureException.class,
+        MongoSocketException.class,
+        MongoTimeoutException.class,
+        MongoWriteConcernException.class
+      },
+      maxRetries = 2,
+      delay = 1000,
+      multiplier = 5,
+      maxDelay = 5000)
   public void ensureRegistered(UserCreatedV1 event) {
-    Document filter = new Document("identitySubject", event.identitySubject());
-    Document inserted =
-        new Document("_id", UUID.randomUUID().toString())
-            .append("identitySubject", event.identitySubject())
-            .append("createdAt", Date.from(event.occurredAt()))
-            .append("updatedAt", Date.from(event.occurredAt()))
-            .append("version", 0);
-    if (event.displayName() != null) inserted.append("displayName", event.displayName());
+    String identitySubject = event.identitySubject();
+    if (userRepository.findByIdentitySubject(identitySubject).isPresent()) {
+      return;
+    }
+
+    // ID hồ sơ là ID nội bộ; identitySubject là ID user trên Keycloak.
+    UserDocument newUser = new UserDocument();
+    newUser.setId(UUID.randomUUID().toString());
+    newUser.setIdentitySubject(identitySubject);
+    newUser.setCreatedAt(event.occurredAt());
+    newUser.setUpdatedAt(event.occurredAt());
+    newUser.setDisplayName(event.displayName());
+
     try {
-      var result =
-          users.updateOne(
-              filter, new Document("$setOnInsert", inserted), new UpdateOptions().upsert(true));
-      if (!result.wasAcknowledged())
-        throw new IllegalStateException("Unacknowledged identity write");
-    } catch (MongoWriteException duplicate) {
-      if (duplicate.getError().getCode() != 11000) throw duplicate;
-      var details = duplicate.getError().getDetails();
-      if (details == null
-          || !details.containsKey("keyPattern")
-          || !details.getDocument("keyPattern").containsKey("identitySubject")) throw duplicate;
-      Document existing = users.find(filter).first();
-      if (existing == null
-          || !(existing.get("createdAt") instanceof Date)
-          || !(existing.get("updatedAt") instanceof Date)
-          || !(existing.get("version") instanceof Number)
-          || existing.getString("_id") == null) throw duplicate;
-      UUID.fromString(existing.getString("_id"));
+      // version đang null để Spring Data nhận diện user mới và thực hiện insert.
+      userRepository.save(newUser);
+    } catch (DuplicateKeyException error) {
+      // Có thể consumer khác vừa tạo user sau lần find đầu tiên.
+      // Chỉ coi là thành công nếu tìm lại được user cùng identitySubject.
+      if (userRepository.findByIdentitySubject(identitySubject).isEmpty()) {
+        throw error;
+      }
     }
   }
 }

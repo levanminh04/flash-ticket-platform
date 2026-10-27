@@ -98,6 +98,17 @@ class RuntimeConfigurationTests {
               } finally {
                 container.destroy();
               }
+              var identityFactory =
+                  new IdentityMessagingConfig()
+                      .identityRabbitListenerContainerFactory(
+                          context.getBean(SimpleRabbitListenerContainerFactoryConfigurer.class),
+                          context.getBean(CachingConnectionFactory.class));
+              var identityContainer = identityFactory.createListenerContainer(endpoint);
+              try {
+                assertThat(identityContainer.getAcknowledgeMode()).isEqualTo(AcknowledgeMode.AUTO);
+              } finally {
+                identityContainer.destroy();
+              }
               var props = context.getBean(RabbitProperties.class);
               assertThat(props.getListener().getSimple().getPrefetch()).isEqualTo(20);
               assertThat(

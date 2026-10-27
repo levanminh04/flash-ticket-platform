@@ -4,35 +4,37 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.flashticket.user_service.config.IdentityMessagingConfig;
 import com.flashticket.user_service.config.UserJsonConfig;
-import com.rabbitmq.client.Channel;
-import java.io.IOException;
+import com.flashticket.user_service.document.UserDocument;
+import com.flashticket.user_service.user.repository.UserRepository;
 import java.nio.file.*;
-import java.time.Duration;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.*;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.*;
-import org.springframework.core.retry.*;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainerFactoryConfigurer;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.dao.*;
+import org.springframework.resilience.annotation.EnableResilientMethods;
+import org.springframework.resilience.annotation.RetryAnnotationBeanPostProcessor;
+import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 class IdentityUserCreatedListenerTests {
   IdentityUserRegistrar registrar = mock(IdentityUserRegistrar.class);
-  Channel channel = mock(Channel.class);
   JsonMapper mapper;
-  RetryTemplate retry;
 
   @BeforeEach
   void setup() {
     var builder = JsonMapper.builder().findAndAddModules();
     new UserJsonConfig().userJsonMapperCustomizer().customize(builder);
     mapper = builder.build();
-    retry =
-        new RetryTemplate(
-            RetryPolicy.builder()
-                .maxRetries(2)
-                .delay(Duration.ZERO)
-                .includes(TransientDataAccessException.class)
-                .build());
   }
 
   Message message(String json) {
@@ -48,16 +50,31 @@ class IdentityUserCreatedListenerTests {
   }
 
   IdentityUserCreatedListener listener() {
-    return new IdentityUserCreatedListener(mapper, registrar, "realm-id-from-keycloak", retry);
+    IdentityUserCreatedListener listener = new IdentityUserCreatedListener(mapper, registrar);
+    ReflectionTestUtils.setField(listener, "realmId", "realm-id-from-keycloak");
+    return listener;
   }
 
   @Test
   void commitsBeforeAckAndIgnoresSenderTypeHeader() throws Exception {
-    listener().onMessage(message(fixture()), channel);
-    var order = inOrder(registrar, channel);
-    order.verify(registrar).ensureRegistered(any(UserCreatedV1.class));
-    order.verify(channel).basicAck(7, false);
-    verify(channel, never()).basicReject(anyLong(), anyBoolean());
+    String json = fixture();
+    for (String payload :
+        new String[] {
+          json,
+          json.replace(",\n  \"displayName\": \"Nguyễn Văn An\"", ""),
+          json.replace("\"displayName\": \"Nguyễn Văn An\"", "\"displayName\": null"),
+          json.replace("2026-10-26T12:00:00Z", "2026-10-26T19:00:00+07:00"),
+          json.replace("9fe8679b-759a-4529-bc49-e522c59da03b", "n+hnm3WaRSm8SeUixZ2gOw==")
+        }) {
+      listener().onMessage(message(payload));
+    }
+    var events = org.mockito.ArgumentCaptor.forClass(UserCreatedV1.class);
+    verify(registrar, times(5)).ensureRegistered(events.capture());
+    var accepted = events.getAllValues();
+    assertThat(accepted.get(1).displayName()).isNull();
+    assertThat(accepted.get(2).displayName()).isNull();
+    assertThat(accepted.get(3).occurredAt()).isEqualTo(accepted.getFirst().occurredAt());
+    assertThat(accepted.get(4).eventId()).isEqualTo(accepted.getFirst().eventId());
   }
 
   @Test
@@ -68,46 +85,74 @@ class IdentityUserCreatedListenerTests {
           fixture().replace("\"schemaVersion\": 1", "\"schemaVersion\": 2"),
           fixture().replace("realm-id-from-keycloak", "foreign"),
           fixture().replace("\"schemaVersion\": 1", "\"schemaVersion\": \"1\""),
-          fixture().replace("\"displayName\": \"Nguyễn Văn An\"", "\"displayName\": null"),
+          fixture().replace("user-id-from-keycloak", " "),
           fixture()
               .replace("\"eventId\": \"9fe8679b-759a-4529-bc49-e522c59da03b\"", "\"eventId\": 7"),
           fixture().replace("\"schemaVersion\": 1", "\"schemaVersion\": 1, \"extra\": true"),
           "{"
-        }) listener().onMessage(message(json), channel);
+        })
+      assertThatThrownBy(() -> listener().onMessage(message(json)))
+          .isInstanceOf(AmqpRejectAndDontRequeueException.class);
     verifyNoInteractions(registrar);
-    verify(channel, times(8)).basicReject(7, false);
-    verify(channel, never()).basicAck(anyLong(), anyBoolean());
   }
 
   @Test
   void retriesTransientWriteButNeverAcknowledgesExhaustion() throws Exception {
-    doThrow(new TransientDataAccessResourceException("temporary"))
-        .when(registrar)
-        .ensureRegistered(any());
-    listener().onMessage(message(fixture()), channel);
-    verify(registrar, times(3)).ensureRegistered(any());
-    verify(channel).basicReject(7, false);
-    verify(channel, never()).basicAck(anyLong(), anyBoolean());
+    assertThat(IdentityMessagingConfig.class.isAnnotationPresent(EnableResilientMethods.class))
+        .isTrue();
+    var repository = mock(UserRepository.class);
+    when(repository.findByIdentitySubject(anyString()))
+        .thenThrow(new TransientDataAccessResourceException("temporary"));
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context.registerBean(
+          "identityUserRegistrar",
+          IdentityUserRegistrar.class,
+          () -> new IdentityUserRegistrar(repository));
+      context.registerBean(ObjectMapper.class, () -> mapper);
+      context.registerBean(
+          SimpleRabbitListenerContainerFactoryConfigurer.class,
+          () -> mock(SimpleRabbitListenerContainerFactoryConfigurer.class));
+      context.registerBean(ConnectionFactory.class, () -> mock(ConnectionFactory.class));
+      context
+          .getEnvironment()
+          .getPropertySources()
+          .addFirst(
+              new MapPropertySource(
+                  "test", Map.of("KEYCLOAK_IDENTITY_REALM_ID", "realm-id-from-keycloak")));
+      context.register(IdentityMessagingConfig.class);
+      context.refresh();
+      var actualRegistrar = context.getBean(IdentityUserRegistrar.class);
+      assertThat(AopUtils.isAopProxy(actualRegistrar)).isTrue();
+      var listener = context.getBean(IdentityUserCreatedListener.class);
+      assertThatThrownBy(() -> listener.onMessage(message(fixture())))
+          .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+      verify(repository, times(3)).findByIdentitySubject(anyString());
+
+      reset(repository);
+      when(repository.findByIdentitySubject(anyString()))
+          .thenThrow(new IllegalArgumentException("permanent"));
+      assertThatThrownBy(() -> listener.onMessage(message(fixture())))
+          .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+      verify(repository, times(1)).findByIdentitySubject(anyString());
+    }
   }
 
   @Test
   void writeCanRecoverBeforeAck() throws Exception {
-    doThrow(new TransientDataAccessResourceException("temporary"))
-        .doNothing()
-        .when(registrar)
-        .ensureRegistered(any());
-    listener().onMessage(message(fixture()), channel);
-    verify(registrar, times(2)).ensureRegistered(any());
-    verify(channel).basicAck(7, false);
-  }
-
-  @Test
-  void ackFailureIsNotRetriedOrRejectedWithStaleTag() throws Exception {
-    doThrow(new IOException("connection lost")).when(channel).basicAck(7, false);
-    assertThatThrownBy(() -> listener().onMessage(message(fixture()), channel))
-        .isInstanceOf(IOException.class);
-    verify(registrar).ensureRegistered(any());
-    verify(channel, never()).basicReject(anyLong(), anyBoolean());
-    verify(channel).abort();
+    var repository = mock(UserRepository.class);
+    when(repository.findByIdentitySubject(anyString()))
+        .thenThrow(new TransientDataAccessResourceException("temporary"))
+        .thenReturn(Optional.of(new UserDocument()));
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context.registerBean(RetryAnnotationBeanPostProcessor.class);
+      context.registerBean(
+          IdentityUserRegistrar.class, () -> new IdentityUserRegistrar(repository));
+      context.refresh();
+      var listener =
+          new IdentityUserCreatedListener(mapper, context.getBean(IdentityUserRegistrar.class));
+      ReflectionTestUtils.setField(listener, "realmId", "realm-id-from-keycloak");
+      listener.onMessage(message(fixture()));
+      verify(repository, times(2)).findByIdentitySubject(anyString());
+    }
   }
 }
