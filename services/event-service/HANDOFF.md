@@ -49,9 +49,6 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: http://3.106.109.119:8080/realms/flash-ticket
-          jwk-set-uri: http://3.106.109.119:8080/realms/flash-ticket/protocol/openid-connect/certs
-          audiences:
-            - flash-ticket-api
 ```
 
 ## 3. Điền biến môi trường

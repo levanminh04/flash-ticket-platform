@@ -37,7 +37,6 @@ Common Eureka/management lấy từ central `application.yaml`. Không có mail,
 | `USER_SERVICE_PORT` | Mặc định 8085 |
 | `MONGO_URI` | URI database `user_db`, authSource đúng tài khoản; URL-encode password |
 | `KEYCLOAK_ISSUER_URI` | Issuer realm flash-ticket |
-| `KEYCLOAK_AUDIENCE` | Mặc định `flash-ticket-api` |
 | `RABBITMQ_HOST`, `RABBITMQ_PASSWORD` | Host và secret broker hiện có |
 | `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_VHOST` | Mặc định 5672, `flash_ticket_app`, `/` |
 | `USER_SERVICE_VERSION`, `USER_INSTANCE_ID`, `USER_ENVIRONMENT` | Metadata log tùy chọn |

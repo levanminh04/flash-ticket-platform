@@ -17,7 +17,6 @@ Required runtime variables:
 | `RABBITMQ_HOST` | Broker hostname |
 | `RABBITMQ_PASSWORD` | Broker password |
 | `KEYCLOAK_ISSUER_URI` | JWT issuer URI |
-| `KEYCLOAK_JWK_SET_URI` | JWT key-set URI |
 
 Optional variables and defaults are defined in `infrastructure/config-server/src/main/resources/config/booking-service.yaml`. `BOOKING_DB_PASSWORD` is the application credential. `BOOKING_DB_ADMIN_PASSWORD` belongs only to database bootstrap and is not consumed by this service. The connection initializes `SET ROLE booking_owner`; retain the approved database role model when changing credentials.
 

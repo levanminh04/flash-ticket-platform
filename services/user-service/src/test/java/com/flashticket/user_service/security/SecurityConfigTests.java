@@ -80,7 +80,6 @@ class SecurityConfigTests {
   @DynamicPropertySource
   static void jwtProperties(DynamicPropertyRegistry properties) {
     properties.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> ISSUER);
-    properties.add("spring.security.oauth2.resourceserver.jwt.audiences", () -> "flash-ticket-api");
   }
 
   @AfterAll
@@ -157,7 +156,7 @@ class SecurityConfigTests {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"signature", "issuer", "audience", "expired", "future"})
+  @ValueSource(strings = {"signature", "issuer", "expired", "future"})
   void invalidSignedTokensAreRejected(String variant) throws Exception {
     mvc.perform(
             get("/api/v1/me")

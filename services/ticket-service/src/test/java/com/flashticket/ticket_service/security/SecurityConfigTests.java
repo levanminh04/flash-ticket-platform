@@ -67,7 +67,6 @@ class SecurityConfigTests {
     properties.add(
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
         () -> "http://127.0.0.1:" + JWK_SERVER.getAddress().getPort() + "/jwks");
-    properties.add("spring.security.oauth2.resourceserver.jwt.audiences", () -> "flash-ticket-api");
   }
 
   @AfterAll
@@ -167,7 +166,7 @@ class SecurityConfigTests {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"expired", "future", "issuer", "audience", "signature", "malformed"})
+  @ValueSource(strings = {"expired", "future", "issuer", "signature", "malformed"})
   void invalidTokensAreUnauthorized(String problem) throws Exception {
     String value = problem.equals("malformed") ? "not-a-jwt" : signed(problem, "BUYER");
     var result =

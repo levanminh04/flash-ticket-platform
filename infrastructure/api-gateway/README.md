@@ -28,8 +28,8 @@ Gateway không triển khai các handler nghiệp vụ còn thiếu trong Bookin
 4. Dùng `API_GATEWAY_PORT` trong `.env`; mặc định cấu hình là `8081`.
    Máy local đang dùng `8088` vì `8081` đã bị ứng dụng khác chiếm.
 
-`KEYCLOAK_ISSUER_URI` phải khớp chính xác claim `iss` trong token;
-`KEYCLOAK_JWK_SET_URI` phải reachable từ JVM; `KEYCLOAK_AUDIENCE=flash-ticket-api`.
+`KEYCLOAK_ISSUER_URI` phải khớp chính xác claim `iss` trong token; JVM phải truy cập
+được metadata và JWKS do Keycloak công bố để xác thực token.
 Gateway và Booking kiểm JWT độc lập. Các credential và địa chỉ Redis lấy từ `.env`.
 Service nội bộ gọi thẳng `/internal/v1/**` của service đích bằng JWT nội bộ;
 Gateway public chặn `/internal/v1/**`, `/fallback/**` và `/actuator/**`.

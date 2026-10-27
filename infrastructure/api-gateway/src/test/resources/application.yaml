@@ -11,7 +11,6 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: https://issuer.invalid/realms/flashticket
-          jwk-set-uri: https://issuer.invalid/realms/flashticket/protocol/openid-connect/certs
 
 eureka:
   client:

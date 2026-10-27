@@ -23,7 +23,7 @@ rtk proxy .\mvnw.cmd -B -ntp '-Dtest=RuntimeConfigurationTests,TicketRabbitError
 |---|---|
 | JSON/contract | Wire types/nullability/coercion, totals/selection, cancellation rỗng và ID/version, probe union |
 | Entity/mapper | Helper aggregate, inbox key, safe view/counts, outbox metadata round-trip, typed JSON |
-| Security | JWT signature/issuer/audience/expiry, role, route/method, Bearer challenge, stateless/default deny |
+| Security | JWT signature/issuer/expiry, role, route/method, Bearer challenge, stateless/default deny |
 | HTTP/logging | Input/return validation, framework status/header, safe Problem/correlation, actual native formatter với sentinel |
 | Rabbit/context | Shared converter, native fatal reject kể cả x-death, safe log, config binding, không declare topology, feature bean graph |
 

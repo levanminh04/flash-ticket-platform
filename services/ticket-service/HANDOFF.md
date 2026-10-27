@@ -37,8 +37,6 @@ rtk proxy ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15432:127.0.0.1:5432 f
 | RABBITMQ_PORT / USERNAME / VHOST | Mặc định `5672` / `flash_ticket_app` / `/` |
 | RABBITMQ_BUSINESS_EXCHANGE | Mặc định `business.ex` |
 | KEYCLOAK_ISSUER_URI | Server 119: `http://3.106.109.119:8080/realms/flash-ticket` |
-| KEYCLOAK_JWK_SET_URI | Server 119: `http://3.106.109.119:8080/realms/flash-ticket/protocol/openid-connect/certs` |
-| KEYCLOAK_AUDIENCE | Mặc định `flash-ticket-api` |
 | MAIL_HOST / PORT / USERNAME / PASSWORD | Cấu hình SMTP hiện có; scaffold chưa gửi mail |
 
 4. Từ `services/ticket-service`:
@@ -103,5 +101,5 @@ riêng trong process kiểm tra; chưa nghiệm thu Config Server/Eureka hoặc 
 JVM dùng UTC; tunnel riêng đã đóng sau probe. Chưa kiểm ghi/đọc round-trip,
 constraint race hoặc luồng nghiệp vụ; không ghi fixture hay thay schema/broker.
 
-`.env` nguồn lúc kiểm còn DB port 5432, Rabbit host và JWKS localhost. Khi chạy
+`.env` nguồn lúc kiểm còn DB port 5432 và Rabbit host localhost. Khi chạy
 Ticket từ local phải nạp các endpoint 119/tunnel trong bảng trên vào process.

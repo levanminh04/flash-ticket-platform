@@ -32,7 +32,7 @@ tests create clients without opening broker/cache connections.
 | MapperTests | money/version conversion, immutable seat lists, typed JSON, Order views and all eight Outbox round trips |
 | EntityBehaviorTests | bidirectional collection helpers, null rejection and four composite key contracts |
 | KeycloakRealmRoleConverterTests | business/internal role whitelist, deduplication, missing/malformed/unknown claims |
-| SecurityConfigTests | public/protected/denied routes, buyer-only orders, internal-service-only internal access, CSRF/session policy, signatures/expiry/not-before/issuer/audience |
+| SecurityConfigTests | public/protected/denied routes, buyer-only orders, internal-service-only internal access, CSRF/session policy, signatures/expiry/not-before/issuer |
 | RuntimeConfigurationTests | actual Booking YAML binding, AMQP conversion and template wiring, no topology, Redis connection settings, OAuth2/Feign settings and internal-client scan |
 | InternalFeignConfigTests | actual Feign HTTP calls, machine token acquisition/reuse/expiry, buyer isolation, opt-in scope, failure/timeout behavior and strict JSON |
 | BookingServiceApplicationTests | isolated full application startup |

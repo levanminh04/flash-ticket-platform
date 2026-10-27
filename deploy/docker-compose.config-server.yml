@@ -1,0 +1,16 @@
+name: flash-ticket-config-server
+
+services:
+  config-server:
+    build:
+      context: ../infrastructure/config-server
+      dockerfile: Dockerfile
+    env_file: ../.env
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

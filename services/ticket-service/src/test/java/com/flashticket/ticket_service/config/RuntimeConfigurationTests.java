@@ -121,7 +121,6 @@ class RuntimeConfigurationTests {
             "TICKET_DB_URL=jdbc:postgresql://127.0.0.1:15432/ticket_db?currentSchema=ticket_schema",
             "TICKET_DB_PASSWORD=test-only",
             "KEYCLOAK_ISSUER_URI=https://issuer.example.test/realms/ticket",
-            "KEYCLOAK_JWK_SET_URI=https://issuer.example.test/jwks",
             "MAIL_HOST=mail.example.test",
             "MAIL_PORT=587",
             "MAIL_USERNAME=test-user",
@@ -150,8 +149,10 @@ class RuntimeConfigurationTests {
                   .isEqualTo("jackson3");
               assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri"))
                   .isEqualTo("https://issuer.example.test/realms/ticket");
-              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.audiences[0]"))
-                  .isEqualTo("flash-ticket-api");
+              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri"))
+                  .isNull();
+              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.audiences"))
+                  .isNull();
               assertThat(env.getProperty("spring.mail.host")).isEqualTo("mail.example.test");
             });
   }

@@ -59,6 +59,12 @@ public enum ErrorCode {
   DEPENDENCY_UNAVAILABLE(SERVICE_UNAVAILABLE, "Dịch vụ phụ thuộc tạm thời chưa sẵn sàng."),
   DEPENDENCY_FAILURE(SERVICE_UNAVAILABLE, "Không thể hoàn tất yêu cầu tới dịch vụ phụ thuộc."),
   INVALID_MESSAGE(INTERNAL_SERVER_ERROR, "Thông điệp không hợp lệ."),
+  INVALID_MONEY_VALUE(INTERNAL_SERVER_ERROR, "Giá trị tiền không hợp lệ."),
+  INVALID_VERSION(INTERNAL_SERVER_ERROR, "Phiên bản dữ liệu không hợp lệ."),
+  INVALID_MESSAGE_PAYLOAD(INTERNAL_SERVER_ERROR, "Nội dung thông điệp không hợp lệ."),
+  INVALID_MESSAGE_ENVELOPE(INTERNAL_SERVER_ERROR, "Thông tin bao thông điệp không hợp lệ."),
+  INVALID_MESSAGE_SCHEMA(INTERNAL_SERVER_ERROR, "Phiên bản schema thông điệp không hợp lệ."),
+  INVALID_MESSAGE_TYPE(INTERNAL_SERVER_ERROR, "Loại thông điệp không khớp nội dung."),
   MESSAGE_PUBLISH_FAILED(INTERNAL_SERVER_ERROR, "Không thể xác nhận việc gửi thông điệp."),
   INTERNAL_ERROR(INTERNAL_SERVER_ERROR, "Đã xảy ra lỗi khi xử lý yêu cầu.");
 

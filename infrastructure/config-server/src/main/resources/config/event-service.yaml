@@ -6,6 +6,11 @@ spring:
     url: ${EVENT_DB_URL}
     username: ${EVENT_DB_USERNAME}
     password: ${EVENT_DB_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
   rabbitmq:
     host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT}

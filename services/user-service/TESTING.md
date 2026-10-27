@@ -40,7 +40,7 @@ Reports tái tạo tại `target/surefire-reports`, `target/failsafe-reports`,
 - Fast suite không kết nối Mongo/Config Server/Eureka/broker thật. Startup test mock bốn
   repository và JwtDecoder chỉ để kiểm bean graph; không dùng mock đó chứng minh JWT validation.
 - `SecurityConfigTests` ký JWT bằng RSA fixture, dùng JWKS HTTP loopback và decoder/validator thật:
-  kiểm signature, issuer, audience, expiry/nbf, role và route. Handler trả 204 chỉ tồn tại trong test.
+  kiểm signature, issuer, expiry/nbf, role và route. Handler trả 204 chỉ tồn tại trong test.
 - `MongoMappingTests` dùng converter thật, chưa ghi DB. `UserPersistenceIT` dùng repository thật
   trên Mongo standalone trong Testcontainers, random host port và credential fixture riêng.
   Container chạy [schema](../../docs/architecture/data/mongodb/schema.cjs),

@@ -4,15 +4,72 @@ server:
 spring:
   datasource:
     url: ${TICKET_DB_URL}
-    username: ${TICKET_DB_USERNAME}
+    username: ${TICKET_DB_USERNAME:ticket_admin}
     password: ${TICKET_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE ticket_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: ticket_schema
+        type:
+          json_format_mapper: jackson3
+        jdbc:
+          time_zone: UTC
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
   rabbitmq:
     host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+
+management:
+  health:
+    mail:
+      enabled: ${TICKET_MAIL_HEALTH_ENABLED:true}
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Chỉ giữ các trường log được cho phép, tránh ghi dữ liệu MDC tùy ý.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+      add:
+        serviceName: ticket-service
+        serviceVersion: ${TICKET_SERVICE_VERSION:local-dev}
+        instanceId: ${TICKET_INSTANCE_ID:${random.uuid}}
+        environment: ${TICKET_ENVIRONMENT:local}
+      customizer: com.flashticket.ticket_service.config.TicketLogFields
+      stacktrace:
+        printer: com.flashticket.ticket_service.config.SafeStackTracePrinter

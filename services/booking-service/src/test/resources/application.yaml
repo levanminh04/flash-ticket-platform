@@ -22,9 +22,6 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: https://issuer.example.test/realms/booking
-          jwk-set-uri: http://127.0.0.1:1/jwks
-          audiences:
-            - flash-ticket-api
 # Test-only isolation: production configuration comes from Config Server and
 # requires the real PostgreSQL and RabbitMQ endpoints.
   autoconfigure:

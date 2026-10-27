@@ -135,6 +135,22 @@ docker compose --env-file .env -f deploy/docker-compose.redis.yml up -d --wait r
 Redis publish trên mọi interface IPv4 của host, password bắt buộc và có healthcheck. Hướng dẫn
 Spring Boot, env, lệnh kiểm tra và kết quả: [redis/handoff.md](redis/handoff.md).
 
+## Build Config Server, Discovery Server và API Gateway trên server 119
+
+Từ root repo trên server Linux, chuẩn bị `.env` cho môi trường server rồi chạy:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.config-server.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.discovery-server.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.api-gateway.yml up -d --build
+```
+
+Dockerfile nằm trong từng thư mục `infrastructure/`. Các service dùng Java 21,
+host network, giới hạn 768 MiB/container và log rotation như các service nghiệp vụ.
+Config Server cần chạy trước API Gateway; Gateway cũng cần kết nối Eureka, Redis và Keycloak.
+Port mặc định lần lượt là 8888, 8761 và 8081. Kiểm tra port và RAM trên server trước khi chạy;
+địa chỉ `localhost` trong `.env` của server chỉ tới chính server, không phải máy developer.
+
 ## Build Booking, Ticket, User trên server 119
 
 Mỗi service có Dockerfile riêng: [Booking](../services/booking-service/Dockerfile),
@@ -145,8 +161,9 @@ UTC và log rotation 10 MiB × 3. Mỗi build context chỉ gửi POM và source
 Từ root repo trên **server 119 Linux**, dùng `.env` gốc đã điền credential:
 
 ```bash
-docker compose --env-file .env -f deploy/docker-compose.services.yml build
-docker compose --env-file .env -f deploy/docker-compose.services.yml up -d
+docker compose --env-file .env -f deploy/docker-compose.booking.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.ticket.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.user.yml up -d --build
 ```
 
 Host network truy cập DB bind loopback; port mặc định Booking/Ticket/User là 8082/8084/8085.
@@ -163,23 +180,22 @@ Build image bỏ test; chạy Maven verify riêng trước deploy.
 Chạy từ root repo trên server 119; chọn **một** lệnh tương ứng:
 
 ```bash
-docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps ticket-service
-docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps booking-service
-docker compose --env-file .env -f deploy/docker-compose.services.yml up -d --build --no-deps user-service
+docker compose --env-file .env -f deploy/docker-compose.ticket.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.booking.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.user.yml up -d --build
 ```
 
-Compose chỉ build và tạo/cập nhật container của service được chọn. Các service còn lại
-giữ nguyên trạng thái; service chưa chạy sẽ không tự bật. Config Server, Eureka và các
-tài nguyên service cần phải chạy sẵn. Không cần tách Compose hoặc thêm profile/script.
+Mỗi file Compose chỉ build và tạo/cập nhật một service. Config Server, Eureka và các
+tài nguyên service cần phải chạy sẵn.
 
 Xem log hoặc dừng riêng Ticket (thay tên tương tự cho Booking/User):
 
 ```bash
-docker compose --env-file .env -f deploy/docker-compose.services.yml logs -f --tail 100 ticket-service
-docker compose --env-file .env -f deploy/docker-compose.services.yml stop ticket-service
+docker compose --env-file .env -f deploy/docker-compose.ticket.yml logs -f --tail 100
+docker compose --env-file .env -f deploy/docker-compose.ticket.yml stop
 ```
 
-Khi cập nhật một service, dùng `up` như trên; `down` sẽ dừng toàn bộ project Compose.
+Khi cập nhật một service, dùng `up` như trên; `down` chỉ dừng project Compose của service đó.
 Các lệnh này build từ source trên server. Khi CI build/push image lên registry,
 thêm `image:` cho từng service rồi deploy bằng `pull <service>` và
 `up -d --no-deps --no-build <service>`.
