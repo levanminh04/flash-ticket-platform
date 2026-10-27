@@ -1,7 +1,7 @@
 # Thiết kế runtime mua vé của Payment
 
 - Ngày: 2026-10-27.
-- Trạng thái: REVIEW_READY — builder check đã xong, chờ người dùng duyệt thiết kế; chưa cho phép code.
+- Trạng thái: ARCHITECTURE_ACCEPTED — người dùng đã chọn HTTP lấy URL và RabbitMQ sau thu tiền, yêu cầu triển khai; kế hoạch chi tiết cần duyệt theo AGENTS.md trước khi sửa Java.
 - Nơi thực hiện: module `services/payment-service`, trực tiếp trên nhánh `dev/tuan` tại checkout hiện tại.
 - Quy mô: một chức năng liên service có lưu bền, nhiều transaction và phục hồi; cần thiết kế đầy đủ.
 
@@ -9,11 +9,11 @@
 
 Hoàn thiện phần trách nhiệm của Payment trong hình người dùng cung cấp: nhận yêu cầu thanh toán, cung cấp đường dẫn VNPay, xác nhận khoản thu, phối hợp Booking chấp nhận đơn và Ticket phát vé, rồi kết thúc tiến trình mua. Chỉ triển khai Payment; các participant được thay bằng test double trong kiểm thử khi chưa có triển khai thật.
 
-Người dùng đã chọn hướng 1: nâng cấp luồng hiện có thành runtime dùng chung, giữ contract B13/B14 và thực hiện trực tiếp trên `dev/tuan`. Đây chưa phải phê duyệt thiết kế này hoặc kế hoạch triển khai sẽ viết sau.
+Người dùng đã chọn hướng 1: nâng cấp luồng hiện có thành runtime dùng chung và thực hiện trực tiếp trên `dev/tuan`. Sau khi đọc bản thiết kế đầu, người dùng xác nhận luồng khởi tạo theo hình: frontend gọi Payment lấy URL, Payment mới gọi Booking lấy PurchaseSnapshot. Sau khi so sánh hai cách, người dùng trả lời "oke vậy triển khai đi" với đề xuất HTTP cho khởi tạo, RabbitMQ cùng saga/outbox sau khi nhận tiền. Đây là quyết định kiến trúc để lập kế hoạch triển khai; các chi tiết kỹ thuật được trình trong plan, không yêu cầu chọn lại kiến trúc.
 
 Các lựa chọn chi tiết, giới hạn của đợt và giá trị mặc định bên dưới là đề xuất của người viết, để người dùng kiểm tra khi duyệt. Không suy diễn rằng người dùng đã duyệt spec runtime ngày 23/10 hoặc spec Booking HTTP mock ngày 27/10; cả hai vẫn ghi chờ review.
 
-Nguồn quy tắc: `docs/architecture/B13-api-and-event-contracts.md`, `B14-main-flow-sequences.md`, `docs/adr/ADR-002-mot-saga-thu-tien-phat-hanh-bu-tru.md`, DDL `docs/architecture/data/postgres/30-payment.sql` và migration đổi tên `services/99-table-prefix.sql` tính từ root repo. B13/B14 v0.2 vẫn REVIEW_READY; sử dụng làm mục tiêu tương thích, không thay trạng thái duyệt toàn hệ thống.
+Nguồn ưu tiên cho khởi tạo là xác nhận của người dùng và hình sequence bước 15–26: frontend → Payment → Booking → Payment trả URL/QR. B13/B14 hiện mô tả một đầu vào khác (POST vào Booking rồi MQ sang Payment); không dùng đoạn đó để ghi đè luồng đã chọn. Các invariant tiền, snapshot, idempotency và message sau thu tiền tiếp tục dùng B13/B14, ADR-002 và DDL hiện có. Với nhánh thành công sau phát vé, giữ contract Ticket → Booking → OrderCompleted → Payment; không thêm một success-message Payment → Booking chưa có trong B13. Khác biệt với mũi tên bước 47 trong hình được ghi rõ để kiểm khi duyệt plan. Không tự sửa tài liệu baseline toàn repo hoặc nhận đã đồng bộ contract participant.
 
 ## 2. Hiện trạng đã đối chiếu
 
@@ -29,13 +29,13 @@ Nguồn quy tắc: `docs/architecture/B13-api-and-event-contracts.md`, `B14-main
 | Simulator | CLI/dev files đang được xóa trong index; configuration và các test còn tham chiếu lớp đã xóa hoặc chưa tồn tại |
 | Broker | Config Server hiện mặc định exchange `business.ex`; đường dẫn definitions được README nhắc tới không tồn tại tại checkout này |
 
-Chưa chạy build trong lượt thiết kế. Các tham chiếu thiếu là quan sát source, chưa phải kết luận từ compiler. Khi lập plan phải đo baseline, phân biệt lỗi có sẵn với lỗi mới; không xóa/skip test của người dùng để làm build xanh, không tự khôi phục các file đã được người dùng xóa.
+Baseline ngày 2026-10-27: Maven test-compile bằng JDK 21.0.12/UTC thất bại ngay ở main compile vì PaymentSimulatorConfiguration import package dev.booking đã xóa và không resolve QUEUE. Log ở target/payment-runtime-baseline.log (artifact local, không commit). Test compilation chưa được chạy tới. Plan phải gỡ phụ thuộc production vào simulator đã xóa và cung cấp test support cần thiết, không xóa/skip các kiểm thử hoặc tự khôi phục CLI/deployment files của người dùng.
 
 ## 3. Phạm vi và tiêu chí thành công
 
 Trong đợt đề xuất:
 
-- Runtime nhận `payment.start-requested.v1`, HTTP guard Booking, lưu snapshot/attempt/URL và kết quả inbox.
+- Public POST tại Payment nhận orderId/provider từ frontend, gọi Booking lấy snapshot đã freeze và kiểm quyền, lưu snapshot/attempt/URL rồi trả URL ngay trong response.
 - Tiếp nhận IPN/query VNPay qua một use case ghi kết quả dùng chung; ghi charge thực và chọn một candidate/order.
 - Một saga/order: WAITING_BOOKING → WAITING_TICKETS → COMPLETED; compensation tối thiểu cho tiền muộn, thu thừa và phát vé FAILED dứt điểm.
 - Inbox/outbox, consumer ACK sau commit, relay có confirm/return, retry hữu hạn và recovery sau restart.
@@ -57,11 +57,16 @@ Giữ cấu trúc theo tầng và service chia theo nghiệp vụ của Payment 
 
 ## 5. API và contract
 
-POST công khai `/api/v1/orders/{id}/payment-attempts` thuộc Booking. Payment nhận Envelope<StartPayment> qua broker, không thêm POST công khai trùng đường dẫn. GET `/api/v1/orders/{id}/payment?requestId=...` giữ nguyên wire format, JWT, ownership, mã lỗi và transaction đọc nhất quán.
+Theo sequence đã xác nhận, POST khởi tạo thuộc **Payment**. Đường dẫn cụ thể đề xuất là `POST /api/v1/orders/{id}/payment-attempts`, body `{provider:'VNPAY'}`, bearer JWT BUYER và Idempotency-Key UUID. Frontend không cung cấp giá hoặc purchase snapshot. Hình chốt hướng lời gọi, không chốt tên route; đường dẫn này là đề xuất của người viết.
+
+Payment xác thực JWT → replay yêu cầu đã xử lý nếu có → gọi Booking kiểm owner/state/deadline và freeze snapshot → lưu snapshot/attempt/URL → trả `200 PaymentStart` trực tiếp. Response dùng DTO PaymentStart hiện có: orderId, attemptId, attemptState, amount, currency, paymentUrl và expiresAt. HTTP timeout/lỗi hạ tầng trả 503 Problem, lỗi nghiệp vụ dùng 404/409/422 đúng nguyên nhân; không trả 202 receipt rồi buộc frontend đợi message start.
+
+GET `/api/v1/orders/{id}/payment` giữ vai trò đọc trạng thái sau đó và sau Return; giữ wire format, JWT, ownership và transaction đọc. Query requestId hiện có được giữ để tương thích các kết quả MQ/dev trước đây; POST mới không yêu cầu frontend dùng requestId để lấy URL, startRequest có thể null.
+
+Không bật consumer production `payment.start-requested.v1` làm đầu vào thứ hai cho cùng luồng; không giả một message có nguồn Booking để gọi lại processor cũ. Có thể giữ adapter MQ trong test/dev nếu còn caller, nhưng phải tái sử dụng core tạo attempt và tách consumer namespace. Các message bên dưới chỉ thuộc phần điều phối sau khi nhận tiền.
 
 | Hướng | messageType | Tác dụng tại Payment |
 | --- | --- | --- |
-| Nhận từ Booking | payment.start-requested.v1 | Tạo/reject attempt, kết quả lưu inbox để poll |
 | Gửi Booking | booking.accept-payment.v1 | Xin chấp nhận candidate charge |
 | Nhận từ Booking | booking.payment-decision.v1 | ACCEPTED cho phép gửi phát vé; LATE/DUPLICATE/CANCELLED xử lý refund |
 | Gửi Ticket | ticket.issue.v1 | IssueTickets dùng đúng frozen purchase |
@@ -69,21 +74,25 @@ POST công khai `/api/v1/orders/{id}/payment-attempts` thuộc Booking. Payment 
 | Gửi Booking | booking.issuance-result.v1 | Chỉ FAILED theo contract hiện có |
 | Nhận từ Booking | booking.order-completed.v1 | Kiểm đủ tuple và hoàn tất saga |
 
-StartPaymentResult chỉ lưu `inbox.response_payload`, không phát một messageType kết quả mới. Money/version vẫn là string, timestamp UTC, IDs UUID. Tái sử dụng canonical hash hiện có; không sửa hợp đồng để dễ ghép fake.
+StartPaymentResult/Envelope<StartPayment> hiện có được giữ cho caller MQ/dev nếu cần; không ép HTTP POST thành hợp đồng Booking phát StartPayment. Money/version vẫn là string, timestamp UTC, IDs UUID. Tái sử dụng canonical hash hiện có; không thêm messageType kết quả.
 
-HTTP guard gọi `POST /internal/v1/orders/{id}/freeze-payment` với buyerSubject từ snapshot, ngoài transaction Payment. Đề xuất adapter nhận `{purchase: PurchaseSnapshot}`; đây là wire shape đã dùng trong spec mock nhưng chưa được Booking thật xác nhận. Decode strict, kiểm invariant và so orderId, buyerSubject, canonical hash với message; không tự tính lại giá. 404 RESOURCE_NOT_FOUND và 409 ORDER_EXPIRED/ORDER_NOT_PAYABLE là rejection bền; 401/403, 5xx, timeout, response sai là lỗi hạ tầng/contract để retry, không tạo REJECTED giả.
+Payment gọi `POST /internal/v1/orders/{id}/freeze-payment` với buyerSubject lấy từ JWT đã xác minh, ngoài transaction Payment. Booking là owner của đơn/giữ chỗ/giá: kiểm đúng chủ, trạng thái và deadline, freeze lần đầu rồi trả `{purchase: PurchaseSnapshot}`; gọi lại trả cùng snapshot bất biến, không gia hạn đơn. Đây là lời gọi lấy và chốt snapshot tại bước 17–21, không chỉ kiểm lại một snapshot đã nhận qua MQ. Route/shape nội bộ là adapter đề xuất cần thống nhất với Booking thật.
+
+Decode strict, kiểm invariant, orderId phải khớp path và buyerSubject phải khớp JWT; snapshotHash so với bản Payment đã lưu nếu đã tồn tại, không tự tính lại giá từ frontend. 404 RESOURCE_NOT_FOUND và 409 ORDER_EXPIRED/ORDER_NOT_PAYABLE được chuyển thành lỗi nghiệp vụ tương ứng; 401/403 từ service credential, 5xx, timeout hoặc response sai là lỗi hạ tầng/contract, trả 503 an toàn và cho retry cùng key, không tạo attempt hoặc trả URL thành công giả. Booking đã freeze nhưng Payment chưa commit thì retry gọi lại cùng frozen snapshot.
 
 Đề xuất service identity: bearer access token client-credentials lấy từ token endpoint cấu hình, cache tới trước hạn, timeout hữu hạn; không dùng token BUYER hoặc secret mặc định. Fake issuer/Booking chỉ dùng test. Audience/scope cụ thể cấu hình theo deployment Booking; không khẳng định hệ thống IAM/Booking đã provision. Khi bật runtime mà thiếu cấu hình credential/URL bắt buộc, fail startup.
 
 ## 6. Khởi tạo thanh toán và profile
 
-Replay inbox cùng ID/hash chạy trước guard, kể cả Booking hiện đã hết hạn hoặc không truy cập được. Sau guard, transaction khóa message và order, kiểm lại snapshot/hash, key và state để tránh cạnh tranh. Giữ snapshot hợp lệ kể cả business rejection để GET kiểm ownership được.
+HTTP dedupe dùng namespace riêng `payment.http-start.v1` trên bảng inbox hiện có, messageId bằng Idempotency-Key UUID. payloadHash là requestHash canonical của actor từ JWT + orderId từ path + provider; không phải envelopeHash của một message MQ. response_payload lưu record nội bộ gồm actor/order, HTTP status, mã lỗi hoặc PaymentStart đã trả. Không đưa record nội bộ nguyên khối ra frontend. Actor khác cùng key nhận lỗi không tiết lộ tài nguyên; cùng actor đổi order/provider dưới key cũ bị 409 IDEMPOTENCY_CONFLICT. Plan phải bổ sung enum/mapping lỗi cần thiết, không dùng lại namespace của MQ.
 
-Giữ các hàng rào hiện có: cùng requestId khác hash bị chặn; cùng order/requestKey khác requestHash bị chặn; một unfinished attempt/order; confirmation đã tồn tại thì request mới bị từ chối. Guard không gia hạn `expiresAt`; callback của attempt cũ vẫn xử lý dù start mới bị reject.
+Replay bản đã commit chạy trước gọi Booking, kể cả Booking hiện đã hết hạn hoặc không truy cập được; trả cùng attempt identity/URL/kết quả đã lưu. Khi chưa có record, Booking được gọi ngoài transaction. Sau đó transaction khóa dedupe key rồi event/order, đọc lại record để chống hai request cạnh tranh, kiểm snapshot/key/state, tạo attempt/URL và lưu response cùng commit. Snapshot hợp lệ do Booking trả được lưu kể cả business rejection tiếp theo tại Payment để GET kiểm ownership. Lỗi xác thực, input sai hoặc lỗi Booking chưa có snapshot không cần tạo record thành công; không persist lỗi hạ tầng thành rejection vĩnh viễn.
+
+Giữ các hàng rào hiện có: cùng order/requestKey khác requestHash bị chặn; một unfinished attempt/order; confirmation đã tồn tại thì request mới bị từ chối. Các adapter MQ/dev nếu giữ vẫn kiểm messageId/envelopeHash riêng. Booking không gia hạn expiresAt; callback của attempt cũ vẫn xử lý dù POST mới bị reject.
 
 Tạo/lưu attempt và URL VNPay cùng transaction hiện có là hợp lệ vì `createPayment` hiện chỉ ký URL cục bộ, không gọi mạng. Không thay bằng provider khác có network trong transaction này. URL replay giữ nguyên attempt identity. Request mới trong PENDING/UNKNOWN trả PAYMENT_IN_PROGRESS; không tạo lần thu mới chỉ vì timeout.
 
-Processor/Store trở thành nghiệp vụ dùng chung, kích hoạt khi runtime hoặc chế độ test/dev tương ứng được chọn, không còn chỉ bị khóa trong simulator. Runtime thật và adapter guard giả không được cùng hoạt động. `local-foundation` tiếp tục tắt consumer/relay/workers. `payment-simulator` chỉ dùng cho dev nếu còn được giữ; không tự phục hồi CLI/container/init SQL đã xóa. Phần cấu hình còn tham chiếu class đã xóa phải được xử lý bằng tách topology dev khỏi nghiệp vụ dùng chung trong plan, không kéo logic simulator vào runtime.
+Tách core snapshot/attempt/URL từ Processor/Store để HTTP service và adapter dev còn cần có thể gọi chung; HTTP controller không dựng một StartPayment giả từ Booking. Booking client phải trả snapshot thay cho port guard chỉ trả rejection hiện tại. Kích hoạt đúng core/runtime theo cấu hình, không còn chỉ bị khóa trong simulator. Runtime thật và adapter Booking giả không được cùng hoạt động. local-foundation tiếp tục tắt nghiệp vụ HTTP start, consumer/relay/workers. payment-simulator chỉ dùng cho dev nếu còn giữ; không tự phục hồi CLI/container/init SQL đã xóa. Tách các tham chiếu dev cũ khỏi cấu hình runtime trong plan.
 
 ## 7. Kết quả provider, charge và saga
 
@@ -125,13 +134,13 @@ Adapter hiện tại chưa tra cứu được refund theo định danh (`queryRe
 
 ## 9. Inbox, outbox, broker và recovery
 
-Inbox dùng cùng consumer name/version và canonical hash hiện có; commit inbox + domain effect + response/outbox trước ACK. Conflict hash/poison contract không retry như lỗi hạ tầng. Source không phải một field do client tự khai: dựa trên queue, exchange/binding và tài khoản/ACL đã provision; payload messageType phải khớp endpoint consumer. Không mở consumer tài chính lên exchange mà browser ghi được.
+Đối với message điều phối, inbox dùng consumer name/version và envelopeHash hiện có; commit inbox + domain effect + response/outbox trước ACK. Đối với POST HTTP, dùng namespace/requestHash/response riêng ở mục 6 và commit trước trả response. Không trộn hai hash/record codec. Conflict hash/poison contract không retry như lỗi hạ tầng. Source message dựa trên queue, exchange/binding và tài khoản/ACL đã provision; payload messageType phải khớp consumer. Không mở consumer tài chính lên exchange mà browser ghi được.
 
 Outbox.payload lưu toàn Envelope JSONB; các cột metadata phải khớp envelope. Relay publish persistent, mandatory, correlated confirm và xử lý return. Chỉ đặt publishedAt sau confirm ACK và không có return. Confirm timeout/NACK/unroutable giữ pending. Crash sau confirm trước update có thể phát lặp; đây là at-least-once và inbox xử lý trùng.
 
 Không giữ transaction/row lock khi chờ broker. Claim batch bằng SKIP LOCKED, tăng attempts và đặt nextAttemptAt làm lease ngắn trong transaction; dùng attempts + due value đã claim làm token CAS khi ghi kết quả. Lease hết có thể claim lại; worker cũ không được ghi đè claim mới. MessageId/envelope giữ nguyên khi retry; header delivery retry tách khỏi hash.
 
-Queue mặc định cấu hình theo các tên đã dùng trong README: payment.start.q, payment.decision.q, payment.ticket-issuance-failed.q, payment.order-completed.q; không coi tên queue chứa failed là bằng chứng queue chỉ nhận FAILED. Exchange lấy `spring.rabbitmq.template.exchange`/RABBITMQ_BUSINESS_EXCHANGE, mặc định hiện có business.ex; routing key là messageType B13. Không hardcode đổi cả hệ thống sang flash-ticket.v1 từ ví dụ tài liệu.
+Queue runtime chỉ cho phần sau thu tiền: payment.decision.q, payment.ticket-issuance-failed.q, payment.order-completed.q; không bật payment.start.q cho đường khởi tạo mới và không coi tên queue chứa failed là bằng chứng queue chỉ nhận FAILED. Exchange lấy spring.rabbitmq.template.exchange/RABBITMQ_BUSINESS_EXCHANGE, mặc định hiện có business.ex; routing key là messageType B13. Không hardcode đổi cả hệ thống sang flash-ticket.v1 từ ví dụ tài liệu.
 
 Không có broker definitions trên checkout này. Plan phải cung cấp mô tả topology/ACL và một artifact cấu hình mẫu trong module Payment, có queue retry riêng từng consumer và DLQ/parking. App runtime không tự tạo/xóa binding/policy trên broker đang dùng chung. Người vận hành phải provision trước khi bật runtime; integration test tự dùng vhost/topology riêng, không unbind queue dùng chung.
 
@@ -143,7 +152,7 @@ Worker query payment dùng context persist và kết quả qua RecordPaymentResu
 
 ## 10. Transaction, schema và tổ chức code
 
-Khóa ghi nhất quán theo event → order → saga/attempt/charge → refund. Dùng advisory namespace event/order/message khi chưa có row, sau đó row lock cần thiết; không chèn một event_finance_snapshot rỗng trái CHECK chỉ để lấy khóa. Event marker và command phát vé phải được đọc/quyết định dưới cùng ranh giới khóa. Mọi writer tương lai xử lý cancellation phải tuân cùng thứ tự.
+Khóa dedupe/message nếu có trước, rồi nhất quán event → order → saga/attempt/charge → refund. Dùng advisory namespace khi chưa có row, sau đó row lock cần thiết; không chèn một event_finance_snapshot rỗng trái CHECK chỉ để lấy khóa. Event marker và command phát vé phải được đọc/quyết định dưới cùng ranh giới khóa. Mọi writer tương lai xử lý cancellation phải tuân cùng thứ tự.
 
 Không gọi Booking, token endpoint, broker, query/refund provider khi đang giữ transaction khóa hàng. Tách orchestration và phương thức transaction sang Spring bean/TransactionTemplate; private helper không tự tạo transaction qua self-invocation. Unique/optimistic-lock conflict rollback xong mới đọc lại bản thắng bằng transaction mới; không tiếp tục trên transaction PostgreSQL đã aborted.
 
@@ -159,18 +168,18 @@ Thêm cấu hình có namespace Payment trong module, gắn env và cờ runtime
 
 Các timeout, queue names, worker batch/backoff và exchange cấu hình được; secret chỉ từ environment/secret store. Giữ Config Server import hiện có. Đề xuất các default runtime properties trong application.yaml của Payment, không sửa shared config hay module Config Server/Gateway; giá trị remote có thể override. Runtime flag không được ghi đè từ simulator bằng cách bật đồng thời hai chế độ; validation profile phải chặn cấu hình đó.
 
-Không thay public route/security, không thêm endpoint sửa state hoặc public refund. Log chỉ IDs/correlation và mã lỗi an toàn, không raw IPN/token/URL có chữ ký, email hay snapshot đầy đủ. Chỉ truy cập DB Payment bằng application role, không đọc DB participant.
+Bổ sung public POST tạo attempt tại Payment và matcher JWT BUYER tương ứng; giữ bảo mật các route khác, không thêm endpoint sửa state/public refund. Gateway hiện được tài liệu mô tả route POST sang Booking: khi tích hợp cần chuyển route duy nhất sang Payment và gỡ POST start cũ tại Booking để tránh hai nơi khởi tạo. Việc sửa module Gateway/Booking nằm ngoài phạm vi chỉ Payment; ghi điều kiện tích hợp này trong runbook và kiểm trực tiếp endpoint Payment trước, không tuyên bố E2E qua Gateway khi route chưa đổi. Log chỉ IDs/correlation và mã lỗi an toàn, không raw IPN/token/URL có chữ ký, email hay snapshot đầy đủ. Chỉ truy cập DB Payment bằng application role, không đọc DB participant.
 
 Chỉ sửa trong services/payment-service, gồm tài liệu/config/test/artifact topology của module. Không dùng git reset/restore/clean lên thay đổi có sẵn, không stage/commit file của người dùng. Tài liệu này có thể commit riêng bằng path, giữ nguyên staged deletions đang có. Chưa có quyền push/deploy hoặc provision broker/DB dùng chung.
 
 ## 12. Kiểm chứng và đầu ra
 
 1. Ghi baseline branch/status và build sau khi plan được duyệt. Các test BookingMockServer/MockBookingStore đang chưa có implementation là dependency công việc có sẵn; không xóa/loại test. Plan phải nêu cách phối hợp phần chưa hoàn thiện trước khi hứa whole-module verify xanh.
-2. Unit/service tests kiểm replay trước guard, key/hash conflict, deadline/rejection, từng transition, paidAt/content conflict, callback trùng và charge khác trên cùng attempt.
-3. HTTP client tests kiểm token/credential, timeout, 401/403/404/409/5xx, JSON/snapshot mismatch và không giữ transaction khi gọi mạng. JWT/ownership GET và Return không ghi state có regression.
+2. Unit/service tests kiểm HTTP replay trước Booking call, key/hash conflict, deadline/rejection, từng transition, paidAt/content conflict, callback trùng và charge khác trên cùng attempt.
+3. HTTP controller/client tests kiểm JWT BUYER, Idempotency-Key, không nhận giá từ frontend, token service, timeout, 401/403/404/409/5xx, JSON/snapshot mismatch, response trả URL trực tiếp và không giữ transaction khi gọi mạng. JWT/ownership GET và Return không ghi state có regression.
 4. PostgreSQL thật kiểm unique/partial indexes, transaction rollback, concurrent callback/command, atomic inbox/outbox, CAS lease, completion tuple với messageId khác và không tăng obligations khi lặp.
 5. RabbitMQ thật trên vhost riêng kiểm ACK sau commit, return/NACK/confirm timeout, retry/parking đúng consumer và duplicate khi crash sau confirm. Không lấy unit mock confirm làm bằng chứng broker.
-6. Test flow Payment đầy đủ: StartPayment → URL đã lưu → signed IPN/query result → AcceptPayment → PaymentDecision ACCEPTED → IssueTickets → Ticket COMPLETED chỉ no-op tại Payment → Booking OrderCompleted → saga COMPLETED; lặp/restart từng ranh giới không phát hành lần hai. Có các nhánh LATE, DUPLICATE, Ticket FAILED và refund UNKNOWN không gửi mới.
+6. Test flow Payment đầy đủ: frontend POST Payment → Booking kiểm quyền/freeze/trả snapshot → Payment lưu attempt/URL và trả response → signed IPN/query result → AcceptPayment → PaymentDecision ACCEPTED → IssueTickets → Ticket COMPLETED chỉ no-op tại Payment → Booking OrderCompleted → saga COMPLETED. Kiểm Booking freeze xong nhưng Payment chưa commit, mất HTTP response sau commit, retry/restart và request đồng thời không tạo attempt mới. Có các nhánh LATE, DUPLICATE, Ticket FAILED và refund UNKNOWN không gửi mới.
 7. Maven verify với JDK 21/UTC, Spotless/SpotBugs và profile integration phù hợp. Không giảm quality gate. Tài liệu chỉ ghi PASS/FAIL/NOT_RUN theo lần chạy thực; test double không chứng minh Booking/Ticket thật, VNPay thật hoặc platform E2E.
 
 Đầu ra sau triển khai: code/test trong module, hướng dẫn cấu hình/chạy/poll, topology mẫu và runbook retry/refund UNKNOWN, báo cáo các kiểm và giới hạn thực. Không tự dựng lại DB hoặc broker của người dùng.
@@ -179,10 +188,10 @@ Chỉ sửa trong services/payment-service, gồm tài liệu/config/test/artifa
 
 - Gộp compensation tối thiểu (muộn/trùng/phát vé thất bại) vào đợt mua vé để không bỏ quên khoản tiền đã thu; refund thật vẫn có cờ riêng và giới hạn tra cứu của VNPay phải hiện rõ.
 - Để hủy sự kiện hàng loạt, finance summary và payout sang đợt riêng; không nhận đã hỗ trợ trọn vẹn phần đó của B13/B14.
-- HTTP guard wire shape `{purchase: ...}` và client-credentials là adapter đề xuất, chưa được participant thật xác nhận; cần contract test trước tích hợp.
+- Public POST tại Payment lấy snapshot từ Booking, rồi MQ/saga sau thu tiền là hướng đã được người dùng chọn. Route cụ thể, HTTP response PaymentStart, dedupe HTTP và freeze-payment wire shape/client-credentials được làm rõ trong kế hoạch và contract test.
 - Giữ schema, API đọc và dependency stack hiện có; điều chỉnh runtime activation và tách phụ thuộc simulator cũ trong phạm vi Payment.
 - Thông số poll/batch/retry là mặc định thử nghiệm, builder có thể điều chỉnh có kiểm chứng; không được thay quy tắc tiền, transaction hoặc quyền.
 
-Builder check ngày 2026-10-27: một reviewer độc lập chỉ đọc đã trả về `nothing important left`; không phát sinh câu hỏi cần người dùng quyết định để lập kế hoạch. Đây là kiểm tính đủ của thiết kế, không phải bằng chứng code đã chạy hoặc các adapter giả đã tích hợp với participant thật.
+Builder check bản đầu ngày 2026-10-27 trả về nothing important left nhưng chọn đầu vào Booking/MQ, nên không áp dụng cho revision hiện tại. Reviewer mới đã kiểm revision và chỉ còn câu hỏi về HTTP hay MQ sau thu tiền; người dùng đã chọn đề xuất dùng MQ. Không còn câu hỏi kiến trúc cần hỏi lại; review không thay bằng chứng code đã chạy hay tích hợp participant thật.
 
-Chỉ sau khi thiết kế được người dùng duyệt mới dùng superpowers:writing-plans để viết plan file/class/helper/annotation cụ thể; theo AGENTS.md của Payment, plan cũng cần được duyệt trước khi sửa Java.
+Dùng superpowers:writing-plans để viết plan file/class/helper/annotation cụ thể theo kiến trúc đã chọn. Theo AGENTS.md của Payment, trình plan này để người dùng duyệt trước khi sửa Java; không coi một bản plan chưa được trình là đã được duyệt.
