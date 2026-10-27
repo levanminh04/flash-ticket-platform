@@ -187,6 +187,7 @@ CREATE TABLE inbox_messages (
   consumer_name nonempty_text NOT NULL, message_id uuid NOT NULL,
   payload_hash nonempty_text NOT NULL, processed_at timestamptz NOT NULL DEFAULT now(),
   response_payload jsonb CHECK (jsonb_typeof(response_payload) = 'object'),
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   PRIMARY KEY (consumer_name, message_id)
 );
 COMMENT ON TABLE outbox_messages IS 'Business update and outgoing event/command commit together. Trade-off: relay and duplicate delivery; published_at only after broker confirm. Payload follows B13 named versioned contract, not arbitrary business JSON.';

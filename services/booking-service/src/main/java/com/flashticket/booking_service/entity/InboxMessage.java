@@ -5,6 +5,7 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
@@ -26,4 +27,10 @@ public class InboxMessage {
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "response_payload", columnDefinition = "jsonb")
   private JsonNode responsePayload;
+
+  // ID inbox được gán trước; version null giúp save() INSERT thay vì merge đè receipt.
+  @Version
+  @ColumnDefault("0")
+  @Column(name = "row_version", nullable = false)
+  private Long rowVersion;
 }

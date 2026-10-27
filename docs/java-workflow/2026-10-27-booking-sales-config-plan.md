@@ -218,6 +218,7 @@ Bàn giao: file thực thay đổi; kết quả unit/integration/broker tách đ
 
 - User yêu cầu: “đồng ý triển khai theo plan đã duyệt + code mã giả như trên. Triển khai cho tôi trên nhánh dev/son. Commit mỗi giai đoạn trong các task”. Đây là nguồn xác nhận plan và quyền sửa code/test, commit từng giai đoạn; chưa có yêu cầu push/deploy.
 - Gate EXECUTING-PLANS: APPROVED cho C1–C9/M1–M14, U1–U3/D1–D11 trong §4–§6. Nguồn: user trả lời “Xác nhận toàn bộ danh sách thực thi” cho câu hỏi xác nhận pha EXECUTING-PLANS trên dev/son. Chỉ hỏi delta nếu phát sinh khai báo/cách viết ngoài danh sách.
+- Delta APPROVED: user yêu cầu “thêm cột rowVersion cho inboxmessage”. C10 = entity InboxMessage hiện có, thêm `@Version @ColumnDefault("0") @Column(name="row_version", nullable=false) private Long rowVersion`; M15/M16 = `public Long getRowVersion()` / `public void setRowVersion(Long rowVersion)` sinh từ Lombok đã có. Đồng bộ DDL bootstrap. Giữ repository save(), không thêm method native insertIfAbsent. M5 dùng save() như mã giả user đã duyệt, flush do transaction quản lý.
 - Giai đoạn 1: field @Version, ddl-auto update, DDL bootstrap, query khóa snapshot, validation và error code; compile/check liên quan rồi commit.
 - Giai đoạn 2: service transaction/inbox/version, M7–M11 và mapping inventory như mã giả đã trình; compile/check liên quan rồi commit.
 - Giai đoạn 3: listener AUTO ACK và phân loại lỗi; compile/check liên quan rồi commit.
@@ -228,3 +229,33 @@ Bàn giao: file thực thay đổi; kết quả unit/integration/broker tách đ
 
 - Đã thêm rowVersion/ColumnDefault, DDL bootstrap và ddl-auto update; thêm query khóa, error code cụ thể và validation quan hệ sector/type/seat.
 - Kiểm tra: Maven Enforcer Java 23 pass, compile pass, ContractRulesTests 67 test pass; Spotless apply và git diff --check sạch. Log local: services/booking-service/target/sales-config-phase1.log. Chưa cập nhật schema server 119.
+
+## 9. Review version tất cả bảng Booking theo yêu cầu user
+
+Đã đọc catalog PostgreSQL thật bằng transaction read-only/role booking_owner qua tunnel 5432: có 15 bảng, 8 bảng đã có row_version. Chưa chạy service để sửa schema trên server. `@Version` kiểm tra version khi UPDATE/DELETE và giúp repository nhận biết INSERT; nó không tự SELECT FOR UPDATE hoặc tự bảo vệ các row liên quan. Unique/PK, transaction và state transition vẫn cần giữ.
+
+| Bảng | DB thật có row_version? | Đề xuất và trạng thái |
+|---|---|---|
+| tbl_event_sales_snapshots | Chưa | Đang thêm theo task; @Version null cho ID gán sẵn, khóa snapshot cho version/inbox guard |
+| tbl_inbox_messages | Chưa | Đang thêm theo yêu cầu mới nhất; save receipt mới là INSERT, trùng PK rollback |
+| tbl_orders | Có | Giữ version; vẫn cần guard state/lock khi giữ, thanh toán, hết hạn |
+| tbl_reservations | Có | Giữ version; bảo vệ chuyển HELD/COMMITTED/RELEASED |
+| tbl_ticket_type_inventory | Có | Giữ version và invariant counter |
+| tbl_sector_inventory | Có | Giữ version, pool STANDING dùng chung |
+| tbl_seat_inventory | Có | Giữ version và điều kiện trạng thái ghế |
+| tbl_purchase_limits | Có | Giữ version và unique buyer/event |
+| tbl_promotion_inventory | Có | Giữ version và counter held/used |
+| tbl_promotion_usages | Có | Giữ version và unique active usage |
+| tbl_idempotency_requests | Chưa | Đề xuất thêm @Version khi làm tạo đơn nếu dùng save() với ID ghép gán sẵn, để receipt mới không merge đè như inbox; chưa sửa vì user chỉ yêu cầu đề xuất |
+| tbl_outbox_messages | Chưa | Đề xuất @Version khi làm relay dùng JPA cập nhật attempts/publishedAt và lưu message có ID gán sẵn. Nếu dùng claim/conditional UPDATE hay FOR UPDATE SKIP LOCKED đúng thì version không bắt buộc cho cạnh tranh worker; version không đảm bảo publish mạng đúng một lần. Chưa sửa |
+| tbl_reservation_allocations | Chưa | Đề xuất nếu payment/expiry/release cập nhật độc lập row: state HELD/COMMITTED/RELEASED không được xử lý hai lần. Nếu mọi thao tác luôn khóa reservation/order cha và kiểm state thì có thể giữ hiện trạng; @Version cha không tự tăng khi chỉ sửa child. Chưa sửa |
+| tbl_order_items | Chưa | Chưa đề xuất cho snapshot giá/số lượng bất biến sau tạo; nếu có sửa item riêng ngoài transaction/order lock thì đánh giá lại |
+| tbl_order_item_seats | Chưa | Chưa đề xuất: mapping ghế/chi tiết đơn giữ bất biến, unique/PK/FK xử lý trùng và liên kết; không cần field version chỉ để đủ tất cả bảng |
+
+Phần review này không tự mở rộng triển khai sang 5 bảng cuối. Entity/DDL của snapshot + inbox đang thay đổi trên dev/son; cột DB chỉ được cập nhật khi chạy Hibernate update ở môi trường triển khai được giao.
+
+### Kết quả giai đoạn 2
+
+- Đã viết transaction đồng bộ snapshot/inventory/inbox, hash/version guard, bảo toàn counter/reservation và chống hồi sinh CANCELLED; chỉ dùng repository save()/saveAll().
+- InboxMessage thêm @Version/ColumnDefault theo yêu cầu trực tiếp của user; bỏ đề xuất insertIfAbsent. Đã thêm review 15 bảng ở §9, không tự thêm version cho các bảng chỉ đang đề xuất.
+- Compile JDK 23 và 67 ContractRulesTests pass; log local target/sales-config-phase2.log. Chưa kết luận transaction đúng cho tới khi chạy D* trên PostgreSQL test thật ở giai đoạn 4.
