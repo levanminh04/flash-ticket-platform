@@ -12,6 +12,7 @@ import java.net.http.HttpTimeoutException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import org.springframework.amqp.AmqpConnectException;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -134,6 +135,7 @@ public enum ErrorCode {
       if (!(error instanceof CompletionException
           || error instanceof ExecutionException
           || error instanceof InvocationTargetException
+          || error instanceof AmqpRejectAndDontRequeueException
           || error instanceof ListenerExecutionFailedException)) return error;
       error = error.getCause();
     }

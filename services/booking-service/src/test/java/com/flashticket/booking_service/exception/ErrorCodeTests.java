@@ -18,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.amqp.AmqpConnectException;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -75,6 +76,11 @@ class ErrorCodeTests {
     var wrapper = new CompletionException(nativeFailure);
     var result = ErrorCode.from(wrapper);
     assertThat(result.name()).isEqualTo("DATASTORE_TIMEOUT");
+    var rejected =
+        new AmqpRejectAndDontRequeueException(
+            "INVALID_MESSAGE", new BusinessException(ErrorCode.INVALID_MESSAGE));
+    assertThat(ErrorCode.from(new CompletionException(rejected)))
+        .isEqualTo(ErrorCode.INVALID_MESSAGE);
   }
 
   @Test
