@@ -277,3 +277,10 @@ Phần review này không tự mở rộng triển khai sang 5 bảng cuối. En
 - D3 kiểm lỗi unique ghế lúc commit rollback snapshot/sector/seat/promotion/inbox. D4–D10 kiểm replay/hash/stale/version/counters/ownership/reservation/CANCELLED và hai transaction tạo event cùng lúc.
 - D11 bỏ hai cột version ở DB test, thêm snapshot/inbox legacy trước schema update, rồi khởi tạo Hibernate update chỉ với hai entity này: cột được thêm NOT NULL/default 0 và row legacy nhận 0; INSERT/UPDATE và optimistic conflict sau đó đều được kiểm chứng. Không chạy schema update trên server 119.
 - Broker test ban đầu phát hiện queue test non-durable không được RabbitMQ 4.3 cho phép; đã đổi test sang durable/quorum. Log reject đã được sửa để unwrap AmqpRejectAndDontRequeueException và giữ INVALID_MESSAGE; sửa trong method ErrorCode/test wrapper hiện có, không thêm khai báo.
+
+### Giai đoạn 5 — bàn giao hoàn tất
+
+- Đã cập nhật TESTING.md và HANDOFF.md với kết quả cuối, cấu hình AUTO ACK/update schema và giới hạn môi trường kiểm chứng.
+- Commits theo giai đoạn trên dev/son: `84f1278` version/validation; `7d71355` service/inventory/inbox; `775f978` listener; `3c6e53b` sửa logging wrapper từ kết quả broker; `91faaa6` test transaction/schema update/broker. Commit tài liệu bàn giao là commit kế tiếp.
+- Đã review đủ 15 bảng ở §9; chỉ snapshot/inbox được bổ sung version theo phạm vi user yêu cầu, các bảng còn lại mới là đề xuất.
+- Không push/deploy hoặc khởi động ứng dụng với database/queue server 119. Cột version trên server sẽ được Hibernate update khi phiên bản này được chạy ở môi trường đó.

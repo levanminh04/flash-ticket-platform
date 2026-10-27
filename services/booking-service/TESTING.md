@@ -4,6 +4,46 @@ Run commands from this service directory with JDK 23. Compilation targets Java 2
 Maven Enforcer requires Java [23,24). Keep Enforcer enabled for verification.
 Older results below retain the Java version and Enforcer exceptions used at the time.
 
+## Sales configuration consumer — 2026-10-27
+
+Final command, with JDK 23 and Enforcer enabled:
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp -Pintegration spotless:apply verify "-Dit.test=BookingPersistenceIT"
+```
+
+**338 unit tests + 27 integration tests passed**, no failures/errors/skips;
+Spotless passed and SpotBugs reported zero findings. Local output:
+`target/sales-config-final-verify.log`.
+
+The service transaction is invoked through the real Spring proxy against an
+isolated PostgreSQL 17 Testcontainer. Tests cover all three inventory modes,
+promotion counters, rollback on a real unique-constraint failure at flush/commit,
+duplicate/hash conflicts, stale and conflicting source versions, concurrent first
+creation, reserved seats, event ownership and the CANCELLED guard.
+
+`InboxMessage` and `EventSalesSnapshot` have nullable-in-Java boxed `@Version`
+fields so new assigned-ID entities use INSERT through repository `save()`.
+A duplicate inbox INSERT is tested to roll back without overwriting its hash.
+The upgrade test removes both version columns in the disposable database,
+inserts legacy rows, runs Hibernate `hbm2ddl.auto=update` for these two entities,
+and verifies NOT NULL columns/default 0 and version 0 on the legacy rows before
+checking subsequent JPA INSERT/UPDATE and optimistic conflict behavior.
+
+The same integration suite starts an isolated RabbitMQ 4.3.6 container with
+durable quorum test queues. A real Jackson converter and Spring AMQP method
+adapter call the transactional service; a successful delivery commits its
+snapshot/inbox and is absent from the queue after the container stops. Invalid
+schema is rejected into the test DLQ without extra DB effects. Three focused
+listener tests also check successful dispatch, permanent rejection and propagation
+of database failures. Logs retain the business error code through the AMQP reject
+wrapper.
+
+No production database or queue on server 119 was changed or consumed. This does
+not verify Event's publisher/outbox, a multi-node broker, or production deployment.
+The default broker delivery-limit/redelivery policy remains the configured native
+policy; this task adds no retry worker or application backoff mechanism.
+
 ## JDK 23 verification — 2026-10-26
 
 `clean verify` passed with Maven 3.9.16 and JDK 23.0.1, Enforcer enabled:
