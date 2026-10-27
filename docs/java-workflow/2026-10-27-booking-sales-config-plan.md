@@ -54,6 +54,7 @@ Prefix Java `B = services/booking-service/src/main/java/com/flashticket/booking_
 | C7 | `T/persistence/BookingPersistenceIT.java` | EXISTING | Test service qua proxy Spring và DB thật của test; dùng Boot Jackson/Validation auto-configuration và import C1/C3, không tạo TestConfiguration/bean phụ | Hạ tầng PostgreSQL Testcontainers hiện có |
 | C8 | `T/messaging/SalesConfigurationListenerTests.java` | NEW | Test JUnit/Mockito cho phân loại lỗi boundary; không test container giả | Dependency test hiện có |
 | C9 | `B/entity/EventSalesSnapshot.java` | EXISTING | Thêm `@Version @Column(name = "row_version", nullable = false) @ColumnDefault("0") private Long rowVersion`; giữ `@Getter/@Setter` sinh đúng getter/setter M13/M14; không initializer 0L | JPA version theo yêu cầu user; annotation Hibernate ColumnDefault đặt default DDL cho row cũ khi schema update, không gán giá trị Java |
+| C10 | `B/entity/InboxMessage.java` | EXISTING | Thêm field/annotation version tương tự C9; sinh getter/setter M15/M16 | Delta user yêu cầu trực tiếp khi thực thi; dùng save() thay native insertIfAbsent |
 
 DTO `Envelope`, `SalesConfiguration`, promotion snapshot; entity/inbox khác; các repository khác; Rabbit converter/error handler, JSON config: tái sử dụng. Không thêm dependency/migration framework hoặc file migration riêng. Dùng ddl-auto update và đồng bộ DDL bootstrap như Bước 1. Không sinh test class/helper khác ngoài danh sách.
 
@@ -77,6 +78,8 @@ Tất cả item mới/đổi chữ ký của pha WRITING-PLANS đang **PENDING**
 | M12 | C5 | `public static boolean validSalesConfiguration(SalesConfiguration value)` | REUSE; thêm check QUANTITY quantity không null, type SEAT_MAP có sector, seat thuộc SEATED và type cùng sector; giữ contract V1 |
 | M13 | C9 | `public Long getRowVersion()` — Lombok-generated | NEW; getter field version theo annotation đã có |
 | M14 | C9 | `public void setRowVersion(Long rowVersion)` — Lombok-generated | NEW; setter được sinh từ `@Setter` hiện có; application không tự set/increment version |
+| M15 | C10 | `public Long getRowVersion()` — Lombok-generated | NEW; getter version inbox |
+| M16 | C10 | `public void setRowVersion(Long rowVersion)` — Lombok-generated | NEW; setter từ annotation đã có; receipt mới không tự gán version |
 
 Bốn helper M8–M11 tương ứng bốn tập inventory có quy tắc khác nhau; tránh một method điều phối quá dài. Không thêm generic base service, strategy hay helper một dòng chỉ bọc repository. `previousConfiguration` có thể null khi tạo event lần đầu.
 
@@ -106,7 +109,7 @@ Thứ tự trong M5:
 2. Khóa snapshot hiện tại bằng M6. Sau khi đã lấy khóa, đọc inbox bằng `(consumerName="booking.sales-configured", messageId)` để không dùng kết quả dedupe đọc trước khi chờ khóa.
 3. Có inbox: hash trùng thì return; khác thì `MESSAGE_ID_CONFLICT`. Chưa có inbox: so source version với snapshot.
 4. Version cũ: không đổi snapshot/inventory; chỉ ghi inbox rồi return. Cùng version: hash cấu hình trùng thì chỉ ghi inbox; khác thì `SALES_CONFIGURATION_CONFLICT`. Version mới: áp dụng full snapshot.
-5. Khi chưa có snapshot, tạo entity với eventId đã có và `rowVersion=null`, rồi gọi `eventSalesSnapshotRepository.saveAndFlush(newSnapshot)`. Vì boxed version null, Spring Data chọn INSERT qua persist nội bộ; không inject/gọi EntityManager. PK có sẵn chặn hai transaction cùng tạo; transaction thua phải rollback, lần redelivery đọc lại từ đầu. Không catch lỗi unique rồi tiếp tục trong transaction đã rollback-only. Optimistic version mismatch cũng phải rollback và đọc lại trong transaction mới, không retry trong transaction đã hỏng.
+5. Khi chưa có snapshot, tạo entity với eventId đã có và `rowVersion=null`, rồi gọi `eventSalesSnapshotRepository.save(newSnapshot)` như mã giả đã được duyệt. Vì boxed version null, Spring Data chọn INSERT qua persist nội bộ; không inject/gọi EntityManager. PK có sẵn chặn hai transaction cùng tạo; transaction thua phải rollback, lần redelivery đọc lại từ đầu. Không catch lỗi unique rồi tiếp tục trong transaction đã rollback-only. Optimistic version mismatch cũng phải rollback và đọc lại trong transaction mới, không retry trong transaction đã hỏng.
 6. Với snapshot đã tồn tại, sửa managed entity bằng setter. Không đặt lại state CANCELLED thành bán được, kể cả message version cao hơn. Việc release/hủy đơn không thuộc consumer này.
 7. Gọi M8–M11 theo thứ tự snapshot → ticket/sector/seat → promotion. Ghi inbox cùng transaction; timestamp `processedAt` không phải một lần commit riêng.
 
@@ -209,7 +212,7 @@ Bàn giao: file thực thay đổi; kết quả unit/integration/broker tách đ
 
 ## 7. Gate WRITING-PLANS
 
-- **PENDING:** C1–C9, M1–M14 và test methods U1–U3/D1–D11; C5/M12 là sửa method hiện có; C6 là enum constants mới. User đã yêu cầu thay EntityManager bằng `@Version`; phần class/method khác chưa được coi là duyệt toàn bộ plan.
+- **APPROVED:** C1–C9, M1–M14 và test methods U1–U3/D1–D11 theo xác nhận EXECUTING-PLANS. C10/M15/M16 được user bổ sung trực tiếp cho InboxMessage; không có method native insertIfAbsent. C5/M12 và ErrorCode.unwrap/test wrapper hiện có chỉ sửa thân, không thêm khai báo Java.
 - **Delta so với design:** tái sử dụng AvailabilityService thay service pair mới; chỉ một listener mới; inventory theo đúng ba nguồn cung; thêm một derived query khóa và một SHA-256 method JDK. Theo chỉnh sửa mới nhất của user: bỏ EntityManager ở C3/M4/M5; thêm C9/M13/M14/D11; schema dùng ddl-auto update thay migration riêng, với ColumnDefault 0 cho cột mới; lần INSERT đầu dùng repository với `rowVersion=null`. YAML update đã được chỉnh theo yêu cầu trực tiếp, không đánh dấu các khai báo Java khác APPROVED.
 - **Nguồn yêu cầu lập plan:** user “ok, viết plan. dùng skill shop app writing plan + ponytail tránh viết code thừa k cần thiết”. Câu này cấp phạm vi viết plan; không tự đánh dấu gate class/method của pha này APPROVED.
 - Sau khi user duyệt danh sách và delta này, cập nhật trạng thái ngay trong file; chỉ chuyển sang execute khi user giao triển khai. Không tạo ledger/framework quản lý phê duyệt mới.
@@ -264,3 +267,13 @@ Phần review này không tự mở rộng triển khai sang 5 bảng cuối. En
 
 - Đã thêm SalesConfigurationListener AUTO ACK, concurrency 1, gọi service qua interface; reject lỗi contract/hash/version vĩnh viễn và để lỗi DB/commit đi ra container.
 - Không Channel/delivery tag, không thêm retry/template/factory. Compile JDK 23 pass, log local target/sales-config-phase3.log; xác minh unit/broker tiếp tục ở giai đoạn 4.
+
+### Kết quả giai đoạn 4 — hoàn tất
+
+- Lệnh cuối: `rtk proxy .\mvnw.cmd -B -ntp -Pintegration spotless:apply verify "-Dit.test=BookingPersistenceIT"`, chạy với JAVA_HOME openjdk-23 và Enforcer bật.
+- Kết quả: **338 unit test + 27 integration test pass**, 0 fail/error/skip; Spotless pass, SpotBugs 0 findings; BUILD SUCCESS. Log local `services/booking-service/target/sales-config-final-verify.log`.
+- U1–U3 và D1–D11 đã triển khai đúng khai báo đã duyệt; chỉ sửa fixture/method test hiện có để tạo SalesConfiguration hợp lệ, không thêm helper/test configuration class.
+- D1 dùng PostgreSQL 17 + RabbitMQ 4.3.6 test cô lập: JSON qua Jackson converter và MethodRabbitListenerEndpoint thật gọi service proxy; DB version 2 commit, dừng consumer không còn delivery quay lại queue, schema sai đi DLQ và không tạo receipt thêm. Queue test dùng quorum/durable, không đụng queue 119. Đây là kiểm chứng broker đơn node, không phải kiểm chứng HA/outbox publisher của Event.
+- D3 kiểm lỗi unique ghế lúc commit rollback snapshot/sector/seat/promotion/inbox. D4–D10 kiểm replay/hash/stale/version/counters/ownership/reservation/CANCELLED và hai transaction tạo event cùng lúc.
+- D11 bỏ hai cột version ở DB test, thêm snapshot/inbox legacy trước schema update, rồi khởi tạo Hibernate update chỉ với hai entity này: cột được thêm NOT NULL/default 0 và row legacy nhận 0; INSERT/UPDATE và optimistic conflict sau đó đều được kiểm chứng. Không chạy schema update trên server 119.
+- Broker test ban đầu phát hiện queue test non-durable không được RabbitMQ 4.3 cho phép; đã đổi test sang durable/quorum. Log reject đã được sửa để unwrap AmqpRejectAndDontRequeueException và giữ INVALID_MESSAGE; sửa trong method ErrorCode/test wrapper hiện có, không thêm khai báo.

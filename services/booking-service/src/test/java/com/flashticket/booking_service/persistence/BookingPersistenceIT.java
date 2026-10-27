@@ -3,28 +3,53 @@ package com.flashticket.booking_service.persistence;
 import static com.flashticket.booking_service.support.BookingFixtures.*;
 import static org.assertj.core.api.Assertions.*;
 
+import com.flashticket.booking_service.availability.repository.EventSalesSnapshotRepository;
+import com.flashticket.booking_service.availability.service.AvailabilityService;
+import com.flashticket.booking_service.availability.service.impl.AvailabilityServiceImpl;
+import com.flashticket.booking_service.config.BookingJsonConfig;
+import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.dto.snapshot.*;
 import com.flashticket.booking_service.entity.*;
 import com.flashticket.booking_service.entity.Order;
 import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.enums.Currency;
+import com.flashticket.booking_service.exception.BusinessException;
+import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.messaging.BookingRabbitErrorHandler;
+import com.flashticket.booking_service.messaging.SalesConfigurationListener;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.nio.file.*;
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.*;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
+import org.springframework.amqp.core.AcknowledgeMode;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.listener.MethodRabbitListenerEndpoint;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,10 +57,17 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
+import tools.jackson.databind.json.JsonMapper;
 
 @DataJpaTest(
     properties = {
@@ -45,6 +77,12 @@ import org.testcontainers.utility.MountableFile;
     })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(initializers = BookingPersistenceIT.BookingConfigInitializer.class)
+@Import({
+  AvailabilityServiceImpl.class,
+  JacksonAutoConfiguration.class,
+  BookingJsonConfig.class,
+  ValidationAutoConfiguration.class
+})
 @Testcontainers
 class BookingPersistenceIT {
   static class BookingConfigInitializer
@@ -116,6 +154,778 @@ class BookingPersistenceIT {
   @Autowired JdbcTemplate jdbc;
   @Autowired ApplicationContext context;
   @Autowired OrderRepository orders;
+  @Autowired AvailabilityService salesService;
+  @Autowired EventSalesSnapshotRepository snapshots;
+  @Autowired PlatformTransactionManager transactionManager;
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void salesConfigurationAndInventoriesCommitTogether() {
+    try {
+      var config = with(sales(), "promotions", List.of(promotion()));
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, config);
+      assertThat(org.springframework.aop.support.AopUtils.isAopProxy(salesService)).isTrue();
+      salesService.synchronizeSalesConfiguration(message);
+      assertThat(
+              jdbc.queryForObject(
+                  "select source_config_version from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  Long.class,
+                  EVENT))
+          .isEqualTo(1L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_capacity from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  TICKET))
+          .isEqualTo(20L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_limit from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  MESSAGE))
+          .isEqualTo(10L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where message_id=?",
+                  Long.class,
+                  MESSAGE))
+          .isEqualTo(1L);
+      // Dùng broker cô lập để kiểm đúng JSON converter + method adapter + AUTO ACK.
+      try (var rabbit =
+          new GenericContainer<>(
+                  org.testcontainers.utility.DockerImageName.parse("rabbitmq:4.3.6-management"))
+              .withExposedPorts(5672)
+              .withEnv("RABBITMQ_DEFAULT_USER", "booking_test")
+              .withEnv("RABBITMQ_DEFAULT_PASS", "test-only")
+              .waitingFor(Wait.forLogMessage(".*Server startup complete.*\\n", 1))) {
+        rabbit.start();
+        var connection = new CachingConnectionFactory(rabbit.getHost(), rabbit.getMappedPort(5672));
+        connection.setUsername("booking_test");
+        connection.setPassword("test-only");
+        try {
+          var admin = new RabbitAdmin(connection);
+          String queue = "booking.sales-configured.test", dlq = queue + ".dlq";
+          admin.declareQueue(new Queue(dlq, true, false, false, Map.of("x-queue-type", "quorum")));
+          admin.declareQueue(
+              new Queue(
+                  queue,
+                  true,
+                  false,
+                  false,
+                  Map.of(
+                      "x-queue-type",
+                      "quorum",
+                      "x-delivery-limit",
+                      3,
+                      "x-dead-letter-exchange",
+                      "",
+                      "x-dead-letter-routing-key",
+                      dlq)));
+          var converter = new JacksonJsonMessageConverter(context.getBean(JsonMapper.class));
+          var method =
+              SalesConfigurationListener.class.getMethod(
+                  "handleSalesConfiguredEvent", Envelope.class);
+          var methods =
+              new org.springframework.messaging.handler.annotation.support
+                  .DefaultMessageHandlerMethodFactory();
+          methods.afterPropertiesSet();
+          var endpoint = new MethodRabbitListenerEndpoint();
+          endpoint.setId("sales-config-integration");
+          endpoint.setBean(new SalesConfigurationListener(salesService));
+          endpoint.setMethod(method);
+          endpoint.setQueueNames(queue);
+          endpoint.setMessageHandlerMethodFactory(methods);
+          var factory = new SimpleRabbitListenerContainerFactory();
+          factory.setConnectionFactory(connection);
+          factory.setMessageConverter(converter);
+          factory.setAcknowledgeMode(
+              AcknowledgeMode.valueOf(method.getAnnotation(RabbitListener.class).ackMode()));
+          factory.setPrefetchCount(1);
+          factory.setErrorHandler(new BookingRabbitErrorHandler());
+          var container = factory.createListenerContainer(endpoint);
+          container.afterPropertiesSet();
+          var template = new RabbitTemplate(connection);
+          template.setMessageConverter(converter);
+          container.start();
+          try {
+            var second =
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    message.messageType(),
+                    1,
+                    EVENT,
+                    "2",
+                    NOW,
+                    EVENT,
+                    null,
+                    null,
+                    with(config, "sourceConfigVersion", "2"));
+            template.convertAndSend("", queue, second);
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .untilAsserted(
+                    () ->
+                        assertThat(snapshots.findById(EVENT).orElseThrow().getSourceConfigVersion())
+                            .isEqualTo(2L));
+            // Dừng container xong: delivery đã commit phải được ACK, không quay lại queue.
+            container.stop();
+            assertThat(admin.getQueueInfo(queue).getMessageCount()).isZero();
+            container.start();
+            template.convertAndSend("", queue, with(second, "schemaVersion", 2));
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .until(() -> template.receive(dlq) != null);
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+                .isEqualTo(2L);
+            assertThat(snapshots.findById(EVENT).orElseThrow().getSourceConfigVersion())
+                .isEqualTo(2L);
+          } finally {
+            container.stop();
+            container.destroy();
+          }
+        } finally {
+          connection.destroy();
+        }
+      } catch (NoSuchMethodException exception) {
+        throw new AssertionError(exception);
+      }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void seatMapUsesSectorPoolsAndSeatStates() {
+    try {
+      UUID standing = UUID.randomUUID(),
+          standingType = UUID.randomUUID(),
+          hiddenSeat = UUID.randomUUID();
+      var config = with(sales(), "mode", SalesMode.SEAT_MAP);
+      config =
+          with(
+              config,
+              "ticketTypes",
+              List.of(
+                  new SalesConfiguration.TicketTypeConfig(
+                      TICKET, "Seated", "100", Currency.VND, SECTOR, null, null),
+                  new SalesConfiguration.TicketTypeConfig(
+                      standingType, "Standing", "50", Currency.VND, standing, null, null),
+                  new SalesConfiguration.TicketTypeConfig(
+                      UUID.randomUUID(),
+                      "Standing VIP",
+                      "70",
+                      Currency.VND,
+                      standing,
+                      null,
+                      null)));
+      config =
+          with(
+              config,
+              "sectors",
+              List.of(
+                  new SalesConfiguration.SectorConfig(SECTOR, SectorType.SEATED, "2"),
+                  new SalesConfiguration.SectorConfig(standing, SectorType.STANDING, "100")));
+      var hidden =
+          new SalesConfiguration.SeatConfig(hiddenSeat, SECTOR, TICKET, "A2", "A", "2", true);
+      config =
+          with(
+              config,
+              "seats",
+              List.of(
+                  new SalesConfiguration.SeatConfig(SEAT, SECTOR, TICKET, "A1", "A", "1", false),
+                  hidden));
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, config);
+      salesService.synchronizeSalesConfiguration(message);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_ticket_type_inventory", Long.class))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_sector_inventory", Long.class))
+          .isEqualTo(2L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_capacity from booking_schema.tbl_sector_inventory where sector_id=?",
+                  Long.class,
+                  standing))
+          .isEqualTo(100L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_seat_inventory where seat_id=?",
+                  String.class,
+                  hiddenSeat))
+          .isEqualTo("UNAVAILABLE");
+      var updated =
+          with(
+              with(config, "sourceConfigVersion", "2"),
+              "seats",
+              List.of(with(hidden, "isHidden", false)));
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              message.messageType(),
+              1,
+              EVENT,
+              "2",
+              NOW,
+              EVENT,
+              null,
+              null,
+              updated));
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_seat_inventory where seat_id=?",
+                  String.class,
+                  SEAT))
+          .isEqualTo("UNAVAILABLE");
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_seat_inventory where seat_id=?",
+                  String.class,
+                  hiddenSeat))
+          .isEqualTo("AVAILABLE");
+      var anotherEvent = UUID.randomUUID();
+      var reusedIds = with(config, "eventId", anotherEvent);
+      assertThatThrownBy(
+              () ->
+                  salesService.synchronizeSalesConfiguration(
+                      new Envelope<>(
+                          UUID.randomUUID(),
+                          message.messageType(),
+                          1,
+                          anotherEvent,
+                          "1",
+                          NOW,
+                          EVENT,
+                          null,
+                          null,
+                          reusedIds)))
+          .isInstanceOf(BusinessException.class);
+      assertThat(snapshots.findById(anotherEvent)).isEmpty();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void failedInventoryWriteRollsBackSnapshotAndInbox() {
+    try {
+      var config = with(sales(), "mode", SalesMode.SEAT_MAP);
+      config =
+          with(
+              config,
+              "ticketTypes",
+              List.of(with(sales().ticketTypes().getFirst(), "sectorId", SECTOR)));
+      config =
+          with(
+              config,
+              "sectors",
+              List.of(new SalesConfiguration.SectorConfig(SECTOR, SectorType.SEATED, "2")));
+      var seatConfig =
+          new SalesConfiguration.SeatConfig(SEAT, SECTOR, TICKET, "A1", "A", "1", false);
+      config =
+          with(config, "seats", List.of(seatConfig, with(seatConfig, "seatId", UUID.randomUUID())));
+      config = with(config, "promotions", List.of(promotion()));
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, config);
+      // Hai ID khác nhau nhưng trùng label sector: lỗi unique thật khi flush/commit.
+      assertThatThrownBy(() -> salesService.synchronizeSalesConfiguration(message))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      for (String table :
+          List.of(
+              "tbl_event_sales_snapshots",
+              "tbl_sector_inventory",
+              "tbl_seat_inventory",
+              "tbl_promotion_inventory",
+              "tbl_inbox_messages"))
+        assertThat(jdbc.queryForObject("select count(*) from booking_schema." + table, Long.class))
+            .as(table)
+            .isZero();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replayedMessageDoesNotResetInventoryCounters() {
+    try {
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
+      salesService.synchronizeSalesConfiguration(message);
+      jdbc.update(
+          "update booking_schema.tbl_ticket_type_inventory set held=3,purchased=7 where ticket_type_id=?",
+          TICKET);
+      salesService.synchronizeSalesConfiguration(message);
+      salesService.synchronizeSalesConfiguration(with(message, "messageId", UUID.randomUUID()));
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  TICKET))
+          .isEqualTo(3L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select purchased from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  TICKET))
+          .isEqualTo(7L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(2L);
+      assertThat(snapshots.findById(EVENT).orElseThrow().getRowVersion()).isZero();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void reusedMessageIdWithDifferentPayloadIsRejected() {
+    try {
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
+      salesService.synchronizeSalesConfiguration(message);
+      String originalHash =
+          jdbc.queryForObject(
+              "select payload_hash from booking_schema.tbl_inbox_messages where message_id=?",
+              String.class,
+              MESSAGE);
+      var conflicting = with(message, "data", with(sales(), "purchaseLimit", 6));
+      assertThatThrownBy(() -> salesService.synchronizeSalesConfiguration(conflicting))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              ex -> assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.MESSAGE_ID_CONFLICT));
+      assertThat(
+              jdbc.queryForObject(
+                  "select payload_hash from booking_schema.tbl_inbox_messages where message_id=?",
+                  String.class,
+                  MESSAGE))
+          .isEqualTo(originalHash);
+      assertThat(
+              jdbc.queryForObject(
+                  "select row_version from booking_schema.tbl_inbox_messages where message_id=?",
+                  Long.class,
+                  MESSAGE))
+          .isZero();
+      // Receipt ID gán sẵn/version null phải INSERT và fail, không merge đè hash cũ.
+      var duplicate = new InboxMessage();
+      var id = new InboxMessageId();
+      id.setConsumerName("booking.sales-configured");
+      id.setMessageId(MESSAGE);
+      duplicate.setId(id);
+      duplicate.setPayloadHash("different-hash");
+      duplicate.setProcessedAt(NOW);
+      var inboxRepository =
+          context.getBean(
+              com.flashticket.booking_service.messaging.repository.InboxMessageRepository.class);
+      assertThatThrownBy(() -> inboxRepository.save(duplicate))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      assertThat(
+              jdbc.queryForObject(
+                  "select payload_hash from booking_schema.tbl_inbox_messages where message_id=?",
+                  String.class,
+                  MESSAGE))
+          .isEqualTo(originalHash);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void staleConfigurationDoesNotOverwriteNewerSnapshot() {
+    try {
+      var config = with(sales(), "sourceConfigVersion", "5");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "5", NOW, EVENT, null, null, config));
+      var stale = with(config, "sourceConfigVersion", "3");
+      stale =
+          with(
+              stale,
+              "ticketTypes",
+              List.of(with(config.ticketTypes().getFirst(), "configuredQuantity", "2")));
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              EVENT,
+              "3",
+              NOW,
+              EVENT,
+              null,
+              null,
+              stale));
+      assertThat(snapshots.findById(EVENT).orElseThrow().getSourceConfigVersion()).isEqualTo(5L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_capacity from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  TICKET))
+          .isEqualTo(20L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(2L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void sameVersionWithDifferentPayloadIsRejected() {
+    try {
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
+      salesService.synchronizeSalesConfiguration(message);
+      var conflicting =
+          with(
+              with(message, "messageId", UUID.randomUUID()),
+              "data",
+              with(sales(), "purchaseLimit", 6));
+      assertThatThrownBy(() -> salesService.synchronizeSalesConfiguration(conflicting))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              ex ->
+                  assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.SALES_CONFIGURATION_CONFLICT));
+      assertThat(snapshots.findById(EVENT).orElseThrow().getPurchaseLimit()).isEqualTo(5);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(1L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void newerConfigurationPreservesHeldAndPurchasedCounters() {
+    try {
+      var config = with(sales(), "promotions", List.of(promotion()));
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, config));
+      jdbc.update(
+          "update booking_schema.tbl_ticket_type_inventory set held=3,purchased=7 where ticket_type_id=?",
+          TICKET);
+      jdbc.update(
+          "update booking_schema.tbl_promotion_inventory set held=1,used=2 where promotion_id=?",
+          MESSAGE);
+      var updated =
+          with(
+              with(config, "sourceConfigVersion", "2"),
+              "ticketTypes",
+              List.of(with(config.ticketTypes().getFirst(), "configuredQuantity", "30")));
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              EVENT,
+              "2",
+              NOW,
+              EVENT,
+              null,
+              null,
+              updated));
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_capacity-held-purchased from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  TICKET))
+          .isEqualTo(20L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  MESSAGE))
+          .isEqualTo(1L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select used from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  MESSAGE))
+          .isEqualTo(2L);
+      var invalid =
+          with(
+              with(updated, "sourceConfigVersion", "3"),
+              "ticketTypes",
+              List.of(with(config.ticketTypes().getFirst(), "configuredQuantity", "5")));
+      assertThatThrownBy(
+              () ->
+                  salesService.synchronizeSalesConfiguration(
+                      new Envelope<>(
+                          UUID.randomUUID(),
+                          "event.sales-configured.v1",
+                          1,
+                          EVENT,
+                          "3",
+                          NOW,
+                          EVENT,
+                          null,
+                          null,
+                          invalid)))
+          .isInstanceOf(BusinessException.class);
+      assertThat(snapshots.findById(EVENT).orElseThrow().getSourceConfigVersion()).isEqualTo(2L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(2L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentConfigurationsKeepTheNewestCommittedVersion() throws Exception {
+    try {
+      var ready = new CountDownLatch(2);
+      var start = new CountDownLatch(1);
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var futures = new ArrayList<Future<?>>();
+        for (String version : List.of("3", "5")) {
+          var config = with(sales(), "sourceConfigVersion", version);
+          var message =
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  EVENT,
+                  version,
+                  NOW,
+                  EVENT,
+                  null,
+                  null,
+                  config);
+          futures.add(
+              executor.submit(
+                  () -> {
+                    ready.countDown();
+                    if (!start.await(5, TimeUnit.SECONDS))
+                      throw new AssertionError("Test start barrier timed out");
+                    try {
+                      salesService.synchronizeSalesConfiguration(message);
+                    } catch (DataIntegrityViolationException | ConcurrencyFailureException race) {
+                      // Mô phỏng redelivery: gọi lại proxy để mở transaction mới sau rollback.
+                      salesService.synchronizeSalesConfiguration(message);
+                    }
+                    return null;
+                  }));
+        }
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        for (var future : futures) future.get(20, TimeUnit.SECONDS);
+      }
+      assertThat(snapshots.findById(EVENT).orElseThrow().getSourceConfigVersion()).isEqualTo(5L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_event_sales_snapshots", Long.class))
+          .isEqualTo(1L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(2L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void configurationCannotRemoveReservedSeatsOrReviveCancelledEvent() {
+    try {
+      var keys = new TransactionTemplate(transactionManager).execute(status -> persistGraph());
+      UUID reservation = (UUID) keys.get("reservationRepository");
+      jdbc.update(
+          "update booking_schema.tbl_seat_inventory set state='HELD',current_reservation_id=?,reservation_generation=1 where seat_id=?",
+          reservation,
+          SEAT);
+      var config =
+          with(
+              snapshots.findById(EVENT).orElseThrow().getConfigurationSnapshot(),
+              "sourceConfigVersion",
+              "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              EVENT,
+              "2",
+              NOW,
+              EVENT,
+              null,
+              null,
+              config));
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_seat_inventory where seat_id=?",
+                  String.class,
+                  SEAT))
+          .isEqualTo("HELD");
+      assertThat(
+              jdbc.queryForObject(
+                  "select current_reservation_id from booking_schema.tbl_seat_inventory where seat_id=?",
+                  UUID.class,
+                  SEAT))
+          .isEqualTo(reservation);
+      assertThat(
+              jdbc.queryForObject(
+                  "select reservation_generation from booking_schema.tbl_seat_inventory where seat_id=?",
+                  Long.class,
+                  SEAT))
+          .isEqualTo(1L);
+      var removed = with(with(config, "sourceConfigVersion", "3"), "seats", List.of());
+      assertThatThrownBy(
+              () ->
+                  salesService.synchronizeSalesConfiguration(
+                      new Envelope<>(
+                          UUID.randomUUID(),
+                          "event.sales-configured.v1",
+                          1,
+                          EVENT,
+                          "3",
+                          NOW,
+                          EVENT,
+                          null,
+                          null,
+                          removed)))
+          .isInstanceOf(BusinessException.class);
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+          EVENT);
+      var revived = with(config, "sourceConfigVersion", "3");
+      assertThatThrownBy(
+              () ->
+                  salesService.synchronizeSalesConfiguration(
+                      new Envelope<>(
+                          UUID.randomUUID(),
+                          "event.sales-configured.v1",
+                          1,
+                          EVENT,
+                          "3",
+                          NOW,
+                          EVENT,
+                          null,
+                          null,
+                          revived)))
+          .isInstanceOf(BusinessException.class);
+      assertThat(snapshots.findById(EVENT).orElseThrow().getEventStatus())
+          .isEqualTo(EventState.CANCELLED);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void snapshotRowVersionIsManagedByJpa() {
+    try {
+      // Mô phỏng DB trước thay đổi: có receipt/snapshot cũ nhưng chưa có cột version.
+      jdbc.execute("alter table booking_schema.tbl_event_sales_snapshots drop column row_version");
+      jdbc.execute("alter table booking_schema.tbl_inbox_messages drop column row_version");
+      seedSqlEvent();
+      jdbc.update(
+          "insert into booking_schema.tbl_inbox_messages(consumer_name,message_id,payload_hash) values ('legacy',?,'old-hash')",
+          MESSAGE);
+      var updater = new org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean();
+      updater.setDataSource(context.getBean(javax.sql.DataSource.class));
+      updater.setJpaVendorAdapter(
+          new org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter());
+      updater.setManagedTypes(
+          org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes.of(
+              EventSalesSnapshot.class.getName(), InboxMessage.class.getName()));
+      updater.setJpaPropertyMap(
+          Map.of(
+              "hibernate.hbm2ddl.auto",
+              "update",
+              "hibernate.default_schema",
+              "booking_schema",
+              "hibernate.type.json_format_mapper",
+              "jackson3"));
+      try {
+        updater.afterPropertiesSet();
+        assertThat(
+                jdbc.queryForObject(
+                    "select row_version from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                    Long.class,
+                    EVENT))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select row_version from booking_schema.tbl_inbox_messages where message_id=?",
+                    Long.class,
+                    MESSAGE))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from information_schema.columns where table_schema='booking_schema' and table_name in ('tbl_event_sales_snapshots','tbl_inbox_messages') and column_name='row_version' and is_nullable='NO' and column_default='0'",
+                    Long.class))
+            .isEqualTo(2L);
+      } finally {
+        updater.destroy();
+      }
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+      var message =
+          new Envelope<>(
+              MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
+      salesService.synchronizeSalesConfiguration(message);
+      var stale = snapshots.findById(EVENT).orElseThrow();
+      assertThat(stale.getRowVersion()).isZero();
+      var updated = with(sales(), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              EVENT,
+              "2",
+              NOW,
+              EVENT,
+              null,
+              null,
+              updated));
+      var current = snapshots.findById(EVENT).orElseThrow();
+      assertThat(current.getSourceConfigVersion()).isEqualTo(2L);
+      assertThat(current.getRowVersion()).isGreaterThan(stale.getRowVersion());
+      stale.setPurchaseLimit(9);
+      assertThatThrownBy(() -> snapshots.save(stale))
+          .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
 
   @Test
   void inboxJsonbRoundTripsWithJackson3TreeModel() {
@@ -320,7 +1130,24 @@ class BookingPersistenceIT {
     event.setSaleStartsAt(NOW);
     event.setSaleEndsAt(NOW.plusSeconds(3600));
     event.setPurchaseLimit(5);
-    event.setConfigurationSnapshot(with(sales(), "mode", SalesMode.SEAT_MAP));
+    var graphConfig = with(sales(), "mode", SalesMode.SEAT_MAP);
+    graphConfig =
+        with(
+            graphConfig,
+            "ticketTypes",
+            List.of(with(sales().ticketTypes().getFirst(), "sectorId", SECTOR)));
+    graphConfig =
+        with(
+            graphConfig,
+            "sectors",
+            List.of(new SalesConfiguration.SectorConfig(SECTOR, SectorType.SEATED, "10")));
+    graphConfig =
+        with(
+            graphConfig,
+            "seats",
+            List.of(
+                new SalesConfiguration.SeatConfig(SEAT, SECTOR, TICKET, "A1", "A", "1", false)));
+    event.setConfigurationSnapshot(with(graphConfig, "promotions", List.of(promotion())));
     event.setSourceConfigVersion(1L);
     event.setReceivedAt(NOW);
     em.persist(event);
