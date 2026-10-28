@@ -24,3 +24,11 @@ flashticket:
       issuer-uri: https://issuer.example.test
       jwk-set-uri: http://127.0.0.1:1/not-used-by-smoke-tests
       audience: payment
+
+vnpay:
+  tmn-code: test
+  hash-secret: fixture-secret
+  payment-url: https://sandbox.example.test/pay
+  return-url: https://example.test/api/v1/payments/vnpay/return
+  ipn-url: https://example.test/api/v1/payments/vnpay/ipn
+  app-return-url: flash-ticket://payment-return

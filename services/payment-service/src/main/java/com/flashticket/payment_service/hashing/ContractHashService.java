@@ -9,12 +9,15 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 @Component
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class ContractHashService {
-  private final CanonicalContractSerializer serializer;
-  private final PurchaseSnapshotValidator validator;
+  CanonicalContractSerializer serializer;
+  PurchaseSnapshotValidator validator;
 
   public ContractHashService(
       CanonicalContractSerializer serializer, PurchaseSnapshotValidator validator) {

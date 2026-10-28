@@ -311,9 +311,11 @@ class EntityMappingTest {
       second.getTransaction().begin();
       var one = first.find(PaymentAttempt.class, f.attempt.getId());
       var two = second.find(PaymentAttempt.class, f.attempt.getId());
-      one.setPaymentUrl("https://fixture.example/first");
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          one, "paymentUrl", "https://fixture.example/first");
       first.getTransaction().commit();
-      two.setPaymentUrl("https://fixture.example/second");
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          two, "paymentUrl", "https://fixture.example/second");
       assertThatThrownBy(() -> second.getTransaction().commit())
           .isInstanceOf(RollbackException.class)
           .hasCauseInstanceOf(OptimisticLockException.class);

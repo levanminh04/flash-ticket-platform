@@ -51,6 +51,33 @@ public class GatewayRouteConfiguration {
     return builder
         .routes()
         .route(
+            "payment-create",
+            route ->
+                route
+                    .order(-20)
+                    .path("/api/v1/payments")
+                    .and()
+                    .method(HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "paymentServiceBreaker",
+                                "payment",
+                                false))
+                    .uri("lb://payment-service"))
+        .route(
+            "payment-vnpay-callbacks",
+            route ->
+                route
+                    .order(-10)
+                    .path("/api/v1/payments/vnpay/return", "/api/v1/payments/vnpay/ipn")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .uri("lb://payment-service"))
+        .route(
             "booking-availability",
             route ->
                 route

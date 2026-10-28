@@ -1,11 +1,14 @@
 package com.flashticket.payment_service.security;
 
+import com.flashticket.payment_service.dto.response.ApiResponse;
 import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.web.PaymentProblemFactory;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.util.List;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -15,10 +18,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class PaymentSecurityProblemHandler
     implements AuthenticationEntryPoint, AccessDeniedHandler {
-  private final PaymentProblemFactory problems;
-  private final JsonMapper json;
+  PaymentProblemFactory problems;
+  JsonMapper json;
 
   @Override
   public void commence(
@@ -41,6 +45,8 @@ public final class PaymentSecurityProblemHandler
     response.setStatus(errorCode.status().value());
     response.setContentType("application/json");
     response.setHeader("Cache-Control", "no-store");
-    json.writeValue(response.getOutputStream(), problems.problem(request, errorCode, List.of()));
+    json.writeValue(
+        response.getOutputStream(),
+        ApiResponse.failure(problems.problem(request, errorCode, List.of())));
   }
 }

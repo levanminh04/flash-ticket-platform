@@ -5,13 +5,16 @@ import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.hashing.ContractHashService;
 import java.util.Objects;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 /** Message-specific checks after ContractCodec has validated the typed wire contract. */
 @Component
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class MessageInvariantValidator {
-  private final PurchaseSnapshotValidator purchases;
-  private final ContractHashService hashes;
+  PurchaseSnapshotValidator purchases;
+  ContractHashService hashes;
 
   public MessageInvariantValidator(
       PurchaseSnapshotValidator purchases, ContractHashService hashes) {

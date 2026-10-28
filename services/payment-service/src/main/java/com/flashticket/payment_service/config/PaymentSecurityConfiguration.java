@@ -12,6 +12,12 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PaymentJwtProperties.class)
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
+@io.swagger.v3.oas.annotations.security.SecurityScheme(
+    name = "bearerAuth",
+    type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP,
+    scheme = "bearer",
+    bearerFormat = "JWT")
 public class PaymentSecurityConfiguration {
   @Bean
   JwtDecoder paymentJwtDecoder(PaymentJwtProperties properties) {
@@ -33,6 +39,15 @@ public class PaymentSecurityConfiguration {
             c ->
                 c.requestMatchers(HttpMethod.GET, "/api/v1/orders/*/payment")
                     .hasRole("BUYER")
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/payments/vnpay/return",
+                        "/api/v1/payments/vnpay/ipn")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/payments")
+                    .hasRole("BUYER")
+                    .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**")
+                    .hasRole("ADMIN")
                     .anyRequest()
                     .denyAll())
         .exceptionHandling(c -> c.authenticationEntryPoint(problems).accessDeniedHandler(problems))

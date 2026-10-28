@@ -1,11 +1,22 @@
-# Payment Service — payment status API P2
+# Payment Service — API trạng thái và VNPay theo Cinema
 
-Có thêm [Booking simulator qua RabbitMQ](docs/booking-simulator.md) để phát triển
-luồng tạo attempt/URL khi Booking chưa chạy. Chế độ `payment-simulator` dùng
-DB/broker riêng và guard Booking giả; không mở runtime này trong profile mặc
-định hoặc production. API GET hiện có vẫn kiểm JWT và chủ đơn.
+Payment có 13 JPA entity, DTO/MapStruct, contract boundary và API đọc trạng thái với JWT, ownership. Phần VNPay được chuyển từ Cinema: `VNPayConfig`, `VNPayUtil` và các phương thức tạo URL/IPN/return trong `PaymentService`. DTO/message và schema hiện có được giữ nguyên; chưa có runtime consumer, outbox relay hoặc Saga.
 
-Có 13 JPA entity, DTO/MapStruct, contract boundary P1 và API đọc trạng thái P2 với repository, JWT Resource Server và ownership. Đã bổ sung cấu hình/adapter VNPay Sandbox và callback được bật có điều kiện; xem [hướng dẫn VNPay](docs/vnpay-sandbox.md). Runtime nghiệp vụ ngoài profile simulator chưa có consumer, outbox relay, StartPayment handler hoặc Saga; callback mặc định tắt và yêu cầu handler lưu bền trước khi bật. B13-v0.2 vẫn REVIEW_READY; chưa nghiệm thu tích hợp liên service hoặc giao dịch VNPay thật.
+`GET /api/v1/orders/{orderId}/payment` trả `ApiResponse<PaymentView>`. `POST /api/v1/payments` tạo URL VNPay, hai GET `/api/v1/payments/vnpay/ipn` và `/api/v1/payments/vnpay/return` nhận callback. PaymentController gọi PaymentService; dữ liệu được đọc/ghi qua repository cục bộ.
+
+## VNPay chuyển từ Cinema
+
+Nguồn: `C:/Users/WEOHWOEH/Documents/PersionalProject/Cinema-Booking-System`. Helper được lấy từ `Shared/enums/VNPayUtil.java`, đúng import mà Cinema PaymentService đang dùng; lớp cùng tên trong `Shared/utils` dùng cách ký khác và không được sử dụng. Logic helper được giữ nguyên, chỉ đổi package và format theo dự án. Config giữ `@Value`/`@Getter`, service giữ Lombok constructor injection, controller điều phối mỏng.
+
+- `POST /api/v1/payments`: JWT role BUYER, body `{"orderId":"<UUID>","clientIp":"203.0.113.5"}`; `clientIp` có thể bỏ qua. Trả `ApiResponse<PaymentStart>` với paymentUrl. Số tiền lấy từ snapshot có sẵn trong Payment. Chưa snapshot trả PAYMENT_NOT_READY; khác chủ đơn trả RESOURCE_NOT_FOUND; hết hạn hoặc đã thanh toán không tạo attempt. Attempt PENDING được dùng lại như Cinema.
+- `GET /api/v1/payments/vnpay/ipn`: public, kiểm chữ ký trước truy cập dữ liệu, merchant, amount ×100 và kết quả giao dịch. Trả trực tiếp JSON `{"RspCode":"00","Message":"Confirm success"}`; các ACK khác giữ mã Cinema 97/01/02/04, 99 cho dữ liệu callback không hợp lệ. Không bọc ACK vào ApiResponse để VNPay đọc được RspCode.
+- `GET /api/v1/payments/vnpay/return`: public, xác minh chữ ký rồi redirect HTTP 302 về app với orderId/attemptId/status và transactionId nếu đã có receipt. Return chỉ đọc trạng thái trong database; có thể PENDING nếu IPN chưa tới. Chữ ký sai trả deep link status=FAILED và không tra thông tin order.
+
+Nạp biến môi trường trong `.env.example` vào tiến trình chạy như các biến DB/JWT hiện có. Cần `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_RETURN_URL`, `VNPAY_IPN_URL`. Có thể đổi `VNPAY_PAYMENT_URL` và `VNPAY_APP_RETURN_URL`; mặc định lần lượt là sandbox và `flash-ticket://payment-return`. Hai URL callback phải trỏ tới đúng endpoint public qua Gateway; đăng ký IPN URL trong cấu hình merchant VNPay như Cinema, không đưa ipn-url vào URL thanh toán. Không copy secret từ Cinema.
+
+Điều chỉnh theo mô hình Payment: bookingId -> orderId; payment -> PaymentAttempt; vnp_TxnRef là UUID attempt để không nhận nhầm callback của lần thử trước; giao dịch thành công lưu Charge. Tạo thanh toán khóa snapshot, IPN khóa attempt trong transaction. Hạn URL tối đa 15 phút và không vượt expiresAt của snapshot. Trạng thái dùng SUCCEEDED/FAILED của Payment thay SUCCESS/FAILED của Cinema. Kết quả chưa rõ (gồm mã 07) giữ UNKNOWN, finishedAt=null, không mở lần thanh toán mới; IPN cuối cùng có thể hoàn tất attempt UNKNOWN. Chỉ response=00/status=00 là thành công; status=02 kèm response thất bại rõ ràng mới kết thúc FAILED. Xem [mã kết quả VNPay](https://sandbox.vnpayment.vn/apis/docs/bang-ma-loi/).
+
+Phần này chưa xác nhận order ở Booking, gửi thông báo/email hoặc phát hành vé: các tích hợp đó trong Cinema gọi service cùng monolith, còn dự án này cần consumer/outbox/Saga riêng. IPN thành công không tự tạo PaymentConfirmation; acceptedChargeId vẫn do luồng chấp nhận của Booking quyết định. Không thêm API refund giả chỉ đổi trạng thái local như Cinema. Các kiểm tự động dùng fixture và repository mock; chưa xác minh giao dịch thật trên sandbox/PostgreSQL hoặc E2E liên service.
 
 ## Build
 
@@ -99,21 +110,21 @@ Review độc lập trước P1 đã rà mô hình/quan hệ, contract và profi
 
 ### Kiểm P1 trên nhánh codex/payment-runtime — 23/10/2026
 
-Maven verify bằng JDK 21/UTC: 64 test, 0 failure/error/skip; Spotless và SpotBugs PASS. Có golden byte/hash độc lập, kiểm Spring bean thật và regression cho Unicode surrogate/control escaping từ review độc lập. Không chạy lại PostgreSQL mapping/RabbitMQ/VNPay/E2E trong P1; chưa có thay đổi runtime các phần đó.
+Maven verify bằng JDK 21/UTC: 64 test, 0 failure/error/skip; Spotless và SpotBugs PASS. Có golden byte/hash độc lập, kiểm Spring bean thật và regression cho Unicode surrogate/control escaping từ review độc lập. Không chạy lại PostgreSQL mapping/RabbitMQ/E2E trong P1; chưa có thay đổi runtime các phần đó.
 
 ## API đọc trạng thái P2
 
 `GET /api/v1/orders/{orderId}/payment?requestId={requestId}` yêu cầu bearer JWT có chữ ký, issuer, audience, expiry hợp lệ, subject không rỗng và role BUYER trong realm_access.roles. Payment tự kiểm token, không chỉ tin Gateway. Không có quyền bypass ownership cho ADMIN. Cấu hình runtime từ Config Server cần KEYCLOAK_ISSUER_URI, KEYCLOAK_JWK_SET_URI và KEYCLOAK_AUDIENCE; thiếu cấu hình phải fail startup. Không dùng URI test trong production.
 
-Controller gọi PaymentQueryService, năm repository cục bộ và các mapper. Một response dùng transaction REPEATABLE_READ chỉ đọc; latestAttempt theo startedAt/id giảm dần, refunds theo createdAt/id tăng dần. Không truy cập datastore Booking, gọi provider hoặc ghi state từ GET.
+Controller gọi PaymentService, năm repository cục bộ và các mapper. Một response dùng transaction REPEATABLE_READ chỉ đọc; latestAttempt theo startedAt/id giảm dần, refunds theo createdAt/id tăng dần. Không truy cập datastore Booking, gọi provider hoặc ghi state từ GET.
 
 - Chưa snapshot: 404 PAYMENT_NOT_READY; khác owner: 404 RESOURCE_NOT_FOUND.
 - Không requestId: startRequest=null. Request chưa có inbox: WAITING, dù latestAttempt đã tồn tại.
 - Có result bền: đọc đúng requestId/orderId từ inbox consumer `payment.start-requested.v1`. CREATED kiểm attempt thuộc order; REJECTED giữ failureCode.
 - Inbox hỏng/không nhất quán: 503 PAYMENT_STATE_UNAVAILABLE; không bịa CREATED hoặc log payload.
-- HTTP lỗi dùng Problem; response có X-Correlation-Id và Cache-Control: no-store. orderId hợp lệ ưu tiên làm correlationId, header sai không được echo.
+- HTTP thành công dùng ApiResponse<PaymentView>; lỗi dùng ApiResponse<Problem>, giữ HTTP status. Response có X-Correlation-Id và Cache-Control: no-store. orderId hợp lệ ưu tiên làm correlationId, header sai không được echo.
 
-Gateway POST `/api/v1/orders/{id}/payment-attempts` đã sửa về Booking với breaker/fallback Booking. GET `/api/v1/orders/{id}/payment` vẫn về Payment. P2 không mở POST start/refund hay route nội bộ/management/callback. Kết quả health UP trong lịch sử scaffold không có nghĩa actuator đang public ở P2.
+Gateway POST `/api/v1/orders/{id}/payment-attempts` vẫn về Booking với breaker/fallback Booking. GET `/api/v1/orders/{id}/payment` vẫn về Payment. Các API VNPay mới dùng `/api/v1/payments` như Cinema; chỉ hai callback GET được public. Kết quả health UP trong lịch sử scaffold không có nghĩa actuator đang public.
 
 ## Throw lỗi Payment
 
@@ -169,4 +180,4 @@ Profile query-tests: 98 test, gồm 14 mapping test và 5 repository/transaction
 
 Maven verify của Payment, Gateway và Config Server đều PASS cùng Spotless/SpotBugs. Gateway có test predicate method/path cho start POST và payment GET. Test fixture không cần thông tin user thật; không lưu credential/token production vào repository.
 
-Chạy thử Payment JAR qua HTTP ngoài bộ test: NOT_RUN vì automatic approval review từ chối script chạy thử với thông báo “blocked by policy”, không có lý do chi tiết. Config Server test process đã khởi động; các helper do lượt này tạo đã dừng. Kết quả ký JWT/HTTP và PostgreSQL ở trên là bằng chứng kiểm riêng, chưa phải end-to-end qua Gateway/Keycloak/Booking/Ticket thật. RabbitMQ/VNPay/Saga E2E chưa triển khai ở P2.
+Chạy thử Payment JAR qua HTTP ngoài bộ test: NOT_RUN vì automatic approval review từ chối script chạy thử với thông báo “blocked by policy”, không có lý do chi tiết. Config Server test process đã khởi động; các helper do lượt này tạo đã dừng. Kết quả ký JWT/HTTP và PostgreSQL ở trên là bằng chứng kiểm riêng, chưa phải end-to-end qua Gateway/Keycloak/Booking/Ticket thật. RabbitMQ/Saga E2E chưa triển khai ở P2.

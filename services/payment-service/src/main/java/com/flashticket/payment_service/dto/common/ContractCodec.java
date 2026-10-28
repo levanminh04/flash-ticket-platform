@@ -5,7 +5,6 @@ import jakarta.validation.Validator;
 import java.lang.reflect.TypeVariable;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -85,14 +84,11 @@ public final class ContractCodec {
 
   private void validate(Object value) {
     if (value == null) throw invalid("$", "REQUIRED");
-    var errors = validator.validate(value);
-    if (!errors.isEmpty()) {
-      var error =
-          errors.stream()
-              .min(Comparator.comparing(e -> e.getPropertyPath().toString()))
-              .orElseThrow();
-      throw invalid(error.getPropertyPath().toString(), "CONSTRAINT_VIOLATION");
-    }
+    ContractViolations.firstPath(validator.validate(value))
+        .ifPresent(
+            path -> {
+              throw invalid(path, "CONSTRAINT_VIOLATION");
+            });
   }
 
   private void shape(JsonNode node, JavaType type, String path, Set<String> additional) {

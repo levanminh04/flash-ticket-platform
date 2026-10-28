@@ -132,10 +132,10 @@ class PaymentJwtSecurityTest {
     mvc.perform(get(path()).header("Authorization", "Bearer " + valid()))
         .andExpect(status().isOk())
         .andExpect(header().string("Cache-Control", "no-store"))
-        .andExpect(jsonPath("orderId").value(order.toString()))
-        .andExpect(jsonPath("latestAttempt").isEmpty())
-        .andExpect(jsonPath("startRequest").isEmpty())
-        .andExpect(jsonPath("refunds").isArray());
+        .andExpect(jsonPath("$.data.orderId").value(order.toString()))
+        .andExpect(jsonPath("$.data.latestAttempt").isEmpty())
+        .andExpect(jsonPath("$.data.startRequest").isEmpty())
+        .andExpect(jsonPath("$.data.refunds").isArray());
   }
 
   @Test
@@ -155,8 +155,8 @@ class PaymentJwtSecurityTest {
     for (var token : tokens)
       mvc.perform(get(path()).header("Authorization", "Bearer " + token))
           .andExpect(status().isUnauthorized())
-          .andExpect(jsonPath("code").value("AUTHENTICATION_REQUIRED"))
-          .andExpect(jsonPath("correlationId").value(order.toString()));
+          .andExpect(jsonPath("$.data.code").value("AUTHENTICATION_REQUIRED"))
+          .andExpect(jsonPath("$.data.correlationId").value(order.toString()));
     verifyNoInteractions(snapshots, attempts, confirmations, refunds, inbox);
   }
 
@@ -176,7 +176,7 @@ class PaymentJwtSecurityTest {
                               Instant.now().plusSeconds(600),
                               KEY)))
           .andExpect(status().isForbidden())
-          .andExpect(jsonPath("code").value("ACCESS_DENIED"));
+          .andExpect(jsonPath("$.data.code").value("ACCESS_DENIED"));
     mvc.perform(
             get(path())
                 .header(
@@ -190,19 +190,19 @@ class PaymentJwtSecurityTest {
                             Instant.now().plusSeconds(600),
                             KEY)))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("code").value("RESOURCE_NOT_FOUND"));
+        .andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
   }
 
   @Test
   void returnsProblemsBeforeControllerAndForInvalidIds() throws Exception {
     mvc.perform(get(path()).header("X-Correlation-Id", UUID.randomUUID()))
         .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("correlationId").value(order.toString()))
-        .andExpect(jsonPath("violations").isArray());
+        .andExpect(jsonPath("$.data.correlationId").value(order.toString()))
+        .andExpect(jsonPath("$.data.violations").isArray());
     mvc.perform(
             get(path()).param("requestId", "invalid").header("Authorization", "Bearer " + valid()))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("code").value("INVALID_REQUEST"));
+        .andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
     mvc.perform(
             get("/api/v1/orders/1-1-1-1-1/payment").header("Authorization", "Bearer " + valid()))
         .andExpect(status().isBadRequest());
@@ -219,6 +219,50 @@ class PaymentJwtSecurityTest {
   }
 
   @Test
+  void opensOnlyVnpayCallbacksAndRequiresBuyerForPaymentCreation() throws Exception {
+    mvc.perform(get("/api/v1/payments/vnpay/ipn"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith("application/json"))
+        .andExpect(jsonPath("$.RspCode").value("97"));
+    mvc.perform(get("/api/v1/payments/vnpay/return"))
+        .andExpect(status().isFound())
+        .andExpect(header().string("Location", "flash-ticket://payment-return?status=FAILED"));
+    mvc.perform(
+            post("/api/v1/payments")
+                .contentType("application/json")
+                .content("{\"orderId\":\"" + order + "\"}"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(
+            post("/api/v1/payments")
+                .contentType("application/json")
+                .header(
+                    "Authorization",
+                    "Bearer "
+                        + token(
+                            "buyer",
+                            ISSUER,
+                            "payment",
+                            List.of("ORGANIZER"),
+                            Instant.now().plusSeconds(600),
+                            KEY))
+                .content("{\"orderId\":\"" + order + "\"}"))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/api/v1/payments/vnpay/anything-else")).andExpect(status().isUnauthorized());
+    var snapshot = PaymentReadFixtures.snapshot(null, "buyer");
+    snapshot.setOrderId(order);
+    when(snapshots.findForUpdateByOrderId(order)).thenReturn(Optional.of(snapshot));
+    when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
+    mvc.perform(
+            post("/api/v1/payments")
+                .contentType("application/json")
+                .header("Authorization", "Bearer " + valid())
+                .content("{\"orderId\":\"" + order + "\",\"clientIp\":\"203.0.113.5\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.orderId").value(order.toString()))
+        .andExpect(jsonPath("$.data.paymentUrl").isNotEmpty());
+  }
+
+  @Test
   void isolatesRequestResultAndDoesNotExposeWriteOrInternalRoutes() throws Exception {
     var request = UUID.randomUUID();
     mvc.perform(
@@ -226,7 +270,7 @@ class PaymentJwtSecurityTest {
                 .param("requestId", request.toString())
                 .header("Authorization", "Bearer " + valid()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("startRequest.state").value("WAITING"));
+        .andExpect(jsonPath("$.data.startRequest.state").value("WAITING"));
     when(inbox.findById(any()))
         .thenReturn(
             Optional.of(

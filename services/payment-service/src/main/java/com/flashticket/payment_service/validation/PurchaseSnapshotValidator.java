@@ -1,20 +1,23 @@
 package com.flashticket.payment_service.validation;
 
 import com.flashticket.payment_service.dto.common.ContractValidationException;
+import com.flashticket.payment_service.dto.common.ContractViolations;
 import com.flashticket.payment_service.dto.snapshot.PurchaseMode;
 import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 @Component
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class PurchaseSnapshotValidator {
   private static final BigDecimal MAX_MONEY = new BigDecimal("9999999999999999999");
-  private final Validator validator;
+  Validator validator;
 
   public PurchaseSnapshotValidator(Validator validator) {
     this.validator = Objects.requireNonNull(validator);
@@ -22,14 +25,8 @@ public final class PurchaseSnapshotValidator {
 
   public void validate(PurchaseSnapshot purchase) {
     if (purchase == null) fail("$", "CONSTRAINT_VIOLATION");
-    var errors = validator.validate(purchase);
-    if (!errors.isEmpty()) {
-      var first =
-          errors.stream()
-              .min(Comparator.comparing(e -> e.getPropertyPath().toString()))
-              .orElseThrow();
-      fail("$." + first.getPropertyPath(), "CONSTRAINT_VIOLATION");
-    }
+    ContractViolations.firstPath(validator.validate(purchase))
+        .ifPresent(path -> fail("$." + path, "CONSTRAINT_VIOLATION"));
     boolean quantity = purchase.mode() == PurchaseMode.QUANTITY;
     if (quantity != (purchase.sectorId() == null)) fail("$.sectorId", "INVALID_SELECTION");
     var itemIds = new HashSet<UUID>();

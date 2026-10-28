@@ -1,8 +1,0 @@
-{
-  "payQuery": "vnp_Amount=10000000&vnp_Command=pay&vnp_CreateDate=20261025100000&vnp_CurrCode=VND&vnp_ExpireDate=20261025101000&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee&vnp_OrderType=other&vnp_ReturnUrl=https%3A%2F%2Fmerchant.example.test%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=TEST1234&vnp_TxnRef=11111111222243338444555555555555&vnp_Version=2.1.0",
-  "payUrl": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=10000000&vnp_Command=pay&vnp_CreateDate=20261025100000&vnp_CurrCode=VND&vnp_ExpireDate=20261025101000&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee&vnp_OrderType=other&vnp_ReturnUrl=https%3A%2F%2Fmerchant.example.test%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=TEST1234&vnp_TxnRef=11111111222243338444555555555555&vnp_Version=2.1.0&vnp_SecureHash=1b206fca9d45e94e45d98d2772c38b87f8da0ec4198f6795f8c773dfc40564d35fcd694103276146f0b93ba5dae57da8ea79d08a2c80df525c70f5d701c48ba0",
-  "queryData": "aaaaaaaa111142228333bbbbbbbbbbbb|2.1.0|querydr|TEST1234|11111111222243338444555555555555|20261025100000|20261025100200|127.0.0.1|Truy van aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-  "querySignature": "3e7a0325c75c5e960817a241f60429850707f1a1a50cd07f2c2274e5d998d5d219d08f99e329f10fa2171248e172d8f1a96b47583c6326fb6a539f763e9f842a",
-  "refundData": "bbbbbbbb111142228333aaaaaaaaaaaa|2.1.0|refund|TEST1234|02|11111111222243338444555555555555|10000000|123456|20261025100000|sandbox-operator|20261025100100|127.0.0.1|Hoan tien bbbbbbbb-1111-4222-8333-aaaaaaaaaaaa",
-  "refundSignature": "eac78a4650cbe935d19d5f4504a838e9d095f45de72a456d22b9f0c8f27be9d2ab35957a843a8ab870a96a60ad682ca28be6184dea80f8e78d6a27f42dbb2ce0"
-}

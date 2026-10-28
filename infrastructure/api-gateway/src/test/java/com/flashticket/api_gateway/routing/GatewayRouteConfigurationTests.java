@@ -30,7 +30,7 @@ class GatewayRouteConfigurationTests {
   void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
     Map<String, Route> routes = routesById();
 
-    assertEquals(14, routes.size());
+    assertEquals(16, routes.size());
     assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
@@ -67,6 +67,34 @@ class GatewayRouteConfigurationTests {
   @Test
   void registersTheRedisRateLimiterBean() {
     assertNotNull(redisRateLimiter);
+  }
+
+  @Test
+  void routesCinemaPaymentCreationAndCallbacksToPayment() {
+    var routes = routesById();
+    assertNotNull(routes.get("payment-create"));
+    assertEquals("lb://payment-service", routes.get("payment-create").getUri().toString());
+    assertNotNull(routes.get("payment-vnpay-callbacks"));
+    var callback = routes.get("payment-vnpay-callbacks");
+    assertEquals("lb://payment-service", callback.getUri().toString());
+    for (String endpoint : List.of("ipn", "return")) {
+      var get =
+          org.springframework.mock.web.server.MockServerWebExchange.from(
+              org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(
+                  "/api/v1/payments/vnpay/" + endpoint));
+      var post =
+          org.springframework.mock.web.server.MockServerWebExchange.from(
+              org.springframework.mock.http.server.reactive.MockServerHttpRequest.post(
+                  "/api/v1/payments/vnpay/" + endpoint));
+      assertEquals(
+          Boolean.TRUE,
+          reactor.core.publisher.Mono.from(callback.getPredicate().apply(get))
+              .block(Duration.ofSeconds(5)));
+      assertEquals(
+          Boolean.FALSE,
+          reactor.core.publisher.Mono.from(callback.getPredicate().apply(post))
+              .block(Duration.ofSeconds(5)));
+    }
   }
 
   @Test

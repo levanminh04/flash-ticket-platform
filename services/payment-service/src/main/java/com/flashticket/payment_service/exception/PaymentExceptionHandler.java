@@ -6,7 +6,9 @@ import com.flashticket.payment_service.web.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.beans.PropertyEditorSupport;
 import java.util.*;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.WebDataBinder;
@@ -16,8 +18,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 @RequiredArgsConstructor
 @Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class PaymentExceptionHandler {
-  private final PaymentProblemFactory problems;
+  PaymentProblemFactory problems;
 
   @InitBinder
   void strictIds(WebDataBinder binder) {
@@ -32,39 +35,59 @@ public final class PaymentExceptionHandler {
   }
 
   @ExceptionHandler(PaymentException.class)
-  ResponseEntity<Problem> payment(PaymentException e, HttpServletRequest request) {
-    return ResponseEntity.status(e.status())
-        .body(problems.problem(request, e.errorCode(), List.of()));
+  ResponseEntity<ApiResponse<Problem>> payment(PaymentException e, HttpServletRequest request) {
+    return ResponseEntity.status(e.status()).body(problem(request, e.errorCode(), List.of()));
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-  ResponseEntity<Problem> invalid(
+  ResponseEntity<ApiResponse<Problem>> invalid(
       MethodArgumentTypeMismatchException e, HttpServletRequest request) {
     return ResponseEntity.badRequest()
         .body(
-            problems.problem(
+            problem(
                 request,
                 PaymentErrorCode.INVALID_REQUEST,
                 List.of(new Violation(e.getName(), "INVALID_UUID"))));
   }
 
   @ExceptionHandler(ContractValidationException.class)
-  ResponseEntity<Problem> contract(ContractValidationException e, HttpServletRequest request) {
+  ResponseEntity<ApiResponse<Problem>> contract(
+      ContractValidationException e, HttpServletRequest request) {
     return ResponseEntity.unprocessableContent()
         .body(
-            problems.problem(
+            problem(
                 request,
                 PaymentErrorCode.INVALID_REQUEST,
                 List.of(new Violation(e.field(), e.code()))));
   }
 
   @ExceptionHandler(Exception.class)
-  ResponseEntity<Problem> unexpected(Exception e, HttpServletRequest request) {
+  ResponseEntity<ApiResponse<Problem>> unexpected(Exception e, HttpServletRequest request) {
     log.error(
         "Payment request failed correlationId={} exceptionType={}",
         PaymentCorrelationFilter.correlationId(request),
         e.getClass().getSimpleName());
     return ResponseEntity.internalServerError()
-        .body(problems.problem(request, PaymentErrorCode.INTERNAL_ERROR, List.of()));
+        .body(problem(request, PaymentErrorCode.INTERNAL_ERROR, List.of()));
+  }
+
+  @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+  ResponseEntity<ApiResponse<Problem>> denied(HttpServletRequest request) {
+    return ResponseEntity.status(403)
+        .body(problem(request, PaymentErrorCode.ACCESS_DENIED, List.of()));
+  }
+
+  @ExceptionHandler({
+    org.springframework.web.bind.MethodArgumentNotValidException.class,
+    org.springframework.http.converter.HttpMessageNotReadableException.class
+  })
+  ResponseEntity<ApiResponse<Problem>> invalidBody(HttpServletRequest request) {
+    return ResponseEntity.badRequest()
+        .body(problem(request, PaymentErrorCode.INVALID_REQUEST, List.of()));
+  }
+
+  private ApiResponse<Problem> problem(
+      HttpServletRequest request, PaymentErrorCode code, List<Violation> violations) {
+    return ApiResponse.failure(problems.problem(request, code, violations));
   }
 }

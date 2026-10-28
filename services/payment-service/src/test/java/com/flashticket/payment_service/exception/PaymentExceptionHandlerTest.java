@@ -37,10 +37,10 @@ class PaymentExceptionHandlerTest {
         .build()
         .perform(get("/failure").header("X-Correlation-Id", correlationId))
         .andExpect(status().is(status))
-        .andExpect(jsonPath("$.code").value(code))
+        .andExpect(jsonPath("$.data.code").value(code))
         .andExpect(jsonPath("$.message").value(message))
-        .andExpect(jsonPath("$.correlationId").value(correlationId.toString()))
-        .andExpect(jsonPath("$.violations").isEmpty());
+        .andExpect(jsonPath("$.data.correlationId").value(correlationId.toString()))
+        .andExpect(jsonPath("$.data.violations").isEmpty());
   }
 
   @Test
@@ -51,9 +51,9 @@ class PaymentExceptionHandlerTest {
         .build()
         .perform(get("/failure"))
         .andExpect(status().isUnprocessableContent())
-        .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-        .andExpect(jsonPath("$.violations[0].field").value("$.total"))
-        .andExpect(jsonPath("$.violations[0].code").value("TOTAL_MISMATCH"));
+        .andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"))
+        .andExpect(jsonPath("$.data.violations[0].field").value("$.total"))
+        .andExpect(jsonPath("$.data.violations[0].code").value("TOTAL_MISMATCH"));
   }
 
   @Test
@@ -64,7 +64,7 @@ class PaymentExceptionHandlerTest {
         .build()
         .perform(get("/failure"))
         .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+        .andExpect(jsonPath("$.data.code").value("INTERNAL_ERROR"))
         .andExpect(jsonPath("$.message").value("The request could not be processed."));
   }
 

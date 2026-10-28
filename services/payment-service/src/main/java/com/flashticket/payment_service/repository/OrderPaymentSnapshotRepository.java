@@ -7,6 +7,12 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OrderPaymentSnapshotRepository extends JpaRepository<OrderPaymentSnapshot, UUID> {
+  @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+  @org.springframework.data.jpa.repository.Query(
+      "select s from OrderPaymentSnapshot s where s.orderId = :orderId")
+  Optional<OrderPaymentSnapshot> findForUpdateByOrderId(
+      @org.springframework.data.repository.query.Param("orderId") UUID orderId);
+
   interface OrderPaymentAccess {
     UUID getOrderId();
 

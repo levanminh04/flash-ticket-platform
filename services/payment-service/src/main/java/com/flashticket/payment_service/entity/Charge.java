@@ -26,6 +26,22 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Charge {
+  public static Charge received(
+      PaymentAttempt attempt, String transactionNo, Instant chargedAt, Instant recordedAt) {
+    var charge = new Charge();
+    charge.id = UUID.randomUUID();
+    charge.attemptId = attempt.getId();
+    charge.orderId = attempt.getOrderId();
+    charge.provider = attempt.getProvider();
+    charge.merchantAccount = attempt.getMerchantAccount();
+    charge.providerChargeId = transactionNo;
+    charge.amount = attempt.getExpectedAmount();
+    charge.currency = attempt.getCurrency();
+    charge.chargedAt = chargedAt;
+    charge.recordedAt = recordedAt;
+    return charge;
+  }
+
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;

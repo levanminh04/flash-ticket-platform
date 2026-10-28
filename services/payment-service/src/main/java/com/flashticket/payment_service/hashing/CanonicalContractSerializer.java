@@ -1,6 +1,7 @@
 package com.flashticket.payment_service.hashing;
 
 import com.flashticket.payment_service.dto.common.ContractValidationException;
+import com.flashticket.payment_service.dto.common.ContractViolations;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.IssueTickets;
 import com.flashticket.payment_service.dto.message.PaymentProvider;
@@ -15,6 +16,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.databind.JsonNode;
@@ -23,10 +26,11 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** Canonical v1 encoding; callers validate semantic invariants before encoding. */
 @Component
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public final class CanonicalContractSerializer {
   private static final JsonMapper JSON =
       JsonMapper.builder().disable(JsonWriteFeature.WRITE_HEX_UPPER_CASE).build();
-  private final Validator validator;
+  Validator validator;
 
   public CanonicalContractSerializer(Validator validator) {
     this.validator = java.util.Objects.requireNonNull(validator);
@@ -55,15 +59,11 @@ public final class CanonicalContractSerializer {
 
   private JsonNode validatedTree(Object value) {
     if (value == null) throw new ContractValidationException("$", "REQUIRED");
-    var violations = validator.validate(value);
-    if (!violations.isEmpty()) {
-      var first =
-          violations.stream()
-              .min(Comparator.comparing(v -> v.getPropertyPath().toString()))
-              .orElseThrow();
-      throw new ContractValidationException(
-          first.getPropertyPath().toString(), "CONSTRAINT_VIOLATION");
-    }
+    ContractViolations.firstPath(validator.validate(value))
+        .ifPresent(
+            path -> {
+              throw new ContractValidationException(path, "CONSTRAINT_VIOLATION");
+            });
     // Use an isolated encoder: application formatting/time/escaping settings cannot alter hashes.
     return JSON.valueToTree(value);
   }

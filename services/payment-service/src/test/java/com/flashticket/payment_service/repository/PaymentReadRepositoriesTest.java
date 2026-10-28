@@ -7,7 +7,7 @@ import static org.mockito.Mockito.*;
 import com.flashticket.payment_service.dto.message.StartPaymentResultState;
 import com.flashticket.payment_service.entity.enums.PaymentAttemptState;
 import com.flashticket.payment_service.entity.id.InboxMessageId;
-import com.flashticket.payment_service.service.payment.PaymentQueryService;
+import com.flashticket.payment_service.service.payment.PaymentService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.LinkedHashMap;
@@ -34,7 +34,7 @@ class PaymentReadRepositoriesTest {
   @Autowired PaymentConfirmationRepository confirmations;
   @Autowired RefundRepository refunds;
   @Autowired InboxMessageRepository inbox;
-  @Autowired PaymentQueryService payments;
+  @Autowired PaymentService payments;
   @Autowired PlatformTransactionManager transactions;
   @Autowired JdbcTemplate jdbc;
   @Autowired EntityManagerFactory emf;

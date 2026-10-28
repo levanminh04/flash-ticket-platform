@@ -14,6 +14,31 @@ class PurchaseSnapshotValidatorTest {
   final PurchaseSnapshotValidator validator =
       new PurchaseSnapshotValidator(F.factory.getValidator());
 
+  @Test
+  void selectsFirstConstraintPathWithPurchaseRootPrefix() throws Exception {
+    var tree = F.quantity().put("buyerSubject", "").put("eventTitle", "");
+    var purchase = F.mapper.treeToValue(tree, PurchaseSnapshot.class);
+
+    assertThatThrownBy(() -> validator.validate(purchase))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("$.buyerSubject");
+              assertThat(error.code()).isEqualTo("CONSTRAINT_VIOLATION");
+            });
+  }
+
+  @Test
+  void keepsConstraintErrorForNullPurchases() {
+    assertThatThrownBy(() -> validator.validate(null))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("$");
+              assertThat(error.code()).isEqualTo("CONSTRAINT_VIOLATION");
+            });
+  }
+
   @AfterAll
   static void close() {
     F.close();

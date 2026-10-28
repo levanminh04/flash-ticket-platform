@@ -59,7 +59,8 @@ class PaymentMappersTest {
     attempt.setOrderId(UUID.randomUUID());
     attempt.setExpectedAmount(BigDecimal.TEN);
     attempt.setCurrency("VND");
-    attempt.setPaymentUrl("https://fixture.example/pay");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        attempt, "paymentUrl", "https://fixture.example/pay");
     var mapper = startMapper;
     for (var state : PaymentAttemptState.values()) {
       attempt.setState(state);

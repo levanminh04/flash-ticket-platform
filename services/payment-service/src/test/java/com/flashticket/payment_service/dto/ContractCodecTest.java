@@ -3,6 +3,7 @@ package com.flashticket.payment_service.dto;
 import static org.assertj.core.api.Assertions.*;
 
 import com.flashticket.payment_service.dto.common.ContractCodec;
+import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
@@ -11,12 +12,40 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.*;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ContractCodecTest {
   static final jakarta.validation.ValidatorFactory FACTORY =
       Validation.buildDefaultValidatorFactory();
   static final ContractCodec CODEC =
       new ContractCodec(JsonMapper.builder().build(), FACTORY.getValidator());
+
+  @Test
+  void selectsFirstConstraintPathForDirectObjects() throws Exception {
+    var mapper = JsonMapper.builder().build();
+    var tree = (ObjectNode) mapper.readTree(purchaseJson());
+    tree.put("buyerSubject", "").put("eventTitle", "");
+    var purchase = mapper.treeToValue(tree, PurchaseSnapshot.class);
+
+    assertThatThrownBy(() -> CODEC.toTree(purchase))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("buyerSubject");
+              assertThat(error.code()).isEqualTo("CONSTRAINT_VIOLATION");
+            });
+  }
+
+  @Test
+  void keepsRequiredErrorForNullObjects() {
+    assertThatThrownBy(() -> CODEC.toTree(null))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("$");
+              assertThat(error.code()).isEqualTo("REQUIRED");
+            });
+  }
 
   public static String purchaseJson() throws Exception {
     try (var in = ContractCodecTest.class.getResourceAsStream("/contracts/purchase.json")) {

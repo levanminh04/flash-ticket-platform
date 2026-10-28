@@ -47,7 +47,8 @@ public final class PaymentReadFixtures {
     a.setState(state);
     a.setRequestKey(UUID.randomUUID());
     a.setRequestHash("fixture");
-    a.setPaymentUrl("https://sandbox.example.test/pay");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        a, "paymentUrl", "https://sandbox.example.test/pay");
     if (state == PaymentAttemptState.FAILED || state == PaymentAttemptState.SUCCEEDED)
       a.setFinishedAt(TIME.plusSeconds(1));
     if (em != null) em.persist(a);

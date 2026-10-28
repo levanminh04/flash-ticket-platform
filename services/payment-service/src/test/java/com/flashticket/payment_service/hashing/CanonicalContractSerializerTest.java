@@ -2,6 +2,7 @@ package com.flashticket.payment_service.hashing;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.IssueTickets;
 import com.flashticket.payment_service.dto.message.PaymentProvider;
@@ -37,6 +38,31 @@ class CanonicalContractSerializerTest {
   static final PaymentContractFixtures F = new PaymentContractFixtures();
   final CanonicalContractSerializer serializer =
       new CanonicalContractSerializer(F.factory.getValidator());
+
+  @Test
+  void selectsFirstConstraintPathBeforeCanonicalEncoding() throws Exception {
+    var tree = F.quantity().put("buyerSubject", "").put("eventTitle", "");
+    var purchase = F.mapper.treeToValue(tree, PurchaseSnapshot.class);
+
+    assertThatThrownBy(() -> serializer.purchaseBytes(purchase))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("buyerSubject");
+              assertThat(error.code()).isEqualTo("CONSTRAINT_VIOLATION");
+            });
+  }
+
+  @Test
+  void keepsRequiredErrorForNullPurchases() {
+    assertThatThrownBy(() -> serializer.purchaseBytes(null))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            error -> {
+              assertThat(error.field()).isEqualTo("$");
+              assertThat(error.code()).isEqualTo("REQUIRED");
+            });
+  }
 
   @AfterAll
   static void close() {

@@ -11,20 +11,20 @@ import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.*;
 import com.flashticket.payment_service.repository.*;
-import com.flashticket.payment_service.service.payment.PaymentQueryService;
+import com.flashticket.payment_service.service.payment.PaymentService;
 import com.flashticket.payment_service.validation.PaymentContractFixtures;
 import java.util.*;
 import org.junit.jupiter.api.*;
 
-class PaymentQueryServiceTest {
+class PaymentServiceTest {
   static final PaymentContractFixtures F = new PaymentContractFixtures();
   final OrderPaymentSnapshotRepository snapshots = mock(OrderPaymentSnapshotRepository.class);
   final PaymentAttemptRepository attempts = mock(PaymentAttemptRepository.class);
   final PaymentConfirmationRepository confirmations = mock(PaymentConfirmationRepository.class);
   final RefundRepository refunds = mock(RefundRepository.class);
   final InboxMessageRepository inbox = mock(InboxMessageRepository.class);
-  final PaymentQueryService service =
-      new PaymentQueryService(
+  final PaymentService service =
+      new PaymentService(
           snapshots,
           attempts,
           confirmations,
@@ -33,7 +33,10 @@ class PaymentQueryServiceTest {
           new PaymentViewMapperImpl(),
           new PaymentStartMapperImpl(new MoneyMapper()),
           new RefundMapperImpl(new MoneyMapper()),
-          new MessageJsonMapper(F.codec));
+          new MessageJsonMapper(F.codec),
+          mock(com.flashticket.payment_service.config.VNPayConfig.class),
+          mock(ChargeRepository.class),
+          mock(com.flashticket.payment_service.hashing.ContractHashService.class));
   final UUID order = UUID.randomUUID();
 
   @AfterAll

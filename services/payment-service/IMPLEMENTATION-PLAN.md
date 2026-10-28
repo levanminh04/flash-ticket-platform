@@ -1,5 +1,8 @@
 # Kế hoạch Payment Service — từ chạy được đến thanh toán hoàn chỉnh
 
+> Phần tích hợp cổng thanh toán đã được người dùng yêu cầu gỡ ngày 2026-10-28. Các bước cấu hình/callback/refund của cổng trong tài liệu này là lịch sử, không được thực hiện hoặc khôi phục. Hợp đồng DTO/message và mô hình tài chính hiện có được giữ nguyên.
+
+
 Cập nhật 22/10/2026. Kế hoạch này thay bản trước, ưu tiên từng bước nhỏ cho người bắt đầu. Đây là kế hoạch đề xuất; chưa thực hiện các bước hoặc xác nhận runtime trong lượt lập kế hoạch.
 
 ## Điểm xuất phát

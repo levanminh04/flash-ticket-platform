@@ -39,22 +39,19 @@ spring:
 
 flashticket:
   payment:
-    vnpay:
-      enabled: ${PAYMENT_VNPAY_ENABLED:false}
-      callbacks-enabled: ${PAYMENT_VNPAY_CALLBACKS_ENABLED:false}
-      environment: ${PAYMENT_VNPAY_ENVIRONMENT:sandbox}
-      tmn-code: ${PAYMENT_VNPAY_TMN_CODE:}
-      hash-secret: ${PAYMENT_VNPAY_HASH_SECRET:}
-      payment-url: ${PAYMENT_VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-      api-url: ${PAYMENT_VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
-      return-url: ${PAYMENT_VNPAY_RETURN_URL:}
-      ipn-url: ${PAYMENT_VNPAY_IPN_URL:}
-      sandbox-payer-ip: ${PAYMENT_VNPAY_SANDBOX_PAYER_IP:}
-      api-client-ip: ${PAYMENT_VNPAY_API_CLIENT_IP:}
-      connect-timeout: ${PAYMENT_VNPAY_CONNECT_TIMEOUT:2s}
-      read-timeout: ${PAYMENT_VNPAY_READ_TIMEOUT:5s}
-      refund-enabled: ${PAYMENT_VNPAY_REFUND_ENABLED:false}
     jwt:
       issuer-uri: ${KEYCLOAK_ISSUER_URI}
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
       audience: ${KEYCLOAK_AUDIENCE}
+
+vnpay:
+  tmn-code: ${VNPAY_TMN_CODE}
+  hash-secret: ${VNPAY_HASH_SECRET}
+  payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+  return-url: ${VNPAY_RETURN_URL}
+  ipn-url: ${VNPAY_IPN_URL}
+  app-return-url: ${VNPAY_APP_RETURN_URL:flash-ticket://payment-return}
+  version: 2.1.0
+  command: pay
+  currency-code: VND
+  locale: vn

@@ -38,6 +38,18 @@ class GatewaySecurityConfigurationTests {
   }
 
   @Test
+  void permitsOnlyTheTwoVnpayGetCallbacksAndRequiresBuyerToCreate() {
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/payments/vnpay/ipn", null));
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/payments/vnpay/return", null));
+    assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/payments/vnpay/ipn", null));
+    assertFalse(reachesDownstream(HttpMethod.GET, "/api/v1/payments/vnpay/other", null));
+    assertFalse(
+        reachesDownstream(HttpMethod.POST, "/api/v1/payments", authenticatedAs("ROLE_ORGANIZER")));
+    assertTrue(
+        reachesDownstream(HttpMethod.POST, "/api/v1/payments", authenticatedAs("ROLE_BUYER")));
+  }
+
+  @Test
   void appliesApprovedCoarseRoleChecks() {
     Authentication buyer = authenticatedAs("ROLE_BUYER");
     Authentication organizer = authenticatedAs("ROLE_ORGANIZER");

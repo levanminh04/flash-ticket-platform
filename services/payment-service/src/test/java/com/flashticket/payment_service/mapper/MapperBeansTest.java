@@ -39,7 +39,8 @@ class MapperBeansTest {
     attempt.setState(PaymentAttemptState.UNKNOWN);
     attempt.setExpectedAmount(new BigDecimal("9999999999999999999"));
     attempt.setCurrency("VND");
-    attempt.setPaymentUrl("https://fixture.example/expired");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        attempt, "paymentUrl", "https://fixture.example/expired");
     var response = paymentStartMapper.toDto(attempt, Instant.EPOCH);
     assertThat(response.amount()).isEqualTo("9999999999999999999");
     assertThat(response.expiresAt()).isEqualTo(Instant.EPOCH);

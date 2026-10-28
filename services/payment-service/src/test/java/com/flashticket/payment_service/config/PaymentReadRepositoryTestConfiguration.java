@@ -10,6 +10,11 @@ import org.springframework.context.annotation.Bean;
 @TestConfiguration(proxyBeanMethods = false)
 public class PaymentReadRepositoryTestConfiguration {
   @Bean
+  ChargeRepository chargeRepository() {
+    return mock(ChargeRepository.class);
+  }
+
+  @Bean
   OrderPaymentSnapshotRepository orderPaymentSnapshotRepository() {
     return mock(OrderPaymentSnapshotRepository.class);
   }

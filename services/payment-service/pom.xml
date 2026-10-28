@@ -33,6 +33,11 @@
 	</properties>
 	<dependencies>
 		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+			<version>3.1.1</version>
+		</dependency>
+		<dependency>
 			<groupId>org.mapstruct</groupId>
 			<artifactId>mapstruct</artifactId>
 			<version>${mapstruct.version}</version>
@@ -134,19 +139,11 @@
 
 	<profiles>
 		<profile>
-			<id>simulator-tests</id>
-			<build><plugins><plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration><excludes combine.self="override"><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude></excludes></configuration>
-			</plugin></plugins></build>
-		</profile>
-		<profile>
 			<id>mapping-tests</id>
 			<build><plugins><plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration><excludes combine.self="override"><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes></configuration>
+				<configuration><excludes combine.self="override"/></configuration>
 			</plugin></plugins></build>
 		</profile>
 		<profile>
@@ -154,7 +151,7 @@
 			<build><plugins><plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration><excludes combine.self="override"><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes></configuration>
+				<configuration><excludes combine.self="override"/></configuration>
 			</plugin></plugins></build>
 		</profile>
 	</profiles>
@@ -164,7 +161,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude><exclude>**/StartPaymentRabbitIntegrationTest.java</exclude></excludes>
+					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude></excludes>
 					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
 				</configuration>
 			</plugin>

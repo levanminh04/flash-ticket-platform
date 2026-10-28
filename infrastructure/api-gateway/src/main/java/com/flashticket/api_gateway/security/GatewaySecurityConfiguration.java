@@ -42,6 +42,13 @@ public class GatewaySecurityConfiguration {
                 exchanges
                     .pathMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
+                    .pathMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/payments/vnpay/return",
+                        "/api/v1/payments/vnpay/ipn")
+                    .permitAll()
+                    .pathMatchers(HttpMethod.POST, "/api/v1/payments")
+                    .hasRole("BUYER")
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*/availability")
                     .permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*")
