@@ -58,37 +58,53 @@ public class AvailabilityServiceImpl implements AvailabilityService {
   @Override
   @Transactional
   public void synchronizeSalesConfiguration(Envelope<SalesConfiguration> message) {
+    // Check các field bắt buộc và quan hệ giữa loại vé, sector, ghế trong message.
     if (message == null || !validator.validate(message).isEmpty())
       throw new BusinessException(ErrorCode.INVALID_MESSAGE);
+
     SalesConfiguration configuration = message.data();
+
+    // Check đúng loại message; eventId và version bên ngoài phải khớp config bên trong.
     if (!"event.sales-configured.v1".equals(message.messageType())
         || !message.aggregateId().equals(configuration.eventId())
         || !message.aggregateVersion().equals(configuration.sourceConfigVersion()))
       throw new BusinessException(ErrorCode.INVALID_MESSAGE);
 
     long sourceConfigVersion = Long.parseLong(configuration.sourceConfigVersion());
+
     String hash = calculateConfigurationHash(configuration);
+
+    // Lock để update trong trường hợp event đã có.
+    // Tránh race condition giữa các consumer cùng event.
     EventSalesSnapshot snapshot =
         eventSalesSnapshotRepository.findByEventId(configuration.eventId()).orElse(null);
+
     var inboxId = new InboxMessageId();
     inboxId.setConsumerName("booking.sales-configured");
     inboxId.setMessageId(message.messageId());
-    // Đọc receipt sau khi chờ khóa snapshot để thấy kết quả transaction trước đã commit.
+
+    // Check inbox sau khi lấy lock, để thấy message mà consumer trước vừa xử lý xong.
     var existingInbox = inboxMessageRepository.findById(inboxId);
     if (existingInbox.isPresent()) {
+      // Cùng messageId nhưng khác data => conflict; cùng data thì bỏ qua, không xử lý lại.
       if (!hash.equals(existingInbox.get().getPayloadHash()))
         throw new BusinessException(ErrorCode.MESSAGE_ID_CONFLICT);
       return;
     }
 
+    // Check cùng version cấu hình nhưng khác data => conflict.
     if (snapshot != null
         && sourceConfigVersion == snapshot.getSourceConfigVersion()
         && !hash.equals(calculateConfigurationHash(snapshot.getConfigurationSnapshot())))
       throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
 
+    // Event chưa có thì tạo mới; đã có thì chỉ update khi version nhận được mới hơn.
     if (snapshot == null || sourceConfigVersion > snapshot.getSourceConfigVersion()) {
+      // Giữ config cũ để biết loại vé, sector, ghế hoặc promotion nào bị bỏ khỏi config mới.
       SalesConfiguration previousConfiguration =
           snapshot == null ? null : snapshot.getConfigurationSnapshot();
+
+      // Event cũ không được đổi chủ/mode bán vé hoặc mở lại nếu đã CANCELLED.
       if (snapshot == null) {
         snapshot = new EventSalesSnapshot();
         snapshot.setEventId(configuration.eventId());
@@ -107,25 +123,27 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       snapshot.setConfigurationSnapshot(configuration);
       snapshot.setSourceConfigVersion(sourceConfigVersion);
       snapshot.setReceivedAt(Instant.now());
-      // @Version null ở snapshot mới buộc repository INSERT; PK chặn race lần tạo đầu.
+      // rowVersion null => save() INSERT. Nếu hai consumer cùng tạo, PK sẽ chặn bản trùng.
       eventSalesSnapshotRepository.save(snapshot);
+      // Lưu các inventory cùng transaction; QUANTITY dùng pool loại vé, SEAT_MAP dùng sector/ghế.
       synchronizeTicketTypeInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizeSectorInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizeSeatInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizePromotionInventory(previousConfiguration, configuration, sourceConfigVersion);
     }
 
-    // Version cũ/cùng nội dung cũng được ghi receipt, nhưng không sửa snapshot/counter.
+    // Version cũ hoặc cùng version/cùng data: chỉ ghi inbox để đánh dấu message đã xử lý.
     var inbox = new InboxMessage();
     inbox.setId(inboxId);
     inbox.setPayloadHash(hash);
     inbox.setProcessedAt(Instant.now());
-    // Inbox cũng có @Version: INSERT trùng sẽ rollback, không merge đè hash đã lưu.
+    // Inbox mới cũng INSERT nhờ @Version; trùng PK thì rollback, không ghi đè hash cũ.
     inboxMessageRepository.save(inbox);
-    // Commit diễn ra ở proxy trước khi trả về listener; không ACK trong transaction này.
+    // Spring commit trước khi trả về listener. Lỗi ở bất kỳ bước nào thì rollback toàn bộ.
   }
 
   private String calculateConfigurationHash(SalesConfiguration configuration) {
+    // Tạo dấu vân tay của config để so nội dung khi message được gửi lại.
     try {
       return HexFormat.of()
           .formatHex(
@@ -141,12 +159,14 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       SalesConfiguration configuration,
       long sourceConfigVersion) {
     if (configuration.mode() != SalesMode.QUANTITY) return;
+    // Gom ID cũ và mới để tìm inventory đã có, tránh tạo lại rồi reset counter.
     Set<UUID> ids = new HashSet<>();
     configuration.ticketTypes().forEach(type -> ids.add(type.ticketTypeId()));
     if (previousConfiguration != null)
       previousConfiguration.ticketTypes().forEach(type -> ids.add(type.ticketTypeId()));
     Map<UUID, TicketTypeInventory> existing = new HashMap<>();
     for (TicketTypeInventory inventory : ticketTypeInventoryRepository.findAllById(ids)) {
+      // Check ID loại vé có thuộc đúng event không, tránh sửa nhầm inventory event khác.
       if (!configuration.eventId().equals(inventory.getEventId()))
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
       existing.put(inventory.getTicketTypeId(), inventory);
@@ -155,6 +175,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     for (var type : configuration.ticketTypes()) {
       TicketTypeInventory inventory = existing.get(type.ticketTypeId());
       if (inventory == null) {
+        // Chỉ row mới mới bắt đầu với held/purchased = 0; row cũ giữ nguyên counter.
         inventory = new TicketTypeInventory();
         inventory.setTicketTypeId(type.ticketTypeId());
         inventory.setEventId(configuration.eventId());
@@ -162,7 +183,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         inventory.setPurchased(0L);
       }
       long capacity = Long.parseLong(type.configuredQuantity());
-      // Tránh tràn số khi so tổng counter; không hạ capacity dưới phần đã sử dụng.
+      // Capacity mới phải đủ cho số đang giữ + đã bán; dùng phép trừ để tránh tràn số.
       if (inventory.getPurchased() > capacity
           || inventory.getHeld() > capacity - inventory.getPurchased())
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
@@ -170,7 +191,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       inventory.setSourceConfigVersion(sourceConfigVersion);
       inventories.add(inventory);
     }
-    // Row đã bỏ khỏi snapshot vẫn giữ nguyên để đơn cũ/release còn tham chiếu được.
+    // Loại vé bị bỏ khỏi config vẫn giữ row để đơn cũ còn tham chiếu và trả lại lượt giữ.
+    // Lưu cùng thứ tự ID để giảm nguy cơ các transaction chờ khóa ngược nhau.
     inventories.sort(Comparator.comparing(TicketTypeInventory::getTicketTypeId));
     ticketTypeInventoryRepository.saveAll(inventories);
   }
@@ -180,6 +202,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       SalesConfiguration configuration,
       long sourceConfigVersion) {
     if (configuration.mode() != SalesMode.SEAT_MAP) return;
+    // STANDING dùng một pool chung cho cả sector, không tạo pool riêng cho từng loại vé.
+    // SEATED cũng lưu sector để ghế tham chiếu; việc giữ chỗ dựa vào từng ghế.
     Set<UUID> ids = new HashSet<>();
     configuration.sectors().forEach(sector -> ids.add(sector.sectorId()));
     if (previousConfiguration != null)
@@ -201,10 +225,11 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         inventory.setHeld(0L);
         inventory.setPurchased(0L);
       }
-      // Kind gắn với ID sector và FK của ghế lịch sử; không đổi SEATED thành STANDING.
+      // Không đổi loại sector đã lưu vì ghế cũ vẫn tham chiếu sector này.
       if (inventory.getSectorType() != sector.kind())
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
       long capacity = Long.parseLong(sector.configuredCapacity());
+      // Update sức chứa nhưng giữ số đang giữ/đã bán; sức chứa không đủ => conflict.
       if (inventory.getPurchased() > capacity
           || inventory.getHeld() > capacity - inventory.getPurchased())
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
@@ -221,6 +246,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       SalesConfiguration configuration,
       long sourceConfigVersion) {
     if (configuration.mode() != SalesMode.SEAT_MAP) return;
+    // Giữ riêng ID ghế trong config mới để nhận biết ghế nào đã bị bỏ.
     Set<UUID> currentIds = new HashSet<>();
     configuration.seats().forEach(seat -> currentIds.add(seat.seatId()));
     Set<UUID> ids = new HashSet<>(currentIds);
@@ -245,12 +271,13 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       boolean occupied =
           inventory.getState() == SeatState.HELD || inventory.getState() == SeatState.PURCHASED;
       if (occupied) {
-        // Cập nhật cấu hình không được giải phóng hay đổi loại ghế đã được giữ/bán.
+        // Ghế đang giữ/đã bán thì không được ẩn, chuyển sector hoặc đổi loại vé.
         if (seat.isHidden()
             || !Objects.equals(inventory.getSectorId(), seat.sectorId())
             || !Objects.equals(inventory.getTicketTypeId(), seat.ticketTypeId()))
           throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
       } else {
+        // Ghế chưa có người giữ: hidden thì không bán, còn lại có thể bán.
         inventory.setState(seat.isHidden() ? SeatState.UNAVAILABLE : SeatState.AVAILABLE);
       }
       inventory.setSectorId(seat.sectorId());
@@ -260,11 +287,12 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       inventory.setSourceConfigVersion(sourceConfigVersion);
       inventories.add(inventory);
     }
+    // Check các ghế cũ không còn trong config mới.
     for (SeatInventory inventory : existing.values()) {
       if (currentIds.contains(inventory.getSeatId())) continue;
       if (inventory.getState() == SeatState.HELD || inventory.getState() == SeatState.PURCHASED)
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
-      // Không xóa row vì lịch sử order_item_seats vẫn có thể giữ FK tới ghế này.
+      // Ghế đang giữ/đã bán không được bỏ. Ghế còn lại ngừng bán nhưng giữ row cho lịch sử đơn.
       inventory.setState(SeatState.UNAVAILABLE);
       inventory.setSourceConfigVersion(sourceConfigVersion);
       inventories.add(inventory);
@@ -277,6 +305,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       SalesConfiguration previousConfiguration,
       SalesConfiguration configuration,
       long sourceConfigVersion) {
+    // Đọc cả promotion cũ để check trường hợp config mới bỏ mã đang có người giữ.
     Set<UUID> currentIds = new HashSet<>();
     configuration.promotions().forEach(promotion -> currentIds.add(promotion.promotionId()));
     Set<UUID> ids = new HashSet<>(currentIds);
@@ -291,6 +320,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     var inventories = new ArrayList<PromotionInventory>();
     for (var promotion : configuration.promotions()) {
       PromotionInventory inventory = existing.get(promotion.promotionId());
+      // Mã mới bắt đầu với counter = 0; mã đang có người giữ thì không đổi ưu đãi.
       if (inventory == null) {
         inventory = new PromotionInventory();
         inventory.setPromotionId(promotion.promotionId());
@@ -302,6 +332,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
       }
       long limit = Long.parseLong(promotion.maximumUses());
+      // Giới hạn mới không được thấp hơn số lượt đang giữ + đã dùng.
       if (inventory.getUsed() > limit || inventory.getHeld() > limit - inventory.getUsed())
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
       inventory.setConfiguredLimit(limit);
@@ -313,6 +344,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       inventories.add(inventory);
     }
     for (PromotionInventory inventory : existing.values()) {
+      // Bỏ mã khỏi config trong khi còn người giữ mã => conflict.
       if (!currentIds.contains(inventory.getPromotionId()) && inventory.getHeld() > 0)
         throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
     }

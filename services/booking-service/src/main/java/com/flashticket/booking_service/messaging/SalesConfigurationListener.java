@@ -19,17 +19,20 @@ public class SalesConfigurationListener {
   @RabbitListener(queues = "booking.sales-configured.q", ackMode = "AUTO", concurrency = "1")
   public void handleSalesConfiguredEvent(Envelope<SalesConfiguration> message) {
     try {
+      // Gọi service lưu DB; transaction phải commit xong thì lệnh gọi này mới trả về.
       availabilityService.synchronizeSalesConfiguration(message);
     } catch (BusinessException exception) {
       ErrorCode code = exception.getErrorCode();
       if (code == ErrorCode.INVALID_MESSAGE
           || code == ErrorCode.MESSAGE_ID_CONFLICT
           || code == ErrorCode.SALES_CONFIGURATION_CONFLICT) {
-        // Retry không sửa được contract sai; broker đưa vào DLQ đã cấu hình.
+        // Dữ liệu sai thì xử lý lại vẫn sai => reject, không requeue, chuyển sang DLQ.
         throw new AmqpRejectAndDontRequeueException(code.name(), exception);
       }
+      // Lỗi khác: ném ra ngoài để Spring xử lý theo cấu hình, có thể giao lại message.
       throw exception;
     }
-    // Không bắt lỗi DB/commit: container không ACK thành công khi transaction rollback.
+    // Lỗi DB/commit không thuộc catch trên cũng được ném ra ngoài, không ACK thành công.
+    // Chạy đến đây là thành công; method kết thúc thì Spring tự ACK vì đang dùng AUTO.
   }
 }
