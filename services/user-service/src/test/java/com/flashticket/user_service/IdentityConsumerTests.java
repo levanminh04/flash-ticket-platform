@@ -22,6 +22,7 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class IdentityConsumerTests {
   private static final String ENVELOPE =
@@ -29,7 +30,7 @@ class IdentityConsumerTests {
                     {"messageId":"00000000-0000-4000-8000-000000000001","messageType":"identity.user-created.v1",
                      "schemaVersion":1,"aggregateId":"00000000-0000-4000-8000-000000000002","aggregateVersion":"1",
                      "occurredAt":"2026-10-25T00:00:00Z","correlationId":"00000000-0000-4000-8000-000000000003",
-                     "causationId":null,"traceparent":null,"data":{"identitySubject":"buyer-identity","displayName":"Display name"}}
+                     "causationId":null,"traceparent":null,"data":{"realmId":"test-realm","identitySubject":"buyer-identity","displayName":"Display name"}}
                     """;
 
   private Message message(String json) {
@@ -71,7 +72,7 @@ class IdentityConsumerTests {
       consumer.receive(message(ENVELOPE), channel);
       consumer.receive(message(ENVELOPE), channel);
       assertThat(mongo.getCollection("tbl_users").find().first())
-          .doesNotContainKeys("email", "roles", "_class");
+          .doesNotContainKeys("email", "roles", "realmId", "_class");
       verify(channel, times(2)).basicAck(7, false);
       verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
       consumer.receive(
@@ -80,6 +81,64 @@ class IdentityConsumerTests {
       assertThat(mongo.getCollection("tbl_users").countDocuments()).isEqualTo(1);
     } finally {
       server.shutdownNow();
+    }
+  }
+
+  @Test
+  void missingOrBlankRealmIsRejectedWithoutWriting() throws Exception {
+    var store = mock(UserStore.class);
+    var json =
+        JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var consumer =
+          new IdentityConsumer(
+              json,
+              validation.getValidator(),
+              store,
+              new UserTelemetry(new SimpleMeterRegistry(), Clock.systemUTC()),
+              65536);
+      Channel channel = mock(Channel.class);
+      ObjectNode envelope = (ObjectNode) json.readTree(ENVELOPE);
+      ObjectNode data = (ObjectNode) envelope.get("data");
+
+      data.remove("realmId");
+      consumer.receive(message(json.writeValueAsString(envelope)), channel);
+      data.putNull("realmId");
+      consumer.receive(message(json.writeValueAsString(envelope)), channel);
+      data.put("realmId", "");
+      consumer.receive(message(json.writeValueAsString(envelope)), channel);
+      data.put("realmId", "   ");
+      consumer.receive(message(json.writeValueAsString(envelope)), channel);
+
+      verify(channel, times(4)).basicReject(7, false);
+      verify(channel, never()).basicAck(anyLong(), anyBoolean());
+      verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+      verifyNoInteractions(store);
+    }
+  }
+
+  @Test
+  void unexpectedDataFieldIsStillRejectedWithoutWriting() throws Exception {
+    var store = mock(UserStore.class);
+    var json =
+        JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var consumer =
+          new IdentityConsumer(
+              json,
+              validation.getValidator(),
+              store,
+              new UserTelemetry(new SimpleMeterRegistry(), Clock.systemUTC()),
+              65536);
+      Channel channel = mock(Channel.class);
+      ObjectNode envelope = (ObjectNode) json.readTree(ENVELOPE);
+      ((ObjectNode) envelope.get("data")).put("unexpectedField", "not in the contract");
+
+      consumer.receive(message(json.writeValueAsString(envelope)), channel);
+
+      verify(channel).basicReject(7, false);
+      verify(channel, never()).basicAck(anyLong(), anyBoolean());
+      verifyNoInteractions(store);
     }
   }
 

@@ -23,6 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ConditionalOnProperty(name = "user.identity.enabled", havingValue = "true", matchIfMissing = true)
 public final class IdentityConsumer {
   public record Data(
+      @NotBlank String realmId,
       @NotBlank @Size(max = 512) String identitySubject,
       @Size(max = 200) @Pattern(regexp = "(?s).*\\S.*") String displayName) {}
 
