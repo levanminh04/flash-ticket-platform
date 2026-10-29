@@ -277,3 +277,13 @@ lọc trên119 và rollback thủ công. Không tự compose down/prune, không 
 liệu/schema; ddl-auto update hiện tại đòi hỏi image cũ còn tương thích schema.
 Lần deploy đầu chưa có Booking cũ để rollback. Không đưa log/raw config/secret lên
 artifact GitHub. Source chưa commit/push sẽ không có trong image từ Actions.
+
+Checkpoint29/10/2026: [push run đầu](https://github.com/levanminh04/flash-ticket-platform/actions/runs/40907914365)
+và [run thủ công qua API](https://github.com/levanminh04/flash-ticket-platform/actions/runs/40909384611)
+đều deploy thành công Booking + Config Server lên119, hai health UP và auth401/403/400
+đúng kỳ vọng, không OOM/restart tại thời điểm kiểm tra. Booking public8082 từ ngoài
+chưa truy cập được; có thể truy cập nội bộ qua SSH/tunnel hiện có. [PR #3](https://github.com/levanminh04/flash-ticket-platform/pull/3)
+chỉ chứa định nghĩa workflow cho main đã qua CI nhưng ruleset bảo vệ chặn tài khoản
+hiện tại merge; người có quyền cần merge để có nút Run workflow UI. Không tắt/bypass
+ruleset. Chi tiết run/digest/bộ nhớ và trạng thái run thủ công nằm trong
+[plan triển khai](../docs/java-workflow/plans/2026-10-29-booking-github-actions-deployment-plan.md#9-nhật-ký-thực-thi).
