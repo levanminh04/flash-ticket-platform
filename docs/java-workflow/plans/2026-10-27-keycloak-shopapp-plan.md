@@ -1,7 +1,7 @@
 # Plan — viết lại SPI Keycloak theo Shop App
 
 - Ngày: 2026-10-27.
-- Thiết kế: [2026-10-27-keycloak-shopapp-design.md](2026-10-27-keycloak-shopapp-design.md).
+- Thiết kế: [2026-10-27-keycloak-shopapp-design.md](../specs/2026-10-27-keycloak-shopapp-design.md).
 - BRAINSTORMING: **APPROVED**, user: “oke code đi”.
 - WRITING-PLANS: **APPROVED**, user: “xác nhận” cho cùng danh sách ở cả hai pha.
 - EXECUTING-PLANS: **APPROVED**, cùng phản hồi “xác nhận” trước khi ghi Java.

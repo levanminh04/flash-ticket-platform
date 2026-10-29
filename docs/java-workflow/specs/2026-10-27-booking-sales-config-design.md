@@ -122,7 +122,7 @@ Sau xác nhận, spec mới được chốt. Việc lập plan và triển khai 
 
 ## 9. Chuyển sang plan theo yêu cầu user
 
-User xác nhận hành vi version cũ rồi yêu cầu viết plan bằng Shop App Writing Plans + Ponytail. Plan nháp ở [2026-10-27-booking-sales-config-plan.md](2026-10-27-booking-sales-config-plan.md).
+User xác nhận hành vi version cũ rồi yêu cầu viết plan bằng Shop App Writing Plans + Ponytail. Plan nháp ở [2026-10-27-booking-sales-config-plan.md](../plans/2026-10-27-booking-sales-config-plan.md).
 
 Plan đưa ra hai điều chỉnh PENDING sau khi đối chiếu B14 và FK/CHECK của schema: dùng lại AvailabilityService/Impl thay cặp service mới; QUANTITY dùng pool type, STANDING dùng pool sector chung, SEATED dùng từng seat, nên không cần capacity type tự suy ra cho SEAT_MAP. Các đề xuất class/method/capacity cũ ở §5/§7 chưa được phê duyệt và cần được thay bằng danh sách cuối trong plan nếu user duyệt. Tại thời điểm viết plan chưa thay đổi application/test Java.
 
