@@ -2,6 +2,8 @@
 
 Pha: **BRAINSTORMING — APPROVED để lập plan**. Nguồn: sau câu hỏi “Bạn duyệt spec để chuyển sang viết plan chứ?”, user trả lời **“continue”** ngày29/10/2026. Phạm vi chốt là v0.1/F1–F5 và các lựa chọn CI/config/runtime dưới đây; không có class/method Java mới. Chưa tạo workflow/script thực thi, commit/push hoặc thay đổi server; phê duyệt này không phải bằng chứng đã deploy.
 
+Điều chỉnh sau triển khai: user chốt **chỉ cần push dev/son tự deploy, không cần nút Run workflow**. Vì vậy các mục yêu cầu đưa YAML lên main/nút UI phía dưới là lịch sử, không còn điều kiện nghiệm thu. PR#3 được đóng không merge; push run và manual API đã đạt được ghi trong plan §9.
+
 ## 1. Phạm vi và lựa chọn đã chốt
 
 - Build/push image trên GitHub Actions, SSH vào **server119** để pull và chạy Docker Compose.
