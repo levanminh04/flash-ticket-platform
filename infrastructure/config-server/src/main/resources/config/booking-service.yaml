@@ -1,6 +1,11 @@
 server:
   port: ${BOOKING_SERVICE_PORT:8082}
 
+booking:
+  reservation:
+    hold-duration: PT15M
+    lock-timeout: 5s
+
 spring:
   datasource:
     url: ${BOOKING_DB_URL}

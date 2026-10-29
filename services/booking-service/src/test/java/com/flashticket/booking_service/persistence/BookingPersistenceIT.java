@@ -8,6 +8,9 @@ import com.flashticket.booking_service.availability.service.AvailabilityService;
 import com.flashticket.booking_service.availability.service.impl.AvailabilityServiceImpl;
 import com.flashticket.booking_service.config.BookingJsonConfig;
 import com.flashticket.booking_service.dto.message.Envelope;
+import com.flashticket.booking_service.dto.request.CreateOrderRequest;
+import com.flashticket.booking_service.dto.request.OrderSelection;
+import com.flashticket.booking_service.dto.response.OrderView;
 import com.flashticket.booking_service.dto.snapshot.*;
 import com.flashticket.booking_service.entity.*;
 import com.flashticket.booking_service.entity.Order;
@@ -15,14 +18,19 @@ import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.enums.Currency;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.mapper.MappingValueConverter;
+import com.flashticket.booking_service.mapper.OrderMapperImpl;
 import com.flashticket.booking_service.messaging.BookingRabbitErrorHandler;
 import com.flashticket.booking_service.messaging.SalesConfigurationListener;
 import com.flashticket.booking_service.order.repository.OrderRepository;
+import com.flashticket.booking_service.order.service.OrderService;
+import com.flashticket.booking_service.order.service.impl.OrderServiceImpl;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.nio.file.*;
 import java.sql.DriverManager;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import org.awaitility.Awaitility;
@@ -54,6 +62,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.resilience.annotation.EnableResilientMethods;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -79,11 +88,15 @@ import tools.jackson.databind.json.JsonMapper;
 @ContextConfiguration(initializers = BookingPersistenceIT.BookingConfigInitializer.class)
 @Import({
   AvailabilityServiceImpl.class,
+  OrderServiceImpl.class,
+  OrderMapperImpl.class,
+  MappingValueConverter.class,
   JacksonAutoConfiguration.class,
   BookingJsonConfig.class,
   ValidationAutoConfiguration.class
 })
 @Testcontainers
+@EnableResilientMethods
 class BookingPersistenceIT {
   static class BookingConfigInitializer
       implements ApplicationContextInitializer<ConfigurableApplicationContext> {
@@ -154,6 +167,7 @@ class BookingPersistenceIT {
   @Autowired JdbcTemplate jdbc;
   @Autowired ApplicationContext context;
   @Autowired OrderRepository orders;
+  @Autowired OrderService orderService;
   @Autowired AvailabilityService salesService;
   @Autowired EventSalesSnapshotRepository snapshots;
   @Autowired PlatformTransactionManager transactionManager;
@@ -1107,6 +1121,1032 @@ class BookingPersistenceIT {
                     ORDER,
                     EVENT))
         .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void createsQuantityOrderAndHoldsTicketTypeInventory() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+    UUID key = UUID.randomUUID();
+    var result = orderService.createOrder("buyer-quantity", key, createOrderRequest(config, 2));
+    assertThat(result.getState()).isEqualTo(OrderState.PENDING_PAYMENT);
+    assertThat(result.getSubtotal()).isEqualTo("200");
+    assertThat(result.getItems()).hasSize(1);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                Long.class,
+                config.ticketTypes().getFirst().ticketTypeId()))
+        .isEqualTo(2L);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=?",
+                Integer.class,
+                config.eventId(),
+                "buyer-quantity"))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_reservation_allocations where event_id=? and resource_kind='TICKET_TYPE' and quantity=2",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_idempotency_requests where actor_subject=? and request_key=? and resource_id=?",
+                Long.class,
+                "buyer-quantity",
+                key,
+                result.getOrderId()))
+        .isEqualTo(1L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void standingTicketTypesShareOneSectorPool() {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.STANDING, 20, 10);
+    var selection =
+        new OrderSelection.StandingSelection(
+            config.sectors().getFirst().sectorId(),
+            List.of(
+                new OrderSelection.QuantityItem(config.ticketTypes().get(0).ticketTypeId(), 2),
+                new OrderSelection.QuantityItem(config.ticketTypes().get(1).ticketTypeId(), 3)));
+    var request = new CreateOrderRequest(config.eventId(), "buyer@example.com", selection);
+    var result = orderService.createOrder("buyer-standing", UUID.randomUUID(), request);
+    assertThat(result.getItems()).hasSize(2);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_sector_inventory where sector_id=?",
+                Long.class,
+                config.sectors().getFirst().sectorId()))
+        .isEqualTo(5L);
+    assertThat(
+            jdbc.queryForObject(
+                "select sum(quantity) from booking_schema.tbl_reservation_allocations where event_id=? and resource_kind='STANDING_SECTOR'",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(5L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isZero();
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void seatedOrderGroupsItemsAndHoldsIndividualSeats() {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 3, 5);
+    var result =
+        orderService.createOrder("buyer-seated", UUID.randomUUID(), createOrderRequest(config, 2));
+    assertThat(result.getItems()).hasSize(2);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state='HELD' and current_reservation_id is not null and reservation_generation=1",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(2L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_order_item_seats where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(2L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_reservation_allocations where event_id=? and resource_kind='SEAT' and quantity=1",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(2L);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_sector_inventory where sector_id=?",
+                Long.class,
+                config.sectors().getFirst().sectorId()))
+        .isZero();
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsInvalidSelectionsWithoutPartialHolds() {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 3, 5);
+    var request = createOrderRequest(config, 1);
+    orderService.createOrder("seat-owner", UUID.randomUUID(), request);
+    var before = captureOrderCreationState(config.eventId());
+    assertThatThrownBy(() -> orderService.createOrder("other-buyer", UUID.randomUUID(), request))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BusinessException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.SEAT_UNAVAILABLE));
+    var wrongSector =
+        new CreateOrderRequest(
+            config.eventId(),
+            "buyer@example.com",
+            new OrderSelection.SeatedSelection(
+                UUID.randomUUID(), List.of(config.seats().getFirst().seatId())));
+    assertThatThrownBy(
+            () -> orderService.createOrder("other-buyer", UUID.randomUUID(), wrongSector))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BusinessException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.INVALID_SELECTION));
+    assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsOrdersOutsidePublishedSalesWindow() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    jdbc.update(
+        "update booking_schema.tbl_event_sales_snapshots set event_status='DRAFT' where event_id=?",
+        config.eventId());
+    var before = captureOrderCreationState(config.eventId());
+    assertThatThrownBy(
+            () ->
+                orderService.createOrder(
+                    "buyer-closed", UUID.randomUUID(), createOrderRequest(config, 1)))
+        .isInstanceOf(BusinessException.class);
+    assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+    jdbc.update(
+        "update booking_schema.tbl_event_sales_snapshots set event_status='PUBLISHED', sale_ends_at=clock_timestamp()-interval '1 second' where event_id=?",
+        config.eventId());
+    assertThatThrownBy(
+            () ->
+                orderService.createOrder(
+                    "buyer-closed", UUID.randomUUID(), createOrderRequest(config, 1)))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BusinessException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replayReturnsTheSameOrderWithoutExtendingExpiry() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var request = createOrderRequest(config, 2);
+    UUID key = UUID.randomUUID();
+    var first = orderService.createOrder("buyer-replay", key, request);
+    var before = captureOrderCreationState(config.eventId());
+    var replay = orderService.createOrder("buyer-replay", key, request);
+    assertThat(replay.getOrderId()).isEqualTo(first.getOrderId());
+    assertThat(replay.getExpiresAt()).isEqualTo(first.getExpiresAt());
+    assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void reusedKeyWithDifferentInputIsRejected() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    UUID key = UUID.randomUUID();
+    orderService.createOrder("buyer-conflict", key, createOrderRequest(config, 1));
+    var before = captureOrderCreationState(config.eventId());
+    assertThatThrownBy(
+            () -> orderService.createOrder("buyer-conflict", key, createOrderRequest(config, 2)))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BusinessException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.IDEMPOTENCY_CONFLICT));
+    assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void idempotencyKeysAreScopedByBuyerAndOperation() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    UUID key = UUID.randomUUID();
+    var request = createOrderRequest(config, 1);
+    var first = orderService.createOrder("buyer-one", key, request);
+    var second = orderService.createOrder("buyer-two", key, request);
+    assertThat(second.getOrderId()).isNotEqualTo(first.getOrderId());
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_idempotency_requests where request_key=?",
+                Long.class,
+                key))
+        .isEqualTo(2L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentSameKeyCreatesOnlyOneOrder() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var request = createOrderRequest(config, 1);
+    UUID key = UUID.randomUUID();
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                return orderService.createOrder("buyer-race", key, request);
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                return orderService.createOrder("buyer-race", key, request);
+              });
+      start.countDown();
+      assertThat(first.get(15, TimeUnit.SECONDS).getOrderId())
+          .isEqualTo(second.get(15, TimeUnit.SECONDS).getOrderId());
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_orders where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                Long.class,
+                config.ticketTypes().getFirst().ticketTypeId()))
+        .isEqualTo(1L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentSameKeyAcrossEventsCannotOverwriteReceipt() throws Exception {
+    var firstConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var secondConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    UUID key = UUID.randomUUID();
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder(
+                      "buyer-cross-event", key, createOrderRequest(firstConfig, 1));
+                } catch (BusinessException ex) {
+                  return ex;
+                }
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder(
+                      "buyer-cross-event", key, createOrderRequest(secondConfig, 1));
+                } catch (BusinessException ex) {
+                  return ex;
+                }
+              });
+      start.countDown();
+      var outcomes = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+      assertThat(outcomes.stream().filter(OrderView.class::isInstance)).hasSize(1);
+      assertThat(
+              outcomes.stream()
+                  .filter(BusinessException.class::isInstance)
+                  .map(BusinessException.class::cast)
+                  .map(BusinessException::getErrorCode))
+          .containsExactly(ErrorCode.IDEMPOTENCY_CONFLICT);
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_idempotency_requests where actor_subject=? and request_key=?",
+                Long.class,
+                "buyer-cross-event",
+                key))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_orders where event_id in (?, ?)",
+                Long.class,
+                firstConfig.eventId(),
+                secondConfig.eventId()))
+        .isEqualTo(1L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentRequestsCannotHoldTheSameSeat() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 3, 5);
+    var request = createOrderRequest(config, 1);
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder("seat-buyer-one", UUID.randomUUID(), request);
+                } catch (RuntimeException ex) {
+                  return ex;
+                }
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder("seat-buyer-two", UUID.randomUUID(), request);
+                } catch (RuntimeException ex) {
+                  return ex;
+                }
+              });
+      start.countDown();
+      var outcomes = List.of(first.get(45, TimeUnit.SECONDS), second.get(45, TimeUnit.SECONDS));
+      assertThat(outcomes.stream().filter(OrderView.class::isInstance)).hasSize(1);
+      assertThat(
+              outcomes.stream()
+                  .filter(RuntimeException.class::isInstance)
+                  .map(RuntimeException.class::cast)
+                  .map(ErrorCode::from))
+          .singleElement()
+          .isIn(ErrorCode.SEAT_UNAVAILABLE, ErrorCode.RESOURCE_BUSY);
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_orders where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state='HELD'",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(1L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void lockTimeoutIsScopedToOrderTransaction() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 2, 5);
+    var before = captureOrderCreationState(config.eventId());
+    String originalTimeout = jdbc.queryForObject("show lock_timeout", String.class);
+    try (var connection = jdbc.getDataSource().getConnection()) {
+      connection.setAutoCommit(false);
+      try (var statement =
+          connection.prepareStatement(
+              "select seat_id from booking_schema.tbl_seat_inventory where seat_id=? for update")) {
+        statement.setObject(1, config.seats().getFirst().seatId());
+        statement.executeQuery();
+      }
+      long started = System.nanoTime();
+      Throwable failure =
+          catchThrowable(
+              () ->
+                  orderService.createOrder(
+                      "buyer-timeout", UUID.randomUUID(), createOrderRequest(config, 1)));
+      long elapsedSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started);
+      assertThat(failure).isNotNull();
+      assertThat(ErrorCode.from(failure)).isEqualTo(ErrorCode.RESOURCE_BUSY);
+      assertThat(elapsedSeconds).isBetween(4L, 12L);
+      connection.rollback();
+    }
+    assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+    assertThat(jdbc.queryForObject("show lock_timeout", String.class)).isEqualTo(originalTimeout);
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status -> {
+              orders.configureTransactionLockTimeout("5s");
+              assertThat(jdbc.queryForObject("show lock_timeout", String.class)).isEqualTo("5s");
+            });
+    assertThat(jdbc.queryForObject("show lock_timeout", String.class)).isEqualTo(originalTimeout);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentRequestsCannotOversellQuantityOrStandingPool() throws Exception {
+    for (var mode : List.of(SalesMode.QUANTITY, SalesMode.SEAT_MAP)) {
+      var config =
+          seedOrderCreationConfiguration(
+              mode, mode == SalesMode.SEAT_MAP ? SectorType.STANDING : null, 1, 5);
+      var request = createOrderRequest(config, 1);
+      var start = new CountDownLatch(1);
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var first =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return orderService.createOrder("pool-buyer-one", UUID.randomUUID(), request);
+                  } catch (RuntimeException ex) {
+                    return ex;
+                  }
+                });
+        var second =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return orderService.createOrder("pool-buyer-two", UUID.randomUUID(), request);
+                  } catch (RuntimeException ex) {
+                    return ex;
+                  }
+                });
+        start.countDown();
+        var results = List.of(first.get(45, TimeUnit.SECONDS), second.get(45, TimeUnit.SECONDS));
+        assertThat(results.stream().filter(OrderView.class::isInstance)).hasSize(1);
+        assertThat(
+                results.stream()
+                    .filter(RuntimeException.class::isInstance)
+                    .map(RuntimeException.class::cast)
+                    .map(ErrorCode::from))
+            .singleElement()
+            .isIn(ErrorCode.INSUFFICIENT_QUANTITY, ErrorCode.RESOURCE_BUSY);
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_orders where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(1L);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentOrdersCannotExceedBuyerPurchaseLimit() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 1);
+    var request = createOrderRequest(config, 1);
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder("buyer-limit", UUID.randomUUID(), request);
+                } catch (RuntimeException ex) {
+                  return ex;
+                }
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  return orderService.createOrder("buyer-limit", UUID.randomUUID(), request);
+                } catch (RuntimeException ex) {
+                  return ex;
+                }
+              });
+      start.countDown();
+      var results = List.of(first.get(45, TimeUnit.SECONDS), second.get(45, TimeUnit.SECONDS));
+      assertThat(results.stream().filter(OrderView.class::isInstance)).hasSize(1);
+      assertThat(
+              results.stream()
+                  .filter(RuntimeException.class::isInstance)
+                  .map(RuntimeException.class::cast)
+                  .map(ErrorCode::from))
+          .singleElement()
+          .isIn(ErrorCode.PURCHASE_LIMIT_EXCEEDED, ErrorCode.RESOURCE_BUSY);
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=?",
+                Integer.class,
+                config.eventId(),
+                "buyer-limit"))
+        .isEqualTo(1);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void failedCommitRollsBackOrderReservationInventoryAndReceipt() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var before = captureOrderCreationState(config.eventId());
+    jdbc.execute(
+        "alter table booking_schema.tbl_idempotency_requests add constraint test_receipt_failure check (actor_subject <> 'rollback-case')");
+    try {
+      assertThatThrownBy(
+              () ->
+                  orderService.createOrder(
+                      "rollback-case", UUID.randomUUID(), createOrderRequest(config, 1)))
+          .isInstanceOf(RuntimeException.class);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+    } finally {
+      jdbc.execute(
+          "alter table booking_schema.tbl_idempotency_requests drop constraint test_receipt_failure");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void changingConfigurationDoesNotRepriceExistingOrder() {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var first =
+        orderService.createOrder(
+            "buyer-old-price", UUID.randomUUID(), createOrderRequest(config, 1));
+    var newType = with(config.ticketTypes().getFirst(), "unitPrice", "300");
+    var updated = with(with(config, "sourceConfigVersion", "2"), "ticketTypes", List.of(newType));
+    salesService.synchronizeSalesConfiguration(
+        new Envelope<>(
+            UUID.randomUUID(),
+            "event.sales-configured.v1",
+            1,
+            config.eventId(),
+            "2",
+            Instant.now(),
+            UUID.randomUUID(),
+            null,
+            null,
+            updated));
+    var second =
+        orderService.createOrder(
+            "buyer-new-price", UUID.randomUUID(), createOrderRequest(updated, 1));
+    assertThat(first.getSubtotal()).isEqualTo("100");
+    assertThat(second.getSubtotal()).isEqualTo("300");
+    assertThat(
+            jdbc.queryForObject(
+                "select subtotal from booking_schema.tbl_orders where id=?",
+                BigDecimal.class,
+                first.getOrderId()))
+        .isEqualByComparingTo("100");
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void concurrentFirstOrdersCreateOnePurchaseLimit() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+    var request = createOrderRequest(config, 1);
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                return orderService.createOrder("buyer-first-race", UUID.randomUUID(), request);
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                return orderService.createOrder("buyer-first-race", UUID.randomUUID(), request);
+              });
+      start.countDown();
+      assertThat(first.get(45, TimeUnit.SECONDS).getOrderId())
+          .isNotEqualTo(second.get(45, TimeUnit.SECONDS).getOrderId());
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=?",
+                Long.class,
+                config.eventId(),
+                "buyer-first-race"))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=?",
+                Integer.class,
+                config.eventId(),
+                "buyer-first-race"))
+        .isEqualTo(2);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replayAfterWaitingForPurchaseLimitReturnsOriginalOrder() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 1);
+    jdbc.update(
+        "insert into booking_schema.tbl_purchase_limits (event_id,buyer_subject,configured_limit,held,purchased,source_config_version,row_version) values (?,?,1,0,0,1,0)",
+        config.eventId(),
+        "buyer-replay-wait");
+    var request = createOrderRequest(config, 1);
+    UUID key = UUID.randomUUID();
+    try (var connection = jdbc.getDataSource().getConnection();
+        var executor = Executors.newFixedThreadPool(2)) {
+      connection.setAutoCommit(false);
+      try (var statement =
+          connection.prepareStatement(
+              "select event_id from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=? for update")) {
+        statement.setObject(1, config.eventId());
+        statement.setString(2, "buyer-replay-wait");
+        statement.executeQuery();
+      }
+      var first =
+          executor.submit(() -> orderService.createOrder("buyer-replay-wait", key, request));
+      var second =
+          executor.submit(() -> orderService.createOrder("buyer-replay-wait", key, request));
+      // Xác nhận request đã thực sự chờ khóa trước khi thả transaction giữ row.
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(20))
+          .pollInterval(Duration.ofMillis(100))
+          .until(
+              () -> {
+                try (var statement =
+                    connection.prepareStatement(
+                        "select exists (select 1 from pg_locks waiting join pg_locks relation_lock on relation_lock.pid=waiting.pid where not waiting.granted and relation_lock.relation=to_regclass(?))")) {
+                  statement.setString(1, "booking_schema." + "tbl_purchase_limits");
+                  try (var result = statement.executeQuery()) {
+                    result.next();
+                    return result.getBoolean(1);
+                  }
+                }
+              });
+      connection.commit();
+      assertThat(first.get(45, TimeUnit.SECONDS).getOrderId())
+          .isEqualTo(second.get(45, TimeUnit.SECONDS).getOrderId());
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_orders where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(1L);
+    assertThat(
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_purchase_limits where event_id=? and buyer_subject=?",
+                Integer.class,
+                config.eventId(),
+                "buyer-replay-wait"))
+        .isEqualTo(1);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void differentSeatsCanBeReservedConcurrently() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 2, 5);
+    var requestA = createOrderRequest(config, 1);
+    var requestB =
+        new CreateOrderRequest(
+            config.eventId(),
+            "buyer@example.com",
+            new OrderSelection.SeatedSelection(
+                config.sectors().getFirst().sectorId(), List.of(config.seats().get(1).seatId())));
+    try (var connection = jdbc.getDataSource().getConnection();
+        var executor = Executors.newFixedThreadPool(2)) {
+      connection.setAutoCommit(false);
+      try (var statement =
+          connection.prepareStatement(
+              "select seat_id from booking_schema.tbl_seat_inventory where seat_id=? for update")) {
+        statement.setObject(1, config.seats().getFirst().seatId());
+        statement.executeQuery();
+      }
+      var first =
+          executor.submit(
+              () -> orderService.createOrder("buyer-seat-a", UUID.randomUUID(), requestA));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(20))
+          .pollInterval(Duration.ofMillis(100))
+          .until(
+              () -> {
+                try (var statement =
+                    connection.prepareStatement(
+                        "select exists (select 1 from pg_locks waiting join pg_locks relation_lock on relation_lock.pid=waiting.pid where not waiting.granted and relation_lock.relation=to_regclass(?))")) {
+                  statement.setString(1, "booking_schema." + "tbl_seat_inventory");
+                  try (var result = statement.executeQuery()) {
+                    result.next();
+                    return result.getBoolean(1);
+                  }
+                }
+              });
+      var second =
+          executor.submit(
+              () -> orderService.createOrder("buyer-seat-b", UUID.randomUUID(), requestB));
+      var secondOrder = second.get(45, TimeUnit.SECONDS);
+      // Ghế B đã commit khi khóa ghế A vẫn được transaction test giữ.
+      assertThat(connection.getAutoCommit()).isFalse();
+      assertThat(secondOrder.getOrderId()).isNotNull();
+      connection.commit();
+      assertThat(first.get(45, TimeUnit.SECONDS).getOrderId())
+          .isNotEqualTo(secondOrder.getOrderId());
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state='HELD'",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(2L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void configurationUpdateWaitsForActiveBooking() throws Exception {
+    var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 2, 5);
+    var updated = with(with(config, "sourceConfigVersion", "2"), "eventTitle", "Updated concert");
+    var message =
+        new Envelope<>(
+            UUID.randomUUID(),
+            "event.sales-configured.v1",
+            1,
+            config.eventId(),
+            "2",
+            Instant.now(),
+            UUID.randomUUID(),
+            null,
+            null,
+            updated);
+    try (var connection = jdbc.getDataSource().getConnection();
+        var executor = Executors.newFixedThreadPool(2)) {
+      connection.setAutoCommit(false);
+      try (var statement =
+          connection.prepareStatement(
+              "select seat_id from booking_schema.tbl_seat_inventory where seat_id=? for update")) {
+        statement.setObject(1, config.seats().getFirst().seatId());
+        statement.executeQuery();
+      }
+      var booking =
+          executor.submit(
+              () ->
+                  orderService.createOrder(
+                      "buyer-config-wait", UUID.randomUUID(), createOrderRequest(config, 1)));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(20))
+          .pollInterval(Duration.ofMillis(100))
+          .until(
+              () -> {
+                try (var statement =
+                    connection.prepareStatement(
+                        "select exists (select 1 from pg_locks waiting join pg_locks relation_lock on relation_lock.pid=waiting.pid where not waiting.granted and relation_lock.relation=to_regclass(?))")) {
+                  statement.setString(1, "booking_schema." + "tbl_seat_inventory");
+                  try (var result = statement.executeQuery()) {
+                    result.next();
+                    return result.getBoolean(1);
+                  }
+                }
+              });
+      var consumer =
+          executor.submit(
+              () -> {
+                salesService.synchronizeSalesConfiguration(message);
+                return null;
+              });
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(20))
+          .pollInterval(Duration.ofMillis(100))
+          .until(
+              () -> {
+                try (var statement =
+                    connection.prepareStatement(
+                        "select exists (select 1 from pg_locks waiting join pg_locks relation_lock on relation_lock.pid=waiting.pid where not waiting.granted and relation_lock.relation=to_regclass(?))")) {
+                  statement.setString(1, "booking_schema." + "tbl_event_sales_snapshots");
+                  try (var result = statement.executeQuery()) {
+                    result.next();
+                    return result.getBoolean(1);
+                  }
+                }
+              });
+      assertThat(consumer.isDone()).isFalse();
+      connection.commit();
+      assertThat(booking.get(45, TimeUnit.SECONDS).getOrderId()).isNotNull();
+      consumer.get(45, TimeUnit.SECONDS);
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select source_config_version from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                Long.class,
+                config.eventId()))
+        .isEqualTo(2L);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void saleDecisionUsesDatabaseTimeAfterWaitingForSnapshotLock() throws Exception {
+    for (boolean lockSnapshot : List.of(true, false)) {
+      var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 2, 5);
+      try (var connection = jdbc.getDataSource().getConnection();
+          var executor = Executors.newSingleThreadExecutor()) {
+        connection.setAutoCommit(false);
+        String lockSql =
+            lockSnapshot
+                ? "select event_id from booking_schema.tbl_event_sales_snapshots where event_id=? for update"
+                : "select seat_id from booking_schema.tbl_seat_inventory where seat_id=? for update";
+        try (var statement = connection.prepareStatement(lockSql)) {
+          statement.setObject(
+              1, lockSnapshot ? config.eventId() : config.seats().getFirst().seatId());
+          statement.executeQuery();
+        }
+        // Đặt giờ đóng bán ở DB và giữ khóa để request phải chờ qua mốc này.
+        if (lockSnapshot) {
+          try (var statement =
+              connection.prepareStatement(
+                  "update booking_schema.tbl_event_sales_snapshots set sale_ends_at=clock_timestamp()+interval '3 seconds' where event_id=?")) {
+            statement.setObject(1, config.eventId());
+            statement.executeUpdate();
+          }
+        } else {
+          jdbc.update(
+              "update booking_schema.tbl_event_sales_snapshots set sale_ends_at=clock_timestamp()+interval '3 seconds' where event_id=?",
+              config.eventId());
+        }
+        var order =
+            executor.submit(
+                () ->
+                    orderService.createOrder(
+                        "buyer-clock", UUID.randomUUID(), createOrderRequest(config, 1)));
+        String table = lockSnapshot ? "tbl_event_sales_snapshots" : "tbl_seat_inventory";
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(20))
+            .pollInterval(Duration.ofMillis(100))
+            .until(
+                () -> {
+                  try (var statement =
+                      connection.prepareStatement(
+                          "select exists (select 1 from pg_locks waiting join pg_locks relation_lock on relation_lock.pid=waiting.pid where not waiting.granted and relation_lock.relation=to_regclass(?))")) {
+                    statement.setString(1, "booking_schema." + table);
+                    try (var result = statement.executeQuery()) {
+                      result.next();
+                      return result.getBoolean(1);
+                    }
+                  }
+                });
+        if (lockSnapshot) {
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(4))
+              .pollInterval(Duration.ofMillis(100))
+              .until(
+                  () -> {
+                    try (var statement =
+                        connection.prepareStatement(
+                            "select clock_timestamp() >= sale_ends_at from booking_schema.tbl_event_sales_snapshots where event_id=?")) {
+                      statement.setObject(1, config.eventId());
+                      try (var result = statement.executeQuery()) {
+                        result.next();
+                        return result.getBoolean(1);
+                      }
+                    }
+                  });
+        } else {
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(4))
+              .pollInterval(Duration.ofMillis(100))
+              .until(
+                  () ->
+                      Boolean.TRUE.equals(
+                          jdbc.queryForObject(
+                              "select clock_timestamp() >= sale_ends_at from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                              Boolean.class,
+                              config.eventId())));
+        }
+        connection.commit();
+        assertThatThrownBy(() -> order.get(45, TimeUnit.SECONDS))
+            .hasCauseInstanceOf(BusinessException.class)
+            .satisfies(
+                ex ->
+                    assertThat(((BusinessException) ex.getCause()).getErrorCode())
+                        .isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_orders where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+    }
+  }
+
+  private SalesConfiguration seedOrderCreationConfiguration(
+      SalesMode mode, SectorType sectorType, long capacity, int purchaseLimit) {
+    Instant now =
+        jdbc.queryForObject("select clock_timestamp()", java.sql.Timestamp.class).toInstant();
+    UUID eventId = UUID.randomUUID();
+    UUID firstType = UUID.randomUUID();
+    UUID secondType = UUID.randomUUID();
+    UUID sectorId = mode == SalesMode.SEAT_MAP ? UUID.randomUUID() : null;
+    var types = new ArrayList<SalesConfiguration.TicketTypeConfig>();
+    types.add(
+        new SalesConfiguration.TicketTypeConfig(
+            firstType,
+            "Standard",
+            "100",
+            Currency.VND,
+            sectorId,
+            mode == SalesMode.QUANTITY ? Long.toString(capacity) : null,
+            null));
+    if (mode == SalesMode.SEAT_MAP)
+      types.add(
+          new SalesConfiguration.TicketTypeConfig(
+              secondType, "VIP", "200", Currency.VND, sectorId, null, null));
+    var sectors =
+        mode == SalesMode.SEAT_MAP
+            ? List.of(
+                new SalesConfiguration.SectorConfig(sectorId, sectorType, Long.toString(capacity)))
+            : List.<SalesConfiguration.SectorConfig>of();
+    var seats = new ArrayList<SalesConfiguration.SeatConfig>();
+    if (sectorType == SectorType.SEATED)
+      for (int i = 1; i <= capacity; i++)
+        seats.add(
+            new SalesConfiguration.SeatConfig(
+                UUID.randomUUID(),
+                sectorId,
+                i % 2 == 1 ? firstType : secondType,
+                "A" + i,
+                "A",
+                Integer.toString(i),
+                false));
+    var config =
+        new SalesConfiguration(
+            1,
+            eventId,
+            "organizer",
+            "1",
+            SalesConfiguration.EventStatus.PUBLISHED,
+            "Concert",
+            now.plusSeconds(7200),
+            now.plusSeconds(10800),
+            null,
+            mode,
+            now.minusSeconds(60),
+            now.plusSeconds(3600),
+            purchaseLimit,
+            types,
+            sectors,
+            seats,
+            List.of());
+    salesService.synchronizeSalesConfiguration(
+        new Envelope<>(
+            UUID.randomUUID(),
+            "event.sales-configured.v1",
+            1,
+            eventId,
+            "1",
+            now,
+            UUID.randomUUID(),
+            null,
+            null,
+            config));
+    return config;
+  }
+
+  private CreateOrderRequest createOrderRequest(SalesConfiguration configuration, int quantity) {
+    OrderSelection selection;
+    if (configuration.mode() == SalesMode.QUANTITY) {
+      selection =
+          new OrderSelection.QuantitySelection(
+              List.of(
+                  new OrderSelection.QuantityItem(
+                      configuration.ticketTypes().getFirst().ticketTypeId(), quantity)));
+    } else if (configuration.sectors().getFirst().kind() == SectorType.STANDING) {
+      selection =
+          new OrderSelection.StandingSelection(
+              configuration.sectors().getFirst().sectorId(),
+              List.of(
+                  new OrderSelection.QuantityItem(
+                      configuration.ticketTypes().getFirst().ticketTypeId(), quantity)));
+    } else {
+      selection =
+          new OrderSelection.SeatedSelection(
+              configuration.sectors().getFirst().sectorId(),
+              configuration.seats().stream()
+                  .limit(quantity)
+                  .map(SalesConfiguration.SeatConfig::seatId)
+                  .toList());
+    }
+    return new CreateOrderRequest(configuration.eventId(), "buyer@example.com", selection);
+  }
+
+  private Map<String, Object> captureOrderCreationState(UUID eventId) {
+    Map<String, Object> state = new LinkedHashMap<>();
+    state.put(
+        "orders",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_orders where event_id=? order by id", eventId));
+    state.put(
+        "items",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_order_items where event_id=? order by id", eventId));
+    state.put(
+        "reservations",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_reservations where event_id=? order by id", eventId));
+    state.put(
+        "allocations",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_reservation_allocations where event_id=? order by id",
+            eventId));
+    state.put(
+        "seats",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_seat_inventory where event_id=? order by seat_id",
+            eventId));
+    state.put(
+        "assignments",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_order_item_seats where event_id=? order by order_item_id,seat_id",
+            eventId));
+    state.put(
+        "ticketInventory",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_ticket_type_inventory where event_id=? order by ticket_type_id",
+            eventId));
+    state.put(
+        "sectors",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_sector_inventory where event_id=? order by sector_id",
+            eventId));
+    state.put(
+        "limits",
+        jdbc.queryForList(
+            "select * from booking_schema.tbl_purchase_limits where event_id=? order by buyer_subject",
+            eventId));
+    state.put(
+        "receipts",
+        jdbc.queryForList(
+            "select r.* from booking_schema.tbl_idempotency_requests r join booking_schema.tbl_orders o on o.id=r.resource_id where o.event_id=? order by r.actor_subject,r.operation,r.request_key",
+            eventId));
+    return state;
   }
 
   private void seedSqlEvent() {

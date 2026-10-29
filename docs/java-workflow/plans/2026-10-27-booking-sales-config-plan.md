@@ -1,7 +1,7 @@
 # Plan: Booking nhận cấu hình bán vé từ Event
 
 **Pha:** WRITING-PLANS — APPROVED; EXECUTING-PLANS — APPROVED. Đang triển khai trên dev/son.  
-**Thiết kế đầu vào:** [booking-sales-config-design](2026-10-27-booking-sales-config-design.md).  
+**Thiết kế đầu vào:** [booking-sales-config-design](../specs/2026-10-27-booking-sales-config-design.md).  
 **Task:** [Tích hợp luồng tạo sự kiện vào Booking](https://app.clickup.com/t/z8qgvc7vb8).  
 **Workflow:** Shop App Writing Plans + Ponytail full.  
 **Root thực thi:** `D:/DATN/flash-ticket-platform`, nhánh `dev/son` theo yêu cầu user. Checkout sạch tại commit `5d6742e` trước khi chuyển hai tài liệu thiết kế/plan sang. Các file bên dưới tính từ root này. Worktree cũ có thay đổi ngoài task nên không chuyển các file khác.

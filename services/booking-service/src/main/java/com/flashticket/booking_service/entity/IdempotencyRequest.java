@@ -6,6 +6,7 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "tbl_idempotency_requests", schema = "booking_schema")
@@ -26,4 +27,10 @@ public class IdempotencyRequest {
 
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
+
+  // ID được gán trước; version null giúp save() INSERT thay vì ghi đè receipt.
+  @Version
+  @ColumnDefault("0")
+  @Column(name = "row_version", nullable = false)
+  private Long rowVersion;
 }
