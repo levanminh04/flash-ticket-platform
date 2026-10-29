@@ -125,3 +125,4 @@ docs/projectd
 # Local database consolidation backups.
 /deploy/postgres/backups/
 /.playwright-mcp/
+/deploy/keycloak/postman/RESET-TEST-RESULTS.md
