@@ -2,6 +2,12 @@ server:
   port: ${BOOKING_SERVICE_PORT:8082}
 
 booking:
+  outbox:
+    enabled: true
+    poll-interval: PT2S
+    batch-size: 20
+    confirm-timeout: PT5S
+    retry-delay: PT5S
   reservation:
     hold-duration: PT15M
     lock-timeout: 5s
@@ -34,6 +40,7 @@ spring:
       connect-timeout: 2s
       timeout: 2s
   rabbitmq:
+    connection-timeout: 5s
     host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:flash_ticket_app}

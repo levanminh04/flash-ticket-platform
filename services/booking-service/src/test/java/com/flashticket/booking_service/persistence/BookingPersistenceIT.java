@@ -95,11 +95,71 @@ import tools.jackson.databind.json.JsonMapper;
   MappingValueConverter.class,
   JacksonAutoConfiguration.class,
   BookingJsonConfig.class,
-  ValidationAutoConfiguration.class
+  ValidationAutoConfiguration.class,
+  com.flashticket.booking_service.messaging.service.impl.MessagingServiceImpl.class,
+  com.flashticket.booking_service.mapper.OutboxMessageMapperImpl.class,
+  BookingPersistenceIT.RelayRabbitTestConfiguration.class
 })
 @Testcontainers
 @EnableResilientMethods
 class BookingPersistenceIT {
+  static final String RELAY_QUEUE =
+      System.getenv().getOrDefault("BOOKING_TEST_RABBIT_QUEUE", "payment.decision.relay.test");
+  static final String RELAY_EXCHANGE =
+      System.getenv().getOrDefault("BOOKING_TEST_RABBIT_EXCHANGE", "business.ex");
+
+  @Container
+  static final GenericContainer<?> RELAY_RABBIT =
+      new GenericContainer<>(
+              org.testcontainers.utility.DockerImageName.parse("rabbitmq:4.3.6-management"))
+          .withExposedPorts(5672)
+          .withEnv("RABBITMQ_DEFAULT_USER", "booking_test")
+          .withEnv("RABBITMQ_DEFAULT_PASS", "test-only")
+          .waitingFor(Wait.forLogMessage(".*Server startup complete.*\\n", 1));
+
+  @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+  public static class RelayRabbitTestConfiguration {
+    @org.springframework.context.annotation.Bean(destroyMethod = "destroy")
+    public CachingConnectionFactory relayRabbitConnectionFactory() {
+      var connection =
+          new CachingConnectionFactory(
+              System.getenv().getOrDefault("BOOKING_TEST_RABBIT_HOST", RELAY_RABBIT.getHost()),
+              System.getenv("BOOKING_TEST_RABBIT_HOST") == null
+                  ? RELAY_RABBIT.getMappedPort(5672)
+                  : Integer.parseInt(System.getenv().getOrDefault("RABBITMQ_PORT", "5672")));
+      connection.setUsername(
+          System.getenv("BOOKING_TEST_RABBIT_HOST") == null
+              ? "booking_test"
+              : System.getenv("RABBITMQ_USERNAME"));
+      connection.setPassword(
+          System.getenv("BOOKING_TEST_RABBIT_HOST") == null
+              ? "test-only"
+              : System.getenv("RABBITMQ_PASSWORD"));
+      connection.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
+      connection.setPublisherReturns(true);
+      connection.setConnectionTimeout(5000);
+      return connection;
+    }
+
+    @org.springframework.context.annotation.Bean
+    public RabbitTemplate relayRabbitTemplate(
+        CachingConnectionFactory relayRabbitConnectionFactory, JsonMapper objectMapper) {
+      var template = new RabbitTemplate(relayRabbitConnectionFactory);
+      template.setMessageConverter(new JacksonJsonMessageConverter(objectMapper));
+      template.setMandatory(true);
+      var admin = new RabbitAdmin(relayRabbitConnectionFactory);
+      var exchange = new org.springframework.amqp.core.DirectExchange(RELAY_EXCHANGE, true, false);
+      var queue = new Queue(RELAY_QUEUE, true, false, false, Map.of("x-queue-type", "quorum"));
+      admin.declareExchange(exchange);
+      admin.declareQueue(queue);
+      admin.declareBinding(
+          org.springframework.amqp.core.BindingBuilder.bind(queue)
+              .to(exchange)
+              .with("booking.payment-decision.v1"));
+      return template;
+    }
+  }
+
   static class BookingConfigInitializer
       implements ApplicationContextInitializer<ConfigurableApplicationContext> {
     @Override
@@ -169,6 +229,8 @@ class BookingPersistenceIT {
   @Autowired JdbcTemplate jdbc;
   @Autowired ApplicationContext context;
   @Autowired OrderRepository orders;
+  @Autowired com.flashticket.booking_service.messaging.service.MessagingService messagingService;
+  @Autowired RabbitTemplate relayRabbitTemplate;
   @Autowired com.flashticket.booking_service.promotion.service.PromotionService promotionService;
   @Autowired OrderService orderService;
   @Autowired AvailabilityService salesService;
@@ -3162,6 +3224,1545 @@ class BookingPersistenceIT {
     } finally {
       jdbc.execute(
           "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void acceptsPaymentForEveryInventoryMode() throws Exception {
+    try {
+
+      for (int mode = 0; mode < 3; mode++) {
+        var config =
+            seedOrderCreationConfiguration(
+                mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                20,
+                5);
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+        var command =
+            new com.flashticket.booking_service.dto.message.AcceptPayment(
+                order.getOrderId(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                purchase.total(),
+                purchase.currency(),
+                "1");
+        var message =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                "1",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                command);
+        assertThat(orderService.acceptPayment(message).outcome())
+            .isEqualTo(
+                com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.ACCEPTED);
+        assertThat(
+                jdbc.queryForObject(
+                    "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                    String.class,
+                    order.getOrderId()))
+            .isEqualTo("ISSUING");
+        assertThat(
+                jdbc.queryForObject(
+                    "select state from booking_schema.tbl_reservations where order_id=?",
+                    String.class,
+                    order.getOrderId()))
+            .isEqualTo("COMMITTED");
+        assertThat(
+                jdbc.queryForList(
+                    "select state from booking_schema.tbl_reservation_allocations where order_id=?",
+                    String.class,
+                    order.getOrderId()))
+            .containsOnly("COMMITTED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_purchase_limits where event_id=?",
+                    Integer.class,
+                    config.eventId()))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select purchased from booking_schema.tbl_purchase_limits where event_id=?",
+                    Integer.class,
+                    config.eventId()))
+            .isEqualTo(2);
+        if (mode == 2) {
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state='PURCHASED' and current_reservation_id is not null",
+                      Long.class,
+                      config.eventId()))
+              .isEqualTo(2L);
+          assertThat(
+                  jdbc.queryForList(
+                      "select reservation_generation from booking_schema.tbl_seat_inventory where event_id=? and state='PURCHASED'",
+                      Long.class,
+                      config.eventId()))
+              .containsOnly(1L);
+        } else {
+          String table = mode == 0 ? "tbl_ticket_type_inventory" : "tbl_sector_inventory";
+          assertThat(
+                  jdbc.queryForObject(
+                      "select sum(purchased) from booking_schema." + table + " where event_id=?",
+                      Long.class,
+                      config.eventId()))
+              .isEqualTo(2L);
+          assertThat(
+                  jdbc.queryForObject(
+                      "select sum(held) from booking_schema." + table + " where event_id=?",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+        }
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void commitsPromotionUsageWithAcceptedPayment() throws Exception {
+    try {
+
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotion =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config = with(with(base, "promotions", List.of(promotion)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      promotionService.applyPromotionToOrder(
+          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              "1");
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_promotion_usages where promotion_id=?",
+                  String.class,
+                  promotion.promotionId()))
+          .isEqualTo("USED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotion.promotionId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select used from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotion.promotionId()))
+          .isEqualTo(1L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select total from booking_schema.tbl_orders where id=?",
+                  BigDecimal.class,
+                  order.getOrderId()))
+          .isEqualByComparingTo("180");
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysAcceptPaymentWithoutChangingResources() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    var oldDuration =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        target, "reservationHoldDuration", Duration.ofSeconds(3));
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var decision = orderService.acceptPayment(message);
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(8))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      var before = captureOrderCreationState(config.eventId());
+      assertThat(orderService.acceptPayment(message)).isEqualTo(decision);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      var newMessage = with(message, "messageId", UUID.randomUUID());
+      assertThat(orderService.acceptPayment(newMessage)).isEqualTo(decision);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isEqualTo(2L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where consumer_name='booking.accept-payment' and response_payload->>'orderId'=?",
+                  Long.class,
+                  order.getOrderId().toString()))
+          .isEqualTo(2L);
+
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", oldDuration);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsConflictingAcceptPaymentMessages() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      assertThatThrownBy(
+              () -> orderService.acceptPayment(with(message, "correlationId", UUID.randomUUID())))
+          .isInstanceOf(BusinessException.class)
+          .satisfies(
+              ex ->
+                  assertThat(((BusinessException) ex).getErrorCode())
+                      .isEqualTo(ErrorCode.MESSAGE_ID_CONFLICT));
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isEqualTo(1L);
+      var other =
+          orderService.createOrder("buyer2", UUID.randomUUID(), createOrderRequest(config, 1));
+      var frozen = orderService.preparePurchaseSnapshot("buyer2", other.getOrderId());
+      var otherCommand =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              other.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              frozen.total(),
+              frozen.currency(),
+              "1");
+      var conflicting =
+          new Envelope<>(
+              message.messageId(),
+              message.messageType(),
+              1,
+              other.getOrderId(),
+              "1",
+              message.occurredAt(),
+              message.correlationId(),
+              null,
+              null,
+              otherCommand);
+      assertThatThrownBy(() -> orderService.acceptPayment(conflicting))
+          .isInstanceOf(BusinessException.class);
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  other.getOrderId()))
+          .isEqualTo("PENDING_PAYMENT");
+
+      UUID raceId = UUID.randomUUID();
+      var firstCandidate = with(message, "messageId", raceId);
+      var secondCandidate = with(conflicting, "messageId", raceId);
+      int successes = 0, failures = 0;
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var candidates =
+            List.of(
+                executor.submit(() -> orderService.acceptPayment(firstCandidate)),
+                executor.submit(() -> orderService.acceptPayment(secondCandidate)));
+        for (var future : candidates) {
+          try {
+            future.get(15, TimeUnit.SECONDS);
+            successes++;
+          } catch (ExecutionException exception) {
+            assertThat(exception.getCause())
+                .isInstanceOfAny(DataIntegrityViolationException.class, BusinessException.class);
+            if (exception.getCause() instanceof BusinessException business)
+              assertThat(business.getErrorCode()).isEqualTo(ErrorCode.MESSAGE_ID_CONFLICT);
+            failures++;
+          }
+        }
+      }
+      assertThat(successes).isEqualTo(1);
+      assertThat(failures).isEqualTo(1);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where consumer_name='booking.accept-payment' and message_id=?",
+                  Integer.class,
+                  raceId))
+          .isEqualTo(1);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void returnsDuplicateForAnotherAcceptedCharge() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var another = with(message, "messageId", UUID.randomUUID());
+      another = with(another, "data", with(command, "chargeId", UUID.randomUUID()));
+      final var second = another;
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var firstFuture = executor.submit(() -> orderService.acceptPayment(message));
+        var secondFuture = executor.submit(() -> orderService.acceptPayment(second));
+        var decisions =
+            List.of(firstFuture.get(15, TimeUnit.SECONDS), secondFuture.get(15, TimeUnit.SECONDS));
+        assertThat(
+                decisions.stream()
+                    .map(com.flashticket.booking_service.dto.message.PaymentDecision::outcome)
+                    .toList())
+            .containsExactlyInAnyOrder(
+                com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.ACCEPTED,
+                com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.DUPLICATE);
+        assertThat(decisions.get(0).acceptedChargeId())
+            .isEqualTo(decisions.get(1).acceptedChargeId());
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select purchased from booking_schema.tbl_purchase_limits where event_id=?",
+                  Integer.class,
+                  config.eventId()))
+          .isEqualTo(2);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void releasesExpiredReservationWhenPaymentArrivesLate() throws Exception {
+    try {
+
+      Object target =
+          org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+      var oldDuration =
+          org.springframework.test.util.ReflectionTestUtils.getField(
+              target, "reservationHoldDuration");
+      try {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", Duration.ofSeconds(3));
+        for (int mode = 0; mode < 3; mode++) {
+          var config =
+              seedOrderCreationConfiguration(
+                  mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                  mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                  20,
+                  5);
+          var order =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+          var command =
+              new com.flashticket.booking_service.dto.message.AcceptPayment(
+                  order.getOrderId(),
+                  UUID.randomUUID(),
+                  UUID.randomUUID(),
+                  purchase.total(),
+                  purchase.currency(),
+                  "1");
+          var message =
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "booking.accept-payment.v1",
+                  1,
+                  order.getOrderId(),
+                  "1",
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  command);
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(8))
+              .until(
+                  () ->
+                      Boolean.TRUE.equals(
+                          jdbc.queryForObject(
+                              "select clock_timestamp()>=expires_at from booking_schema.tbl_orders where id=?",
+                              Boolean.class,
+                              order.getOrderId())));
+          assertThat(orderService.acceptPayment(message).outcome())
+              .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.LATE);
+          var before = captureOrderCreationState(config.eventId());
+          assertThat(
+                  orderService
+                      .acceptPayment(with(message, "messageId", UUID.randomUUID()))
+                      .outcome())
+              .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.LATE);
+          assertThat(
+                  jdbc.queryForObject(
+                      "select held from booking_schema.tbl_purchase_limits where event_id=?",
+                      Integer.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select purchased from booking_schema.tbl_purchase_limits where event_id=?",
+                      Integer.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForList(
+                      "select state from booking_schema.tbl_reservation_allocations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .containsOnly("RELEASED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state in ('HELD','PURCHASED')",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+        }
+      } finally {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", oldDuration);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsPaymentForCancelledEventOrOrder() throws Exception {
+    try {
+
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotion =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config = with(with(base, "promotions", List.of(promotion)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      promotionService.applyPromotionToOrder(
+          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              "1");
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+          config.eventId());
+      assertThat(orderService.acceptPayment(message).outcome())
+          .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.CANCELLED);
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("CANCELLED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_promotion_usages where promotion_id=?",
+                  String.class,
+                  promotion.promotionId()))
+          .isEqualTo("RELEASED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotion.promotionId()))
+          .isZero();
+      assertThat(
+              orderService.acceptPayment(with(message, "messageId", UUID.randomUUID())).outcome())
+          .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.CANCELLED);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsMismatchedFrozenPaymentSnapshot() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var before = captureOrderCreationState(config.eventId());
+      for (var invalid :
+          List.of(with(command, "amount", "1"), with(command, "sourceOrderVersion", "2"))) {
+        var bad =
+            new Envelope<>(
+                UUID.randomUUID(),
+                message.messageType(),
+                1,
+                order.getOrderId(),
+                invalid.sourceOrderVersion(),
+                Instant.now(),
+                message.correlationId(),
+                null,
+                null,
+                invalid);
+        assertThatThrownBy(() -> orderService.acceptPayment(bad))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(
+                ex ->
+                    assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ErrorCode.PAYMENT_SNAPSHOT_MISMATCH));
+      }
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isZero();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackAcceptPaymentWhenPersistenceFails() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var before = captureOrderCreationState(config.eventId());
+      assertThatThrownBy(
+              () ->
+                  new TransactionTemplate(transactionManager)
+                      .execute(
+                          status -> {
+                            orderService.acceptPayment(message);
+                            jdbc.update(
+                                "update booking_schema.tbl_orders set total=-1 where id=?",
+                                order.getOrderId());
+                            return null;
+                          }))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where consumer_name='booking.accept-payment' and message_id=?",
+                  Long.class,
+                  message.messageId()))
+          .isZero();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void checksPaymentDeadlineAfterInventoryLockWait() throws Exception {
+    try {
+
+      Object target =
+          org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+      var oldDuration =
+          org.springframework.test.util.ReflectionTestUtils.getField(
+              target, "reservationHoldDuration");
+      try {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", Duration.ofSeconds(3));
+
+        var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+        var command =
+            new com.flashticket.booking_service.dto.message.AcceptPayment(
+                order.getOrderId(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                purchase.total(),
+                purchase.currency(),
+                purchase.sourceOrderVersion());
+        var message =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                "1",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                command);
+
+        try (var connection = jdbc.getDataSource().getConnection();
+            var executor = Executors.newSingleThreadExecutor()) {
+          connection.setAutoCommit(false);
+          try (var st =
+              connection.prepareStatement(
+                  "select ticket_type_id from booking_schema.tbl_ticket_type_inventory where event_id=? for update")) {
+            st.setObject(1, config.eventId());
+            st.executeQuery();
+          }
+          var future = executor.submit(() -> orderService.acceptPayment(message));
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(3))
+              .until(
+                  () ->
+                      jdbc.queryForObject(
+                          "select exists(select 1 from pg_locks waiting join pg_locks rel on rel.pid=waiting.pid where not waiting.granted and rel.relation=to_regclass('booking_schema.tbl_ticket_type_inventory'))",
+                          Boolean.class));
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(4))
+              .until(
+                  () ->
+                      jdbc.queryForObject(
+                          "select clock_timestamp()>=expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId()));
+          connection.commit();
+          assertThat(future.get(10, TimeUnit.SECONDS).outcome())
+              .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.LATE);
+        }
+      } finally {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", oldDuration);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsInconsistentReservationResources() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      jdbc.update(
+          "update booking_schema.tbl_reservation_allocations set quantity=3 where order_id=?",
+          order.getOrderId());
+      var before = captureOrderCreationState(config.eventId());
+      assertThatThrownBy(() -> orderService.acceptPayment(message))
+          .isInstanceOf(BusinessException.class)
+          .satisfies(
+              ex ->
+                  assertThat(((BusinessException) ex).getErrorCode())
+                      .isEqualTo(ErrorCode.RESERVATION_DATA_CONFLICT));
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void acknowledgesAcceptPaymentOnlyAfterDatabaseCommit() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var connection = (CachingConnectionFactory) relayRabbitTemplate.getConnectionFactory();
+      var admin = new RabbitAdmin(connection);
+      String queue = "accept-payment-" + UUID.randomUUID(), dlq = queue + ".dlq";
+      admin.declareQueue(new Queue(dlq, true, false, false, Map.of("x-queue-type", "quorum")));
+      admin.declareQueue(
+          new Queue(
+              queue,
+              true,
+              false,
+              false,
+              Map.of(
+                  "x-queue-type",
+                  "quorum",
+                  "x-delivery-limit",
+                  3,
+                  "x-dead-letter-exchange",
+                  "",
+                  "x-dead-letter-routing-key",
+                  dlq)));
+      var method =
+          com.flashticket.booking_service.messaging.AcceptPaymentListener.class.getMethod(
+              "handleAcceptPayment", Envelope.class);
+      var methods =
+          new org.springframework.messaging.handler.annotation.support
+              .DefaultMessageHandlerMethodFactory();
+      methods.afterPropertiesSet();
+      var endpoint = new MethodRabbitListenerEndpoint();
+      endpoint.setId(queue);
+      endpoint.setBean(
+          new com.flashticket.booking_service.messaging.AcceptPaymentListener(orderService));
+      endpoint.setMethod(method);
+      endpoint.setQueueNames(queue);
+      endpoint.setMessageHandlerMethodFactory(methods);
+      var factory = new SimpleRabbitListenerContainerFactory();
+      factory.setConnectionFactory(connection);
+      factory.setMessageConverter(relayRabbitTemplate.getMessageConverter());
+      factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+      factory.setPrefetchCount(1);
+      factory.setErrorHandler(new BookingRabbitErrorHandler());
+      var container = factory.createListenerContainer(endpoint);
+      container.afterPropertiesSet();
+      container.start();
+
+      try {
+        relayRabbitTemplate.convertAndSend("", queue, message);
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(15))
+            .until(
+                () ->
+                    "ISSUING"
+                        .equals(
+                            jdbc.queryForObject(
+                                "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                                String.class,
+                                order.getOrderId())));
+        container.stop();
+        assertThat(admin.getQueueInfo(queue).getMessageCount()).isZero();
+        container.start();
+        relayRabbitTemplate.convertAndSend("", queue, message);
+        relayRabbitTemplate.convertAndSend("", queue, with(message, "schemaVersion", 2));
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(10))
+            .until(() -> relayRabbitTemplate.receive(dlq) != null);
+        container.stop();
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                    Long.class,
+                    order.getOrderId()))
+            .isEqualTo(1L);
+      } finally {
+        container.stop();
+        container.destroy();
+        admin.deleteQueue(queue);
+        admin.deleteQueue(dlq);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void publishesPaymentDecisionWithConfirmAndPersistentEnvelope() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      UUID responseId =
+          UUID.nameUUIDFromBytes(
+              ("booking.payment-decision:" + message.messageId())
+                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+      messagingService.publishPaymentDecision(responseId);
+      var received = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
+      assertThat(received).isNotNull();
+      assertThat(received.getMessageProperties().getReceivedDeliveryMode())
+          .isEqualTo(org.springframework.amqp.core.MessageDeliveryMode.PERSISTENT);
+      assertThat(received.getMessageProperties().getMessageId()).isEqualTo(responseId.toString());
+      var json = context.getBean(JsonMapper.class).readTree(received.getBody());
+      assertThat(json.get("messageType").asText()).isEqualTo("booking.payment-decision.v1");
+      assertThat(json.get("causationId").asText()).isEqualTo(message.messageId().toString());
+      assertThat(json.get("data").get("outcome").asText()).isEqualTo("ACCEPTED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select published_at from booking_schema.tbl_outbox_messages where message_id=?",
+                  java.sql.Timestamp.class,
+                  responseId))
+          .isNotNull();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void retriesUnconfirmedOrReturnedPaymentDecision() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      UUID responseId =
+          UUID.nameUUIDFromBytes(
+              ("booking.payment-decision:" + message.messageId())
+                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+      Object target =
+          org.springframework.test.util.AopTestUtils.getUltimateTargetObject(messagingService);
+      var originalTemplate =
+          org.springframework.test.util.ReflectionTestUtils.getField(target, "rabbitTemplate");
+      var originalTimeout =
+          org.springframework.test.util.ReflectionTestUtils.getField(target, "confirmTimeout");
+      var originalExchange =
+          org.springframework.test.util.ReflectionTestUtils.getField(target, "exchange");
+      try {
+        var admin = new RabbitAdmin(relayRabbitTemplate.getConnectionFactory());
+        admin.declareExchange(
+            new org.springframework.amqp.core.DirectExchange(RELAY_EXCHANGE + ".unroutable"));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "exchange", RELAY_EXCHANGE + ".unroutable");
+        messagingService.publishPaymentDecision(responseId);
+        assertThat(
+                jdbc.queryForObject(
+                    "select last_error_code from booking_schema.tbl_outbox_messages where message_id=?",
+                    String.class,
+                    responseId))
+            .isEqualTo("MESSAGE_PUBLISH_FAILED");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "exchange", originalExchange);
+        for (int scenario = 0; scenario < 3; scenario++) {
+          var mock = org.mockito.Mockito.mock(RabbitTemplate.class);
+          org.mockito.Mockito.when(mock.getMessageConverter())
+              .thenReturn(relayRabbitTemplate.getMessageConverter());
+          if (scenario == 0)
+            org.mockito.Mockito.doAnswer(
+                    call -> {
+                      ((org.springframework.amqp.rabbit.connection.CorrelationData)
+                              call.getArgument(3))
+                          .getFuture()
+                          .complete(
+                              new org.springframework.amqp.rabbit.connection.CorrelationData
+                                  .Confirm(false, "test nack"));
+                      return null;
+                    })
+                .when(mock)
+                .send(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.any(org.springframework.amqp.core.Message.class),
+                    org.mockito.ArgumentMatchers.any(
+                        org.springframework.amqp.rabbit.connection.CorrelationData.class));
+          if (scenario == 2)
+            org.mockito.Mockito.doThrow(
+                    new org.springframework.amqp.AmqpConnectException(
+                        new java.net.ConnectException("test broker down")))
+                .when(mock)
+                .send(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.any(org.springframework.amqp.core.Message.class),
+                    org.mockito.ArgumentMatchers.any(
+                        org.springframework.amqp.rabbit.connection.CorrelationData.class));
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target, "rabbitTemplate", mock);
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target, "confirmTimeout", Duration.ofMillis(50));
+          jdbc.update(
+              "update booking_schema.tbl_outbox_messages set next_attempt_at=clock_timestamp() where message_id=?",
+              responseId);
+          messagingService.publishPaymentDecision(responseId);
+        }
+        assertThat(
+                jdbc.queryForObject(
+                    "select attempts from booking_schema.tbl_outbox_messages where message_id=?",
+                    Integer.class,
+                    responseId))
+            .isEqualTo(4);
+        assertThat(
+                jdbc.queryForObject(
+                    "select published_at is null and next_attempt_at>clock_timestamp() from booking_schema.tbl_outbox_messages where message_id=?",
+                    Boolean.class,
+                    responseId))
+            .isTrue();
+      } finally {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "rabbitTemplate", originalTemplate);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "confirmTimeout", originalTimeout);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "exchange", originalExchange);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysPublishedButUncommittedOutboxMessageWithSameId() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      UUID responseId =
+          UUID.nameUUIDFromBytes(
+              ("booking.payment-decision:" + message.messageId())
+                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+      new TransactionTemplate(transactionManager)
+          .execute(
+              status -> {
+                messagingService.publishPaymentDecision(responseId);
+                status.setRollbackOnly();
+                return null;
+              });
+      var first = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
+      assertThat(
+              jdbc.queryForObject(
+                  "select published_at is null from booking_schema.tbl_outbox_messages where message_id=?",
+                  Boolean.class,
+                  responseId))
+          .isTrue();
+      messagingService.publishPaymentDecision(responseId);
+      var second = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
+      assertThat(first).isNotNull();
+      assertThat(second).isNotNull();
+      assertThat(first.getBody()).isEqualTo(second.getBody());
+      assertThat(first.getMessageProperties().getMessageId())
+          .isEqualTo(second.getMessageProperties().getMessageId());
+      // Dedupe receiver phải dựa cùng messageId; đây không phải consumer Payment thật.
+      assertThat(
+              new HashSet<>(
+                  List.of(
+                      first.getMessageProperties().getMessageId(),
+                      second.getMessageProperties().getMessageId())))
+          .hasSize(1);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void serializesConcurrentOutboxPublishersAndSkipsPublishedRows() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      orderService.acceptPayment(message);
+      UUID responseId =
+          UUID.nameUUIDFromBytes(
+              ("booking.payment-decision:" + message.messageId())
+                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var first = executor.submit(() -> messagingService.publishPaymentDecision(responseId));
+        var second = executor.submit(() -> messagingService.publishPaymentDecision(responseId));
+        first.get(15, TimeUnit.SECONDS);
+        second.get(15, TimeUnit.SECONDS);
+      }
+      assertThat(relayRabbitTemplate.receive(RELAY_QUEUE, 5000)).isNotNull();
+      messagingService.publishPaymentDecision(responseId);
+      assertThat(relayRabbitTemplate.receive(RELAY_QUEUE, 200)).isNull();
+      assertThat(
+              jdbc.queryForObject(
+                  "select published_at from booking_schema.tbl_outbox_messages where message_id=?",
+                  java.sql.Timestamp.class,
+                  responseId))
+          .isNotNull();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void deliversAcceptPaymentDecisionThroughRealRabbitMq() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var command =
+          new com.flashticket.booking_service.dto.message.AcceptPayment(
+              order.getOrderId(),
+              UUID.randomUUID(),
+              UUID.randomUUID(),
+              purchase.total(),
+              purchase.currency(),
+              purchase.sourceOrderVersion());
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              "1",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              command);
+
+      var connection = (CachingConnectionFactory) relayRabbitTemplate.getConnectionFactory();
+      var admin = new RabbitAdmin(connection);
+      String queue = "accept-payment-" + UUID.randomUUID(), dlq = queue + ".dlq";
+      admin.declareQueue(new Queue(dlq, true, false, false, Map.of("x-queue-type", "quorum")));
+      admin.declareQueue(
+          new Queue(
+              queue,
+              true,
+              false,
+              false,
+              Map.of(
+                  "x-queue-type",
+                  "quorum",
+                  "x-delivery-limit",
+                  3,
+                  "x-dead-letter-exchange",
+                  "",
+                  "x-dead-letter-routing-key",
+                  dlq)));
+      var method =
+          com.flashticket.booking_service.messaging.AcceptPaymentListener.class.getMethod(
+              "handleAcceptPayment", Envelope.class);
+      var methods =
+          new org.springframework.messaging.handler.annotation.support
+              .DefaultMessageHandlerMethodFactory();
+      methods.afterPropertiesSet();
+      var endpoint = new MethodRabbitListenerEndpoint();
+      endpoint.setId(queue);
+      endpoint.setBean(
+          new com.flashticket.booking_service.messaging.AcceptPaymentListener(orderService));
+      endpoint.setMethod(method);
+      endpoint.setQueueNames(queue);
+      endpoint.setMessageHandlerMethodFactory(methods);
+      var factory = new SimpleRabbitListenerContainerFactory();
+      factory.setConnectionFactory(connection);
+      factory.setMessageConverter(relayRabbitTemplate.getMessageConverter());
+      factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+      factory.setPrefetchCount(1);
+      factory.setErrorHandler(new BookingRabbitErrorHandler());
+      var container = factory.createListenerContainer(endpoint);
+      container.afterPropertiesSet();
+      container.start();
+
+      try {
+        relayRabbitTemplate.convertAndSend("", queue, message);
+        UUID responseId =
+            UUID.nameUUIDFromBytes(
+                ("booking.payment-decision:" + message.messageId())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(15))
+            .until(
+                () ->
+                    jdbc.queryForObject(
+                            "select count(*) from booking_schema.tbl_outbox_messages where message_id=?",
+                            Integer.class,
+                            responseId)
+                        == 1);
+        var worker =
+            new com.flashticket.booking_service.messaging.PaymentDecisionOutboxWorker(
+                context.getBean(
+                    com.flashticket.booking_service.messaging.repository.OutboxMessageRepository
+                        .class),
+                messagingService);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker, "batchSize", 20);
+        worker.publishDuePaymentDecisions();
+        var received = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
+        assertThat(received).isNotNull();
+        assertThat(
+                context
+                    .getBean(JsonMapper.class)
+                    .readTree(received.getBody())
+                    .get("data")
+                    .get("orderId")
+                    .asText())
+            .isEqualTo(order.getOrderId().toString());
+        assertThat(
+                jdbc.queryForObject(
+                    "select published_at from booking_schema.tbl_outbox_messages where message_id=?",
+                    java.sql.Timestamp.class,
+                    responseId))
+            .isNotNull();
+        // Cả bốn outcome đi qua command queue -> transaction -> outbox -> queue trả lời.
+        Object target =
+            org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+        var oldDuration =
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                target, "reservationHoldDuration");
+        try {
+          for (var outcome : List.of("DUPLICATE", "CANCELLED", "LATE")) {
+            Envelope<com.flashticket.booking_service.dto.message.AcceptPayment> next;
+            if (outcome.equals("DUPLICATE")) {
+              next =
+                  with(
+                      with(message, "messageId", UUID.randomUUID()),
+                      "data",
+                      with(command, "chargeId", UUID.randomUUID()));
+            } else {
+              org.springframework.test.util.ReflectionTestUtils.setField(
+                  target,
+                  "reservationHoldDuration",
+                  outcome.equals("LATE") ? Duration.ofSeconds(3) : Duration.ofMinutes(15));
+              var nextConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+              var nextOrder =
+                  orderService.createOrder(
+                      "buyer-" + outcome, UUID.randomUUID(), createOrderRequest(nextConfig, 1));
+              var nextPurchase =
+                  orderService.preparePurchaseSnapshot("buyer-" + outcome, nextOrder.getOrderId());
+              var nextCommand =
+                  new com.flashticket.booking_service.dto.message.AcceptPayment(
+                      nextOrder.getOrderId(),
+                      UUID.randomUUID(),
+                      UUID.randomUUID(),
+                      nextPurchase.total(),
+                      nextPurchase.currency(),
+                      "1");
+              next =
+                  new Envelope<>(
+                      UUID.randomUUID(),
+                      message.messageType(),
+                      1,
+                      nextOrder.getOrderId(),
+                      "1",
+                      Instant.now(),
+                      UUID.randomUUID(),
+                      null,
+                      null,
+                      nextCommand);
+              if (outcome.equals("CANCELLED"))
+                jdbc.update(
+                    "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+                    nextConfig.eventId());
+              else
+                Awaitility.await()
+                    .atMost(Duration.ofSeconds(8))
+                    .until(
+                        () ->
+                            jdbc.queryForObject(
+                                "select clock_timestamp()>=expires_at from booking_schema.tbl_orders where id=?",
+                                Boolean.class,
+                                nextOrder.getOrderId()));
+            }
+            relayRabbitTemplate.convertAndSend("", queue, next);
+            UUID nextId =
+                UUID.nameUUIDFromBytes(
+                    ("booking.payment-decision:" + next.messageId())
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .until(
+                    () ->
+                        jdbc.queryForObject(
+                                "select count(*) from booking_schema.tbl_outbox_messages where message_id=?",
+                                Integer.class,
+                                nextId)
+                            == 1);
+            worker.publishDuePaymentDecisions();
+            var reply = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
+            assertThat(reply).isNotNull();
+            assertThat(
+                    context
+                        .getBean(JsonMapper.class)
+                        .readTree(reply.getBody())
+                        .get("data")
+                        .get("outcome")
+                        .asText())
+                .isEqualTo(outcome);
+          }
+        } finally {
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target, "reservationHoldDuration", oldDuration);
+        }
+
+      } finally {
+        container.stop();
+        container.destroy();
+        admin.deleteQueue(queue);
+        admin.deleteQueue(dlq);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+      new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
     }
   }
 

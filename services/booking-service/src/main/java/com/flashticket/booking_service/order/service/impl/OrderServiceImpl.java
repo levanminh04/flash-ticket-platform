@@ -1,6 +1,9 @@
 package com.flashticket.booking_service.order.service.impl;
 
 import com.flashticket.booking_service.availability.repository.*;
+import com.flashticket.booking_service.dto.message.AcceptPayment;
+import com.flashticket.booking_service.dto.message.Envelope;
+import com.flashticket.booking_service.dto.message.PaymentDecision;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
 import com.flashticket.booking_service.dto.response.OrderView;
@@ -20,13 +23,18 @@ import com.flashticket.booking_service.enums.SectorType;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.mapper.OrderMapper;
+import com.flashticket.booking_service.mapper.OutboxMessageMapper;
+import com.flashticket.booking_service.messaging.repository.InboxMessageRepository;
+import com.flashticket.booking_service.messaging.repository.OutboxMessageRepository;
 import com.flashticket.booking_service.order.repository.IdempotencyRequestRepository;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
+import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
 import com.flashticket.booking_service.reservation.repository.ReservationRepository;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -55,12 +63,450 @@ public class OrderServiceImpl implements OrderService {
   private final JsonMapper objectMapper;
   private final PromotionUsageRepository promotionUsageRepository;
   private final Validator validator;
+  private final InboxMessageRepository inboxMessageRepository;
+  private final OutboxMessageRepository outboxMessageRepository;
+  private final OutboxMessageMapper outboxMessageMapper;
+  private final PromotionInventoryRepository promotionInventoryRepository;
 
   @Value("${booking.reservation.hold-duration}")
   private Duration reservationHoldDuration;
 
   @Value("${booking.reservation.lock-timeout}")
   private String reservationLockTimeout;
+
+  @Override
+  @Transactional
+  public PaymentDecision acceptPayment(Envelope<AcceptPayment> message) {
+    if (message == null
+        || !validator.validate(message).isEmpty()
+        || !"booking.accept-payment.v1".equals(message.messageType())
+        || !message.aggregateId().equals(message.data().orderId())
+        || !message.aggregateVersion().equals(message.data().sourceOrderVersion()))
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE);
+    String payloadHash = calculateAcceptPaymentHash(message);
+    orderRepository.configureTransactionLockTimeout(reservationLockTimeout);
+    UUID eventId =
+        orderRepository
+            .findEventIdById(message.data().orderId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var storedSnapshot =
+        eventSalesSnapshotRepository
+            .findForBookingByEventId(eventId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var lockedOrder =
+        orderRepository
+            .findLockedById(message.data().orderId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var receiptId = new InboxMessageId();
+    receiptId.setConsumerName("booking.accept-payment");
+    receiptId.setMessageId(message.messageId());
+    // Message khác có thể đã commit trong lúc chờ khóa order.
+    var receipt = inboxMessageRepository.findById(receiptId);
+    if (receipt.isPresent()) {
+      if (!payloadHash.equals(receipt.get().getPayloadHash()))
+        throw new BusinessException(ErrorCode.MESSAGE_ID_CONFLICT);
+      if (receipt.get().getResponsePayload() == null)
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      var replayed =
+          objectMapper.treeToValue(receipt.get().getResponsePayload(), PaymentDecision.class);
+      if (!validator.validate(replayed).isEmpty()
+          || !lockedOrder.getId().equals(replayed.orderId())
+          || !message.data().chargeId().equals(replayed.chargeId()))
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      return replayed;
+    }
+    validatePaymentSnapshot(lockedOrder, message.data());
+    PaymentDecision decision;
+    if (lockedOrder.getAcceptedChargeId() != null) {
+      // Charge đã nhận phải được phân xử trước deadline, không đổi ACCEPTED thành LATE.
+      if (lockedOrder.getAcceptedAt() == null)
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      boolean sameCharge = lockedOrder.getAcceptedChargeId().equals(message.data().chargeId());
+      decision =
+          new PaymentDecision(
+              lockedOrder.getId(),
+              message.data().chargeId(),
+              sameCharge ? lockedOrder.getAcceptedAt() : orderRepository.currentDatabaseTime(),
+              sameCharge ? PaymentDecision.Outcome.ACCEPTED : PaymentDecision.Outcome.DUPLICATE,
+              lockedOrder.getAcceptedChargeId());
+    } else {
+      var storedReservation =
+          reservationRepository
+              .findByOrderId(lockedOrder.getId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+      decision =
+          settlePendingPayment(lockedOrder, storedReservation, storedSnapshot, message.data());
+    }
+    persistPaymentDecision(message, payloadHash, decision);
+    return decision;
+  }
+
+  private String calculateAcceptPaymentHash(Envelope<AcceptPayment> message) {
+    try {
+      return HexFormat.of()
+          .formatHex(
+              MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(message)));
+    } catch (NoSuchAlgorithmException exception) {
+      throw new BusinessException(ErrorCode.INTERNAL_ERROR, exception);
+    }
+  }
+
+  private void validatePaymentSnapshot(Order lockedOrder, AcceptPayment requestedPayment) {
+    var frozen = lockedOrder.getFrozenPurchaseSnapshot();
+    if (frozen == null
+        || !validator.validate(frozen).isEmpty()
+        || lockedOrder.getPaymentFrozenAt() == null
+        || !lockedOrder.getId().equals(frozen.orderId())
+        || !lockedOrder.getEventId().equals(frozen.eventId())
+        || !lockedOrder.getBuyerSubject().equals(frozen.buyerSubject())
+        || !lockedOrder.getExpiresAt().equals(frozen.expiresAt())
+        || !lockedOrder.getPaymentFrozenAt().equals(frozen.frozenAt())
+        || !Objects.equals(
+            lockedOrder.getPaymentSnapshotVersion(), Long.valueOf(frozen.sourceOrderVersion()))
+        || !requestedPayment.sourceOrderVersion().equals(frozen.sourceOrderVersion())
+        || requestedPayment.currency() != frozen.currency()
+        || lockedOrder.getCurrency() != frozen.currency()
+        || new BigDecimal(requestedPayment.amount()).signum() <= 0
+        || new BigDecimal(requestedPayment.amount()).compareTo(lockedOrder.getTotal()) != 0
+        || new BigDecimal(frozen.total()).compareTo(lockedOrder.getTotal()) != 0
+        || new BigDecimal(frozen.subtotal()).compareTo(lockedOrder.getSubtotal()) != 0
+        || new BigDecimal(frozen.discount()).compareTo(lockedOrder.getDiscount()) != 0)
+      throw new BusinessException(ErrorCode.PAYMENT_SNAPSHOT_MISMATCH);
+  }
+
+  private PaymentDecision settlePendingPayment(
+      Order lockedOrder,
+      Reservation storedReservation,
+      EventSalesSnapshot storedSnapshot,
+      AcceptPayment requestedPayment) {
+    if (!storedReservation.getEventId().equals(lockedOrder.getEventId())
+        || !storedReservation.getBuyerSubject().equals(lockedOrder.getBuyerSubject())
+        || !storedReservation.getExpiresAt().equals(lockedOrder.getExpiresAt())
+        || storedReservation.getState() == ReservationState.COMMITTED
+        || !List.of(OrderState.PENDING_PAYMENT, OrderState.EXPIRED, OrderState.CANCELLED)
+            .contains(lockedOrder.getLifecycleState()))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    var allocations = storedReservation.getAllocations();
+    if (lockedOrder.getItems().size() != lockedOrder.getFrozenPurchaseSnapshot().items().size()
+        || lockedOrder.getSalesMode() != lockedOrder.getFrozenPurchaseSnapshot().mode()
+        || !Objects.equals(
+            lockedOrder.getSectorId(), lockedOrder.getFrozenPurchaseSnapshot().sectorId()))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    if (allocations.isEmpty()
+        || allocations.stream()
+            .anyMatch(
+                a ->
+                    !lockedOrder.getId().equals(a.getOrderId())
+                        || !lockedOrder.getEventId().equals(a.getEventId())
+                        || !lockedOrder.getId().equals(a.getOrderItem().getOrder().getId())
+                        || a.getQuantity() == null
+                        || a.getQuantity() <= 0
+                        || a.getState() != storedReservation.getState()))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    // Allocation là phần giữ của chính đơn này; tổng phải khớp từng item đã chốt.
+    for (var storedItem : lockedOrder.getItems()) {
+      long allocated =
+          allocations.stream()
+              .filter(a -> a.getOrderItem().getId().equals(storedItem.getId()))
+              .mapToLong(ReservationAllocation::getQuantity)
+              .sum();
+      var frozenItem =
+          lockedOrder.getFrozenPurchaseSnapshot().items().stream()
+              .filter(i -> i.orderItemId().equals(storedItem.getId()))
+              .findFirst()
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+      if (allocated != storedItem.getQuantity()
+          || allocated != frozenItem.quantity()
+          || !storedItem.getTicketTypeId().equals(frozenItem.ticketTypeId())
+          || !lockedOrder.getEventId().equals(storedItem.getEventId())
+          || !Objects.equals(storedItem.getSectorId(), frozenItem.sectorId())
+          || storedItem.getSelectionSnapshot() == null
+          || storedItem.getSelectionSnapshot().seats() == null
+          || !new HashSet<>(storedItem.getSelectionSnapshot().seats())
+              .equals(new HashSet<>(frozenItem.seats()))
+          || storedItem.getUnitPrice().compareTo(new BigDecimal(frozenItem.unitPrice())) != 0
+          || storedItem.getLineSubtotal().compareTo(new BigDecimal(frozenItem.lineSubtotal())) != 0)
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    }
+    if (allocations.stream()
+        .anyMatch(
+            a ->
+                lockedOrder.getItems().stream()
+                    .noneMatch(i -> i.getId().equals(a.getOrderItem().getId()))))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    var limitId = new PurchaseLimitId();
+    limitId.setEventId(lockedOrder.getEventId());
+    limitId.setBuyerSubject(lockedOrder.getBuyerSubject());
+    var lockedLimit =
+        purchaseLimitRepository
+            .findLockedById(limitId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+    List<TicketTypeInventory> lockedTypes = List.of();
+    SectorInventory lockedSector = null;
+    List<SeatInventory> lockedSeats = List.of();
+    if (storedReservation.getState() == ReservationState.HELD) {
+      if (lockedOrder.getSalesMode() == com.flashticket.booking_service.enums.SalesMode.QUANTITY) {
+        if (allocations.stream().anyMatch(a -> a.getResourceKind() != ResourceKind.TICKET_TYPE))
+          throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+        lockedTypes =
+            ticketTypeInventoryRepository.findLockedByTicketTypeIdInOrderByTicketTypeIdAsc(
+                allocations.stream()
+                    .map(ReservationAllocation::getTicketTypeId)
+                    .distinct()
+                    .toList());
+      } else if (allocations.stream()
+          .allMatch(a -> a.getResourceKind() == ResourceKind.STANDING_SECTOR)) {
+        lockedSector =
+            sectorInventoryRepository
+                .findLockedBySectorId(lockedOrder.getSectorId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+      } else if (allocations.stream().allMatch(a -> a.getResourceKind() == ResourceKind.SEAT)) {
+        lockedSeats =
+            seatInventoryRepository.findLockedBySeatIdInOrderBySeatIdAsc(
+                allocations.stream().map(ReservationAllocation::getSeatId).toList());
+      } else throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    }
+    var storedUsage =
+        promotionUsageRepository
+            .findByReservationIdAndStateIn(
+                storedReservation.getId(),
+                List.of(
+                    PromotionUsageState.HELD,
+                    PromotionUsageState.USED,
+                    PromotionUsageState.RELEASED))
+            .orElse(null);
+    PromotionInventory lockedPromotion = null;
+    if (storedUsage != null) {
+      lockedPromotion =
+          promotionInventoryRepository
+              .findLockedByPromotionId(storedUsage.getPromotion().getPromotionId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+      if (!storedUsage.getEventId().equals(lockedOrder.getEventId())
+          || !storedUsage.getBuyerSubject().equals(lockedOrder.getBuyerSubject())
+          || storedUsage.getDiscount().compareTo(lockedOrder.getDiscount()) != 0
+          || storedUsage.getCurrency() != lockedOrder.getCurrency()
+          || !storedUsage.getExpiresAt().equals(lockedOrder.getExpiresAt()))
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    }
+    if ((storedUsage == null) != (lockedOrder.getFrozenPurchaseSnapshot().promotion() == null))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    // Đồng hồ phải đọc sau mọi bước có thể chờ khóa inventory/promotion.
+    Instant decisionAt = orderRepository.currentDatabaseTime();
+    boolean cancelled =
+        storedSnapshot.getEventStatus() == EventState.CANCELLED
+            || lockedOrder.getLifecycleState() == OrderState.CANCELLED;
+    boolean late =
+        lockedOrder.getLifecycleState() == OrderState.EXPIRED
+            || !decisionAt.isBefore(lockedOrder.getExpiresAt());
+    boolean accepted = !cancelled && !late;
+    if (accepted && storedReservation.getState() != ReservationState.HELD)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    ReservationState targetState =
+        accepted ? ReservationState.COMMITTED : ReservationState.RELEASED;
+    if (storedReservation.getState() == ReservationState.HELD) {
+      updatePurchaseLimitForPaymentDecision(
+          lockedOrder, storedReservation, lockedLimit, targetState);
+      if (lockedOrder.getSalesMode() == com.flashticket.booking_service.enums.SalesMode.QUANTITY)
+        updateQuantityInventoryForPaymentDecision(
+            lockedOrder, storedReservation, lockedTypes, targetState);
+      else if (lockedSector != null)
+        updateStandingInventoryForPaymentDecision(
+            lockedOrder, storedReservation, lockedSector, targetState);
+      else
+        updateSeatedInventoryForPaymentDecision(
+            lockedOrder, storedReservation, lockedSeats, targetState);
+      updatePromotionUsageForPaymentDecision(
+          lockedOrder, storedUsage, lockedPromotion, targetState);
+      allocations.forEach(a -> a.setState(targetState));
+      storedReservation.setState(targetState);
+      reservationRepository.save(storedReservation);
+    } else if (storedUsage != null && storedUsage.getState() != PromotionUsageState.RELEASED)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    if (accepted) {
+      lockedOrder.setLifecycleState(OrderState.ISSUING);
+      lockedOrder.setAcceptedChargeId(requestedPayment.chargeId());
+      lockedOrder.setAcceptedAt(decisionAt);
+    } else if (lockedOrder.getLifecycleState() == OrderState.PENDING_PAYMENT) {
+      lockedOrder.setLifecycleState(cancelled ? OrderState.CANCELLED : OrderState.EXPIRED);
+    }
+    lockedOrder.setUpdatedAt(decisionAt);
+    orderRepository.save(lockedOrder);
+    return new PaymentDecision(
+        lockedOrder.getId(),
+        requestedPayment.chargeId(),
+        decisionAt,
+        accepted
+            ? PaymentDecision.Outcome.ACCEPTED
+            : cancelled ? PaymentDecision.Outcome.CANCELLED : PaymentDecision.Outcome.LATE,
+        accepted ? requestedPayment.chargeId() : null);
+  }
+
+  private void updateQuantityInventoryForPaymentDecision(
+      Order lockedOrder,
+      Reservation storedReservation,
+      List<TicketTypeInventory> lockedInventories,
+      ReservationState targetState) {
+    var quantityByType = new HashMap<UUID, Long>();
+    for (var allocation : storedReservation.getAllocations()) {
+      if (allocation.getResourceKind() != ResourceKind.TICKET_TYPE
+          || !allocation.getOrderItem().getTicketTypeId().equals(allocation.getTicketTypeId()))
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      quantityByType.merge(
+          allocation.getTicketTypeId(), (long) allocation.getQuantity(), Long::sum);
+    }
+    if (lockedInventories.size() != quantityByType.size())
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    for (var lockedInventory : lockedInventories) {
+      long quantity = quantityByType.getOrDefault(lockedInventory.getTicketTypeId(), 0L);
+      if (quantity <= 0
+          || !lockedOrder.getEventId().equals(lockedInventory.getEventId())
+          || lockedInventory.getHeld() < quantity)
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      lockedInventory.setHeld(lockedInventory.getHeld() - quantity);
+      if (targetState == ReservationState.COMMITTED)
+        lockedInventory.setPurchased(Math.addExact(lockedInventory.getPurchased(), quantity));
+    }
+    ticketTypeInventoryRepository.saveAll(lockedInventories);
+  }
+
+  private void updateStandingInventoryForPaymentDecision(
+      Order lockedOrder,
+      Reservation storedReservation,
+      SectorInventory lockedSector,
+      ReservationState targetState) {
+    if (!lockedOrder.getEventId().equals(lockedSector.getEventId())
+        || lockedSector.getSectorType() != SectorType.STANDING
+        || storedReservation.getAllocations().stream()
+            .anyMatch(
+                a ->
+                    a.getResourceKind() != ResourceKind.STANDING_SECTOR
+                        || !lockedSector.getSectorId().equals(a.getSectorId())))
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    long quantity =
+        storedReservation.getAllocations().stream()
+            .mapToLong(ReservationAllocation::getQuantity)
+            .sum();
+    if (lockedSector.getHeld() < quantity)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    lockedSector.setHeld(lockedSector.getHeld() - quantity);
+    if (targetState == ReservationState.COMMITTED)
+      lockedSector.setPurchased(Math.addExact(lockedSector.getPurchased(), quantity));
+    sectorInventoryRepository.save(lockedSector);
+  }
+
+  private void updateSeatedInventoryForPaymentDecision(
+      Order lockedOrder,
+      Reservation storedReservation,
+      List<SeatInventory> lockedSeats,
+      ReservationState targetState) {
+    var allocations = storedReservation.getAllocations();
+    if (lockedSeats.size() != allocations.size())
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    for (var lockedSeat : lockedSeats) {
+      var allocation =
+          allocations.stream()
+              .filter(a -> lockedSeat.getSeatId().equals(a.getSeatId()))
+              .findFirst()
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+      if (allocation.getResourceKind() != ResourceKind.SEAT
+          || allocation.getQuantity() != 1
+          || lockedSeat.getState() != SeatState.HELD
+          || !storedReservation.getId().equals(lockedSeat.getCurrentReservationId())
+          || !lockedOrder.getEventId().equals(lockedSeat.getEventId())
+          || !lockedOrder.getSectorId().equals(lockedSeat.getSectorId())
+          || !allocation.getOrderItem().getTicketTypeId().equals(lockedSeat.getTicketTypeId())
+          || allocation.getOrderItem().getSelectionSnapshot().seats().stream()
+              .noneMatch(s -> s.seatId().equals(lockedSeat.getSeatId()))
+          || lockedSeat.getReservationGeneration() <= 0)
+        throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+      if (targetState == ReservationState.COMMITTED) {
+        if (Boolean.TRUE.equals(lockedSeat.getIsHidden()))
+          throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+        lockedSeat.setState(SeatState.PURCHASED);
+      } else {
+        lockedSeat.setState(
+            Boolean.TRUE.equals(lockedSeat.getIsHidden())
+                ? SeatState.UNAVAILABLE
+                : SeatState.AVAILABLE);
+        lockedSeat.setCurrentReservationId(null);
+      }
+    }
+    seatInventoryRepository.saveAll(lockedSeats);
+  }
+
+  private void updatePurchaseLimitForPaymentDecision(
+      Order lockedOrder,
+      Reservation storedReservation,
+      PurchaseLimit lockedPurchaseLimit,
+      ReservationState targetState) {
+    int quantity =
+        Math.toIntExact(
+            storedReservation.getAllocations().stream()
+                .mapToLong(ReservationAllocation::getQuantity)
+                .sum());
+    if (!lockedOrder.getEventId().equals(lockedPurchaseLimit.getId().getEventId())
+        || !lockedOrder.getBuyerSubject().equals(lockedPurchaseLimit.getId().getBuyerSubject())
+        || lockedPurchaseLimit.getHeld() < quantity)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    lockedPurchaseLimit.setHeld(lockedPurchaseLimit.getHeld() - quantity);
+    if (targetState == ReservationState.COMMITTED)
+      lockedPurchaseLimit.setPurchased(Math.addExact(lockedPurchaseLimit.getPurchased(), quantity));
+    purchaseLimitRepository.save(lockedPurchaseLimit);
+  }
+
+  private void updatePromotionUsageForPaymentDecision(
+      Order lockedOrder,
+      PromotionUsage storedUsage,
+      PromotionInventory lockedPromotion,
+      ReservationState targetState) {
+    if (storedUsage == null) return;
+    var promotion = lockedOrder.getFrozenPurchaseSnapshot().promotion();
+    if (promotion == null
+        || !promotion.promotionId().equals(lockedPromotion.getPromotionId())
+        || !lockedOrder.getEventId().equals(lockedPromotion.getEventId())
+        || storedUsage.getState() != PromotionUsageState.HELD
+        || lockedPromotion.getHeld() < 1)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    lockedPromotion.setHeld(lockedPromotion.getHeld() - 1);
+    if (targetState == ReservationState.COMMITTED) {
+      lockedPromotion.setUsed(Math.addExact(lockedPromotion.getUsed(), 1));
+      storedUsage.setState(PromotionUsageState.USED);
+    } else storedUsage.setState(PromotionUsageState.RELEASED);
+    promotionUsageRepository.save(storedUsage);
+    promotionInventoryRepository.save(lockedPromotion);
+  }
+
+  private void persistPaymentDecision(
+      Envelope<AcceptPayment> message, String payloadHash, PaymentDecision decision) {
+    if (!validator.validate(decision).isEmpty())
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE);
+    var id = new InboxMessageId();
+    id.setConsumerName("booking.accept-payment");
+    id.setMessageId(message.messageId());
+    var receipt = new InboxMessage();
+    receipt.setId(id);
+    receipt.setPayloadHash(payloadHash);
+    receipt.setProcessedAt(orderRepository.currentDatabaseTime());
+    receipt.setResponsePayload(objectMapper.valueToTree(decision));
+    // Version null: ID gán trước vẫn INSERT; PK chặn receipt cạnh tranh khác order.
+    inboxMessageRepository.save(receipt);
+    UUID responseId =
+        UUID.nameUUIDFromBytes(
+            ("booking.payment-decision:" + message.messageId()).getBytes(StandardCharsets.UTF_8));
+    var envelope =
+        new Envelope<>(
+            responseId,
+            "booking.payment-decision.v1",
+            1,
+            decision.orderId(),
+            message.data().sourceOrderVersion(),
+            decision.decisionAt(),
+            message.correlationId(),
+            message.messageId(),
+            message.traceparent(),
+            decision);
+    outboxMessageRepository.save(outboxMessageMapper.toEntity(envelope));
+  }
 
   @Override
   @Transactional

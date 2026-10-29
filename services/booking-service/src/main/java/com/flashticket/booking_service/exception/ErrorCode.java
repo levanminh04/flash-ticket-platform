@@ -24,6 +24,8 @@ import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 
 /** Danh mục mã lỗi, message an toàn và HTTP status dùng chung trong Booking. */
 public enum ErrorCode {
+  PAYMENT_SNAPSHOT_MISMATCH(CONFLICT, "Thông tin thanh toán không khớp bản chốt tiền."),
+  RESERVATION_DATA_CONFLICT(CONFLICT, "Dữ liệu giữ chỗ không nhất quán."),
   ORDER_NOT_FOUND(NOT_FOUND, "Không tìm thấy đơn hàng."),
   CONFIG_NOT_READY(SERVICE_UNAVAILABLE, "Cấu hình bán vé chưa sẵn sàng."),
   SALES_CONFIGURATION_CONFLICT(CONFLICT, "Cấu hình bán vé mâu thuẫn với dữ liệu đã lưu."),

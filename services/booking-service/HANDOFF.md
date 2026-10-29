@@ -1,5 +1,41 @@
 # Booking Service handoff
 
+## AcceptPayment and decision outbox — 2026-10-29
+
+- Branch `codex/booking-accept-payment`: AcceptPaymentListener consumes
+  `booking.accept-payment.q` with AUTO ACK. The service commits before listener return.
+  No HTTP accept endpoint, manual ACK, new schema, dependency or Payment code.
+- `OrderService.acceptPayment` validates frozen price/version, locks event snapshot
+  READ then order WRITE, reads inbox, then locks buyer limit/inventory/promotion.
+  Decision uses DB clock after waits. Same accepted charge replays ACCEPTED before
+  deadline checks; another charge is DUPLICATE. LATE/CANCELLED release remaining HELD
+  resources once. Accepted reservation/allocations become COMMITTED, inventory and
+  purchase limit held become purchased, promotion HELD becomes USED, order is ISSUING.
+  SEATED uses PURCHASED, retaining reservation ID/generation. Completion belongs to
+  the subsequent Ticket → Payment → Booking flow.
+- Inbox response and payment-decision outbox commit atomically with resources.
+  Wrong input is rejected to DLQ; database/commit failures propagate for redelivery.
+- PaymentDecisionOutboxWorker polls due decision rows, at most20 per batch. Each
+  `MessagingService.publishPaymentDecision(messageId)` runs a separate transaction,
+  pessimistically locks that outbox row, sends a persistent Envelope and waits for
+  correlated ACK with no return before saving publishedAt. Only outbox is locked
+  across network I/O. Failure leaves pending with retry metadata. Crash between
+  broker ACK and DB commit can resend the same messageId: Payment needs deduplication.
+- Config Server booking YAML enables worker, poll PT2S, confirm/retry PT5S,
+  batch20, Rabbit connection timeout5s. Set booking.outbox.enabled=false to disable
+  worker. Existing business exchange/mandatory/confirms/returns remain in force.
+- Smoke test now intentionally connects to the real broker using RABBITMQ_* env,
+  with listener/worker/topology auto-declarations disabled. The suite must receive
+  those variables securely; Maven does not load root .env automatically.
+- Verification and remote119 evidence are recorded in TESTING.md. A message in a
+  Payment-bound queue or a broker confirm does not prove Payment handler processing.
+  No Booking deployment, Payment integration, expiry scheduler or refund worker
+  is delivered by this task. The previous local Booking process was stopped to
+  release its JAR for Maven packaging; runtime restart is a separate action.
+
+Design/plan: `docs/java-workflow/specs/2026-10-29-booking-accept-payment-design.md`
+and `docs/java-workflow/plans/2026-10-29-booking-accept-payment-plan.md`.
+
 ## Apply promotion and prepare purchase snapshot — 2026-10-29
 
 - `POST /api/v1/orders/{orderId}/promotion`, BUYER JWT, body `{"code":"SAVE"}`:

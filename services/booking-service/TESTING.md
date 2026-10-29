@@ -1,5 +1,54 @@
 # Booking Service tests
 
+## AcceptPayment and outbox relay — 2026-10-29
+
+New coverage: five methods in AcceptPaymentListenerTests, seventeen methods in
+BookingPersistenceIT. Existing contextLoads now opens/closes a real Rabbit119
+connection using environment credentials, with worker/listener/dynamic declarations
+disabled. Delta C14 was explicitly approved by the user; no mock RabbitTemplate
+is used by that smoke test.
+
+Initial checkpoints: production compile passed; five listener/worker unit tests
+and live-broker smoke passed (6/6). The first targeted IT run found fixture errors
+(QUANTITY accidentally included seats), the wrong received-delivery-mode accessor,
+and an unreliable pg_stat_activity lock observation. Those were corrected within
+the approved test bodies; the four affected methods passed on rerun. PostgreSQL
+and fault-injection broker tests use disposable Testcontainers, not shared DB119.
+
+Remote relay checkpoint: 5/5 methods passed with RabbitMQ `3.106.109.119`, isolated
+exchange `booking.accept-payment.test.eb7586b75989` and its dedicated queue. These
+resources were absent before the run and deleted afterward (HTTP204). An admin
+test credential was required to declare/read isolated resources; the application
+credential has no configure permission. No permissions or production bindings
+were changed and no Payment queue was purged/consumed. DB fixtures remained local.
+Nack/timeout/connect-error subcases in D14 simulate the transport response;
+the unroutable return, persistent delivery, actual confirms, rollback/resend and
+concurrent publisher cases exercise the real broker. This does not prove Payment
+consumer idempotency or payment-provider E2E success.
+
+Local evidence: `target/accept-live-smoke.log`, `target/accept-it.log`,
+`target/accept-it-repair.log`, `target/accept-remote119.log`.
+Final full `-P integration verify` passed at 17:23:47 on 2026-10-29:
+**360 unit tests +81 integration tests**, no failures/errors/skips, BUILD SUCCESS.
+Log `target/accept-verify-final.log`; the full81-test XML report is preserved as
+`target/accept-full-81-tests.xml`. D3 verifies accepted-charge replay after the
+actual DB expiry time; D4 includes concurrent same-messageId commands for distinct
+orders; D17 exercises all four outcomes through command and response broker queues.
+Nack/connect-timeout faults are clearly separated from real broker cases above.
+
+Final repeat of the five relay methods against119 also passed after the D17
+four-outcome expansion. Dedicated exchange `booking.accept-payment.test.1d36822b890a`,
+queue with suffix `.q`, and the unroutable-test exchange were all deleted after
+the run (HTTP204). Latest result is in `target/accept-remote119.log`.
+
+Run Maven with root environment variables injected securely into its process;
+do not put secrets on CLI flags or commit tokens. Example commands once env is set:
+
+```powershell
+rtk mvn -B -ntp -Dtest=BookingServiceApplicationTests,AcceptPaymentListenerTests test
+rtk mvn -B -ntp -P integration verify
+```
+
 ## Order promotion and purchase snapshot — 2026-10-29
 
 New coverage: seven HTTP methods in OrderControllerTests and sixteen PostgreSQL
