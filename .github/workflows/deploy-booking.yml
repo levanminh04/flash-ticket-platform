@@ -1,0 +1,167 @@
+name: Deploy Booking to119
+
+on:
+  push:
+    branches: [dev/son]
+    paths:
+      - services/booking-service/**
+      - infrastructure/config-server/**
+      - deploy/docker-compose.booking.yml
+      - deploy/docker-compose.config-server.yml
+      - deploy/deploy-booking.sh
+      - .github/workflows/deploy-booking.yml
+  workflow_dispatch:
+
+concurrency:
+  group: booking-deploy-ft119
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  BOOKING_REPOSITORY: ghcr.io/levanminh04/flash-ticket-platform/booking-service
+  CONFIG_REPOSITORY: ghcr.io/levanminh04/flash-ticket-platform/config-server
+
+jobs:
+  build_publish:
+    if: github.ref == 'refs/heads/dev/son'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      booking_digest: ${{ steps.booking.outputs.digest }}
+      config_digest: ${{ steps.config.outputs.digest }}
+    services:
+      # Smoke test mở connection thật, nhưng không dùng broker119 trong CI.
+      rabbitmq:
+        image: rabbitmq:4.3.6-management
+        env:
+          RABBITMQ_DEFAULT_USER: booking_ci
+          RABBITMQ_DEFAULT_PASS: booking_ci_disposable
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 5s --health-retries 12
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Java23 for Booking
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '23'
+          cache: maven
+          cache-dependency-path: services/booking-service/pom.xml
+      - name: Verify Booking
+        env:
+          RABBITMQ_HOST: 127.0.0.1
+          RABBITMQ_PORT: '5672'
+          RABBITMQ_USERNAME: booking_ci
+          RABBITMQ_PASSWORD: booking_ci_disposable
+        run: mvn -B -ntp -f services/booking-service/pom.xml -P integration verify
+      - name: Java21 for Config Server
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: infrastructure/config-server/pom.xml
+      - name: Verify Config Server
+        run: mvn -B -ntp -f infrastructure/config-server/pom.xml verify
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Booking
+        id: booking
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: services/booking-service
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.BOOKING_REPOSITORY }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=booking
+          cache-to: type=gha,mode=max,scope=booking
+      - name: Build and push Config Server
+        id: config
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: infrastructure/config-server
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.CONFIG_REPOSITORY }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=config-server
+          cache-to: type=gha,mode=max,scope=config-server
+
+  deploy:
+    needs: build_publish
+    if: github.ref == 'refs/heads/dev/son'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Prepare SSH
+        env:
+          SSH_KEY: ${{ secrets.FT119_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ vars.FT119_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.FT119_SSH_HOST }}
+          SSH_USER: ${{ vars.FT119_SSH_USER }}
+          SSH_PORT: ${{ vars.FT119_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$SSH_USER" =~ ^[a-zA-Z0-9_-]+$ ]]
+          [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
+          install -d -m 700 "$RUNNER_TEMP/ft119-ssh"
+          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/ft119-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/ft119-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/ft119-ssh/"*
+      - name: Pull and deploy on119
+        env:
+          SSH_HOST: ${{ vars.FT119_SSH_HOST }}
+          SSH_USER: ${{ vars.FT119_SSH_USER }}
+          SSH_PORT: ${{ vars.FT119_SSH_PORT }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          BOOKING_DIGEST: ${{ needs.build_publish.outputs.booking_digest }}
+          CONFIG_DIGEST: ${{ needs.build_publish.outputs.config_digest }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh_options=(-i "$RUNNER_TEMP/ft119-ssh/key" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/ft119-ssh/known_hosts")
+          destination="$SSH_USER@$SSH_HOST"
+          ssh "${ssh_options[@]}" -p "$SSH_PORT" "$destination" 'mkdir -p /home/ubuntu/flash-ticket-platform/deploy'
+          scp "${ssh_options[@]}" -P "$SSH_PORT" deploy/docker-compose.booking.yml deploy/docker-compose.config-server.yml deploy/deploy-booking.sh "$destination:/home/ubuntu/flash-ticket-platform/deploy/"
+          printf 'Commit: `%s`\n\n' "$COMMIT_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$REGISTRY_TOKEN" |
+            ssh "${ssh_options[@]}" -p "$SSH_PORT" "$destination" \
+              "bash /home/ubuntu/flash-ticket-platform/deploy/deploy-booking.sh '$BOOKING_REPOSITORY@$BOOKING_DIGEST' '$CONFIG_REPOSITORY@$CONFIG_DIGEST' '$REGISTRY_USER'" |
+            tee "$RUNNER_TEMP/deploy-booking.log"
+          grep -E '^(PREVIOUS|DEPLOYED|HEALTH|DEPLOY_SUCCESS)' "$RUNNER_TEMP/deploy-booking.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary SSH files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/ft119-ssh"
