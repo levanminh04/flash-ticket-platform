@@ -1,0 +1,51 @@
+{
+  "messageId": "00000000-0000-4000-8000-000000000007",
+  "messageType": "payment.start-requested.v1",
+  "schemaVersion": 1,
+  "aggregateId": "00000000-0000-4000-8000-000000000001",
+  "aggregateVersion": "1",
+  "occurredAt": "2026-10-20T00:00:00Z",
+  "correlationId": "00000000-0000-4000-8000-000000000001",
+  "causationId": null,
+  "traceparent": null,
+  "data": {
+    "requestId": "00000000-0000-4000-8000-000000000007",
+    "requestKey": "00000000-0000-4000-8000-000000000007",
+    "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "provider": "VNPAY",
+    "purchase": {
+      "schemaVersion": 1,
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "eventId": "00000000-0000-4000-8000-000000000002",
+      "buyerSubject": "buyer-test",
+      "customerEmail": "buyer@example.test",
+      "sourceConfigVersion": "1",
+      "sourceOrderVersion": "1",
+      "frozenAt": "2026-10-20T00:00:00Z",
+      "expiresAt": "2026-10-20T00:15:00Z",
+      "currency": "VND",
+      "eventTitle": "Sự kiện thử",
+      "eventStartsAt": "2026-11-01T00:00:00Z",
+      "eventEndsAt": "2026-11-01T02:00:00Z",
+      "venueName": null,
+      "mode": "QUANTITY",
+      "sectorId": null,
+      "subtotal": "200",
+      "discount": "0",
+      "total": "200",
+      "promotion": null,
+      "items": [
+        {
+          "orderItemId": "00000000-0000-4000-8000-000000000004",
+          "ticketTypeId": "00000000-0000-4000-8000-000000000003",
+          "ticketTypeName": "Vé thử",
+          "quantity": 2,
+          "unitPrice": "100",
+          "lineSubtotal": "200",
+          "sectorId": null,
+          "seats": []
+        }
+      ]
+    }
+  }
+}

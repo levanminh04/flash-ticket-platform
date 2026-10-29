@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: ${PAYMENT_TEST_DB_URL}
+    username: ${PAYMENT_TEST_DB_USERNAME}
+    password: ${PAYMENT_TEST_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        type:
+          json_format_mapper: jackson3
+        jdbc:
+          time_zone: UTC

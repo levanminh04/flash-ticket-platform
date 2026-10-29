@@ -4,8 +4,23 @@ server:
 spring:
   datasource:
     url: ${PAYMENT_DB_URL}
-    username: ${PAYMENT_DB_USERNAME}
+    username: ${PAYMENT_DB_USERNAME:payment_admin}
     password: ${PAYMENT_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE payment_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        type:
+          json_format_mapper: jackson3
+        jdbc:
+          time_zone: UTC
   security:
     oauth2:
       resourceserver:
@@ -13,6 +28,38 @@ spring:
           issuer-uri: ${KEYCLOAK_ISSUER_URI}
   rabbitmq:
     host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Native Boot filtering/renaming; never include arbitrary MDC fields.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+      add:
+        serviceName: payment-service
+        serviceVersion: ${PAYMENT_SERVICE_VERSION:local-dev}
+        instanceId: ${PAYMENT_INSTANCE_ID:${random.uuid}}
+        environment: ${PAYMENT_ENVIRONMENT:local}
+      customizer: com.flashticket.payment_service.config.PaymentLogFields
+      stacktrace:
+        printer: com.flashticket.payment_service.config.SafeStackTracePrinter

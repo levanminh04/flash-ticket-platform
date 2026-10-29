@@ -1,0 +1,180 @@
+[
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "event.finance-configured.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000002",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "eventId": "00000000-0000-4000-8000-000000000002",
+      "organizerSubject": "organizer-test",
+      "eventEndsAt": "2026-11-01T02:00:00Z",
+      "feeRate": "0.05",
+      "sourceFeeVersion": "1",
+      "currency": "VND"
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "booking.accept-payment.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "attemptId": "00000000-0000-4000-8000-000000000009",
+      "amount": "200",
+      "currency": "VND",
+      "sourceOrderVersion": "1"
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "booking.payment-decision.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "decisionAt": "2026-10-20T00:00:00Z",
+      "outcome": "ACCEPTED",
+      "acceptedChargeId": "00000000-0000-4000-8000-000000000008"
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "ticket.issue.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "purchase": {
+        "schemaVersion": 1,
+        "orderId": "00000000-0000-4000-8000-000000000001",
+        "eventId": "00000000-0000-4000-8000-000000000002",
+        "buyerSubject": "buyer-test",
+        "customerEmail": "buyer@example.test",
+        "sourceConfigVersion": "1",
+        "sourceOrderVersion": "1",
+        "frozenAt": "2026-10-20T00:00:00Z",
+        "expiresAt": "2026-10-20T00:15:00Z",
+        "currency": "VND",
+        "eventTitle": "Sự kiện thử",
+        "eventStartsAt": "2026-11-01T00:00:00Z",
+        "eventEndsAt": "2026-11-01T02:00:00Z",
+        "venueName": null,
+        "mode": "QUANTITY",
+        "sectorId": null,
+        "subtotal": "200",
+        "discount": "0",
+        "total": "200",
+        "promotion": null,
+        "items": [
+          {
+            "orderItemId": "00000000-0000-4000-8000-000000000004",
+            "ticketTypeId": "00000000-0000-4000-8000-000000000003",
+            "ticketTypeName": "Vé thử",
+            "quantity": 2,
+            "unitPrice": "100",
+            "lineSubtotal": "200",
+            "sectorId": null,
+            "seats": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "ticket.issuance-result.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "issuanceId": "00000000-0000-4000-8000-000000000010",
+      "state": "COMPLETED",
+      "ticketCount": 2,
+      "failureCode": null
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "ticket.issuance-result.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "issuanceId": "00000000-0000-4000-8000-000000000010",
+      "state": "FAILED",
+      "ticketCount": 0,
+      "failureCode": "ISSUANCE_FAILED"
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "booking.order-completed.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "issuanceId": "00000000-0000-4000-8000-000000000010",
+      "ticketCount": 2
+    }
+  },
+  {
+    "messageId": "00000000-0000-4000-8000-000000000007",
+    "messageType": "booking.issuance-result.v1",
+    "schemaVersion": 1,
+    "aggregateId": "00000000-0000-4000-8000-000000000001",
+    "aggregateVersion": "1",
+    "occurredAt": "2026-10-20T00:00:00Z",
+    "correlationId": "00000000-0000-4000-8000-000000000001",
+    "causationId": null,
+    "traceparent": null,
+    "data": {
+      "orderId": "00000000-0000-4000-8000-000000000001",
+      "chargeId": "00000000-0000-4000-8000-000000000008",
+      "issuanceId": "00000000-0000-4000-8000-000000000010",
+      "state": "FAILED",
+      "failureCode": "ISSUANCE_FAILED"
+    }
+  }
+]
