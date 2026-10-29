@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.messaging.service.impl;
 
+import com.flashticket.booking_service.dto.message.OrderCompleted;
 import com.flashticket.booking_service.dto.message.PaymentDecision;
 import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.mapper.OutboxMessageMapper;
@@ -45,17 +46,21 @@ public class MessagingServiceImpl implements MessagingService {
 
   @Override
   @Transactional
-  public void publishPaymentDecision(UUID messageId) {
+  public void publishBookingMessage(UUID messageId) {
     orderRepository.configureTransactionLockTimeout(lockTimeout);
     var lockedOutbox = outboxMessageRepository.findLockedByMessageId(messageId).orElse(null);
     if (lockedOutbox == null
         || lockedOutbox.getPublishedAt() != null
-        || !"booking.payment-decision.v1".equals(lockedOutbox.getMessageType())) return;
+        || !("booking.payment-decision.v1".equals(lockedOutbox.getMessageType())
+            || "booking.order-completed.v1".equals(lockedOutbox.getMessageType()))) return;
     var now = orderRepository.currentDatabaseTime();
     if (lockedOutbox.getNextAttemptAt().isAfter(now)) return;
     ErrorCode failure = null;
     try {
-      var envelope = outboxMessageMapper.toEnvelope(lockedOutbox, PaymentDecision.class);
+      var envelope =
+          "booking.payment-decision.v1".equals(lockedOutbox.getMessageType())
+              ? outboxMessageMapper.toEnvelope(lockedOutbox, PaymentDecision.class)
+              : outboxMessageMapper.toEnvelope(lockedOutbox, OrderCompleted.class);
       var properties = new MessageProperties();
       properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
       properties.setMessageId(envelope.messageId().toString());

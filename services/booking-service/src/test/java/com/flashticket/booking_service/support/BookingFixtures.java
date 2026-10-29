@@ -129,9 +129,9 @@ public final class BookingFixtures {
         new IssuanceResult(ORDER, SEAT, TICKET, IssuanceResult.State.COMPLETED, 2, null));
     result.put("booking.order-completed.v1", new OrderCompleted(ORDER, SEAT, TICKET, 2));
     result.put(
-        "booking.issuance-result.v1",
+        "booking.issuance-failed.v1",
         new BookingIssuanceResult(
-            ORDER, SEAT, TICKET, BookingIssuanceResult.State.FAILED, "ERROR"));
+            ORDER, SEAT, TICKET, BookingIssuanceResult.State.FAILED, 0, "ERROR"));
     return result;
   }
 

@@ -16,6 +16,52 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 
 class DtoValidationTests {
+  @org.junit.jupiter.api.Test
+  void validatesBookingIssuanceResultBothOutcomes() {
+    for (var state : BookingIssuanceResult.State.values()) {
+      boolean completed = state == BookingIssuanceResult.State.COMPLETED;
+      var valid =
+          new BookingIssuanceResult(
+              ORDER,
+              SEAT,
+              TICKET,
+              state,
+              completed ? 2 : 0,
+              completed ? null : "ISSUANCE_REJECTED");
+      assertThat(validator.validate(valid)).isEmpty();
+      assertThat(
+              validator.validate(
+                  new BookingIssuanceResult(ORDER, SEAT, TICKET, state, null, valid.failureCode())))
+          .isNotEmpty();
+      assertThat(
+              validator.validate(
+                  new BookingIssuanceResult(ORDER, SEAT, TICKET, state, -1, valid.failureCode())))
+          .isNotEmpty();
+      assertThat(
+              validator.validate(
+                  new BookingIssuanceResult(
+                      ORDER, SEAT, TICKET, state, completed ? 0 : 2, valid.failureCode())))
+          .isNotEmpty();
+      assertThat(
+              validator.validate(
+                  new BookingIssuanceResult(
+                      ORDER, SEAT, TICKET, state, valid.ticketCount(), completed ? "ERROR" : null)))
+          .isNotEmpty();
+      assertThat(
+              validator.validate(
+                  new BookingIssuanceResult(
+                      ORDER, SEAT, null, state, valid.ticketCount(), valid.failureCode())))
+          .isNotEmpty();
+    }
+    assertThat(validator.validate(new BookingIssuanceResult(ORDER, SEAT, TICKET, null, 0, "ERROR")))
+        .isNotEmpty();
+    assertThat(
+            validator.validate(
+                new BookingIssuanceResult(
+                    ORDER, SEAT, TICKET, BookingIssuanceResult.State.FAILED, 0, "  ")))
+        .isNotEmpty();
+  }
+
   static ValidatorFactory factory;
   static Validator validator;
 
@@ -209,7 +255,7 @@ class DtoValidationTests {
     assertThat(validator.validate(new PaymentDecision(ORDER, SEAT, NOW, null, null))).isNotEmpty();
     assertThat(validator.validate(new IssuanceResult(ORDER, SEAT, TICKET, null, null, null)))
         .isNotEmpty();
-    assertThat(validator.validate(new BookingIssuanceResult(ORDER, SEAT, TICKET, null, "")))
+    assertThat(validator.validate(new BookingIssuanceResult(ORDER, SEAT, TICKET, null, null, "")))
         .isNotEmpty();
   }
 

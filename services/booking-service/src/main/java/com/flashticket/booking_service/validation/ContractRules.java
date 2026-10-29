@@ -32,7 +32,8 @@ public final class ContractRules {
           "payment.start-requested.v1", StartPayment.class,
           "ticket.issuance-result.v1", IssuanceResult.class,
           "booking.order-completed.v1", OrderCompleted.class,
-          "booking.issuance-result.v1", BookingIssuanceResult.class);
+          "ticket.issued.v1", BookingIssuanceResult.class,
+          "booking.issuance-failed.v1", BookingIssuanceResult.class);
 
   private ContractRules() {}
 

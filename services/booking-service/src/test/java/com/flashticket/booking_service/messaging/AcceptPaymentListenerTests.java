@@ -65,37 +65,37 @@ class AcceptPaymentListenerTests {
 
   @Test
   void publishesOnlyDuePaymentDecisionOutboxIds() {
-    var worker = new PaymentDecisionOutboxWorker(outboxMessageRepository, messagingService);
+    var worker = new BookingOutboxWorker(outboxMessageRepository, messagingService);
     ReflectionTestUtils.setField(worker, "batchSize", 20);
     var row = new OutboxMessage();
     row.setMessageId(UUID.randomUUID());
     when(outboxMessageRepository
-            .findByMessageTypeAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
-                eq("booking.payment-decision.v1"),
+            .findByMessageTypeInAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
+                eq(List.of("booking.payment-decision.v1", "booking.order-completed.v1")),
                 any(),
                 eq(org.springframework.data.domain.PageRequest.of(0, 20))))
         .thenReturn(List.of(row));
-    worker.publishDuePaymentDecisions();
-    verify(messagingService).publishPaymentDecision(row.getMessageId());
+    worker.publishDueBookingMessages();
+    verify(messagingService).publishBookingMessage(row.getMessageId());
   }
 
   @Test
   void continuesOutboxBatchAfterOneRowFails() {
-    var worker = new PaymentDecisionOutboxWorker(outboxMessageRepository, messagingService);
+    var worker = new BookingOutboxWorker(outboxMessageRepository, messagingService);
     ReflectionTestUtils.setField(worker, "batchSize", 20);
     var first = new OutboxMessage();
     first.setMessageId(UUID.randomUUID());
     var second = new OutboxMessage();
     second.setMessageId(UUID.randomUUID());
     when(outboxMessageRepository
-            .findByMessageTypeAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
-                anyString(), any(), any()))
+            .findByMessageTypeInAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
+                anyCollection(), any(), any()))
         .thenReturn(List.of(first, second));
     doThrow(new DataAccessResourceFailureException("test failure"))
         .when(messagingService)
-        .publishPaymentDecision(first.getMessageId());
-    worker.publishDuePaymentDecisions();
-    verify(messagingService).publishPaymentDecision(second.getMessageId());
+        .publishBookingMessage(first.getMessageId());
+    worker.publishDueBookingMessages();
+    verify(messagingService).publishBookingMessage(second.getMessageId());
     reset(messagingService);
     doAnswer(
             call -> {
@@ -103,10 +103,10 @@ class AcceptPaymentListenerTests {
               return null;
             })
         .when(messagingService)
-        .publishPaymentDecision(first.getMessageId());
+        .publishBookingMessage(first.getMessageId());
     try {
-      worker.publishDuePaymentDecisions();
-      verify(messagingService, never()).publishPaymentDecision(second.getMessageId());
+      worker.publishDueBookingMessages();
+      verify(messagingService, never()).publishBookingMessage(second.getMessageId());
     } finally {
       Thread.interrupted();
     }

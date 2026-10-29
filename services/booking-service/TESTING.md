@@ -1,5 +1,93 @@
 # Booking Service tests
 
+## Booking issuance results — 2026-10-29
+
+New approved methods: three in BookingIssuanceResultListenerTests, one in
+DtoValidationTests and thirteen in BookingPersistenceIT. Existing fixtures/callers
+were updated for the DTO and relay rename; no new Java test helpers/types outside
+the approved class/method list were introduced.
+
+Coverage includes COMPLETED/FAILED, charge/count/version/type guards, acceptance
+dependency, success after hold expiry, cancelled/closed events, all three inventory
+modes, promotion release/replay, stale R1 vs R2, concurrent duplicate failures,
+concurrent opposing outcomes, same messageId on different orders, atomic rollback,
+two AUTO listener endpoints with their own DLQs, and dual-type outbox publishing.
+OrderCompleted tests include persistent envelope metadata, broker return when its
+binding is removed, retry, and publish-before-DB-rollback resend with unchanged ID.
+
+Initial targeted unit/DTO/listener + real119 connection smoke: **101 passed**.
+Initial thirteen-method IT run: **12 passed, one fixture error** before handler
+execution. The fixture used maximumUsesPerUser=2, while existing PromotionConfig
+requires exactly1; corrected to1 and the affected test passed on rerun. Production
+guards were not relaxed to fix the fixture. Logs: `target/issuance-unit.log`,
+`target/issuance-it.log`, `target/issuance-repair.log`.
+
+Final full `-P integration verify` completed at **21:28:58 +07:00, 2026-10-29**:
+**364 unit tests + 94 integration tests**, zero failures/errors/skips, BUILD SUCCESS.
+This includes the expanded D10 races and D13 broker-return/retry cases. Maven's
+current-run totals are authoritative; summing retained surefire XML can include
+old reports. Log: `target/issuance-verify.log`. Existing lifecycle format/static
+checks passed as part of verify; final `git diff --check` passed.
+PostgreSQL/broker IT uses disposable Testcontainers. Tests truncate only the test
+database and consume/purge dedicated test queues, not shared DB119 or Payment's
+production queues. Context smoke opens a real Rabbit119 connection with listeners,
+worker and dynamic declaration disabled; it does not prove a live issuance flow.
+Actual Payment/Ticket producers/consumers and payment/refund E2E are not covered.
+
+### Live Booking + RabbitMQ119 + PostgreSQL119
+
+User-requested runtime check on 2026-10-29: **10/10 scenarios passed**. The actual
+Booking JAR runs locally on8082 (PID11008, JVM timezone UTC), using root environment,
+Config Server8888, PostgreSQL119 through the existing localhost5432 SSH tunnel,
+and Rabbit119 with the application's own credential. Real BUYER/INTERNAL_SERVICE
+tokens authorize order creation/promotion and PurchaseSnapshot HTTP calls; synthetic
+SalesConfigured, AcceptPayment and issuance-result envelopes use business.ex and
+the existing business queues. No broker permissions/topology or production code changed.
+
+| Case | Observed result |
+| --- | --- |
+| 1 | QUANTITY + promotion: COMPLETED, committed resource counters unchanged; OrderCompleted outbox published |
+| 2 | Same-ID replay ACKs without repeated effects; new-ID/different issuanceId replay is accepted; same ID/different hash is rejected to DLQ |
+| 3 | FAILED QUANTITY returns purchased inventory, buyer limit and USED promotion; no success outbox |
+| 4 | Same/new-ID FAILED replay never releases resources twice |
+| 5 | FAILED STANDING returns the sector pool |
+| 6 | FAILED SEATED returns seats; a new order holds them; old failure replay preserves the new reservation |
+| 7 | FAILED after event cancellation releases resources, keeps order CANCELLED; new order gets409 EVENT_NOT_ON_SALE |
+| 8 | FAILED after sale close releases resources; new order gets409 EVENT_NOT_ON_SALE |
+| 9 | Wrong charge/count and wrong queue/state go to the correct DLQ, without inbox receipt or order/resource mutation |
+| 10 | Concurrent COMPLETED/FAILED on separate queues commits one outcome; observed COMPLETED wins, opposing FAILED is rejected to DLQ |
+
+Final audit: health UP; each of sales-configured/accept-payment/tickets-issued/
+issuance-failed has one consumer, zero ready/unacked. Thirteen matching outbox rows
+are published, and the corresponding persistent messages are present on Payment's
+queues: nine decisions and four OrderCompleted. Four success-DLQ and one failure-DLQ
+test messages have x-death reason rejected. The pre-existing eleven sales-configured
+DLQ messages are unchanged. No queue was purged. All observed output/DLQ messages
+belong to the synthetic orders; test records/messages remain available for inspection.
+
+An initial observation run was stopped to reuse the script's DB connection instead
+of reconnecting for every query. The next run hit one Rabbit Management HTTP
+RemoteDisconnected before completing case1; dependent case2 was consequently not
+executed. Cases3–10 passed. Cases1–2 were rerun successfully with a fresh HTTP
+connection per management request; production code/configuration was unchanged.
+Ten synthetic orders include the retained first successful setup run. One order
+intentionally remains ISSUING after invalid results, and the R2 order remains
+PENDING_PAYMENT after the seat-ownership scenario.
+
+Evidence and rerunnable local harness (ignored build artifacts):
+`target/issuance-live119-20261029/results.json`, `booking.log`, and
+`target/issuance-live119.py` (`test`, `test 1,2`, `audit`). The evidence includes
+input envelopes/IDs, per-case assertions, previous attempts and the final broker/DB
+audit; no credentials/tokens. Actual Payment/Ticket handling, ticket issuance and
+refund/Saga end-to-end remain outside this runtime check.
+
+After injecting the root environment into the process securely, run:
+
+```powershell
+rtk mvn -f services/booking-service/pom.xml -B -ntp -Dtest=BookingIssuanceResultListenerTests,DtoValidationTests,AcceptPaymentListenerTests,BookingServiceApplicationTests test
+rtk mvn -f services/booking-service/pom.xml -B -ntp -P integration verify
+```
+
 ## AcceptPayment and outbox relay — 2026-10-29
 
 New coverage: five methods in AcceptPaymentListenerTests, seventeen methods in

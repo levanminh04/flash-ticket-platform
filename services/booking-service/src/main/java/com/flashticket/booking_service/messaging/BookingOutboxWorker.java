@@ -4,6 +4,7 @@ import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.messaging.repository.OutboxMessageRepository;
 import com.flashticket.booking_service.messaging.service.MessagingService;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +20,7 @@ import org.springframework.stereotype.Component;
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-public class PaymentDecisionOutboxWorker {
+public class BookingOutboxWorker {
   private final OutboxMessageRepository outboxMessageRepository;
   private final MessagingService messagingService;
 
@@ -27,18 +28,20 @@ public class PaymentDecisionOutboxWorker {
   private int batchSize;
 
   @Scheduled(fixedDelayString = "${booking.outbox.poll-interval:PT2S}")
-  public void publishDuePaymentDecisions() {
+  public void publishDueBookingMessages() {
     // Chỉ truyền ID; service đọc lại row có khóa trong transaction riêng.
     var dueMessages =
         outboxMessageRepository
-            .findByMessageTypeAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
-                "booking.payment-decision.v1", Instant.now(), PageRequest.of(0, batchSize));
+            .findByMessageTypeInAndPublishedAtIsNullAndNextAttemptAtLessThanEqualOrderByOccurredAtAscMessageIdAsc(
+                List.of("booking.payment-decision.v1", "booking.order-completed.v1"),
+                Instant.now(),
+                PageRequest.of(0, batchSize));
     for (var candidate : dueMessages) {
       if (Thread.currentThread().isInterrupted()) break;
       try {
-        messagingService.publishPaymentDecision(candidate.getMessageId());
+        messagingService.publishBookingMessage(candidate.getMessageId());
       } catch (RuntimeException exception) {
-        LoggerFactory.getLogger(PaymentDecisionOutboxWorker.class)
+        LoggerFactory.getLogger(BookingOutboxWorker.class)
             .warn(
                 "Outbox messageId={} errorCode={}",
                 candidate.getMessageId(),

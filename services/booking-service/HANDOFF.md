@@ -1,5 +1,44 @@
 # Booking Service handoff
 
+## Booking issuance results — 2026-10-29
+
+- Implemented on dev/son after user approved EXECUTING-PLANS C1–C14,
+  M1–M23 except removed M17, U1–U4 and D1–D13. See
+  `docs/java-workflow/plans/2026-10-29-booking-issuance-result-plan.md` §11.
+- BookingIssuanceResultListener has two AUTO/concurrency1 methods:
+  booking.tickets-issued.q accepts ticket.issued.v1 / COMPLETED;
+  booking.issuance-failed.q accepts booking.issuance-failed.v1 / FAILED.
+  Both call OrderServiceImpl through the transaction proxy. The business sender
+  remains Payment; the historical ticket.issued name does not authenticate a sender.
+- COMPLETED validates accepted charge, frozen snapshot/version and ticket count,
+  changes ISSUING to COMPLETED and writes inbox + OrderCompleted outbox together.
+  It does not change committed inventory/promotion counters or recheck hold expiry.
+- FAILED releases purchased inventory/buyer limit and USED promotion once,
+  even when the event is closed/cancelled. Reservation/allocations become RELEASED.
+  Cancelled orders stay cancelled; contradictory terminal results are rejected.
+  createOrder still enforces event status/window. This is not a refund handler.
+- No issuance columns were added to Order. issuanceId is received/passed back,
+  not compared with a previous issuance. Inbox hash and order/resource state guard
+  duplicate effects; Payment/Ticket retain ownership of issuance identity/fencing.
+- BookingOutboxWorker replaces PaymentDecisionOutboxWorker; publishBookingMessage
+  relays only PaymentDecision and OrderCompleted using the same pessimistic row TX,
+  persistent delivery, correlated confirm/returns and pending retry metadata.
+- Source topology already contains the two queues/DLQs/bindings/policies. No broker
+  resources or service permissions were changed by this implementation. Before a
+  deployment, coordinate both message types/body with the Payment branch and verify
+  actual publisher permissions; no real Payment consumer/Saga E2E is established here.
+- New verification results and limits are recorded at the top of TESTING.md.
+  No commit/push/deployment is part of this implementation request.
+- Follow-up live check requested by user: 10/10 scenarios passed against the actual
+  local Booking JAR on8082, DB119 through existing5432 tunnel, and business queues
+  on Rabbit119. Both issuance listeners and shared outbox worker were exercised;
+  thirteen persistent outbound messages match published outbox rows. Application
+  health is UP; four exercised queues each have one consumer and no ready/unacked.
+  Synthetic DB fixtures/output/DLQ messages remain for inspection; the eleven old
+  sales-configured DLQ messages are preserved. Evidence:
+  `target/issuance-live119-20261029/results.json`. Payment/Ticket services themselves
+  were not run, so their handling/refund/Saga E2E is still unverified.
+
 ## AcceptPayment and decision outbox — 2026-10-29
 
 - Branch `codex/booking-accept-payment`: AcceptPaymentListener consumes

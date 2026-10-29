@@ -9,6 +9,9 @@ import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import java.util.UUID;
 
 public interface OrderService {
+  void processBookingIssuanceResult(
+      Envelope<com.flashticket.booking_service.dto.message.BookingIssuanceResult> message);
+
   PaymentDecision acceptPayment(Envelope<AcceptPayment> message);
 
   OrderView createOrder(String buyerSubject, UUID idempotencyKey, CreateOrderRequest request);
