@@ -4,7 +4,13 @@ Provider ID: `flash-ticket-registration-outbox`. Keycloak26.8.0 only; compile Ja
 
 Build from this directory: `mvn -B -ntp clean verify`. The JAR is a regular provider, not a Spring application. Only the AMQP client5.26.0 JAR is copied beside it; newer5.27+ brings Netty4.2 conflicting with Keycloak's Netty4.1. Do not copy all Maven dependencies into providers.
 
-Code theo mẫu Shop App: listener/publisher dùng `@RequiredArgsConstructor` với dependency `private final`; DTO `UserCreatedV1` là class có `@Getter` và builder để nhìn rõ từng field. Builder và Jackson đều gọi constructor kiểm tra dữ liệu; JSON V1 giữ nguyên. Lombok1.18.46 chỉ dùng lúc compile, không đưa vào providers. Factory truyền cờ enabled vào listener thay cho một anonymous no-op class. API transaction, outbox và timer vẫn do Keycloak quản lý, không dùng `@Service` hay `@Transactional` của Spring trong SPI.
+Code theo mẫu Shop App: listener/publisher dùng `@RequiredArgsConstructor` với dependency `private final`; DTO dùng `@Getter`, `@Builder` và constructor kiểm tra dữ liệu. Lombok1.18.46 chỉ dùng lúc compile, không đưa vào providers. API transaction, outbox và timer do Keycloak quản lý, không dùng `@Service` hay `@Transactional` của Spring trong SPI.
+
+Từ 28/10/2026, SPI gửi `Envelope<UserCreatedV1>`: đủ 10 field theo B13; `data` chỉ chứa realmId/identitySubject/displayName. messageId và correlationId là ID sự kiện Keycloak; aggregateId là UUID user; aggregateVersion là chuỗi "1" cho lần đăng ký. causationId và traceparent xuất hiện với null. Payload được lưu nguyên vào native outbox, retry giữ nguyên metadata. Ví dụ: `docs/contracts/identity/user-created-envelope-v1.example.json`. Fixture phẳng cũ được giữ để người phụ trách user-service chuyển consumer ở branch riêng; không dùng fixture đó làm format SPI mới. Cần consumer hiểu envelope trước khi xử lý message mới. Row outbox cũ vẫn giữ payload cũ, không tự sửa lịch sử.
+
+Gate thực thi 28/10/2026: user xác nhận thêm Envelope<T> với 10 field, @Getter/@Builder/constructor validation; đổi constructor UserCreatedV1 còn 3 field; sửa onEvent và các test hiện có. Nguồn: phản hồi "xác nhận" sau danh sách thực thi trong chat. Phạm vi chỉ SPI; user-service ở branch khác.
+
+Kiểm chứng envelope: Maven package chạy 14 test, 0 failure/error. Image triển khai: `flash-ticket/keycloak:26.8.0-identity-envelope-20261028`. JAR SHA-256: `38ab2974f70f182af64f5c523ece0da23a9fad4fc86499de6aca2728464e3fde`. Backup DB và compose trước deploy lưu riêng trên server tại `/home/ubuntu/spi-envelope-20261028/`; không commit backup DB vào Git.
 
 The listener accepts only successful REGISTER with register_method=form in flash-ticket. It uses Keycloak's native OutboxStore in the request transaction. Capture failure marks rollbackOnly because EventBuilder catches listener exceptions. The native outbox APIs are internal and version pinned; upgrading Keycloak requires integration verification.
 

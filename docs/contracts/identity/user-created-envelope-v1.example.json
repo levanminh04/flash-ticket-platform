@@ -1,0 +1,16 @@
+{
+  "messageId": "9fe8679b-759a-4529-bc49-e522c59da03b",
+  "messageType": "identity.user-created.v1",
+  "schemaVersion": 1,
+  "aggregateId": "709f5049-86dc-4a24-a0c0-75149348f4d6",
+  "aggregateVersion": "1",
+  "occurredAt": "2026-10-26T12:00:00Z",
+  "correlationId": "9fe8679b-759a-4529-bc49-e522c59da03b",
+  "causationId": null,
+  "traceparent": null,
+  "data": {
+    "realmId": "443bac7a-5a0e-48c5-aedb-a530dcb35eab",
+    "identitySubject": "709f5049-86dc-4a24-a0c0-75149348f4d6",
+    "displayName": "Nguyễn Văn An"
+  }
+}

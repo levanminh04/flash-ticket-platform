@@ -47,14 +47,26 @@ public final class RegistrationEventListener implements EventListenerProvider {
           .filter(value -> value != null && !value.isBlank()).map(String::trim)
           .collect(Collectors.joining(" "));
 
-      UserCreatedV1 message = UserCreatedV1.builder()
-          .schemaVersion(1)
-          .eventId(UUID.fromString(event.getId()))
-          .eventType(UserCreatedV1.TYPE)
-          .occurredAt(Instant.ofEpochMilli(event.getTime()))
+      UserCreatedV1 data = UserCreatedV1.builder()
           .realmId(event.getRealmId())
           .identitySubject(event.getUserId())
           .displayName(displayName.isEmpty() ? null : displayName)
+          .build();
+
+      // Lưu sẵn envelope: retry không sinh ID, version hoặc thời gian mới.
+      // Đăng ký là sự kiện đầu của user; chưa có message gây ra nên causationId=null.
+      UUID messageId = UUID.fromString(event.getId());
+      Envelope<UserCreatedV1> message = Envelope.<UserCreatedV1>builder()
+          .messageId(messageId)
+          .messageType(UserCreatedV1.TYPE)
+          .schemaVersion(1)
+          .aggregateId(UUID.fromString(event.getUserId()))
+          .aggregateVersion("1")
+          .occurredAt(Instant.ofEpochMilli(event.getTime()))
+          .correlationId(messageId)
+          .causationId(null)
+          .traceparent(null)
+          .data(data)
           .build();
 
       // Tham số: kind, realmId, ownerId, containerId, correlationId, type, payload, metadata.

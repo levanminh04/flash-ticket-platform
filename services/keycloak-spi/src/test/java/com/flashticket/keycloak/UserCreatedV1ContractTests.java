@@ -2,54 +2,49 @@ package com.flashticket.keycloak;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.file.*;
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import org.keycloak.util.JsonSerialization;
 
 class UserCreatedV1ContractTests {
   private String fixture() throws Exception {
-    return Files.readString(Path.of("../../docs/contracts/identity/user-created-v1.example.json"));
+    return Files.readString(Path.of("../../docs/contracts/identity/user-created-envelope-v1.example.json"));
   }
 
   @Test void readsSharedFixtureAndPreservesNamesAndUtcTimestamp() throws Exception {
-    UserCreatedV1 event = JsonSerialization.readValue(fixture(), UserCreatedV1.class);
-    UserCreatedV1 rebuilt = UserCreatedV1.builder()
-        .schemaVersion(event.getSchemaVersion())
-        .eventId(event.getEventId())
-        .eventType(event.getEventType())
-        .occurredAt(event.getOccurredAt())
-        .realmId(event.getRealmId())
-        .identitySubject(event.getIdentitySubject())
-        .displayName(event.getDisplayName())
-        .build();
-    String json = JsonSerialization.writeValueAsString(rebuilt);
-    assertEquals(JsonSerialization.writeValueAsString(event), json);
-    assertEquals(JsonSerialization.readValue(fixture(), java.util.Map.class),
-        JsonSerialization.readValue(json, java.util.Map.class));
-    assertTrue(json.contains("\"identitySubject\":\"user-id-from-keycloak\""));
+    Envelope<UserCreatedV1> event = JsonSerialization.mapper.readValue(fixture(), JsonSerialization.mapper.getTypeFactory().constructParametricType(Envelope.class, UserCreatedV1.class));
+    String json = JsonSerialization.writeValueAsString(event);
+    assertEquals(JsonSerialization.readValue(fixture(), Map.class), JsonSerialization.readValue(json, Map.class));
+    assertEquals(event.getAggregateId().toString(), event.getData().getIdentitySubject());
+    assertEquals(event.getMessageId(), event.getCorrelationId());
+    assertEquals("1", event.getAggregateVersion());
     assertTrue(json.contains("2026-10-26T12:00:00Z"));
+    assertTrue(json.contains("\"causationId\":null"));
+    assertTrue(json.contains("\"traceparent\":null"));
     assertFalse(json.contains("password"));
   }
 
   @Test void rejectsMissingSubjectTypoAndFutureVersion() throws Exception {
-    Class<?> type = Class.forName("com.flashticket.keycloak.UserCreatedV1");
     String json = fixture();
-    assertThrows(Exception.class, () -> JsonSerialization.readValue(json.replace("identitySubject", "identitySubjet"), type));
-    assertThrows(Exception.class, () -> JsonSerialization.readValue(json.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2"), type));
-    assertThrows(Exception.class, () -> JsonSerialization.readValue(json.replace("identity.user-created.v1", "identity.user-created.v2"), type));
-    UserCreatedV1 event = JsonSerialization.readValue(json, UserCreatedV1.class);
-    assertThrows(IllegalArgumentException.class, () -> UserCreatedV1.builder()
-        .schemaVersion(event.getSchemaVersion())
-        .eventId(event.getEventId())
-        .eventType(event.getEventType())
-        .occurredAt(event.getOccurredAt())
-        .realmId(event.getRealmId())
-        .build());
+    for (String invalid : new String[] {
+        json.replace("identitySubject", "identitySubjet"),
+        json.replace("\"schemaVersion\": 1", "\"schemaVersion\": 2"),
+        json.replace("\"aggregateVersion\": \"1\"", "\"aggregateVersion\": \"0\""),
+        json.replace("\"aggregateVersion\": \"1\"", "\"aggregateVersion\": \"9223372036854775808\""),
+        json.replace("\"messageId\"", "\"eventId\""),
+        json.replace("\"data\"", "\"payload\"")}) {
+      assertThrows(Exception.class, () -> JsonSerialization.mapper.readValue(invalid, JsonSerialization.mapper.getTypeFactory().constructParametricType(Envelope.class, UserCreatedV1.class)));
+    }
+    assertThrows(IllegalArgumentException.class, () -> UserCreatedV1.builder().realmId("realm").build());
   }
 
   @Test void omitsAbsentDisplayName() throws Exception {
-    Class<?> type = Class.forName("com.flashticket.keycloak.UserCreatedV1");
-    String json = fixture().replace(",\n  \"displayName\": \"Nguyễn Văn An\"", "");
-    String encoded = JsonSerialization.writeValueAsString(JsonSerialization.readValue(json, type));
+    String json = fixture().replace("\"displayName\": \"Nguyễn Văn An\"", "\"displayName\": null");
+    Envelope<UserCreatedV1> event = JsonSerialization.mapper.readValue(json, JsonSerialization.mapper.getTypeFactory().constructParametricType(Envelope.class, UserCreatedV1.class));
+    String encoded = JsonSerialization.writeValueAsString(event);
     assertFalse(encoded.contains("displayName"));
+    assertTrue(encoded.contains("\"causationId\":null"));
+    assertTrue(encoded.contains("\"traceparent\":null"));
   }
 }

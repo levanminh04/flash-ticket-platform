@@ -28,11 +28,11 @@ class RegistrationEventListenerTests {
     when(realms.getRealm("realm")).thenReturn(realm);
     when(realm.getName()).thenReturn("flash-ticket");
     when(session.users()).thenReturn(users);
-    when(users.getUserById(realm, "subject")).thenReturn(user);
+    when(users.getUserById(realm, "709f5049-86dc-4a24-a0c0-75149348f4d6")).thenReturn(user);
     when(user.getFirstName()).thenReturn(" An ");
     when(user.getLastName()).thenReturn("Nguyễn Văn");
     event.setId("9fe8679b-759a-4529-bc49-e522c59da03b");
-    event.setRealmId("realm"); event.setUserId("subject");
+    event.setRealmId("realm"); event.setUserId("709f5049-86dc-4a24-a0c0-75149348f4d6");
     event.setTime(1793016000000L); event.setType(EventType.REGISTER);
     event.setDetails(Map.of(Details.REGISTER_METHOD, "form"));
   }
@@ -43,8 +43,19 @@ class RegistrationEventListenerTests {
     verify(store).enqueuePending(eq("flash-ticket-registration"), eq("realm"), eq("realm"),
         isNull(), eq(event.getId()), eq("identity.user-created.v1"), payload.capture(), isNull());
     Map<?,?> value = JsonSerialization.readValue(payload.getValue(), Map.class);
-    assertEquals("subject", value.get("identitySubject"));
-    assertEquals("Nguyễn Văn An", value.get("displayName"));
+    assertEquals(Set.of("messageId", "messageType", "schemaVersion", "aggregateId",
+        "aggregateVersion", "occurredAt", "correlationId", "causationId", "traceparent", "data"), value.keySet());
+    assertEquals(event.getId(), value.get("messageId"));
+    assertEquals(event.getId(), value.get("correlationId"));
+    assertEquals(event.getUserId(), value.get("aggregateId"));
+    assertEquals("1", value.get("aggregateVersion"));
+    assertEquals(UserCreatedV1.TYPE, value.get("messageType"));
+    assertEquals(1, value.get("schemaVersion"));
+    assertNull(value.get("causationId"));
+    assertNull(value.get("traceparent"));
+    Map<?,?> data = (Map<?,?>) value.get("data");
+    assertEquals(event.getUserId(), data.get("identitySubject"));
+    assertEquals("Nguyễn Văn An", data.get("displayName"));
     assertTrue(value.get("occurredAt") instanceof String);
     assertFalse(value.containsKey("email"));
     verify(tx, never()).commit(); verify(tx, never()).begin();
