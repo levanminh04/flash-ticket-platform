@@ -1,5 +1,35 @@
 # Booking Service handoff
 
+## Apply promotion and prepare purchase snapshot — 2026-10-29
+
+- `POST /api/v1/orders/{orderId}/promotion`, BUYER JWT, body `{"code":"SAVE"}`:
+  validates and holds one promotion usage, updates order discount/total atomically,
+  returns OrderView. Same normalized code replays without holding again before freeze.
+- `POST /internal/v1/orders/{orderId}/purchase-snapshot`, INTERNAL_SERVICE JWT,
+  body `{"buyerSubject":"..."}` from trusted Payment: validates the order and
+  saves price freeze + PurchaseSnapshot in one transaction before responding.
+  There is no separate freeze endpoint and no GET that writes a freeze.
+- Both operations use the same order write lock after the shared Event snapshot
+  lock; apply also locks promotion inventory. Deadline is checked with DB clock
+  after waiting. The existing 5s timeout is local to each transaction.
+- Once frozen, promotion changes are rejected. Retrying preparation on a payable
+  order returns the stored snapshot without changing timestamp/version/amount.
+  Expired/cancelled orders cannot open a new attempt using an old snapshot.
+- OrderItem retains original ticket prices/names/seats. At first freeze, event
+  metadata and PurchaseSnapshot.sourceConfigVersion come from the Event snapshot
+  read then; Order.sourceConfigVersion remains its creation version. A version
+  increase alone neither cancels nor reprices the order. Event commercial editing
+  after submission is outside the agreed business flow and must be enforced by Event.
+- Internal access reuses the shared INTERNAL_SERVICE boundary; it does not create
+  a Payment-only credential. Payment must authenticate the buyer before forwarding
+  buyerSubject. Gateway must keep internal routes private.
+- No new schema/class/dependency, start-requested publisher, Payment integration,
+  release worker, cancellation/refund handling or runtime deployment was added.
+  Existing promotion active-usage unique indexes are exercised in isolated tests.
+
+See [plan](../../docs/java-workflow/plans/2026-10-29-booking-order-promotion-purchase-snapshot-plan.md)
+and [verification](TESTING.md) for the executed checks and limitations.
+
 Current build/test uses **JDK 23**, compile release 23 and Enforcer `[23,24)`.
 Run `mvnw.cmd -B -ntp verify` from this service directory without skipping Enforcer.
 Earlier acceptance results below retain their original Java 21/23 caveats.

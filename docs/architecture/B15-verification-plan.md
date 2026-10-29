@@ -17,7 +17,7 @@
 | V03 | Mất response create order, retry cùng key; cùng key khác payload | Cùng order/reservation; khác input 409; không giữ chỗ hai lần | Booking |
 | V04 | Áp promotion đồng thời, hết lượt, đã dùng, hết hạn, total <=0 | Sáu lý do FR-22 phân biệt; usage và counter nguyên tử, không giữ mã hai lần | Booking |
 | V05 | Giá/giảm 1.5; subtotal100005 giảm10%; 2 đơn100050 phí1% | Reject đầu vào lẻ; discount10001,total90004; phí toàn event2001 chứ không2002 | Unit tiền trước cổng |
-| V06 | Payment lấy snapshot đồng thời áp voucher; attempt lỗi/retry; mất response | Cơ chế freeze phải được chốt ở B13-OPEN-02 trước triển khai; snapshot đã dùng thu tiền bất biến, không gia hạn; không ngầm ghi bằng GET | Booking/Payment |
+| V06 | POST chuẩn bị snapshot đồng thời áp voucher; hai POST đồng thời; attempt lỗi/retry; mất response | Cùng khóa order: voucher commit trước thì snapshot chứa giảm giá, freeze commit trước thì voucher bị PRICE_FROZEN; cùng snapshot/mốc/version khi retry, không gia hạn, không có API freeze riêng; đơn terminal không mở attempt mới | Booking/Payment |
 | V07 | IPN lặp C1; C1/C2 thực thu khác; IPN invalid signature/amount/attempt | Một confirmation; C2 hoàn riêng; invalid không tạo vé. Không thử/nhận là đã có workflow Q-07 | Payment |
 | V08 | Chờ khóa qua expires_at, confirm/expire/cancel cạnh tranh | Dùng decision time sau khóa; đúng hạn là hết hạn; ACCEPTED replay vẫn ACCEPTED; không hồi sinh | B14 race |
 | V09 | Crash giữa ghi charge–outbox, broker confirm–published_at, effect–ACK | Retry hội tụ, không mất lệnh và không lặp hiệu ứng; inbox/hash đúng | Sau broker tích hợp |

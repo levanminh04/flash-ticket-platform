@@ -25,9 +25,23 @@
 - Giữ ownership, idempotency, không bán vượt tồn, deadline Booking, không gia hạn giữ chỗ, retry không lặp hiệu ứng. Ảnh chỉ happy path; không bỏ expiry/cancel/hoàn muộn/FAILED.
 - Không có payment.start-requested từ Booking trong flow này; không bắt buộc FE poll thay cho response tạo thanh toán.
 - B13-OPEN-01: URL/chuỗi QR/ảnh QR và cách gọi adapter cổng. Ảnh trả QR từ lifeline DB không có nghĩa DB tự tạo QR hoặc đã chốt provider API.
-- B13-OPEN-02: cơ chế freeze, thời điểm snapshot/version, chống áp mã đồng thời khi Payment lấy snapshot. Không tự gắn write/freeze vào GET; phải chốt trong spec trước triển khai.
+- B13-OPEN-02 đã chốt hướng theo GOV-157 bên dưới: một POST nội bộ chuẩn bị snapshot, không có API freeze riêng. Chi tiết Java/query/test chờ duyệt trong spec/plan.
 - ACK trong ảnh là xác nhận giao tiếp sau commit; khi dùng RabbitMQ, broker ACK không tự cập nhật Saga ở service khác. Cơ chế result/xác nhận bền là chi tiết kỹ thuật cần đối chiếu khi lập plan.
 
 ## Tác động
 
 B13-v0.3, B14-v0.3, B15-v0.3 và B14-01 đã đồng bộ; readiness/chỉ mục/trạng thái có cảnh báo thay thế hướng 03/10. Bằng chứng cũ và GOV-149/150 giữ nguyên lịch sử; GOV-156 ghi quyết định mới. Không lan phê duyệt baseline thành phê duyệt toàn bộ phiên bản mới. Kiểm tra tài liệu tĩnh không phải kiểm chứng runtime.
+
+## Bổ sung được user duyệt — GOV-157, 29/10/2026
+
+Sau đề xuất “bỏ API freeze riêng, gộp kiểm đơn + cố định tiền + trả snapshot trong một POST nội bộ”, user trả lời “xác nhận”. Đây là bổ sung để triển khai đúng khi đồng thời, không phải chi tiết vốn được vẽ trong ảnh.
+
+- Áp voucher là request riêng vào Booking, cập nhật order/usage/tiền cùng transaction.
+- Payment gọi Booking một lần bằng POST để chuẩn bị snapshot. Booking kiểm chủ đơn/state/deadline, cố định tiền và lưu snapshot/mốc/version cùng transaction; commit rồi mới trả.
+- Cùng khóa order phân xử áp mã và chuẩn bị snapshot. Sau freeze không áp thêm voucher; retry dùng đúng snapshot cũ trên đơn còn payable; không gia hạn giữ chỗ.
+- Không tạo API freeze riêng hoặc ghi freeze trong GET. Tên route và chữ ký Java chưa được phê duyệt qua gate Shop App; chưa sửa Java/DB/runtime.
+- Ticketbox: frontend công khai có API vouchers/redeem và vouchers/apply riêng; chưa thấy API freeze trong ba bundle checkout đã đọc. Chưa bắt được request thanh toán thật vì yêu cầu đăng nhập, nên không khẳng định backend Ticketbox không freeze.
+
+## Hướng giữ order đã chốt — GOV-158
+
+User đồng ý không hủy/chặn order chỉ vì config tăng version; giữ giá/vé đã lưu, áp voucher riêng, cố định tổng tiền khi Payment POST lấy snapshot. Cấu hình thương mại vẫn khóa từ gửi duyệt theo B3/FR-07. Event hủy và order hết hạn/sai trạng thái xử lý riêng. Xem [spec v0.2](../../java-workflow/specs/2026-10-29-booking-order-promotion-purchase-snapshot-design.md) và [plan v0.1](../../java-workflow/plans/2026-10-29-booking-order-promotion-purchase-snapshot-plan.md); danh sách khai báo vẫn PENDING, chưa viết Java.

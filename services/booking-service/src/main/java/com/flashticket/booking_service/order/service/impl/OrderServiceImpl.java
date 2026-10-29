@@ -4,6 +4,7 @@ import com.flashticket.booking_service.availability.repository.*;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
 import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.dto.snapshot.SeatSelectionSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SelectionSnapshot;
@@ -11,6 +12,7 @@ import com.flashticket.booking_service.entity.*;
 import com.flashticket.booking_service.enums.Currency;
 import com.flashticket.booking_service.enums.EventState;
 import com.flashticket.booking_service.enums.OrderState;
+import com.flashticket.booking_service.enums.PromotionUsageState;
 import com.flashticket.booking_service.enums.ReservationState;
 import com.flashticket.booking_service.enums.ResourceKind;
 import com.flashticket.booking_service.enums.SeatState;
@@ -21,7 +23,9 @@ import com.flashticket.booking_service.mapper.OrderMapper;
 import com.flashticket.booking_service.order.repository.IdempotencyRequestRepository;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
+import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
 import com.flashticket.booking_service.reservation.repository.ReservationRepository;
+import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -49,12 +53,172 @@ public class OrderServiceImpl implements OrderService {
   private final SeatInventoryRepository seatInventoryRepository;
   private final ReservationRepository reservationRepository;
   private final JsonMapper objectMapper;
+  private final PromotionUsageRepository promotionUsageRepository;
+  private final Validator validator;
 
   @Value("${booking.reservation.hold-duration}")
   private Duration reservationHoldDuration;
 
   @Value("${booking.reservation.lock-timeout}")
   private String reservationLockTimeout;
+
+  @Override
+  @Transactional
+  public PurchaseSnapshot preparePurchaseSnapshot(String buyerSubject, UUID orderId) {
+    if (buyerSubject == null || buyerSubject.isBlank())
+      throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+    if (orderId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    orderRepository.configureTransactionLockTimeout(reservationLockTimeout);
+    UUID eventId =
+        orderRepository
+            .findEventIdByIdAndBuyerSubject(orderId, buyerSubject)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    var storedSnapshot =
+        eventSalesSnapshotRepository
+            .findForBookingByEventId(eventId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var lockedOrder =
+        orderRepository
+            .findLockedByIdAndBuyerSubject(orderId, buyerSubject)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    var storedReservation =
+        reservationRepository
+            .findByOrderId(orderId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var decisionAt = orderRepository.currentDatabaseTime();
+    if (storedSnapshot.getEventStatus() == EventState.CANCELLED
+        || lockedOrder.getLifecycleState() != OrderState.PENDING_PAYMENT
+        || storedReservation.getState() != ReservationState.HELD)
+      throw new BusinessException(ErrorCode.ORDER_NOT_PAYABLE);
+    if (!decisionAt.isBefore(lockedOrder.getExpiresAt()))
+      throw new BusinessException(ErrorCode.ORDER_EXPIRED);
+    if (!eventId.equals(storedReservation.getEventId())
+        || !buyerSubject.equals(storedReservation.getBuyerSubject())
+        || !lockedOrder.getExpiresAt().equals(storedReservation.getExpiresAt()))
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    // Cùng khóa với apply voucher: đọc lại sau khi chờ, không cố định tiền lần thứ hai.
+    if (lockedOrder.getPaymentFrozenAt() != null) {
+      var frozen = lockedOrder.getFrozenPurchaseSnapshot();
+      if (frozen == null
+          || !validator.validate(frozen).isEmpty()
+          || !lockedOrder.getId().equals(frozen.orderId())
+          || !eventId.equals(frozen.eventId())
+          || !buyerSubject.equals(frozen.buyerSubject())
+          || !Objects.equals(
+              lockedOrder.getPaymentSnapshotVersion(), Long.valueOf(frozen.sourceOrderVersion()))
+          || !lockedOrder.getPaymentFrozenAt().equals(frozen.frozenAt())
+          || !lockedOrder.getExpiresAt().equals(frozen.expiresAt())
+          || !lockedOrder.getTotal().toPlainString().equals(frozen.total())
+          || !lockedOrder.getSubtotal().toPlainString().equals(frozen.subtotal())
+          || !lockedOrder.getDiscount().toPlainString().equals(frozen.discount()))
+        throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+      return frozen;
+    }
+    if (lockedOrder.getFrozenPurchaseSnapshot() != null
+        || lockedOrder.getPaymentSnapshotVersion() != null)
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    var storedUsage =
+        promotionUsageRepository
+            .findByReservationIdAndStateIn(
+                storedReservation.getId(),
+                List.of(PromotionUsageState.HELD, PromotionUsageState.USED))
+            .orElse(null);
+    if (storedUsage != null
+        && (storedUsage.getState() != PromotionUsageState.HELD
+            || !eventId.equals(storedUsage.getEventId())
+            || !buyerSubject.equals(storedUsage.getBuyerSubject())
+            || !lockedOrder.getExpiresAt().equals(storedUsage.getExpiresAt())
+            || storedUsage.getDiscount().compareTo(lockedOrder.getDiscount()) != 0
+            || storedUsage.getCurrency() != lockedOrder.getCurrency()))
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    var frozen =
+        buildPurchaseSnapshot(
+            lockedOrder, storedSnapshot.getConfigurationSnapshot(), storedUsage, decisionAt);
+    if (!validator.validate(frozen).isEmpty())
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    // Không so version order với config hiện tại để từ chối: tiền lấy từ OrderItem đã lưu.
+    lockedOrder.setFrozenPurchaseSnapshot(frozen);
+    lockedOrder.setPaymentFrozenAt(decisionAt);
+    lockedOrder.setPaymentSnapshotVersion(1L);
+    lockedOrder.setUpdatedAt(decisionAt);
+    orderRepository.save(lockedOrder);
+    return frozen;
+  }
+
+  private PurchaseSnapshot buildPurchaseSnapshot(
+      Order lockedOrder,
+      SalesConfiguration storedConfiguration,
+      PromotionUsage storedPromotionUsage,
+      Instant decisionAt) {
+    if (storedConfiguration == null
+        || !lockedOrder.getEventId().equals(storedConfiguration.eventId())
+        || lockedOrder.getSalesMode() != storedConfiguration.mode())
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    if (lockedOrder.getItems().isEmpty()
+        || lockedOrder.getItems().stream()
+            .anyMatch(
+                storedItem ->
+                    !lockedOrder.getEventId().equals(storedItem.getEventId())
+                        || storedItem.getCurrency() != lockedOrder.getCurrency()
+                        || storedItem.getSelectionSnapshot() == null
+                        || storedItem.getSelectionSnapshot().seats() == null))
+      throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    if (storedPromotionUsage != null
+        && (!lockedOrder.getEventId().equals(storedPromotionUsage.getPromotion().getEventId())
+            || storedPromotionUsage.getPromotion().getConfigurationSnapshot() == null
+            || storedPromotionUsage.getPromotion().getConfigurationSnapshot().configuration()
+                == null)) throw new BusinessException(ErrorCode.CONFIG_NOT_READY);
+    var items =
+        lockedOrder.getItems().stream()
+            .sorted(Comparator.comparing(OrderItem::getId))
+            .map(
+                item ->
+                    new PurchaseSnapshot.Item(
+                        item.getId(),
+                        item.getTicketTypeId(),
+                        item.getTicketTypeName(),
+                        item.getQuantity(),
+                        item.getUnitPrice().toPlainString(),
+                        item.getLineSubtotal().toPlainString(),
+                        item.getSectorId(),
+                        item.getSelectionSnapshot().seats().stream()
+                            .sorted(Comparator.comparing(SeatSelectionSnapshot::seatId))
+                            .toList()))
+            .toList();
+    var promotion =
+        storedPromotionUsage == null
+            ? null
+            : new PurchaseSnapshot.AppliedPromotionSnapshot(
+                storedPromotionUsage.getPromotion().getPromotionId(),
+                storedPromotionUsage
+                    .getPromotion()
+                    .getConfigurationSnapshot()
+                    .configuration()
+                    .code(),
+                storedPromotionUsage.getDiscount().toPlainString());
+    return new PurchaseSnapshot(
+        1,
+        lockedOrder.getId(),
+        lockedOrder.getEventId(),
+        lockedOrder.getBuyerSubject(),
+        lockedOrder.getCustomerEmail(),
+        storedConfiguration.sourceConfigVersion(),
+        "1",
+        decisionAt,
+        lockedOrder.getExpiresAt(),
+        lockedOrder.getCurrency(),
+        storedConfiguration.eventTitle(),
+        storedConfiguration.eventStartsAt(),
+        storedConfiguration.eventEndsAt(),
+        storedConfiguration.venueName(),
+        lockedOrder.getSalesMode(),
+        lockedOrder.getSectorId(),
+        lockedOrder.getSubtotal().toPlainString(),
+        lockedOrder.getDiscount().toPlainString(),
+        lockedOrder.getTotal().toPlainString(),
+        promotion,
+        items);
+  }
 
   @Override
   @Transactional

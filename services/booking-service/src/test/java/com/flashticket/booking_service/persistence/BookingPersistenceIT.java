@@ -8,6 +8,7 @@ import com.flashticket.booking_service.availability.service.AvailabilityService;
 import com.flashticket.booking_service.availability.service.impl.AvailabilityServiceImpl;
 import com.flashticket.booking_service.config.BookingJsonConfig;
 import com.flashticket.booking_service.dto.message.Envelope;
+import com.flashticket.booking_service.dto.request.ApplyPromotionRequest;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
 import com.flashticket.booking_service.dto.response.OrderView;
@@ -88,6 +89,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ContextConfiguration(initializers = BookingPersistenceIT.BookingConfigInitializer.class)
 @Import({
   AvailabilityServiceImpl.class,
+  com.flashticket.booking_service.promotion.service.impl.PromotionServiceImpl.class,
   OrderServiceImpl.class,
   OrderMapperImpl.class,
   MappingValueConverter.class,
@@ -167,6 +169,7 @@ class BookingPersistenceIT {
   @Autowired JdbcTemplate jdbc;
   @Autowired ApplicationContext context;
   @Autowired OrderRepository orders;
+  @Autowired com.flashticket.booking_service.promotion.service.PromotionService promotionService;
   @Autowired OrderService orderService;
   @Autowired AvailabilityService salesService;
   @Autowired EventSalesSnapshotRepository snapshots;
@@ -176,6 +179,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void salesConfigurationAndInventoriesCommitTogether() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var config = with(sales(), "promotions", List.of(promotion()));
       var message =
           new Envelope<>(
@@ -435,6 +441,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void failedInventoryWriteRollsBackSnapshotAndInbox() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var config = with(sales(), "mode", SalesMode.SEAT_MAP);
       config =
           with(
@@ -477,6 +486,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void replayedMessageDoesNotResetInventoryCounters() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var message =
           new Envelope<>(
               MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
@@ -568,6 +580,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void staleConfigurationDoesNotOverwriteNewerSnapshot() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var config = with(sales(), "sourceConfigVersion", "5");
       salesService.synchronizeSalesConfiguration(
           new Envelope<>(
@@ -611,6 +626,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void sameVersionWithDifferentPayloadIsRejected() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var message =
           new Envelope<>(
               MESSAGE, "event.sales-configured.v1", 1, EVENT, "1", NOW, EVENT, null, null, sales());
@@ -640,6 +658,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void newerConfigurationPreservesHeldAndPurchasedCounters() {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var config = with(sales(), "promotions", List.of(promotion()));
       salesService.synchronizeSalesConfiguration(
           new Envelope<>(
@@ -720,6 +741,9 @@ class BookingPersistenceIT {
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void concurrentConfigurationsKeepTheNewestCommittedVersion() throws Exception {
     try {
+      // Test đếm toàn bảng cần database test rỗng, không phụ thuộc thứ tự chạy.
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
       var ready = new CountDownLatch(2);
       var start = new CountDownLatch(1);
       try (var executor = Executors.newFixedThreadPool(2)) {
@@ -938,6 +962,11 @@ class BookingPersistenceIT {
     } finally {
       jdbc.execute(
           "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+      // Test này DROP/ADD cột thật: bỏ connection cache plan cũ trước test tiếp theo.
+      context
+          .getBean(com.zaxxer.hikari.HikariDataSource.class)
+          .getHikariPoolMXBean()
+          .softEvictConnections();
     }
   }
 
@@ -1953,21 +1982,14 @@ class BookingPersistenceIT {
                   }
                 });
         if (lockSnapshot) {
-          Awaitility.await()
-              .atMost(Duration.ofSeconds(4))
-              .pollInterval(Duration.ofMillis(100))
-              .until(
-                  () -> {
-                    try (var statement =
-                        connection.prepareStatement(
-                            "select clock_timestamp() >= sale_ends_at from booking_schema.tbl_event_sales_snapshots where event_id=?")) {
-                      statement.setObject(1, config.eventId());
-                      try (var result = statement.executeQuery()) {
-                        result.next();
-                        return result.getBoolean(1);
-                      }
-                    }
-                  });
+          // Request đã bắt đầu và đang chờ khóa: đóng bán ngay trước khi nhả khóa.
+          // Không phải chờ sát timeout 5s chỉ để tạo điều kiện hết giờ bán.
+          try (var statement =
+              connection.prepareStatement(
+                  "update booking_schema.tbl_event_sales_snapshots set sale_ends_at=clock_timestamp() where event_id=?")) {
+            statement.setObject(1, config.eventId());
+            statement.executeUpdate();
+          }
         } else {
           Awaitility.await()
               .atMost(Duration.ofSeconds(4))
@@ -1994,6 +2016,1152 @@ class BookingPersistenceIT {
                   Long.class,
                   config.eventId()))
           .isZero();
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void appliesFixedAndPercentPromotionAtomically() throws Exception {
+    try {
+
+      for (int scenario = 0; scenario < 3; scenario++) {
+        boolean percent = scenario != 0;
+
+        var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        if (scenario == 2)
+          baseConfig =
+              with(
+                  baseConfig,
+                  "ticketTypes",
+                  List.of(with(baseConfig.ticketTypes().getFirst(), "unitPrice", "100005")));
+        var promotionConfig =
+            new PromotionConfig(
+                UUID.randomUUID(),
+                "SAVE",
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600),
+                "2",
+                1,
+                (percent
+                    ? new PromotionConfig.PercentDiscount("PERCENT", 10)
+                    : new PromotionConfig.FixedDiscount("FIXED", "10")));
+        var config =
+            with(
+                with(baseConfig, "promotions", List.of(promotionConfig)),
+                "sourceConfigVersion",
+                "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        var order =
+            orderService.createOrder(
+                "buyer", UUID.randomUUID(), createOrderRequest(config, scenario == 2 ? 1 : 2));
+
+        var result =
+            promotionService.applyPromotionToOrder(
+                "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+        assertThat(result.getDiscount()).isEqualTo(scenario == 2 ? "10001" : percent ? "20" : "10");
+        assertThat(result.getTotal()).isEqualTo(scenario == 2 ? "90004" : percent ? "180" : "190");
+        assertThat(result.getExpiresAt()).isEqualTo(order.getExpiresAt());
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                    Long.class,
+                    promotionConfig.promotionId()))
+            .isEqualTo(1L);
+        assertThat(
+                jdbc.queryForObject(
+                    "select state from booking_schema.tbl_promotion_usages where promotion_id=?",
+                    String.class,
+                    promotionConfig.promotionId()))
+            .isEqualTo("HELD");
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsPromotionBusinessViolations() throws Exception {
+    try {
+
+      for (var expected :
+          List.of(
+              ErrorCode.PROMOTION_NOT_FOUND,
+              ErrorCode.PROMOTION_OUTSIDE_WINDOW,
+              ErrorCode.PROMOTION_EXHAUSTED,
+              ErrorCode.PROMOTION_ALREADY_USED,
+              ErrorCode.ORDER_ALREADY_HAS_PROMOTION,
+              ErrorCode.NON_POSITIVE_TOTAL)) {
+
+        var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var promotionConfig =
+            new PromotionConfig(
+                UUID.randomUUID(),
+                "SAVE",
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600),
+                "2",
+                1,
+                (expected == ErrorCode.NON_POSITIVE_TOTAL
+                    ? new PromotionConfig.FixedDiscount("FIXED", "200")
+                    : new PromotionConfig.PercentDiscount("PERCENT", 10)));
+        var config =
+            with(
+                with(baseConfig, "promotions", List.of(promotionConfig)),
+                "sourceConfigVersion",
+                "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+        String code = "SAVE";
+        if (expected == ErrorCode.PROMOTION_NOT_FOUND) code = "MISSING";
+        if (expected == ErrorCode.PROMOTION_OUTSIDE_WINDOW)
+          jdbc.update(
+              "update booking_schema.tbl_promotion_inventory set starts_at=clock_timestamp()+interval '1 hour',ends_at=clock_timestamp()+interval '2 hours' where promotion_id=?",
+              promotionConfig.promotionId());
+        if (expected == ErrorCode.PROMOTION_EXHAUSTED)
+          jdbc.update(
+              "update booking_schema.tbl_promotion_inventory set used=configured_limit where promotion_id=?",
+              promotionConfig.promotionId());
+        if (expected == ErrorCode.PROMOTION_ALREADY_USED) {
+          var other =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 1));
+          promotionService.applyPromotionToOrder(
+              "buyer", other.getOrderId(), new ApplyPromotionRequest("SAVE"));
+        }
+        if (expected == ErrorCode.ORDER_ALREADY_HAS_PROMOTION) {
+          promotionService.applyPromotionToOrder(
+              "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+          code = "OTHER";
+        }
+        String requestedCode = code;
+        long before =
+            jdbc.queryForObject(
+                "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                Long.class,
+                promotionConfig.promotionId());
+        assertThatThrownBy(
+                () ->
+                    promotionService.applyPromotionToOrder(
+                        "buyer", order.getOrderId(), new ApplyPromotionRequest(requestedCode)))
+            .isInstanceOfSatisfying(
+                BusinessException.class, e -> assertThat(e.getErrorCode()).isEqualTo(expected));
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                    Long.class,
+                    promotionConfig.promotionId()))
+            .isEqualTo(before);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysSamePromotionWithoutHoldingAgain() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      var first =
+          promotionService.applyPromotionToOrder(
+              "buyer", order.getOrderId(), new ApplyPromotionRequest(" SAVE "));
+      var replay =
+          promotionService.applyPromotionToOrder(
+              "buyer", order.getOrderId(), new ApplyPromotionRequest("save"));
+      assertThat(replay.getTotal()).isEqualTo(first.getTotal());
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_promotion_usages where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isEqualTo(1L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isEqualTo(1L);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsPromotionForUnpayableOrForeignOrder() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "other", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_FOUND));
+      orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PRICE_FROZEN));
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isZero();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void serializesLastPromotionUseAcrossOrders() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "1",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      var other =
+          orderService.createOrder("other", UUID.randomUUID(), createOrderRequest(config, 1));
+      var start = new CountDownLatch(1);
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var first =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return promotionService.applyPromotionToOrder(
+                        "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                  } catch (RuntimeException e) {
+                    return e;
+                  }
+                });
+        var second =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return promotionService.applyPromotionToOrder(
+                        "other", other.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                  } catch (RuntimeException e) {
+                    return e;
+                  }
+                });
+        start.countDown();
+        var outcomes = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+        assertThat(outcomes.stream().filter(OrderView.class::isInstance)).hasSize(1);
+        assertThat(
+                outcomes.stream()
+                    .filter(BusinessException.class::isInstance)
+                    .map(BusinessException.class::cast)
+                    .map(BusinessException::getErrorCode))
+            .containsExactly(ErrorCode.PROMOTION_EXHAUSTED);
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isEqualTo(1L);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void preventsSameBuyerHoldingPromotionOnTwoOrders() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      var other =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 1));
+      var start = new CountDownLatch(1);
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var first =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return promotionService.applyPromotionToOrder(
+                        "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                  } catch (RuntimeException e) {
+                    return e;
+                  }
+                });
+        var second =
+            executor.submit(
+                () -> {
+                  start.await();
+                  try {
+                    return promotionService.applyPromotionToOrder(
+                        "buyer", other.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                  } catch (RuntimeException e) {
+                    return e;
+                  }
+                });
+        start.countDown();
+        var outcomes = List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+        assertThat(outcomes.stream().filter(OrderView.class::isInstance)).hasSize(1);
+        assertThat(
+                outcomes.stream()
+                    .filter(BusinessException.class::isInstance)
+                    .map(BusinessException.class::cast)
+                    .map(BusinessException::getErrorCode))
+            .containsExactly(ErrorCode.PROMOTION_ALREADY_USED);
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isEqualTo(1L);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackPromotionWhenTransactionFails() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      assertThatThrownBy(
+              () ->
+                  new TransactionTemplate(transactionManager)
+                      .execute(
+                          status -> {
+                            promotionService.applyPromotionToOrder(
+                                "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                            // Lỗi SQL sau các thay đổi thật: transaction phải rollback cả
+                            // usage/counter/tiền.
+                            jdbc.update(
+                                "update booking_schema.tbl_orders set total=-1 where id=?",
+                                order.getOrderId());
+                            return null;
+                          }))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_promotion_usages where promotion_id=?",
+                  Long.class,
+                  promotionConfig.promotionId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select total from booking_schema.tbl_orders where id=?",
+                  BigDecimal.class,
+                  order.getOrderId()))
+          .isEqualByComparingTo("200");
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void preparesSnapshotForEverySelectionMode() throws Exception {
+    try {
+
+      for (int mode = 0; mode < 3; mode++) {
+        var config =
+            seedOrderCreationConfiguration(
+                mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                10,
+                5);
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        var snapshot = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+        assertThat(snapshot.total()).isEqualTo(order.getTotal());
+        assertThat(snapshot.promotion()).isNull();
+        assertThat(snapshot.items().stream().mapToInt(PurchaseSnapshot.Item::quantity).sum())
+            .isEqualTo(2);
+        assertThat(snapshot.items().stream().flatMap(i -> i.seats().stream()))
+            .hasSize(mode == 2 ? 2 : 0);
+        assertThat(snapshot.expiresAt()).isEqualTo(order.getExpiresAt());
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysPreparedSnapshotWithoutChangingMoneyOrVersion() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      promotionService.applyPromotionToOrder(
+          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var a =
+            executor.submit(
+                () -> orderService.preparePurchaseSnapshot("buyer", order.getOrderId()));
+        var b =
+            executor.submit(
+                () -> orderService.preparePurchaseSnapshot("buyer", order.getOrderId()));
+        var first = a.get(15, TimeUnit.SECONDS);
+        assertThat(b.get(15, TimeUnit.SECONDS)).isEqualTo(first);
+        assertThat(orderService.preparePurchaseSnapshot("buyer", order.getOrderId()))
+            .isEqualTo(first);
+        assertThat(first.sourceOrderVersion()).isEqualTo("1");
+        assertThat(first.total()).isEqualTo("180");
+        assertThat(first.promotion().discount()).isEqualTo("20");
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void serializesPromotionAndSnapshotPreparation() throws Exception {
+    try {
+
+      for (boolean promotionFirst : List.of(true, false)) {
+
+        var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var promotionConfig =
+            new PromotionConfig(
+                UUID.randomUUID(),
+                "SAVE",
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600),
+                "2",
+                1,
+                new PromotionConfig.PercentDiscount("PERCENT", 10));
+        var config =
+            with(
+                with(baseConfig, "promotions", List.of(promotionConfig)),
+                "sourceConfigVersion",
+                "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+          var waiting = new java.util.concurrent.atomic.AtomicReference<Future<Object>>();
+          new TransactionTemplate(transactionManager)
+              .executeWithoutResult(
+                  status -> {
+                    if (promotionFirst)
+                      promotionService.applyPromotionToOrder(
+                          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                    else orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+                    int blocker = jdbc.queryForObject("select pg_backend_pid()", Integer.class);
+                    waiting.set(
+                        executor.submit(
+                            () -> {
+                              try {
+                                return promotionFirst
+                                    ? orderService.preparePurchaseSnapshot(
+                                        "buyer", order.getOrderId())
+                                    : promotionService.applyPromotionToOrder(
+                                        "buyer",
+                                        order.getOrderId(),
+                                        new ApplyPromotionRequest("SAVE"));
+                              } catch (RuntimeException e) {
+                                return e;
+                              }
+                            }));
+                    Awaitility.await()
+                        .atMost(Duration.ofSeconds(3))
+                        .until(
+                            () ->
+                                jdbc.queryForObject(
+                                    "select exists(select 1 from pg_stat_activity where ? = any(pg_blocking_pids(pid)))",
+                                    Boolean.class,
+                                    blocker));
+                  });
+          Object result = waiting.get().get(10, TimeUnit.SECONDS);
+          if (promotionFirst) assertThat(((PurchaseSnapshot) result).total()).isEqualTo("180");
+          else
+            assertThat(result)
+                .isInstanceOfSatisfying(
+                    BusinessException.class,
+                    e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PRICE_FROZEN));
+        }
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsSnapshotForExpiredCancelledOrForeignOrder() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      assertThatThrownBy(() -> orderService.preparePurchaseSnapshot("other", order.getOrderId()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_FOUND));
+      orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      jdbc.update(
+          "update booking_schema.tbl_orders set lifecycle_state='EXPIRED' where id=?",
+          order.getOrderId());
+      assertThatThrownBy(() -> orderService.preparePurchaseSnapshot("buyer", order.getOrderId()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_PAYABLE));
+      jdbc.update(
+          "update booking_schema.tbl_orders set lifecycle_state='PENDING_PAYMENT' where id=?",
+          order.getOrderId());
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+          config.eventId());
+      assertThatThrownBy(() -> orderService.preparePurchaseSnapshot("buyer", order.getOrderId()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_PAYABLE));
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void preparesSnapshotWhenConfigurationVersionChangesWithoutRepricingOrder() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      var newer = with(config, "sourceConfigVersion", "3");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "3",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              newer));
+      var snapshot = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      assertThat(snapshot.sourceConfigVersion()).isEqualTo("3");
+      assertThat(snapshot.total()).isEqualTo("200");
+      assertThat(
+              jdbc.queryForObject(
+                  "select source_config_version from booking_schema.tbl_orders where id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isEqualTo(2L);
+      var newest = with(newer, "sourceConfigVersion", "4");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "4",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              newest));
+      assertThat(orderService.preparePurchaseSnapshot("buyer", order.getOrderId()))
+          .isEqualTo(snapshot);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackInvalidSnapshotPreparation() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      jdbc.update(
+          "update booking_schema.tbl_orders set discount=5,total=195 where id=?",
+          order.getOrderId());
+      assertThatThrownBy(() -> orderService.preparePurchaseSnapshot("buyer", order.getOrderId()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CONFIG_NOT_READY));
+      assertThat(
+              jdbc.queryForObject(
+                  "select payment_frozen_at is null and payment_snapshot_version is null and frozen_purchase_snapshot is null from booking_schema.tbl_orders where id=?",
+                  Boolean.class,
+                  order.getOrderId()))
+          .isTrue();
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void checksDeadlineAfterWaitingForOrderLock() throws Exception {
+    try {
+
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      Object target =
+          org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+      Object original =
+          org.springframework.test.util.ReflectionTestUtils.getField(
+              target, "reservationHoldDuration");
+      try {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", Duration.ofSeconds(3));
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 1));
+        try (var connection = jdbc.getDataSource().getConnection();
+            var executor = Executors.newSingleThreadExecutor()) {
+          connection.setAutoCommit(false);
+          try (var lock =
+              connection.prepareStatement(
+                  "select id from booking_schema.tbl_orders where id=? for update")) {
+            lock.setObject(1, order.getOrderId());
+            lock.executeQuery().close();
+          }
+          var result =
+              executor.submit(
+                  () -> {
+                    try {
+                      return orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+                    } catch (RuntimeException e) {
+                      return e;
+                    }
+                  });
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(2))
+              .until(
+                  () ->
+                      jdbc.queryForObject(
+                          "select exists(select 1 from pg_locks where not granted)",
+                          Boolean.class));
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(4))
+              .until(
+                  () ->
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= ?",
+                          Boolean.class,
+                          java.sql.Timestamp.from(order.getExpiresAt())));
+          connection.commit();
+          assertThat(result.get(10, TimeUnit.SECONDS))
+              .isInstanceOfSatisfying(
+                  BusinessException.class,
+                  e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_EXPIRED));
+        }
+      } finally {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", original);
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void scopesPromotionAndSnapshotLockTimeoutToTransaction() throws Exception {
+    try {
+
+      for (boolean snapshot : List.of(true, false)) {
+
+        var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var promotionConfig =
+            new PromotionConfig(
+                UUID.randomUUID(),
+                "SAVE",
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600),
+                "2",
+                1,
+                new PromotionConfig.PercentDiscount("PERCENT", 10));
+        var config =
+            with(
+                with(baseConfig, "promotions", List.of(promotionConfig)),
+                "sourceConfigVersion",
+                "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+        String original = jdbc.queryForObject("show lock_timeout", String.class);
+        try (var connection = jdbc.getDataSource().getConnection();
+            var executor = Executors.newSingleThreadExecutor()) {
+          connection.setAutoCommit(false);
+          try (var lock =
+              connection.prepareStatement(
+                  "select id from booking_schema.tbl_orders where id=? for update")) {
+            lock.setObject(1, order.getOrderId());
+            lock.executeQuery().close();
+          }
+          var result =
+              executor.submit(
+                  () -> {
+                    try {
+                      return snapshot
+                          ? orderService.preparePurchaseSnapshot("buyer", order.getOrderId())
+                          : promotionService.applyPromotionToOrder(
+                              "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                    } catch (RuntimeException e) {
+                      return e;
+                    }
+                  });
+          Object outcome = result.get(10, TimeUnit.SECONDS);
+          assertThat(outcome).isInstanceOf(RuntimeException.class);
+          assertThat(ErrorCode.from((RuntimeException) outcome)).isEqualTo(ErrorCode.RESOURCE_BUSY);
+          assertThat(((RuntimeException) outcome).getMessage()).contains("lock timeout");
+          connection.rollback();
+        }
+        assertThat(jdbc.queryForObject("show lock_timeout", String.class)).isEqualTo(original);
+        assertThat(
+                jdbc.queryForObject(
+                    "select payment_frozen_at from booking_schema.tbl_orders where id=?",
+                    java.sql.Timestamp.class,
+                    order.getOrderId()))
+            .isNull();
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_promotion_inventory where promotion_id=?",
+                    Long.class,
+                    promotionConfig.promotionId()))
+            .isZero();
+      }
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rejectsMissingAmbiguousOrInconsistentPromotionConfiguration() throws Exception {
+    try {
+
+      var baseConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promotionConfig =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "2",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config =
+          with(
+              with(baseConfig, "promotions", List.of(promotionConfig)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+
+      jdbc.update(
+          "update booking_schema.tbl_promotion_inventory set source_config_version=1 where promotion_id=?",
+          promotionConfig.promotionId());
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SALES_CONFIGURATION_CONFLICT));
+      jdbc.update(
+          "delete from booking_schema.tbl_promotion_inventory where promotion_id=?",
+          promotionConfig.promotionId());
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CONFIG_NOT_READY));
+
+      var duplicate = with(promotionConfig, "promotionId", UUID.randomUUID());
+      var ambiguous =
+          with(
+              with(config, "promotions", List.of(promotionConfig, duplicate)),
+              "sourceConfigVersion",
+              "3");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "3",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              ambiguous));
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SALES_CONFIGURATION_CONFLICT));
+      var removed = with(with(ambiguous, "promotions", List.of()), "sourceConfigVersion", "4");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "4",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              removed));
+      assertThatThrownBy(
+              () ->
+                  promotionService.applyPromotionToOrder(
+                      "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE")))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.PROMOTION_NOT_FOUND));
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages cascade");
     }
   }
 

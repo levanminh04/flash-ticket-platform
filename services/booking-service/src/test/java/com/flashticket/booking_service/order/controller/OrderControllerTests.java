@@ -33,12 +33,116 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.json.JsonMapper;
 
-@WebMvcTest(OrderController.class)
+@WebMvcTest({OrderController.class, InternalOrderController.class})
 @Import({SecurityConfig.class, BookingJsonConfig.class, GlobalExceptionHandler.class})
 class OrderControllerTests {
   @Autowired MockMvc mvc;
   @Autowired JsonMapper objectMapper;
   @MockitoBean OrderService orderService;
+  @MockitoBean com.flashticket.booking_service.promotion.service.PromotionService promotionService;
+
+  @Test
+  void appliesPromotionUsingAuthenticatedBuyer() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(promotionService.applyPromotionToOrder(eq("buyer"), eq(id), any()))
+        .thenReturn(
+            new OrderView(
+                id,
+                UUID.randomUUID(),
+                OrderState.PENDING_PAYMENT,
+                "buyer@example.com",
+                Currency.VND,
+                "200",
+                "20",
+                "180",
+                Instant.now().plusSeconds(900),
+                null,
+                "1",
+                List.of()));
+    mvc.perform(
+            post("/api/v1/orders/" + id + "/promotion")
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"SAVE\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value("180"));
+    verify(promotionService).applyPromotionToOrder(eq("buyer"), eq(id), any());
+  }
+
+  @Test
+  void rejectsInvalidPromotionRequest() throws Exception {
+    for (String body : List.of("{}", "{\"code\":\" \"}"))
+      mvc.perform(
+              post("/api/v1/orders/" + UUID.randomUUID() + "/promotion")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    verifyNoInteractions(promotionService);
+  }
+
+  @Test
+  void rejectsUnauthorizedPromotionRequest() throws Exception {
+    String path = "/api/v1/orders/" + UUID.randomUUID() + "/promotion";
+    mvc.perform(post(path)).andExpect(status().isUnauthorized());
+    mvc.perform(post(path).with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(promotionService);
+  }
+
+  @Test
+  void preparesSnapshotForInternalCaller() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(orderService.preparePurchaseSnapshot("buyer", id))
+        .thenReturn(com.flashticket.booking_service.support.BookingFixtures.purchase());
+    mvc.perform(
+            post("/internal/v1/orders/" + id + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"buyerSubject\":\"buyer\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value("200"));
+    verify(orderService).preparePurchaseSnapshot("buyer", id);
+  }
+
+  @Test
+  void rejectsInvalidSnapshotRequest() throws Exception {
+    for (String body : List.of("{}", "{\"buyerSubject\":\"\"}"))
+      mvc.perform(
+              post("/internal/v1/orders/" + UUID.randomUUID() + "/purchase-snapshot")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void rejectsBuyerOnInternalSnapshotRoute() throws Exception {
+    mvc.perform(
+            post("/internal/v1/orders/" + UUID.randomUUID() + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void doesNotExposeSeparateFreezeOrSnapshotGet() throws Exception {
+    String path = "/internal/v1/orders/" + UUID.randomUUID();
+    mvc.perform(
+            post(path + "/freeze-payment")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE"))))
+        .andExpect(status().isNotFound());
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    path + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE"))))
+        .andExpect(status().isMethodNotAllowed());
+    verifyNoInteractions(orderService);
+  }
 
   @Test
   void createsOrderUsingAuthenticatedSubjectAndIdempotencyKey() throws Exception {

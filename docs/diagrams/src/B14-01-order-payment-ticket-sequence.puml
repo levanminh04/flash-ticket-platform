@@ -21,8 +21,8 @@ opt áp dụng mã khuyến mãi trước bắt đầu thanh toán
 end
 Buyer -> Frontend : Xác nhận thanh toán
 Frontend -> Payment : POST payment(orderId) + Idempotency-Key [16]
-Payment -> Booking : Lấy PurchaseSnapshot theo orderId [17]
-Booking -> BDB : Đọc order/items/promotion [18-19]
+Payment -> Booking : POST chuẩn bị PurchaseSnapshot theo orderId [17, GOV-157]
+Booking -> BDB : TX: khóa/kiểm đơn + cố định tiền + lưu snapshot; COMMIT
 BDB --> Booking : Dữ liệu đơn [20]
 Booking --> Payment : PurchaseSnapshot [21]
 Payment -> PDB : TX: lưu snapshot + PaymentAttempt; COMMIT [22-23]
@@ -34,7 +34,8 @@ Payment --> Frontend : Dữ liệu thanh toán / QR [24-25]
 Frontend --> Buyer : Hiển thị QR [26]
 note over Booking,Payment
   Không có start outbox từ Booking.
-  Freeze/đua áp voucher còn B13-OPEN-02; GET không ngầm ghi.
+  GOV-157: gộp cố định tiền và trả snapshot trong một POST.
+  Không có API freeze riêng, không ghi bằng GET.
 end note
 Buyer -> Gateway : Thực hiện thanh toán
 Gateway -> Payment : IPN có chữ ký / query result

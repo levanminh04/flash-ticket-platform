@@ -1,8 +1,83 @@
 # Booking Service tests
 
+## Order promotion and purchase snapshot — 2026-10-29
+
+New coverage: seven HTTP methods in OrderControllerTests and sixteen PostgreSQL
+methods in BookingPersistenceIT. They cover FIXED/PERCENT/HALF_UP, replay, six
+promotion errors, last-use/buyer quota races, apply-vs-freeze ordering, immutable
+snapshot replay, three selection modes, config-version changes, rollback, deadline
+after lock wait and transaction-local 5s lock timeout.
+
+Observed: `mvn -B -ntp test` passed 355 tests; the targeted PostgreSQL run passed
+19 tests (16 new plus 3 existing matches), no failures/errors/skips. Tests used
+a disposable local Testcontainers PostgreSQL 17 database, not server 119.
+The first targeted run exposed missing cleanup in new tests; finally cleanup
+now follows the existing disposable-database pattern. No cleanup is run against
+the team's shared database.
+
+Final full-module `-P integration verify` passed at 13:52:40 on 2026-10-29:
+**355 unit tests + 64 integration tests**, no failures/errors/skips, BUILD SUCCESS.
+Local log: `target/promotion-verify-final.log`. `git diff --check` also passed.
+Existing global-count tests now start with clean disposable data; the test that
+alters columns evicts pooled connections holding obsolete PostgreSQL prepared plans.
+The snapshot-lock DB-clock test now sets the closing time after observing the
+blocked request, before releasing the lock, avoiding a narrow timed wait.
+Production transaction lock timeout remains 5s; assertions still require the
+specific business result, never an arbitrary technical failure.
+
+```powershell
+rtk mvn -B -ntp test
+rtk mvn -B -ntp -P integration test-compile failsafe:integration-test failsafe:verify "-Dit.test=BookingPersistenceIT#*Promotion*+*Snapshot*+checksDeadlineAfterWaitingForOrderLock"
+rtk mvn -B -ntp -P integration verify
+```
+
+These are Booking component/database checks, not a live Payment/Keycloak/broker
+checkout or payment-gateway acceptance. The service has not been deployed by this task.
+
 Run commands from this service directory with JDK 23. Compilation targets Java 23;
 Maven Enforcer requires Java [23,24). Keep Enforcer enabled for verification.
 Older results below retain the Java version and Enforcer exceptions used at the time.
+
+## Live curl acceptance — 2026-10-29
+
+**10/10 cases passed** against the real Booking process at `http://localhost:8082`,
+PostgreSQL 16.15 on server 119 through SSH tunnel `127.0.0.1:5432`, RabbitMQ 119,
+and actual Keycloak BUYER / INTERNAL_SERVICE tokens. Config Server ran on 8888;
+Discovery on 8761 registered Booking UP. Booking and Config health both returned
+HTTP 200 / UP after the run. This was not a mocked HTTP or MockMvc run.
+
+| Case | Observed HTTP/result and DB checks |
+| --- | --- |
+| 1. Apply PERCENT | 200; subtotal400000, discount40000, total360000; held1/usage1 |
+| 2. Same voucher, normalized code | 200; total/rowVersion/held/usage unchanged |
+| 3. Apply FIXED | 200; subtotal200000, discount25000, total175000; usage1 |
+| 4. Unknown code | 422 PROMOTION_NOT_FOUND; no order/usage change |
+| 5. Different code on an order with voucher | 422 ORDER_ALREADY_HAS_PROMOTION; original discount preserved |
+| 6. Prepare and replay PurchaseSnapshot | Both 200; snapshot stored; replay identical, frozenAt/version/money unchanged |
+| 7. Apply after freeze | 409 PRICE_FROZEN; frozen data unchanged |
+| 8. Auth boundaries | 401 without token; 403 for BUYER on internal API and INTERNAL_SERVICE on BUYER API |
+| 9. Expired order | Both APIs 409 ORDER_EXPIRED; no usage/freeze/money change |
+| 10. Concurrent final-use requests | Two orders: exactly one 200 and one 422 PROMOTION_EXHAUSTED; held1/usage1; losing order unchanged |
+
+Local request/response evidence: `target/curl-live-20261029/results.json`;
+runtime logs/PIDs and seed envelope are in the same ignored directory.
+Runner: `target/curl-live-cases.py`; curl credentials/tokens are passed through
+stdin, not recorded in the evidence. Seed event:
+`113bc45b-7f96-4921-b47e-b30141ca2645`, title prefixed TEST CURL, created via
+RabbitMQ `event.sales-configured.v1`. Only newly created test rows were used;
+existing events/orders were not edited. Synthetic fixtures remain for inspection.
+
+Case9 first failed during fixture setup: updating only order.expires_at violated
+the reservation composite FK. No application request had failed in that case.
+The fixture now updates order/reservation deadlines in one SQL CTE statement;
+both actual HTTP checks then passed. No FK or production code was changed.
+
+Runtime loaded the root `.env`; missing `KEYCLOAK_TOKEN_URI` and
+`INTERNAL_SERVICE_CLIENT_SECRET` were supplied only to the Booking process using
+Keycloak's actual endpoint/client secret, without editing `.env`. Config Server
+used its existing JAR with native search location pointing to current repository
+YAML files. JVM23 used UTC. These cases cover QUANTITY; they do not establish live
+SEATED/STANDING checkout, Payment-provider E2E behavior, or load-test capacity.
 
 ## Sales configuration consumer — 2026-10-27
 
