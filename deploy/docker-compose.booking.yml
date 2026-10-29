@@ -2,13 +2,18 @@ name: flash-ticket-booking
 
 services:
   booking-service:
+    image: ${BOOKING_IMAGE:-flash-ticket/booking-service:local}
     build:
       context: ../services/booking-service
       dockerfile: Dockerfile
     env_file: ../.env
+    environment:
+      CONFIG_SERVER_URL: http://127.0.0.1:8888
+      EUREKA_CLIENT_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60.0 -Duser.timezone=UTC
     network_mode: host
     restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 512m
     logging:
       driver: json-file
       options:

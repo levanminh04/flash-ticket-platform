@@ -198,4 +198,82 @@ docker compose --env-file .env -f deploy/docker-compose.ticket.yml stop
 Khi cập nhật một service, dùng `up` như trên; `down` chỉ dừng project Compose của service đó.
 Các lệnh này build từ source trên server. Khi CI build/push image lên registry,
 thêm `image:` cho từng service rồi deploy bằng `pull <service>` và
-`up -d --no-deps --no-build <service>`.
+`up -d --no-deps --no-build <service>`. Booking và Config Server đã có image ref
+tham số hóa như hướng dẫn dưới đây; các service khác vẫn build theo cách cũ.
+
+## GitHub Actions → GHCR → Booking trên119
+
+Workflow: [deploy-booking.yml](../.github/workflows/deploy-booking.yml).
+Push `dev/son` thay đổi Booking/Config Server/hai Compose/script/workflow sẽ chạy:
+verify Booking Java23 + Config Java21 → build/push hai image GHCR → SSH119 pull
+đúng digest → Config Server health UP → Booking health UP. CI dùng broker tạm;
+ứng dụng sau deploy dùng DB/Rabbit/Redis119. Server không build source.
+
+Image: `ghcr.io/levanminh04/flash-ticket-platform/booking-service` và
+`ghcr.io/levanminh04/flash-ticket-platform/config-server`. Tag `sha-<commit>` giúp
+tra cứu; deploy dùng `@sha256:...` từ chính kết quả build. GITHUB_TOKEN push/pull
+package gắn repository; credential login chỉ nằm trong thư mục Docker tạm khi SSH
+và được xóa sau lệnh. Không cần lưu PAT registry hoặc mật khẩu hạ tầng trong workflow.
+
+GitHub Settings → Secrets and variables → Actions:
+
+| Loại | Tên | Ý nghĩa |
+| --- | --- | --- |
+| Secret | FT119_SSH_PRIVATE_KEY | Key deploy riêng; public key đã thêm vào authorized_keys119 |
+| Variable | FT119_SSH_HOST | 3.106.109.119 |
+| Variable | FT119_SSH_USER | ubuntu |
+| Variable | FT119_SSH_PORT | 22 |
+| Variable | FT119_SSH_KNOWN_HOSTS | Host key đã xác minh qua SSH đang tin cậy, không tắt host checking |
+
+Trước deploy, root `/home/ubuntu/flash-ticket-platform/.env` trên119 phải có
+credential đang hoạt động, mode600. Booking dùng JDBC127.0.0.1:5432/booking_db,
+CONFIG_SERVER_URL=http://127.0.0.1:8888, issuer public Keycloak đúng token,
+KEYCLOAK_TOKEN_URI endpoint server và INTERNAL_SERVICE_CLIENT_SECRET hiện hành.
+Giữ nguyên credential DB/Rabbit/Redis, không copy env Windows lên server, không
+reset secret. Chỉ dùng issuer-uri, không JWKS/audience riêng.
+
+Hai Compose giữ host network, non-root JRE/UTC và log rotation. Config Server
+bind127.0.0.1:8888, limit256m/heap55%; Booking8082 limit512m/heap60%, Eureka tắt
+cho deployment này vì chưa chạy Discovery. Local IntelliJ vẫn dùng YAML hiện có.
+Các giới hạn là khởi đầu trên máy2GB; phải kiểm OOM/restart/RAM/swap thực tế,
+không suy từ health UP thành đủ chịu tải. Không tự dừng hạ tầng để lấy bộ nhớ.
+
+GitHub Actions → Deploy Booking to119 → Run workflow → chọn `dev/son`.
+Để có nút này, định nghĩa workflow phải có trên default branch `main`; job chặn
+ref khác dev/son nên chạy từ main không deploy. Không merge source nghiệp vụ vào
+main chỉ để có nút. Run push và run thủ công đều qua verify/build trước deploy.
+
+Script [deploy-booking.sh](deploy-booking.sh) pull đủ hai image trước up; dùng
+flock để không deploy chồng, đợi health180s/service và kiểm image thật/OOM/restart.
+Một replica có khoảng dừng khi recreate. Config chỉ loopback; URL Booking public
+còn phụ thuộc đường mạng/Security Group, kiểm SSH loopback không chứng minh public.
+Không expose Config Server ra Internet để xem env đã resolve.
+
+Tra cứu đúng project từ SSH119, đứng ở root:
+
+```bash
+cd /home/ubuntu/flash-ticket-platform
+docker compose --env-file .env -f deploy/docker-compose.booking.yml ps
+docker compose --env-file .env -f deploy/docker-compose.config-server.yml ps
+curl -fsS http://127.0.0.1:8082/actuator/health
+curl -fsS http://127.0.0.1:8888/actuator/health
+docker stats --no-stream
+```
+
+Job summary lưu commit/digest trước và sau. Khi cần rollback, dùng **hai digest cũ**
+trong summary làm BOOKING_IMAGE/CONFIG_SERVER_IMAGE, registry token mới có quyền
+read package (không dùng token job hết hạn), rồi chạy lại cùng script từ SSH119:
+
+```bash
+# REGISTRY_TOKEN lấy từ nguồn an toàn, không ghi trực tiếp vào lịch sử shell.
+printf '%s\n' "$REGISTRY_TOKEN" | bash deploy/deploy-booking.sh \
+  'ghcr.io/levanminh04/flash-ticket-platform/booking-service@sha256:<old-booking-digest>' \
+  'ghcr.io/levanminh04/flash-ticket-platform/config-server@sha256:<old-config-digest>' \
+  '<registry-user>'
+```
+
+Nếu pull lỗi thì chưa up. Nếu health lỗi sau recreate, workflow fail; xem log có
+lọc trên119 và rollback thủ công. Không tự compose down/prune, không rollback dữ
+liệu/schema; ddl-auto update hiện tại đòi hỏi image cũ còn tương thích schema.
+Lần deploy đầu chưa có Booking cũ để rollback. Không đưa log/raw config/secret lên
+artifact GitHub. Source chưa commit/push sẽ không có trong image từ Actions.
