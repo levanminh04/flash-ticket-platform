@@ -42,6 +42,3 @@ logging:
         serviceVersion: ${USER_SERVICE_VERSION:local-dev}
         instanceId: ${USER_INSTANCE_ID:${random.uuid}}
         environment: ${USER_ENVIRONMENT:local}
-      customizer: com.flashticket.user_service.config.UserLogFields
-      stacktrace:
-        printer: com.flashticket.user_service.config.SafeStackTracePrinter

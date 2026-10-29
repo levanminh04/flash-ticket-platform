@@ -3,24 +3,3 @@ spring:
     name: user-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
-
-logging:
-  charset:
-    console: UTF-8
-  structured:
-    format:
-      console: logstash
-    json:
-      # Native Boot filtering/renaming; never include arbitrary MDC fields.
-      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
-      rename:
-        level: severity
-        stack_trace: stackTrace
-      add:
-        serviceName: user-service
-        serviceVersion: ${USER_SERVICE_VERSION:local-dev}
-        instanceId: ${USER_INSTANCE_ID:${random.uuid}}
-        environment: ${USER_ENVIRONMENT:local}
-      customizer: com.flashticket.user_service.config.UserLogFields
-      stacktrace:
-        printer: com.flashticket.user_service.config.SafeStackTracePrinter
