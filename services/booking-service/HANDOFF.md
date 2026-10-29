@@ -20,7 +20,7 @@ Hibernate to add the new NOT NULL columns for legacy data. Bootstrap SQL also
 includes the columns. The change is committed on dev/son; the application has not
 been restarted against server 119 to apply these columns there.
 
-See [plan and review of all 15 tables](../../docs/java-workflow/2026-10-27-booking-sales-config-plan.md)
+See [plan and review of all 15 tables](../../docs/java-workflow/plans/2026-10-27-booking-sales-config-plan.md)
 and [current verification](TESTING.md). The five other tables without row_version
 were reviewed, not modified. Remaining historical scaffold notes below predate
 this consumer and do not supersede the current verification.

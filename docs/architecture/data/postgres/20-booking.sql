@@ -169,6 +169,7 @@ CREATE TABLE idempotency_requests (
   request_hash nonempty_text NOT NULL, resource_id uuid NOT NULL,
   response_status integer NOT NULL CHECK (response_status BETWEEN 200 AND 299),
   created_at timestamptz NOT NULL DEFAULT now(),
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   PRIMARY KEY (actor_subject, operation, request_key)
 );
 COMMENT ON TABLE idempotency_requests IS 'Create-order replay returns original order rather than creating another hold. Record success in order transaction; conflicting payload returns conflict. Trade-off: storage and retention, not a replacement for reservation state guards.';

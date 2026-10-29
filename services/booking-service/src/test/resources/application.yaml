@@ -30,6 +30,11 @@ spring:
       - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
 
+booking:
+  reservation:
+    hold-duration: PT15M
+    lock-timeout: 5s
+
 eureka:
   client:
     enabled: false
