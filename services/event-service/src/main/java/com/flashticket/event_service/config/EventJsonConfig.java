@@ -20,6 +20,17 @@ public class EventJsonConfig {
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
             .withCoercionConfig(
+                LogicalType.Boolean,
+                c ->
+                    c.setCoercion(CoercionInputShape.String, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Float, CoercionAction.Fail))
+            .withCoercionConfig(
+                LogicalType.Float,
+                c ->
+                    c.setCoercion(CoercionInputShape.String, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
+            .withCoercionConfig(
                 LogicalType.Textual,
                 c ->
                     c.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)

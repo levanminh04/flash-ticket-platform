@@ -3,6 +3,23 @@
 Gateway WebFlux chuyển tiếp URL, body, JWT `Authorization`, `Idempotency-Key` và
 query string tới service đăng ký trong Eureka. Không rewrite prefix `/api/v1`.
 
+## Event routes
+
+Đã thêm route theo method/path cụ thể cho catalog public `/api/v1/events`,
+`/categories`, `/venues`; organizer collection/detail, submit/publish, seat-map,
+ticket-types, sales-mode, cancel/cancellation-requests, statistics; admin Event
+collection/detail/approve/return-to-draft/cancel và cancellation request review.
+Xem [Event README](../../services/event-service/README.md) cho body/quyền nghiệp vụ.
+Prefix organizer/events yêu cầu ORGANIZER, admin Event/cancellation yêu cầu ADMIN;
+Event tiếp tục kiểm ownership. Giữ nguyên availability→Booking và check-ins→Ticket.
+Không route internal summary qua Gateway. Source có23 route definitions, trong đó
+8 definitions mới nhóm các method/path Event; không mở wildcard events/** chung.
+
+Các route có trong source/JAR đã build không tự thay image đang chạy. Áp dụng
+Gateway Docker cần build/test JAR rồi rebuild image/recreate riêng api-gateway.
+Chỉ restart container cũ không nạp Java mới; không cần restart Config/Discovery.
+Lượt coding Event bước5–7 chưa recreate/deploy container Gateway.
+
 ## Booking routes
 
 | Method | Path | Service |

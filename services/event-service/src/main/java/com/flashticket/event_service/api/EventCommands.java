@@ -57,4 +57,24 @@ public final class EventCommands {
       @NotNull @Valid Discount discount) {}
 
   public record Discount(@NotBlank String kind, String amount, Integer percent) {}
+
+  public record Mode(
+      @NotBlank String rowVersion,
+      @NotBlank String mode,
+      @NotNull Boolean confirmDeleteIncompatibleConfiguration) {}
+
+  public record SeatTicketType(
+      UUID ticketTypeId,
+      @NotNull UUID sectorId,
+      @NotBlank String name,
+      @NotBlank String unitPrice,
+      @NotBlank String currency,
+      String colorCode) {}
+
+  public record SeatTypes(
+      @NotBlank String rowVersion, @NotNull List<@NotNull @Valid SeatTicketType> ticketTypes) {
+    public SeatTypes {
+      ticketTypes = ticketTypes == null ? null : List.copyOf(ticketTypes);
+    }
+  }
 }

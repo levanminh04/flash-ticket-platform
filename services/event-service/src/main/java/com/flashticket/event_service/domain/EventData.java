@@ -1,5 +1,6 @@
 package com.flashticket.event_service.domain;
 
+import com.flashticket.event_service.api.SeatMap;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -29,7 +30,8 @@ public record EventData(
     Instant updatedAt,
     List<Image> images,
     List<TicketType> ticketTypes,
-    List<Promotion> promotions) {
+    List<Promotion> promotions,
+    SeatMap seatMap) {
   public EventData {
     images = List.copyOf(images);
     ticketTypes = List.copyOf(ticketTypes);
@@ -39,7 +41,17 @@ public record EventData(
   public record Image(UUID id, String objectReference, int displayOrder) {}
 
   public record TicketType(
-      UUID id, String name, BigDecimal unitPrice, long configuredQuantity, String colorCode) {}
+      UUID id,
+      String name,
+      BigDecimal unitPrice,
+      Long configuredQuantity,
+      String colorCode,
+      UUID sectorId) {
+    public TicketType(
+        UUID id, String name, BigDecimal unitPrice, long configuredQuantity, String colorCode) {
+      this(id, name, unitPrice, configuredQuantity, colorCode, null);
+    }
+  }
 
   public record Promotion(
       UUID id,

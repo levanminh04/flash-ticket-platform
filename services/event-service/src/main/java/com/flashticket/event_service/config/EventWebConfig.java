@@ -1,6 +1,5 @@
 package com.flashticket.event_service.config;
 
-import com.flashticket.event_service.api.EventController;
 import com.flashticket.event_service.observability.EventContext;
 import java.beans.PropertyEditorSupport;
 import java.util.UUID;
@@ -8,7 +7,7 @@ import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.InitBinder;
 
-@ControllerAdvice(assignableTypes = EventController.class)
+@ControllerAdvice(basePackages = "com.flashticket.event_service.api")
 public class EventWebConfig {
   @InitBinder
   public void canonicalUuid(WebDataBinder binder) {

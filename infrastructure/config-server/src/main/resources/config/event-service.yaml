@@ -53,6 +53,14 @@ spring:
             - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 event:
+  read-model:
+    enabled: ${EVENT_READ_MODEL_ENABLED:false}
+    payment-base-url: ${EVENT_PAYMENT_BASE_URL:}
+    booking-base-url: ${EVENT_BOOKING_BASE_URL:}
+    connect-timeout: ${EVENT_READ_CONNECT_TIMEOUT:2s}
+    response-timeout: ${EVENT_READ_RESPONSE_TIMEOUT:5s}
+    cancellation-max-age: ${EVENT_CANCELLATION_SUMMARY_MAX_AGE:30s}
+    clock-skew: ${EVENT_READ_CLOCK_SKEW:5s}
   outbox:
     enabled: ${EVENT_OUTBOX_ENABLED:true}
     poll-delay: ${EVENT_OUTBOX_POLL_DELAY:1s}

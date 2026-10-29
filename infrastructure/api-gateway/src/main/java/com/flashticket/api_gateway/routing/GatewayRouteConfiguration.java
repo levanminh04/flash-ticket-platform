@@ -303,6 +303,158 @@ public class GatewayRouteConfiguration {
                                 "userServiceBreaker",
                                 "user"))
                     .uri("lb://user-service"))
+        .route(
+            "event-public-catalog",
+            route ->
+                route
+                    .order(140)
+                    .path("/api/v1/events", "/api/v1/categories", "/api/v1/venues")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-collection",
+            route ->
+                route
+                    .order(150)
+                    .path("/api/v1/organizer/events")
+                    .and()
+                    .method(HttpMethod.GET, HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-detail",
+            route ->
+                route
+                    .order(160)
+                    .path("/api/v1/organizer/events/*")
+                    .and()
+                    .method(HttpMethod.GET, HttpMethod.PUT)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-commands",
+            route ->
+                route
+                    .order(170)
+                    .path(
+                        "/api/v1/organizer/events/*/submit",
+                        "/api/v1/organizer/events/*/publish",
+                        "/api/v1/organizer/events/*/sales-mode",
+                        "/api/v1/organizer/events/*/cancel",
+                        "/api/v1/organizer/events/*/cancellation-requests")
+                    .and()
+                    .method(HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-seat-types",
+            route ->
+                route
+                    .order(180)
+                    .path("/api/v1/organizer/events/*/ticket-types")
+                    .and()
+                    .method(HttpMethod.PUT)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-read-models",
+            route ->
+                route
+                    .order(190)
+                    .path(
+                        "/api/v1/organizer/events/*/statistics",
+                        "/api/v1/organizer/events/*/cancellation-requests")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-admin-reads",
+            route ->
+                route
+                    .order(200)
+                    .path(
+                        "/api/v1/admin/events",
+                        "/api/v1/admin/events/*",
+                        "/api/v1/admin/events/*/cancellation-requests",
+                        "/api/v1/admin/cancellation-requests")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-admin-commands",
+            route ->
+                route
+                    .order(210)
+                    .path(
+                        "/api/v1/admin/events/*/approve",
+                        "/api/v1/admin/events/*/return-to-draft",
+                        "/api/v1/admin/events/*/cancel",
+                        "/api/v1/admin/cancellation-requests/*/approve",
+                        "/api/v1/admin/cancellation-requests/*/reject")
+                    .and()
+                    .method(HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventServiceBreaker",
+                                "event"))
+                    .uri("lb://event-service"))
         .build();
   }
 

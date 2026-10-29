@@ -55,8 +55,15 @@ public final class ContractRules {
   }
 
   public static DraftConfiguration draft(EventCommands.Draft input, EventData existing) {
-    if (!"QUANTITY".equals(input.mode()))
+    if (!java.util.Set.of("QUANTITY", "SEAT_MAP")
+        .contains(java.util.Objects.toString(input.mode(), "")))
       throw new EventProblem(422, "SALES_MODE_NOT_IMPLEMENTED", "mode");
+    if (existing != null && !existing.mode().equals(input.mode()))
+      throw EventProblem.conflict("EXPLICIT_MODE_CHANGE_REQUIRED");
+    if ("SEAT_MAP".equals(input.mode())
+        && input.ticketTypes() != null
+        && !input.ticketTypes().isEmpty())
+      throw EventProblem.invalid("ticketTypes.useSectorEndpoint");
     var start = instant(input.startsAt(), "startsAt");
     var end = instant(input.endsAt(), "endsAt");
     var saleStart = instant(input.saleStartsAt(), "saleStartsAt");
@@ -163,6 +170,7 @@ public final class ContractRules {
         input.description(),
         input.categoryId(),
         input.venueId(),
+        input.mode(),
         start,
         end,
         saleStart,

@@ -18,9 +18,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class EventRepository {
   private final NamedParameterJdbcTemplate jdbc;
+  private final SeatMapRepository maps;
 
-  public EventRepository(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+  public EventRepository(org.springframework.jdbc.core.JdbcTemplate jdbc, SeatMapRepository maps) {
     this.jdbc = new NamedParameterJdbcTemplate(jdbc);
+    this.maps = maps;
   }
 
   private static final String SELECT =
@@ -44,7 +46,7 @@ public class EventRepository {
       UUID beforeId,
       int size,
       boolean published) {
-    var sql = new StringBuilder(SELECT + "WHERE e.sales_mode='QUANTITY'");
+    var sql = new StringBuilder(SELECT + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP')");
     var params = new MapSqlParameterSource();
     if (owner != null) {
       sql.append(" AND e.organizer_subject=:owner");
@@ -106,6 +108,7 @@ public class EventRepository {
                 promotions
                     .computeIfAbsent(rs.getObject("event_id", UUID.class), k -> new ArrayList<>())
                     .add(promotion(rs)));
+    var layouts = maps.load(ids);
     return events.stream()
         .map(
             e ->
@@ -113,7 +116,8 @@ public class EventRepository {
                     e,
                     images.getOrDefault(e.id(), List.of()),
                     types.getOrDefault(e.id(), List.of()),
-                    promotions.getOrDefault(e.id(), List.of())))
+                    promotions.getOrDefault(e.id(), List.of()),
+                    layouts.get(e.id())))
         .toList();
   }
 
@@ -139,7 +143,7 @@ public class EventRepository {
   public void insert(UUID id, String organizer, DraftConfiguration draft) {
     var p = parameters(id, draft).addValue("organizer", organizer);
     jdbc.update(
-        "INSERT INTO event_schema.tbl_events(id,organizer_subject,category_id,venue_id,title,description,sales_mode,status,starts_at,ends_at,sale_starts_at,sale_ends_at,checkin_starts_at,checkin_ends_at,purchase_limit) VALUES(:id,:organizer,:category,:venue,:title,:description,'QUANTITY','DRAFT',:start,:end,:saleStart,:saleEnd,:start,:end,:limit)",
+        "INSERT INTO event_schema.tbl_events(id,organizer_subject,category_id,venue_id,title,description,sales_mode,status,starts_at,ends_at,sale_starts_at,sale_ends_at,checkin_starts_at,checkin_ends_at,purchase_limit) VALUES(:id,:organizer,:category,:venue,:title,:description,:mode,'DRAFT',:start,:end,:saleStart,:saleEnd,:start,:end,:limit)",
         p);
     replaceChildren(id, draft);
   }
@@ -194,7 +198,8 @@ public class EventRepository {
 
   private void replaceChildren(UUID id, DraftConfiguration draft) {
     jdbc.update("DELETE FROM event_schema.tbl_event_images WHERE event_id=:id", Map.of("id", id));
-    jdbc.update("DELETE FROM event_schema.tbl_ticket_types WHERE event_id=:id", Map.of("id", id));
+    if ("QUANTITY".equals(draft.mode()))
+      jdbc.update("DELETE FROM event_schema.tbl_ticket_types WHERE event_id=:id", Map.of("id", id));
     jdbc.update("DELETE FROM event_schema.tbl_promotions WHERE event_id=:id", Map.of("id", id));
     for (var i : draft.images())
       jdbc.update(
@@ -231,6 +236,7 @@ public class EventRepository {
     return new MapSqlParameterSource("id", id)
         .addValue("category", d.categoryId())
         .addValue("venue", d.venueId())
+        .addValue("mode", d.mode())
         .addValue("title", d.title())
         .addValue("description", d.description())
         .addValue("start", utc(d.startsAt()))
@@ -265,14 +271,16 @@ public class EventRepository {
         time(r, "updated_at"),
         List.of(),
         List.of(),
-        List.of());
+        List.of(),
+        null);
   }
 
   private static EventData copy(
       EventData e,
       List<EventData.Image> i,
       List<EventData.TicketType> t,
-      List<EventData.Promotion> p) {
+      List<EventData.Promotion> p,
+      com.flashticket.event_service.api.SeatMap map) {
     return new EventData(
         e.id(),
         e.organizer(),
@@ -297,7 +305,8 @@ public class EventRepository {
         e.updatedAt(),
         i,
         t,
-        p);
+        p,
+        map);
   }
 
   private static EventData.Image image(ResultSet r) throws SQLException {
@@ -310,8 +319,9 @@ public class EventRepository {
         r.getObject("id", UUID.class),
         r.getString("name"),
         r.getBigDecimal("unit_price"),
-        r.getLong("configured_quantity"),
-        r.getString("color_code"));
+        r.getObject("configured_quantity", Long.class),
+        r.getString("color_code"),
+        r.getObject("sector_id", UUID.class));
   }
 
   private static EventData.Promotion promotion(ResultSet r) throws SQLException {

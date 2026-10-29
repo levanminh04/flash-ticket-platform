@@ -117,7 +117,7 @@ public class EventController {
     return service.venues();
   }
 
-  private static String actor(Jwt jwt) {
+  static String actor(Jwt jwt) {
     String subject = jwt == null ? null : jwt.getSubject();
     if (subject == null || subject.isBlank()) throw new EventProblem(401, "UNAUTHENTICATED", null);
     return subject;

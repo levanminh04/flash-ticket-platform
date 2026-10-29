@@ -9,6 +9,7 @@ public record DraftConfiguration(
     String description,
     UUID categoryId,
     UUID venueId,
+    String mode,
     Instant startsAt,
     Instant endsAt,
     Instant saleStartsAt,

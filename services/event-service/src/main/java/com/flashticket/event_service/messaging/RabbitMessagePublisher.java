@@ -50,7 +50,11 @@ public class RabbitMessagePublisher implements MessagePublisher {
     if (timeout.isZero() || timeout.isNegative())
       throw new IllegalArgumentException("Confirm timeout must be positive");
     if (message.schemaVersion() != 1
-        || !Set.of(EventSnapshots.SALES, EventSnapshots.ACCESS, EventSnapshots.FINANCE)
+        || !Set.of(
+                EventSnapshots.SALES,
+                EventSnapshots.ACCESS,
+                EventSnapshots.FINANCE,
+                EventSnapshots.CANCELLED)
             .contains(message.type())) throw new Failure("INVALID_MESSAGE");
     try {
       var payload = json.readTree(message.payload());

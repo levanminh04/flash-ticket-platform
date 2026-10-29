@@ -54,6 +54,17 @@ public class GatewaySecurityConfiguration {
                     .permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*")
                     .permitAll()
+                    .pathMatchers(
+                        HttpMethod.GET, "/api/v1/events", "/api/v1/categories", "/api/v1/venues")
+                    .permitAll()
+                    .pathMatchers("/api/v1/organizer/events", "/api/v1/organizer/events/**")
+                    .hasRole("ORGANIZER")
+                    .pathMatchers(
+                        "/api/v1/admin/events",
+                        "/api/v1/admin/events/**",
+                        "/api/v1/admin/cancellation-requests",
+                        "/api/v1/admin/cancellation-requests/**")
+                    .hasRole("ADMIN")
                     .pathMatchers("/api/v1/orders", "/api/v1/orders/**", "/api/v1/tickets/**")
                     .hasRole("BUYER")
                     .pathMatchers(HttpMethod.GET, "/api/v1/organizer/events/*/seat-map")

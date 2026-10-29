@@ -2,13 +2,17 @@ package com.flashticket.event_service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.flashticket.event_service.api.CancellationCommands;
 import com.flashticket.event_service.api.EventCommands;
+import com.flashticket.event_service.application.CancellationTransactions;
 import com.flashticket.event_service.application.EventService;
+import com.flashticket.event_service.integration.EventSummaries;
+import com.flashticket.event_service.integration.HttpEventSummaries;
 import com.flashticket.event_service.messaging.OutboxStore;
 import com.flashticket.event_service.web.EventProblem;
 import java.nio.file.Path;
@@ -38,6 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
     properties = {
       "spring.autoconfigure.exclude=org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration",
       "event.outbox.enabled=false",
+      "event.read-model.cancellation-max-age=1s",
       "spring.jpa.hibernate.ddl-auto=none",
       "spring.datasource.hikari.connection-init-sql=SET ROLE event_owner"
     })
@@ -106,6 +111,8 @@ class EventFlowTests {
   @Autowired JsonMapper json;
   @MockitoBean RabbitTemplate rabbit;
   @MockitoSpyBean OutboxStore outbox;
+  @MockitoSpyBean HttpEventSummaries summaries;
+  @Autowired CancellationTransactions cancellationTransactions;
   static final UUID VENUE = UUID.fromString("00000000-0000-4000-8000-000000000001");
   static final UUID CATEGORY = UUID.fromString("00000000-0000-4000-8000-000000000002");
 
@@ -152,6 +159,776 @@ class EventFlowTests {
 
   static RequestPostProcessor actor(String sub, String role) {
     return jwt().jwt(j -> j.subject(sub)).authorities(new SimpleGrantedAuthority("ROLE_" + role));
+  }
+
+  @Test
+  void createsSeatMapDraftWithoutQuantityTicketTypes() throws Exception {
+    var v = draft("Seated concert");
+    var input =
+        new EventCommands.Draft(
+            v.title(),
+            v.description(),
+            v.categoryId(),
+            v.venueId(),
+            "SEAT_MAP",
+            v.startsAt(),
+            v.endsAt(),
+            v.saleStartsAt(),
+            v.saleEndsAt(),
+            v.purchaseLimit(),
+            v.images(),
+            List.of(),
+            v.promotions());
+    mvc.perform(
+            post("/api/v1/organizer/events")
+                .with(actor("seat-owner", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(input)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.mode").value("SEAT_MAP"));
+  }
+
+  @Test
+  void seatMapRoundTripFreezesAndPublishesTypedSnapshotWithoutHiddenPublicSeats() throws Exception {
+    var input = draft("Seat map lifecycle");
+    var event =
+        service.create(
+            "a",
+            new EventCommands.Draft(
+                input.title(),
+                input.description(),
+                input.categoryId(),
+                input.venueId(),
+                "SEAT_MAP",
+                input.startsAt(),
+                input.endsAt(),
+                input.saleStartsAt(),
+                input.saleEndsAt(),
+                input.purchaseLimit(),
+                input.images(),
+                List.of(),
+                input.promotions()));
+    String path = "/api/v1/organizer/events/" + event.eventId() + "/seat-map";
+    mvc.perform(
+            put(path)
+                .param("rowVersion", "0")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(false)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.layoutId").value(SeatMapFixtures.LAYOUT));
+    mvc.perform(
+            put("/api/v1/organizer/events/" + event.eventId() + "/ticket-types")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.types("1")))
+        .andExpect(status().isOk());
+    var current = service.readOwned(event.eventId(), "a");
+    String type = current.ticketTypes().getFirst().ticketTypeId().toString();
+    mvc.perform(
+            post("/api/v1/organizer/events/" + event.eventId() + "/submit")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"2\"}"))
+        .andExpect(status().isUnprocessableEntity());
+    mvc.perform(
+            put(path)
+                .param("rowVersion", "2")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(true).replace(SeatMapFixtures.TYPE, type)))
+        .andExpect(status().isOk());
+    mvc.perform(get(path).with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sectors[0].seats.length()").value(2))
+        .andExpect(jsonPath("$.sectors[0].seats[1].isHidden").value(true));
+    var submitted = service.submit(event.eventId(), "a", "3");
+    mvc.perform(get("/api/v1/admin/events/" + event.eventId()).with(actor("admin", "ADMIN")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.seatMap.sectors[0].seats.length()").value(2));
+    var approved =
+        service.approve(
+            event.eventId(), "admin", new EventCommands.Approval(submitted.rowVersion(), "0.1"));
+    service.publish(event.eventId(), "a", approved.rowVersion());
+    mvc.perform(get("/api/v1/events/" + event.eventId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.seatMap.sectors[0].seats.length()").value(1))
+        .andExpect(jsonPath("$.ticketTypes[0].configuredQuantity").isEmpty());
+    String snapshot =
+        jdbc.queryForObject(
+            "SELECT payload::text FROM event_schema.tbl_outbox_messages WHERE message_type='event.sales-configured.v1'",
+            String.class);
+    var sales = json.readTree(snapshot);
+    assertThat(sales.get("sectors").size()).isEqualTo(1);
+    assertThat(sales.get("seats").size()).isEqualTo(1);
+    mvc.perform(
+            put(path)
+                .param("rowVersion", "5")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(false)))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void adminCancellationIsAtomicAndIdempotent() throws Exception {
+    var event = service.create("a", draft("Cancelled"));
+    String path = "/api/v1/admin/events/" + event.eventId() + "/cancel";
+    for (int i = 0; i < 2; i++) {
+      mvc.perform(
+              post(path)
+                  .with(actor("admin", "ADMIN"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"rowVersion\":\"0\"}"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages WHERE message_type='event.cancelled.v1'",
+                Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void unavailableSummaryContractDoesNotReturnFakeStatistics() throws Exception {
+    var event = service.create("a", draft("Stats"));
+    mvc.perform(
+            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.code").value("DEPENDENCY_CONTRACT_NOT_READY"));
+    mvc.perform(
+            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
+                .with(actor("foreign", "ORGANIZER")))
+        .andExpect(status().isNotFound());
+  }
+
+  void collected(UUID id, boolean collected) {
+    doAnswer(
+            call -> {
+              assertThat(
+                      org.springframework.transaction.support.TransactionSynchronizationManager
+                          .isActualTransactionActive())
+                  .isFalse();
+              return new EventSummaries.Financial(
+                  1,
+                  id,
+                  call.getArgument(1, String.class),
+                  java.time.Instant.now().toString(),
+                  collected,
+                  "VND",
+                  "100000",
+                  "0",
+                  "10000",
+                  "90000");
+            })
+        .when(summaries)
+        .financial(eq(id), anyString(), anyBoolean());
+  }
+
+  @Test
+  void requestHistoryRejectResubmitAndApprovalKeepOneCancellationIdentity() throws Exception {
+    var event = service.create("a", draft("Paid event"));
+    collected(event.eventId(), true);
+    String organizer = "/api/v1/organizer/events/" + event.eventId();
+    var result =
+        mvc.perform(
+                post(organizer + "/cancellation-requests")
+                    .with(actor("a", "ORGANIZER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"rowVersion\":\"0\",\"reason\":\"Weather\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String requestId =
+        json.readTree(result.getResponse().getContentAsString()).get("requestId").asString();
+    mvc.perform(
+            post(organizer + "/cancellation-requests")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"1\",\"reason\":\"Again\"}"))
+        .andExpect(status().isConflict());
+    mvc.perform(
+            post("/api/v1/admin/cancellation-requests/" + requestId + "/reject")
+                .with(actor("admin", "ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"1\",\"reason\":null}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("REJECTED"));
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("DRAFT");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+    result =
+        mvc.perform(
+                post(organizer + "/cancellation-requests")
+                    .with(actor("a", "ORGANIZER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"rowVersion\":\"2\",\"reason\":\"Storm\"}"))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String nextId =
+        json.readTree(result.getResponse().getContentAsString()).get("requestId").asString();
+    assertThat(nextId).isNotEqualTo(requestId);
+    mvc.perform(get(organizer + "/cancellation-requests").with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(2));
+    mvc.perform(get(organizer + "/cancellation-requests").with(actor("b", "ORGANIZER")))
+        .andExpect(status().isNotFound());
+    for (int n = 0; n < 2; n++)
+      mvc.perform(
+              post("/api/v1/admin/cancellation-requests/" + nextId + "/approve")
+                  .with(actor("admin", "ADMIN"))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"rowVersion\":\"3\"}"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.status").value("APPROVED"));
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("CANCELLED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isEqualTo(1);
+    var cancelled =
+        json.readTree(
+            jdbc.queryForObject(
+                "SELECT payload::text FROM event_schema.tbl_outbox_messages", String.class));
+    assertThat(cancelled.get("sales").get("eventStatus").asString()).isEqualTo("CANCELLED");
+    assertThat(cancelled.get("access").get("eventStatus").asString()).isEqualTo("CANCELLED");
+    mvc.perform(
+            post(organizer + "/cancellation-requests")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"4\",\"reason\":\"Again\"}"))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void directCancellationRequiresRealSummaryAndRechecksVersionAfterHttp() throws Exception {
+    var event = service.create("a", draft("Direct"));
+    String path = "/api/v1/organizer/events/" + event.eventId() + "/cancel";
+    mvc.perform(
+            post(path)
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isServiceUnavailable());
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("DRAFT");
+    collected(event.eventId(), true);
+    mvc.perform(
+            post(path)
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CANCELLATION_REQUEST_REQUIRED"));
+    collected(event.eventId(), false);
+    mvc.perform(
+            post(path)
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("CANCELLED"));
+    mvc.perform(
+            post(path)
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isOk());
+    var racing = service.create("a", draft("Race"));
+    doAnswer(
+            call -> {
+              assertThat(
+                      org.springframework.transaction.support.TransactionSynchronizationManager
+                          .isActualTransactionActive())
+                  .isFalse();
+              jdbc.update(
+                  "UPDATE event_schema.tbl_events SET row_version=row_version+1 WHERE id=?",
+                  racing.eventId());
+              return new EventSummaries.Financial(
+                  1,
+                  racing.eventId(),
+                  "a",
+                  java.time.Instant.now().toString(),
+                  false,
+                  "VND",
+                  "0",
+                  "0",
+                  "0",
+                  "0");
+            })
+        .when(summaries)
+        .financial(eq(racing.eventId()), eq("a"), eq(true));
+    mvc.perform(
+            post("/api/v1/organizer/events/" + racing.eventId() + "/cancel")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STALE_EVENT_VERSION"));
+    assertThat(service.readOwned(racing.eventId(), "a").status()).isEqualTo("DRAFT");
+  }
+
+  @Test
+  void cancellationAfterStartAndOutboxFailureCannotPartiallyCancel() throws Exception {
+    var event = service.create("a", draft("Late"));
+    jdbc.update(
+        "UPDATE event_schema.tbl_events SET starts_at=now()-interval '1 hour',checkin_starts_at=now()-interval '1 hour' WHERE id=?",
+        event.eventId());
+    mvc.perform(
+            post("/api/v1/admin/events/" + event.eventId() + "/cancel")
+                .with(actor("admin", "ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("EVENT_ALREADY_STARTED"));
+    var future = service.create("a", draft("Rollback cancellation"));
+    doThrow(
+            new org.springframework.dao.DataAccessResourceFailureException(
+                "Injected outbox failure"))
+        .when(outbox)
+        .append(any(), eq("event.cancelled.v1"), any());
+    mvc.perform(
+            post("/api/v1/admin/events/" + future.eventId() + "/cancel")
+                .with(actor("admin", "ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"0\"}"))
+        .andExpect(status().isServiceUnavailable());
+    assertThat(service.readOwned(future.eventId(), "a").status()).isEqualTo("DRAFT");
+    assertThat(service.readOwned(future.eventId(), "a").rowVersion()).isEqualTo("0");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void statisticsUsesOwnerScopedReadSummariesOutsideTransaction() throws Exception {
+    var event = service.create("a", draft("Statistics"));
+    collected(event.eventId(), true);
+    doAnswer(
+            call -> {
+              assertThat(
+                      org.springframework.transaction.support.TransactionSynchronizationManager
+                          .isActualTransactionActive())
+                  .isFalse();
+              return new EventSummaries.Sales(
+                  1,
+                  event.eventId(),
+                  "a",
+                  java.time.Instant.now().minusSeconds(5).toString(),
+                  "10");
+            })
+        .when(summaries)
+        .sales(event.eventId(), "a");
+    mvc.perform(
+            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.purchasedTicketCount").value("10"))
+        .andExpect(jsonPath("$.netAmount").value("90000"))
+        .andExpect(jsonPath("$.asOf").isNotEmpty());
+    mvc.perform(
+            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
+                .with(actor("b", "ORGANIZER")))
+        .andExpect(status().isNotFound());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void modeChangeNeedsConfirmationAndBadMapCannotEraseDraft() throws Exception {
+    var event = service.create("a", draft("Switch"));
+    String base = "/api/v1/organizer/events/" + event.eventId();
+    mvc.perform(
+            post(base + "/sales-mode")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"rowVersion\":\"0\",\"mode\":\"SEAT_MAP\",\"confirmDeleteIncompatibleConfiguration\":false}"))
+        .andExpect(status().isConflict());
+    assertThat(service.readOwned(event.eventId(), "a").ticketTypes()).hasSize(1);
+    mvc.perform(
+            post(base + "/sales-mode")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"rowVersion\":\"0\",\"mode\":\"SEAT_MAP\",\"confirmDeleteIncompatibleConfiguration\":true}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.ticketTypes.length()").value(0));
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "1")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(false)))
+        .andExpect(status().isOk());
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "2")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(false).replace("\"width\":100", "\"width\":-1")))
+        .andExpect(status().isUnprocessableEntity());
+    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo("2");
+    mvc.perform(get(base + "/seat-map").with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sectors[0].seats.length()").value(2));
+    mvc.perform(
+            post(base + "/sales-mode")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"rowVersion\":\"2\",\"mode\":\"QUANTITY\",\"confirmDeleteIncompatibleConfiguration\":true}"))
+        .andExpect(status().isOk());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_event_layouts", Integer.class))
+        .isZero();
+    assertThat(service.readOwned(event.eventId(), "a").promotions()).hasSize(1);
+  }
+
+  @Test
+  void cancellationReviewRollsBackRequestAndEventWhenOutboxFails() {
+    var event = service.create("a", draft("Request rollback"));
+    var request =
+        cancellationTransactions.request(
+            event.eventId(),
+            "a",
+            new CancellationCommands.Request("0", "Weather"),
+            java.time.Instant.now());
+    doThrow(
+            new org.springframework.dao.DataAccessResourceFailureException(
+                "Injected outbox failure"))
+        .when(outbox)
+        .append(any(), eq("event.cancelled.v1"), any());
+    assertThatThrownBy(
+            () -> cancellationTransactions.review(request.requestId(), "admin", "1", true, null))
+        .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("DRAFT");
+    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo("1");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM event_schema.tbl_event_cancellation_requests", String.class))
+        .isEqualTo("PENDING");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void concurrentCancellationAndRequestDecisionsSerializeOnEvent() throws Exception {
+    var event = service.create("a", draft("Double cancel"));
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var one =
+          executor.submit(
+              () -> {
+                start.await();
+                return cancellationTransactions.cancel(event.eventId(), "admin", "0", false);
+              });
+      var two =
+          executor.submit(
+              () -> {
+                start.await();
+                return cancellationTransactions.cancel(event.eventId(), "admin", "0", false);
+              });
+      start.countDown();
+      assertThat(one.get(15, TimeUnit.SECONDS).rowVersion())
+          .isEqualTo(two.get(15, TimeUnit.SECONDS).rowVersion());
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isEqualTo(1);
+    var next = service.create("a", draft("Opposing reviews"));
+    var request =
+        cancellationTransactions.request(
+            next.eventId(),
+            "a",
+            new CancellationCommands.Request("0", "Weather"),
+            java.time.Instant.now());
+    var gate = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var accept =
+          executor.submit(
+              () -> {
+                gate.await();
+                try {
+                  cancellationTransactions.review(request.requestId(), "admin", "1", true, null);
+                  return true;
+                } catch (EventProblem e) {
+                  return false;
+                }
+              });
+      var reject =
+          executor.submit(
+              () -> {
+                gate.await();
+                try {
+                  cancellationTransactions.review(request.requestId(), "admin", "1", false, null);
+                  return true;
+                } catch (EventProblem e) {
+                  return false;
+                }
+              });
+      gate.countDown();
+      assertThat(accept.get(15, TimeUnit.SECONDS) ^ reject.get(15, TimeUnit.SECONDS)).isTrue();
+    }
+    var state =
+        jdbc.queryForObject(
+            "SELECT status FROM event_schema.tbl_event_cancellation_requests WHERE id=?",
+            String.class,
+            request.requestId());
+    assertThat(service.readOwned(next.eventId(), "a").status())
+        .isEqualTo("APPROVED".equals(state) ? "CANCELLED" : "DRAFT");
+  }
+
+  @Test
+  void standingSectorUsesSharedCapacityAndNoSeatInventoryInSnapshot() throws Exception {
+    var event = service.create("a", draft("Standing"));
+    String base = "/api/v1/organizer/events/" + event.eventId();
+    mvc.perform(
+            post(base + "/sales-mode")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"rowVersion\":\"0\",\"mode\":\"SEAT_MAP\",\"confirmDeleteIncompatibleConfiguration\":true}"))
+        .andExpect(status().isOk());
+    String map =
+        SeatMapFixtures.map(false)
+            .replace("SEATED", "STANDING")
+            .replaceAll("(?s)\"seats\":\\[.*", "\"seats\":[]}]}");
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "1")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(map))
+        .andExpect(status().isOk());
+    mvc.perform(
+            put(base + "/ticket-types")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.types("2")))
+        .andExpect(status().isOk());
+    var submitted = service.submit(event.eventId(), "a", "3");
+    var approved =
+        service.approve(
+            event.eventId(), "admin", new EventCommands.Approval(submitted.rowVersion(), "0.1"));
+    service.publish(event.eventId(), "a", approved.rowVersion());
+    var snapshot =
+        json.readTree(
+            jdbc.queryForObject(
+                "SELECT payload::text FROM event_schema.tbl_outbox_messages WHERE message_type='event.sales-configured.v1'",
+                String.class));
+    assertThat(snapshot.get("sectors").get(0).get("kind").asString()).isEqualTo("STANDING");
+    assertThat(snapshot.get("sectors").get(0).get("configuredCapacity").asString()).isEqualTo("2");
+    assertThat(snapshot.get("seats").size()).isZero();
+    assertThat(snapshot.get("ticketTypes").get(0).get("configuredQuantity").isNull()).isTrue();
+  }
+
+  @Test
+  void seatInsertFailureRollsBackLayoutAndDeletedChildren() throws Exception {
+    var event = service.create("a", draft("Map rollback"));
+    String base = "/api/v1/organizer/events/" + event.eventId();
+    mvc.perform(
+            post(base + "/sales-mode")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"rowVersion\":\"0\",\"mode\":\"SEAT_MAP\",\"confirmDeleteIncompatibleConfiguration\":true}"))
+        .andExpect(status().isOk());
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "1")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.map(false)))
+        .andExpect(status().isOk());
+    try (var connection =
+            DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        var statement = connection.createStatement()) {
+      statement.execute(
+          "CREATE FUNCTION event_schema.test_reject_seat() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.seat_label='A2' THEN RAISE EXCEPTION 'Injected seat fault'; END IF; RETURN NEW; END $$");
+      statement.execute(
+          "CREATE TRIGGER test_seat_fault BEFORE INSERT ON event_schema.tbl_event_seats FOR EACH ROW EXECUTE FUNCTION event_schema.test_reject_seat()");
+      try {
+        mvc.perform(
+                put(base + "/seat-map")
+                    .param("rowVersion", "2")
+                    .with(actor("a", "ORGANIZER"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(SeatMapFixtures.map(false).replace("Main hall", "Must rollback")))
+            .andExpect(status().isServiceUnavailable());
+      } finally {
+        statement.execute("DROP TRIGGER test_seat_fault ON event_schema.tbl_event_seats");
+        statement.execute("DROP FUNCTION event_schema.test_reject_seat()");
+      }
+    }
+    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo("2");
+    mvc.perform(get(base + "/seat-map").with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("Main hall"))
+        .andExpect(jsonPath("$.sectors[0].seats.length()").value(2));
+  }
+
+  @Test
+  void visibleSeatsCannotExceedCapacityButHiddenSeatsAreRetained() throws Exception {
+    var v = draft("Capacity");
+    var event =
+        service.create(
+            "a",
+            new EventCommands.Draft(
+                v.title(),
+                v.description(),
+                v.categoryId(),
+                v.venueId(),
+                "SEAT_MAP",
+                v.startsAt(),
+                v.endsAt(),
+                v.saleStartsAt(),
+                v.saleEndsAt(),
+                v.purchaseLimit(),
+                v.images(),
+                List.of(),
+                v.promotions()));
+    String base = "/api/v1/organizer/events/" + event.eventId();
+    String zero =
+        SeatMapFixtures.map(false)
+            .replace("\"configuredCapacity\":\"2\"", "\"configuredCapacity\":\"0\"");
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "0")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(zero))
+        .andExpect(status().isOk());
+    mvc.perform(
+            put(base + "/ticket-types")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(SeatMapFixtures.types("1")))
+        .andExpect(status().isOk());
+    String type =
+        service.readOwned(event.eventId(), "a").ticketTypes().getFirst().ticketTypeId().toString();
+    zero =
+        SeatMapFixtures.map(true)
+            .replace(SeatMapFixtures.TYPE, type)
+            .replace("\"configuredCapacity\":\"2\"", "\"configuredCapacity\":\"0\"");
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "2")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(zero))
+        .andExpect(status().isOk());
+    mvc.perform(
+            post(base + "/submit")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"3\"}"))
+        .andExpect(status().isUnprocessableEntity());
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("DRAFT");
+    mvc.perform(
+            put(base + "/seat-map")
+                .param("rowVersion", "3")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    zero.replace("\"configuredCapacity\":\"0\"", "\"configuredCapacity\":\"1\"")))
+        .andExpect(status().isOk());
+    mvc.perform(
+            post(base + "/submit")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"4\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void classificationMustStillBeFreshAfterWaitingForParentLockRollback() throws Exception {
+    var event = service.create("a", draft("Waiting cancellation"));
+    var locked = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var read = new CountDownLatch(1);
+    doAnswer(
+            call -> {
+              assertThat(
+                      org.springframework.transaction.support.TransactionSynchronizationManager
+                          .isActualTransactionActive())
+                  .isFalse();
+              var summary =
+                  new EventSummaries.Financial(
+                      1,
+                      event.eventId(),
+                      "a",
+                      java.time.Instant.now().toString(),
+                      false,
+                      "VND",
+                      "0",
+                      "0",
+                      "0",
+                      "0");
+              read.countDown();
+              return summary;
+            })
+        .when(summaries)
+        .financial(event.eventId(), "a", true);
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var holder =
+          executor.submit(
+              () -> {
+                try (var connection =
+                        DriverManager.getConnection(
+                            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                    var statement =
+                        connection.prepareStatement(
+                            "SELECT id FROM event_schema.tbl_events WHERE id=? FOR UPDATE")) {
+                  connection.setAutoCommit(false);
+                  statement.setObject(1, event.eventId());
+                  try (var rows = statement.executeQuery()) {
+                    assertThat(rows.next()).isTrue();
+                    locked.countDown();
+                    release.await(10, TimeUnit.SECONDS);
+                  } finally {
+                    connection.rollback();
+                  }
+                }
+                return true;
+              });
+      try {
+        assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+        var cancel =
+            executor.submit(
+                () ->
+                    mvc.perform(
+                        post("/api/v1/organizer/events/" + event.eventId() + "/cancel")
+                            .with(actor("a", "ORGANIZER"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"rowVersion\":\"0\"}")));
+        assertThat(read.await(5, TimeUnit.SECONDS)).isTrue();
+        Thread.sleep(1200);
+        release.countDown();
+        cancel
+            .get(10, TimeUnit.SECONDS)
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("UPSTREAM_DATA_STALE"));
+      } finally {
+        release.countDown();
+        holder.get(10, TimeUnit.SECONDS);
+      }
+    }
+    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo("0");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
   }
 
   @Test
@@ -257,7 +1034,7 @@ class EventFlowTests {
   }
 
   @Test
-  void hiddenUnsupportedModeDoesNotRevealDraftToPublicOrForeignOwner() throws Exception {
+  void hiddenSeatMapDoesNotRevealDraftToPublicOrForeignOwner() throws Exception {
     var event = service.create("a", draft("Hidden seat map"));
     jdbc.update("DELETE FROM event_schema.tbl_ticket_types WHERE event_id=?", event.eventId());
     jdbc.update(
@@ -266,8 +1043,8 @@ class EventFlowTests {
     mvc.perform(get("/api/v1/organizer/events/" + event.eventId()).with(actor("b", "ORGANIZER")))
         .andExpect(status().isNotFound());
     mvc.perform(get("/api/v1/organizer/events/" + event.eventId()).with(actor("a", "ORGANIZER")))
-        .andExpect(status().isUnprocessableEntity())
-        .andExpect(jsonPath("$.code").value("SALES_MODE_NOT_IMPLEMENTED"));
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.mode").value("SEAT_MAP"));
   }
 
   @Test

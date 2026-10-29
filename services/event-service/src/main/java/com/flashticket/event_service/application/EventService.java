@@ -64,6 +64,8 @@ public class EventService {
     version(event, expected);
     if (event.ticketTypes().isEmpty()) throw EventProblem.invalid("ticketTypes");
     if (event.venueId() == null) throw EventProblem.invalid("venueId");
+    if ("SEAT_MAP".equals(event.mode()))
+      com.flashticket.event_service.domain.SeatMapRules.submittable(event);
     repository.transition(event, "PENDING_APPROVAL", null, null);
     var next = load(id, false);
     audit.committed("submit", event.status(), next, actor);
@@ -212,7 +214,7 @@ public class EventService {
   }
 
   private static void supportedMode(EventData event) {
-    if (!"QUANTITY".equals(event.mode()))
+    if (!Set.of("QUANTITY", "SEAT_MAP").contains(event.mode()))
       throw new EventProblem(422, "SALES_MODE_NOT_IMPLEMENTED", "mode");
   }
 

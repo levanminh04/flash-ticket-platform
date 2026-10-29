@@ -10,6 +10,7 @@ public final class EventSnapshots {
   public static final String SALES = "event.sales-configured.v1";
   public static final String ACCESS = "event.access-configured.v1";
   public static final String FINANCE = "event.finance-configured.v1";
+  public static final String CANCELLED = "event.cancelled.v1";
 
   private EventSnapshots() {}
 
@@ -28,8 +29,8 @@ public final class EventSnapshots {
       Instant saleEndsAt,
       int purchaseLimit,
       List<EventViews.TicketType> ticketTypes,
-      List<Void> sectors,
-      List<Void> seats,
+      List<Sector> sectors,
+      List<Seat> seats,
       List<Promotion> promotions) {
     public Sales {
       ticketTypes = List.copyOf(ticketTypes);
@@ -48,6 +49,17 @@ public final class EventSnapshots {
       int maximumUsesPerUser,
       Discount discount) {}
 
+  public record Sector(UUID sectorId, String kind, String configuredCapacity) {}
+
+  public record Seat(
+      UUID seatId,
+      UUID sectorId,
+      UUID ticketTypeId,
+      String seatLabel,
+      String rowName,
+      String seatNumber,
+      boolean isHidden) {}
+
   @com.fasterxml.jackson.annotation.JsonInclude(
       com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record Discount(String kind, String amount, Integer percent) {}
@@ -59,6 +71,15 @@ public final class EventSnapshots {
       Instant eventStartsAt,
       Instant eventEndsAt,
       String sourceConfigVersion) {}
+
+  public record Cancellation(
+      UUID eventId,
+      UUID cancellationId,
+      String sourceConfigVersion,
+      Instant cancelledAt,
+      String actorSubject,
+      Sales sales,
+      Access access) {}
 
   public record Finance(
       UUID eventId,
@@ -84,8 +105,29 @@ public final class EventSnapshots {
         event.saleEndsAt(),
         event.purchaseLimit(),
         event.ticketTypes().stream().map(EventViews::ticketType).toList(),
-        List.of(),
-        List.of(),
+        event.seatMap() == null
+            ? List.of()
+            : event.seatMap().sectors().stream()
+                .map(s -> new Sector(s.sectorId(), s.kind(), s.configuredCapacity()))
+                .toList(),
+        event.seatMap() == null
+            ? List.of()
+            : event.seatMap().sectors().stream()
+                .flatMap(
+                    s ->
+                        s.seats().stream()
+                            .filter(seat -> seat.ticketTypeId() != null)
+                            .map(
+                                seat ->
+                                    new Seat(
+                                        seat.seatId(),
+                                        s.sectorId(),
+                                        seat.ticketTypeId(),
+                                        seat.seatLabel(),
+                                        seat.rowName(),
+                                        seat.seatNumber(),
+                                        seat.isHidden())))
+                .toList(),
         event.promotions().stream()
             .map(
                 p ->

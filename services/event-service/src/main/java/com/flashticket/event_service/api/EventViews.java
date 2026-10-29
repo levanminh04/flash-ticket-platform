@@ -46,7 +46,8 @@ public final class EventViews {
       Instant approvedAt,
       List<Image> images,
       List<TicketType> ticketTypes,
-      List<Promotion> promotions) {
+      List<Promotion> promotions,
+      SeatMap seatMap) {
     public Owner {
       images = List.copyOf(images);
       ticketTypes = List.copyOf(ticketTypes);
@@ -86,7 +87,7 @@ public final class EventViews {
       String venueName,
       String mode,
       List<TicketType> ticketTypes,
-      Void seatMap) {
+      SeatMap seatMap) {
     public Public {
       ticketTypes = List.copyOf(ticketTypes);
     }
@@ -98,8 +99,8 @@ public final class EventViews {
         value.name(),
         value.unitPrice().toPlainString(),
         "VND",
-        null,
-        Long.toString(value.configuredQuantity()),
+        value.sectorId(),
+        value.configuredQuantity() == null ? null : Long.toString(value.configuredQuantity()),
         value.colorCode());
   }
 
@@ -141,7 +142,8 @@ public final class EventViews {
                             p.discountRate() == null
                                 ? null
                                 : p.discountRate().movePointRight(2).intValueExact())))
-            .toList());
+            .toList(),
+        event.seatMap());
   }
 
   public static Public publicView(EventData event) {
@@ -154,7 +156,7 @@ public final class EventViews {
         event.venueName(),
         event.mode(),
         event.ticketTypes().stream().map(EventViews::ticketType).toList(),
-        null);
+        event.seatMap() == null ? null : event.seatMap().publicView());
   }
 
   public static Summary summary(EventData event) {

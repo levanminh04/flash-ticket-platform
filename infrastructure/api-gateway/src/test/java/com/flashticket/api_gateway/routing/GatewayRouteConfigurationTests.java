@@ -30,7 +30,7 @@ class GatewayRouteConfigurationTests {
   void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
     Map<String, Route> routes = routesById();
 
-    assertEquals(15, routes.size());
+    assertEquals(23, routes.size());
     assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
@@ -68,6 +68,62 @@ class GatewayRouteConfigurationTests {
   @Test
   void registersTheRedisRateLimiterBean() {
     assertNotNull(redisRateLimiter);
+  }
+
+  @Test
+  void routesEventEditorCancellationAndStatisticsWithoutTakingBookingOrTicketPaths() {
+    String[][] routes = {
+      {"GET", "/api/v1/events"},
+      {"GET", "/api/v1/categories"},
+      {"GET", "/api/v1/venues"},
+      {"POST", "/api/v1/organizer/events"},
+      {"GET", "/api/v1/organizer/events"},
+      {"GET", "/api/v1/organizer/events/event-1"},
+      {"PUT", "/api/v1/organizer/events/event-1"},
+      {"POST", "/api/v1/organizer/events/event-1/submit"},
+      {"POST", "/api/v1/organizer/events/event-1/publish"},
+      {"POST", "/api/v1/organizer/events/event-1/sales-mode"},
+      {"PUT", "/api/v1/organizer/events/event-1/ticket-types"},
+      {"POST", "/api/v1/organizer/events/event-1/cancel"},
+      {"POST", "/api/v1/organizer/events/event-1/cancellation-requests"},
+      {"GET", "/api/v1/organizer/events/event-1/cancellation-requests"},
+      {"GET", "/api/v1/organizer/events/event-1/statistics"},
+      {"GET", "/api/v1/admin/events"},
+      {"GET", "/api/v1/admin/events/event-1"},
+      {"POST", "/api/v1/admin/events/event-1/approve"},
+      {"POST", "/api/v1/admin/events/event-1/return-to-draft"},
+      {"POST", "/api/v1/admin/events/event-1/cancel"},
+      {"GET", "/api/v1/admin/cancellation-requests"},
+      {"GET", "/api/v1/admin/events/event-1/cancellation-requests"},
+      {"POST", "/api/v1/admin/cancellation-requests/request-1/approve"},
+      {"POST", "/api/v1/admin/cancellation-requests/request-1/reject"}
+    };
+    for (var endpoint : routes)
+      assertEquals(
+          "lb://event-service", target(endpoint[0], endpoint[1]), endpoint[0] + " " + endpoint[1]);
+    assertEquals("lb://booking-service", target("GET", "/api/v1/events/event-1/availability"));
+    assertEquals("lb://ticket-service", target("POST", "/api/v1/events/event-1/check-ins"));
+    assertEquals(null, target("POST", "/api/v1/events/event-1/unapproved-operation"));
+    assertEquals(null, target("GET", "/internal/v1/events/event-1/financial-summary"));
+  }
+
+  private String target(String method, String path) {
+    var exchange =
+        org.springframework.mock.web.server.MockServerWebExchange.from(
+            org.springframework.mock.http.server.reactive.MockServerHttpRequest.method(
+                    org.springframework.http.HttpMethod.valueOf(method), path)
+                .build());
+    var matches =
+        routeLocator
+            .getRoutes()
+            .filterWhen(
+                route -> reactor.core.publisher.Mono.from(route.getPredicate().apply(exchange)))
+            .collectList()
+            .block(Duration.ofSeconds(5));
+    assertNotNull(matches);
+    if (matches.isEmpty()) return null;
+    assertEquals(1, matches.size(), "Ambiguous route " + path);
+    return matches.getFirst().getUri().toString();
   }
 
   private Map<String, Route> routesById() {
