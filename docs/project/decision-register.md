@@ -562,3 +562,9 @@ Phương án provisioning, cơ chế loại quyền BUYER khỏi machine, bộ c
 | GOV-155 | Phạm vi hiện tại chỉ ở Keycloak; chưa code hoặc sửa các service FlashTicket. | Phạm vi triển khai hiện tại | USER_CONFIRMED | Người dùng phiên dev/son | Nguyên văn: “pham vi hiện tại sẽ chỉ là ở keycloak thôi, chưa code hay sửa ở các service flashticket”. | 2026-10-07 | Task cấu hình Keycloak hiện tại; không bỏ yêu cầu tích hợp đã duyệt | docs/superpowers/specs/2026-10-07-keycloak-identity-configuration-design.md | — |
 
 Spec KC-ID-v0.2 nhận phạm vi này: nghiệm thu ở Keycloak, các phụ thuộc frontend/Gateway/User Service và service-to-service để tích hợp sau. Chi tiết client/role/scope và cách provisioning vẫn CANDIDATE; GOV-155 không phê duyệt spec hoặc runtime configuration. GOV-154 giữ nguyên đích kênh admin tương lai.
+
+## Luồng đặt vé theo ảnh đính kèm ClickUp — 2026-10-29
+
+| ID | Nội dung quyết định | Trạng thái | Người chốt / bằng chứng | Phạm vi / thay thế |
+|---|---|---|---|---|
+| GOV-156 | FE bắt đầu thanh toán tại Payment; Payment lấy PurchaseSnapshot từ Booking. Ticket báo success về Payment; Payment báo Booking commit order COMPLETED; nhận xác nhận rồi Payment mới hoàn tất Saga. | USER_CONFIRMED | User phiên dev/son: “update lại lại nghiệp vụ cho tôi follow theo ảnh”; [ảnh ClickUp 61 bước](../evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md) đã đọc trực tiếp | Thay hướng phối hợp start/result GOV-149/150 trong luồng này. B13/B14/B15-v0.3 REVIEW_READY; không duyệt route/DTO/freeze/QR, Java, DDL hoặc runtime. |

@@ -14,31 +14,28 @@ Buyer -> Frontend : Chọn vé, nhập thông tin người mua
 Frontend -> Booking : Tạo đơn + Idempotency-Key
 Booking -> BDB : TX: order + reservation + allocations + counters
 Booking --> Frontend : PENDING_PAYMENT + expiresAt
-opt áp dụng mã khuyến mãi trước freeze
+opt áp dụng mã khuyến mãi trước bắt đầu thanh toán
   Frontend -> Booking : Áp mã
   Booking -> BDB : TX: usage HELD + cập nhật tổng tiền
   Booking --> Frontend : Chi tiết đơn đã cập nhật
 end
 Buyer -> Frontend : Xác nhận thanh toán
-Frontend -> Booking : POST payment-attempts + Idempotency-Key
-Booking -> BDB : TX: kiểm owner/state/deadline + freeze + receipt + outbox
-Booking --> Frontend : 202 requestId, đang tạo URL
-Booking -> Payment : start-requested (PurchaseSnapshot) qua broker
-Payment -> Booking : Guard payable, trả cùng snapshot frozen
-Booking --> Payment : Hợp lệ / không còn payable
-note over Booking,Payment
-  Đoạn tiếp theo mô tả start hợp lệ.
-  Bị từ chối: lưu kết quả REJECTED, không gọi cổng (B14 §2).
+Frontend -> Payment : POST payment(orderId) + Idempotency-Key [16]
+Payment -> Booking : Lấy PurchaseSnapshot theo orderId [17]
+Booking -> BDB : Đọc order/items/promotion [18-19]
+BDB --> Booking : Dữ liệu đơn [20]
+Booking --> Payment : PurchaseSnapshot [21]
+Payment -> PDB : TX: lưu snapshot + PaymentAttempt; COMMIT [22-23]
+note over Payment,Gateway
+  Ảnh không mô tả adapter tạo URL/QR.
+  Gọi cổng ngoài TX; định dạng QR còn B13-OPEN-01.
 end note
-Payment -> PDB : TX: snapshot + attempt + inbox result trước gọi cổng
-Payment -> Gateway : Tạo thanh toán
-Gateway --> Payment : URL thanh toán / dữ liệu QR (format còn OPEN)
-Payment -> PDB : TX: lưu payment_url
-loop poll có backoff
-  Frontend -> Payment : GET payment theo orderId, requestId
-  Payment -> PDB : Đọc attempt + kết quả command
-  Payment --> Frontend : Chờ / bị từ chối / attempt và URL
-end
+Payment --> Frontend : Dữ liệu thanh toán / QR [24-25]
+Frontend --> Buyer : Hiển thị QR [26]
+note over Booking,Payment
+  Không có start outbox từ Booking.
+  Freeze/đua áp voucher còn B13-OPEN-02; GET không ngầm ghi.
+end note
 Buyer -> Gateway : Thực hiện thanh toán
 Gateway -> Payment : IPN có chữ ký / query result
 Payment -> PDB : TX: charge + Saga + outbox
@@ -49,7 +46,8 @@ alt ACCEPTED
   Payment -> PDB : TX: confirmation + WAITING_TICKETS + outbox
   Payment -> Ticket : issue (purchase snapshot)
   Ticket -> TDB : TX: inbox + đủ tập vé + COMPLETED + outbox + delivery
-  Ticket -> Booking : issuance-result COMPLETED qua broker
+  Ticket -> Payment : issuance-result COMPLETED [46]
+  Payment -> Booking : booking.issuance-result COMPLETED [47]
   Booking -> BDB : TX: kiểm charge/issuance + COMPLETED + inbox + outbox
   Booking -> Payment : order-completed qua broker, sau commit
   Payment -> PDB : TX: inbox + Saga COMPLETED
@@ -63,6 +61,6 @@ note over Booking,Ticket
   Mũi tên async là giao nhận ít nhất một lần qua outbox/broker/inbox.
   Không có transaction xuyên DB. Timeout phát hành không cho quyền hoàn.
   ACK consumer chỉ sau commit; không ACK tới database của service khác.
-  Nhánh start bị từ chối dừng trước gọi cổng; chi tiết tại B13/B14.
+  Snapshot/đơn không hợp lệ thì dừng trước tạo thanh toán; chi tiết tại B13/B14.
 end note
 @enduml

@@ -1,7 +1,7 @@
 # B15 — Kế hoạch kiểm chứng theo lát dọc
 
-- Phiên bản: B15-v0.2; ngày 2026-10-03; trạng thái: REVIEW_READY; FORMATION; người duyệt/ngày duyệt bản này chưa có. B15-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144).
-- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B16-v0.1 APPROVED; B13-v0.2/B14-v0.2 REVIEW_READY theo GOV-149/150; không sinh bất biến/ASR/ngưỡng mới. Duyệt v0.2 sau các đầu vào sửa.
+- Phiên bản: B15-v0.3; ngày 2026-10-29; trạng thái: REVIEW_READY; FORMATION; người duyệt/ngày duyệt bản này chưa có. B15-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144).
+- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B16-v0.1 APPROVED; B13-v0.3/B14-v0.3 REVIEW_READY theo GOV-156 và ảnh ClickUp 61 bước; không sinh bất biến/ASR/ngưỡng mới. Duyệt v0.3 sau các đầu vào sửa.
 - Ưu tiên PRJ-016–021: luồng chính đúng → dữ liệu quan sát → thử tải/chèn lỗi/RCA. Không yêu cầu hoàn thiện công cụ tải trước code.
 
 ## 1. Kết quả thật nằm ở đâu?
@@ -17,7 +17,7 @@
 | V03 | Mất response create order, retry cùng key; cùng key khác payload | Cùng order/reservation; khác input 409; không giữ chỗ hai lần | Booking |
 | V04 | Áp promotion đồng thời, hết lượt, đã dùng, hết hạn, total <=0 | Sáu lý do FR-22 phân biệt; usage và counter nguyên tử, không giữ mã hai lần | Booking |
 | V05 | Giá/giảm 1.5; subtotal100005 giảm10%; 2 đơn100050 phí1% | Reject đầu vào lẻ; discount10001,total90004; phí toàn event2001 chứ không2002 | Unit tiền trước cổng |
-| V06 | Freeze, attempt thất bại, sửa mã, retry; mất response freeze | Tiền/email/items snapshot không đổi; không gia hạn; retry giữ mốc/version | Booking/Payment |
+| V06 | Payment lấy snapshot đồng thời áp voucher; attempt lỗi/retry; mất response | Cơ chế freeze phải được chốt ở B13-OPEN-02 trước triển khai; snapshot đã dùng thu tiền bất biến, không gia hạn; không ngầm ghi bằng GET | Booking/Payment |
 | V07 | IPN lặp C1; C1/C2 thực thu khác; IPN invalid signature/amount/attempt | Một confirmation; C2 hoàn riêng; invalid không tạo vé. Không thử/nhận là đã có workflow Q-07 | Payment |
 | V08 | Chờ khóa qua expires_at, confirm/expire/cancel cạnh tranh | Dùng decision time sau khóa; đúng hạn là hết hạn; ACCEPTED replay vẫn ACCEPTED; không hồi sinh | B14 race |
 | V09 | Crash giữa ghi charge–outbox, broker confirm–published_at, effect–ACK | Retry hội tụ, không mất lệnh và không lặp hiệu ứng; inbox/hash đúng | Sau broker tích hợp |
@@ -32,11 +32,11 @@
 | V18 | Follow lặp, unfollow lặp, count | Một quan hệ, count từ source, không dual-write lệch counter | User |
 | V19 | Payout còn tiền pending, feeconfig thiếu, paid lặp | Từ chối; đúng fee đã duyệt; một lần đánh paid + actor/time/evidence | Payment đọc/đối soát |
 | V20 | Một giao dịch xuyên callback/retry/message, secret/QR mẫu trong input | Correlation nối đủ; log/trace có node/time/outcome; không lộ dữ liệu cấm | Theo B16 từ lát đầu |
-| V21 | POST start qua Booking; crash sau freeze trước publish, mất 202; replay key cũ và key mới khi còn attempt | Freeze/receipt/outbox cùng commit; cùng key cùng requestId/attempt; không hai unfinished attempt; poll chỉ đọc; từ chối/UNKNOWN không giả thành URL thành công | Booking/Payment/Frontend |
-| V22 | Ticket COMPLETED; crash Booking trước/sau commit, mất result/completion/ACK; Payment probe thấy vé trước thấy OrderCompleted | Order COMPLETED trước Saga COMPLETED; replay không phát thêm vé/message/hiệu ứng; probe không bỏ qua Booking; CANCELLED không hồi sinh | Ticket/Booking/Payment |
+| V21 | FE POST Payment; Payment gọi Booking lấy snapshot; crash trước/sau commit attempt, mất response; replay key cũ/mới | Snapshot + attempt cùng commit; cùng key cùng attempt; không hai unfinished attempt; không có Booking start/outbox; UNKNOWN không giả thành QR thành công | Booking/Payment/Frontend |
+| V22 | Ticket → Payment → Booking; mất result/yêu cầu completion/xác nhận; crash trước/sau commit | Booking commit COMPLETED trước Payment Saga COMPLETED; retry không phát thêm vé hoặc cập nhật hai lần; Ticket ACK chưa phải Saga hoàn tất | Ticket/Booking/Payment |
 | V23 | Buyer cancel PENDING_PAYMENT đã freeze, cancel đồng thời acceptance; ISSUING/COMPLETED; hủy lặp | Còn đủ điều kiện thì trả reservation/limit/promotion một lần; sau acceptance từ chối, rollback không trả một phần; charge tới sau hủy hoàn muộn | Booking/Payment |
 | V24 | Đọc danh sách/chi tiết đơn rồi vé; orderId buyer khác; vé PENDING; QR thanh toán so với QR vé | Backend lọc chủ; GET không tạo/freeze/phát vé; chưa đủ vé trả mảng rỗng; không nhầm QR payment với token Ticket | Booking/Ticket/Frontend |
-| V25 | Start command tới sau hủy/hết hạn; guard HTTP timeout; request bị từ chối; poll trước snapshot; cùng requestId khác order | Không mở attempt mới khi guard từ chối; timeout retry cùng command; kết quả REJECTED lưu bền và poll phân biệt; chưa snapshot không rò quyền; không đọc kết quả command của đơn khác | Booking/Payment/Frontend |
+| V25 | Payment lấy snapshot sau hủy/hết hạn; Booking timeout; buyer khác; hủy sau snapshot | Từ chối khi không payable/không có quyền; timeout không tạo attempt dựa dữ liệu thiếu; snapshot không rò quyền; race sau snapshot phân xử tại acceptance/hoàn muộn | Booking/Payment/Frontend |
 
 ## 3. Fake gateway có khó không?
 

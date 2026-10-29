@@ -1,5 +1,7 @@
 # Đối chiếu ba use case trong image với rule hệ thống — 2026-10-03
 
+> **Hiện hành 29/10/2026 — GOV-156:** theo ảnh Đặt vé.png trên ClickUp, FE → Payment → Booking lấy PurchaseSnapshot; Ticket → Payment → Booking commit COMPLETED → Payment kết thúc Saga. Hướng start/result theo GOV-149/150 ở nội dung 03/10 bên dưới là lịch sử, đã được thay thế trong phạm vi này. Xem [đối chiếu mới](2026-10-29-clickup-booking-flow.md). B13/B14/B15-v0.3 REVIEW_READY; route/freeze/QR chưa tự động được duyệt.
+
 - Phân lớp: `FORMATION`; bằng chứng nội bộ do người dùng cung cấp, không phải kiểm kê legacy.
 - Người đối chiếu: Codex; ngày đọc: 2026-10-03. Chỉ kiểm ảnh/tài liệu, không chạy service hoặc cổng thanh toán.
 - Yêu cầu: đọc ba UC đã vẽ, đặc biệt sequence đặt vé và hủy vé; cập nhật docs nếu khác.
