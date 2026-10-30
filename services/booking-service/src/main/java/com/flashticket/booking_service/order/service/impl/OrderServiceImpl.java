@@ -78,6 +78,110 @@ public class OrderServiceImpl implements OrderService {
 
   @Override
   @Transactional
+  public OrderView cancelOrder(String buyerSubject, UUID orderId) {
+    if (buyerSubject == null || buyerSubject.isBlank())
+      throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+    if (orderId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    orderRepository.configureTransactionLockTimeout(reservationLockTimeout);
+    var eventId =
+        orderRepository
+            .findEventIdByIdAndBuyerSubject(orderId, buyerSubject)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    var storedSnapshot =
+        eventSalesSnapshotRepository
+            .findForBookingByEventId(eventId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    var lockedOrder =
+        orderRepository
+            .findLockedByIdAndBuyerSubject(orderId, buyerSubject)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    // Yêu cầu hủy trước có thể đã commit trong lúc chờ khóa; không trả tài nguyên lần hai.
+    if (lockedOrder.getLifecycleState() == OrderState.CANCELLED)
+      return orderMapper.toView(lockedOrder);
+    if (lockedOrder.getLifecycleState() == OrderState.EXPIRED)
+      throw new BusinessException(ErrorCode.ORDER_EXPIRED);
+    if (lockedOrder.getLifecycleState() != OrderState.PENDING_PAYMENT)
+      throw new BusinessException(ErrorCode.ORDER_NOT_CANCELLABLE);
+    if (storedSnapshot.getEventStatus() == EventState.CANCELLED)
+      throw new BusinessException(ErrorCode.EVENT_NOT_ON_SALE);
+    if (lockedOrder.getAcceptedChargeId() != null || lockedOrder.getAcceptedAt() != null)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    var storedReservation =
+        reservationRepository
+            .findByOrderId(orderId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+    if (storedReservation.getState() != ReservationState.HELD)
+      throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    var allocations = storedReservation.getAllocations();
+    var limitId = new PurchaseLimitId();
+    limitId.setEventId(eventId);
+    limitId.setBuyerSubject(buyerSubject);
+    var lockedLimit =
+        purchaseLimitRepository
+            .findLockedById(limitId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+    List<TicketTypeInventory> lockedTypes = List.of();
+    SectorInventory lockedSector = null;
+    List<SeatInventory> lockedSeats = List.of();
+    if (lockedOrder.getSalesMode() == com.flashticket.booking_service.enums.SalesMode.QUANTITY) {
+      lockedTypes =
+          ticketTypeInventoryRepository.findLockedByTicketTypeIdInOrderByTicketTypeIdAsc(
+              allocations.stream().map(ReservationAllocation::getTicketTypeId).distinct().toList());
+    } else if (allocations.stream()
+        .allMatch(a -> a.getResourceKind() == ResourceKind.STANDING_SECTOR)) {
+      lockedSector =
+          sectorInventoryRepository
+              .findLockedBySectorId(lockedOrder.getSectorId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+    } else if (allocations.stream().allMatch(a -> a.getResourceKind() == ResourceKind.SEAT)) {
+      lockedSeats =
+          seatInventoryRepository.findLockedBySeatIdInOrderBySeatIdAsc(
+              allocations.stream().map(ReservationAllocation::getSeatId).toList());
+    } else throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
+    var storedUsage =
+        promotionUsageRepository
+            .findByReservationIdAndStateIn(
+                storedReservation.getId(),
+                List.of(
+                    PromotionUsageState.HELD,
+                    PromotionUsageState.USED,
+                    PromotionUsageState.RELEASED))
+            .orElse(null);
+    PromotionInventory lockedPromotion = null;
+    if (storedUsage != null)
+      lockedPromotion =
+          promotionInventoryRepository
+              .findLockedByPromotionId(storedUsage.getPromotion().getPromotionId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT));
+    // Chờ inventory có thể làm đơn quá hạn; giờ DB sau khóa mới quyết định được hủy.
+    Instant decisionAt = orderRepository.currentDatabaseTime();
+    if (!decisionAt.isBefore(lockedOrder.getExpiresAt()))
+      throw new BusinessException(ErrorCode.ORDER_EXPIRED);
+    updatePurchaseLimitForPaymentDecision(
+        lockedOrder, storedReservation, lockedLimit, ReservationState.RELEASED);
+    if (lockedOrder.getSalesMode() == com.flashticket.booking_service.enums.SalesMode.QUANTITY)
+      updateQuantityInventoryForPaymentDecision(
+          lockedOrder, storedReservation, lockedTypes, ReservationState.RELEASED);
+    else if (lockedSector != null)
+      updateStandingInventoryForPaymentDecision(
+          lockedOrder, storedReservation, lockedSector, ReservationState.RELEASED);
+    else
+      updateSeatedInventoryForPaymentDecision(
+          lockedOrder, storedReservation, lockedSeats, ReservationState.RELEASED);
+    updatePromotionUsageForPaymentDecision(
+        lockedOrder, storedUsage, lockedPromotion, ReservationState.RELEASED);
+    allocations.forEach(a -> a.setState(ReservationState.RELEASED));
+    storedReservation.setState(ReservationState.RELEASED);
+    reservationRepository.save(storedReservation);
+    lockedOrder.setLifecycleState(OrderState.CANCELLED);
+    lockedOrder.setUpdatedAt(decisionAt);
+    orderRepository.save(lockedOrder);
+    // Proxy commit xong mới trả về controller; lỗi flush/commit phải đi ra ngoài.
+    return orderMapper.toView(lockedOrder);
+  }
+
+  @Override
+  @Transactional
   public void expireOrder(UUID orderId) {
     if (orderId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
     orderRepository.configureTransactionLockTimeout(reservationLockTimeout);

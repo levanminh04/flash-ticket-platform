@@ -1,5 +1,87 @@
 # Booking Service tests
 
+## Buyer cancellation — 2026-10-30
+
+Execution approval: user confirmed "xác nhận" after the C1–C6, M1–M3,
+R1–R6, U1–U3 and D1–D8 execution list. Added only the three production
+cancelOrder declarations and eleven test methods in existing classes. The
+five inventory/limit/promotion helpers, Payment handling and expiry logic are
+unchanged. POST /api/v1/orders/{orderId}/cancel uses JWT ownership, the shared
+lock order and DB time after resource locks; CANCELLED replay does not release
+again. Frozen orders can still be cancelled while pending, HELD and unexpired.
+
+Verification:
+
+- Controller suite: **20 passed**, no failures/errors/skips.
+- Initial eight new integration methods: six passed, one assertion failure and
+  one fixture error. Corrected an AcceptPayment chargeId/attemptId argument
+  mix-up and the expected existing PaymentDecision.CANCELLED after buyer cancel
+  (LATE is the expiry branch). No production Payment logic changed.
+- Full `-P integration -Dit.test=BookingPersistenceIT verify` completed at
+  **14:21:37 +07, 2026-10-30**: **375 unit + 115 integration tests**, zero
+  failures/errors/skips, BUILD SUCCESS. Maven format/static/coverage checks
+  passed. Log: `target/cancel-full-verify.log`.
+- Afterwards strengthened the existing D8 body to include held promotion usage
+  in deferred-commit rollback/retry assertions. Focused `test-compile
+  failsafe:integration-test failsafe:verify` for that method completed at
+  **14:25:51 +07**: **1 passed**, no failures/errors/skips. This was a focused
+  test rerun, not another full suite. Production code did not change.
+  Log: `target/cancel-rollback-promotion.log`.
+
+The new integration methods cover all inventory modes with/without voucher and
+freeze, ownership, terminal states, equality and waiting past deadline,
+concurrent cancels, competing Payment/expiry/voucher/snapshot calls, seat R1/R2
+replay, lock timeout, resource failure and a deferred PostgreSQL commit failure.
+Service calls use real transaction proxies and PostgreSQL locks. Only deadline
+equality/replay-clock checks stub the existing repository spy's DB clock.
+Promotion state/counters are explicitly compared before/after failed commit.
+
+### Ten curl cases against a real HTTP server
+
+**10/10 passed**, including independent PostgreSQL assertions after every
+request. Ran the newly built production Booking JAR, PostgreSQL17,
+RabbitMQ4.3.6 and Keycloak26.8.0 in disposable localhost isolation. JWTs came
+from the actual Keycloak password/client-credentials grants; security filters,
+ownership queries, service transactions and production listeners were active.
+Sales configuration and AcceptPayment fixtures traversed RabbitMQ and the
+production listeners. No mock controller/service or shared DB119 fixture was
+used for these curl results.
+
+| Case | Request | HTTP / result |
+|---|---|---|
+| H1 | Cancel QUANTITY | 200 CANCELLED; inventory/limit released |
+| H2 | Cancel STANDING | 200 CANCELLED; sector pool released |
+| H3 | Cancel SEATED | 200 CANCELLED; seat AVAILABLE, holder cleared |
+| H4 | Cancel frozen order with held voucher | 200 CANCELLED; voucher released, money/frozen snapshot unchanged |
+| H5 | Repeat cancellation | 200 CANCELLED; DB state and updatedAt unchanged |
+| H6 | Another buyer's order | 404 ORDER_NOT_FOUND; no mutation |
+| H7 | Missing JWT | 401 UNAUTHENTICATED; no mutation |
+| H8 | JWT without BUYER role | 403 ACCESS_DENIED; no mutation |
+| H9 | Expired pending order | 409 ORDER_EXPIRED; no mutation |
+| H10 | Accepted ISSUING order | 409 ORDER_NOT_CANCELLABLE; purchased/COMMITTED preserved |
+
+Runtime test overrides: hold duration10s to reach H9 with the real DB clock;
+expiry/outbox workers disabled to isolate HTTP assertions, Redis health disabled,
+checked-in PostgreSQL schema initialized as in BookingPersistenceIT. Loaded the
+existing central Booking YAML directly, with local endpoints, instead of using
+Config Server. An initial harness boot used the wrong import mechanism and
+failed before any test; fixing the harness config location required no app code
+change. The successful curl run exercised the same handler/service code but is
+not a Config Server deployment, scheduler or Payment/Ticket Saga E2E test.
+
+The runtime script and sanitized JSON results are local ignored artifacts:
+`target/cancel_curl_runtime.py`, `target/cancel-curl-results.json`;
+app log: `target/cancel-curl-app.log`. Tokens were passed to curl on stdin and
+not recorded. The disposable realm credential file was removed. Task containers
+were removed; the Windows Java launcher left a child process, which was verified
+as the task server on18082 and stopped. The harness now selects the JDK's real
+java.exe rather than the launcher for future runs. Server119 was not deployed
+or seeded by this test.
+
+The existing local Postman collection now has `Booking - Cancel Pending Order`
+in its root Booking folder, with userAccessToken, orderId and body {}. The
+collection is already ignored locally; it was not force-added to Git.
+
 ## Order expiry worker — 2026-10-30
 
 Approved additions: OrderExpiryWorker/OrderExpiryWorkerTests, five production

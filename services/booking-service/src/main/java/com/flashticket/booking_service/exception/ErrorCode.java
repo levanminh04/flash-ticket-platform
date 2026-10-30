@@ -29,6 +29,7 @@ public enum ErrorCode {
   PAYMENT_SNAPSHOT_MISMATCH(CONFLICT, "Thông tin thanh toán không khớp bản chốt tiền."),
   RESERVATION_DATA_CONFLICT(CONFLICT, "Dữ liệu giữ chỗ không nhất quán."),
   ORDER_NOT_FOUND(NOT_FOUND, "Không tìm thấy đơn hàng."),
+  ORDER_NOT_CANCELLABLE(CONFLICT, "Đơn hàng không ở trạng thái có thể hủy."),
   CONFIG_NOT_READY(SERVICE_UNAVAILABLE, "Cấu hình bán vé chưa sẵn sàng."),
   SALES_CONFIGURATION_CONFLICT(CONFLICT, "Cấu hình bán vé mâu thuẫn với dữ liệu đã lưu."),
   MESSAGE_ID_CONFLICT(CONFLICT, "Mã thông điệp đã được dùng với nội dung khác."),

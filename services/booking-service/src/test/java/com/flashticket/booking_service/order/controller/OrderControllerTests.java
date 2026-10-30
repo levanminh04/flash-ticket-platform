@@ -42,6 +42,88 @@ class OrderControllerTests {
   @MockitoBean com.flashticket.booking_service.promotion.service.PromotionService promotionService;
 
   @Test
+  void cancelsOrderUsingAuthenticatedBuyer() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(orderService.cancelOrder("buyer", id))
+        .thenReturn(
+            new OrderView(
+                id,
+                UUID.randomUUID(),
+                OrderState.CANCELLED,
+                "buyer@example.com",
+                Currency.VND,
+                "100",
+                "0",
+                "100",
+                Instant.now().plusSeconds(900),
+                null,
+                "1",
+                List.of()));
+    mvc.perform(
+            post("/api/v1/orders/" + id + "/cancel")
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("CANCELLED"));
+    verify(orderService).cancelOrder("buyer", id);
+    for (ErrorCode code :
+        List.of(
+            ErrorCode.ORDER_NOT_FOUND,
+            ErrorCode.ORDER_EXPIRED,
+            ErrorCode.ORDER_NOT_CANCELLABLE,
+            ErrorCode.RESOURCE_BUSY)) {
+      when(orderService.cancelOrder("buyer", id)).thenThrow(new BusinessException(code));
+      mvc.perform(
+              post("/api/v1/orders/" + id + "/cancel")
+                  .with(
+                      jwt()
+                          .jwt(t -> t.subject("buyer"))
+                          .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{}"))
+          .andExpect(status().is(code.status().value()))
+          .andExpect(jsonPath("$.code").value(code.name()));
+      org.mockito.Mockito.reset(orderService);
+    }
+  }
+
+  @Test
+  void requiresBuyerAuthenticationForCancellation() throws Exception {
+    String path = "/api/v1/orders/" + UUID.randomUUID() + "/cancel";
+    mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(
+            post(path)
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void rejectsInvalidCancellationCommand() throws Exception {
+    for (String body : List.of("", "null", "[]", "{", "{\"buyerSubject\":\"other\"}"))
+      mvc.perform(
+              post("/api/v1/orders/" + UUID.randomUUID() + "/cancel")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    mvc.perform(
+            post("/api/v1/orders/not-a-uuid/cancel")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
   void appliesPromotionUsingAuthenticatedBuyer() throws Exception {
     UUID id = UUID.randomUUID();
     when(promotionService.applyPromotionToOrder(eq("buyer"), eq(id), any()))

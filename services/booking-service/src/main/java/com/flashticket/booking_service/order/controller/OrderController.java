@@ -3,10 +3,13 @@ package com.flashticket.booking_service.order.controller;
 import com.flashticket.booking_service.dto.request.ApplyPromotionRequest;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.exception.BusinessException;
+import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.order.service.OrderService;
 import com.flashticket.booking_service.promotion.service.PromotionService;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +28,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
   private final OrderService orderService;
   private final PromotionService promotionService;
+
+  @PostMapping("/{orderId}/cancel")
+  public ResponseEntity<OrderView> cancelOrder(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID orderId,
+      @RequestBody Map<String, Object> request) {
+    if (!request.isEmpty()) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    return ResponseEntity.ok(orderService.cancelOrder(jwt.getSubject(), orderId));
+  }
 
   @PostMapping("/{orderId}/promotion")
   public ResponseEntity<OrderView> applyPromotionToOrder(
