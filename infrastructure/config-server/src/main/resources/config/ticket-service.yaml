@@ -4,15 +4,79 @@ server:
 spring:
   datasource:
     url: ${TICKET_DB_URL}
-    username: ${TICKET_DB_USERNAME}
+    username: ${TICKET_DB_USERNAME:ticket_admin}
     password: ${TICKET_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE ticket_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 5000
+  sql:
+    init:
+      mode: never
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: ticket_schema
+        jdbc:
+          time_zone: UTC
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
+    host: ${TICKET_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${TICKET_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${TICKET_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
+    password: ${TICKET_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    virtual-host: ${TICKET_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 5s
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${TICKET_RABBITMQ_BUSINESS_EXCHANGE:${RABBITMQ_BUSINESS_EXCHANGE:business.ex}}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+        default-requeue-rejected: true
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+    properties:
+      "[mail.smtp.auth]": ${MAIL_SMTP_AUTH:true}
+      "[mail.smtp.starttls.enable]": ${MAIL_SMTP_STARTTLS_ENABLE:true}
+      "[mail.smtp.starttls.required]": ${MAIL_SMTP_STARTTLS_REQUIRED:true}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${TICKET_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${TICKET_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${TICKET_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+ticket:
+  messaging:
+    access-configured-queue: ${TICKET_ACCESS_CONFIGURED_QUEUE:ticket.access-configured.q}
+    event-cancelled-queue: ${TICKET_EVENT_CANCELLED_QUEUE:ticket.event-cancelled.q}
+    issuance-queue: ${TICKET_ISSUANCE_QUEUE:ticket.issuance.q}
+  # Reserved for the QR implementation; no key is generated or loaded by this foundation.
+  qr:
+    active-key-version: ${TICKET_QR_ACTIVE_KEY_VERSION:}
+    key-ring-location: ${TICKET_QR_KEY_RING_LOCATION:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

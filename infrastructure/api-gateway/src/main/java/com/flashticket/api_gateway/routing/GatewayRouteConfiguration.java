@@ -48,8 +48,15 @@ public class GatewayRouteConfiguration {
       RouteLocatorBuilder builder,
       RedisRateLimiter redisRateLimiter,
       KeyResolver remoteAddressKeyResolver) {
-    return builder
-        .routes()
+    return UserGatewayRoutes.addTo(
+            builder.routes(),
+            filters ->
+                standardFilters(
+                    filters,
+                    redisRateLimiter,
+                    remoteAddressKeyResolver,
+                    "userServiceBreaker",
+                    "user"))
         .route(
             "booking-availability",
             route ->

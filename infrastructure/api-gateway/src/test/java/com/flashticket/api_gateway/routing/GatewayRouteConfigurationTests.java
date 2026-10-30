@@ -30,7 +30,7 @@ class GatewayRouteConfigurationTests {
   void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
     Map<String, Route> routes = routesById();
 
-    assertEquals(23, routes.size());
+    assertEquals(30, routes.size());
     assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
@@ -124,6 +124,33 @@ class GatewayRouteConfigurationTests {
     if (matches.isEmpty()) return null;
     assertEquals(1, matches.size(), "Ambiguous route " + path);
     return matches.getFirst().getUri().toString();
+  }
+
+  @Test
+  void routesUserWorkflowsWithoutCapturingOtherServicesOrInternalEndpoints() {
+    String[][] endpoints = {
+      {"GET", "/api/v1/me"},
+      {"PUT", "/api/v1/me"},
+      {"GET", "/api/v1/organizer-applications"},
+      {"POST", "/api/v1/organizer-applications"},
+      {"GET", "/api/v1/organizer-applications/application-1"},
+      {"GET", "/api/v1/admin/organizer-applications"},
+      {"GET", "/api/v1/admin/organizer-applications/application-1"},
+      {"POST", "/api/v1/admin/organizer-applications/application-1/approve"},
+      {"POST", "/api/v1/admin/organizer-applications/application-1/reject"},
+      {"GET", "/api/v1/organizers/subject-1"},
+      {"GET", "/api/v1/organizers/subject-1/follow"},
+      {"PUT", "/api/v1/organizers/subject-1/follow"},
+      {"DELETE", "/api/v1/organizers/subject-1/follow"},
+      {"POST", "/api/v1/organizers/me/logo"},
+      {"POST", "/api/v1/organizers/me/banner"}
+    };
+    for (var endpoint : endpoints)
+      assertEquals("lb://user-service", target(endpoint[0], endpoint[1]), endpoint[1]);
+    assertEquals(null, target("PUT", "/api/v1/organizer-applications/application-1"));
+    assertEquals(null, target("GET", "/internal/v1/users/subject-1"));
+    assertEquals("lb://booking-service", target("POST", "/api/v1/orders"));
+    assertEquals("lb://payment-service", target("GET", "/api/v1/orders/order-1/payment"));
   }
 
   private Map<String, Route> routesById() {

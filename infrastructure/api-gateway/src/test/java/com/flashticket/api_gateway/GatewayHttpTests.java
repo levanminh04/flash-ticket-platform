@@ -139,6 +139,58 @@ class GatewayHttpTests {
   }
 
   @Test
+  void proxiesUserApplicationsWithSignedJwtAndAllowsPublicOrganizerReads() {
+    client
+        .get()
+        .uri("/api/v1/organizers/fixture-organizer")
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.service")
+        .isEqualTo("other");
+    String bearer = "Bearer " + token("BUYER", "flash-ticket-api");
+    client
+        .post()
+        .uri("/api/v1/organizer-applications")
+        .header(HttpHeaders.AUTHORIZATION, bearer)
+        .header(HttpHeaders.CONTENT_TYPE, "application/json")
+        .bodyValue("{\"organizationName\":\"Fixture\",\"shortDescription\":\"Description\"}")
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.authorization")
+        .isEqualTo(bearer)
+        .jsonPath("$.body")
+        .isEqualTo("{\"organizationName\":\"Fixture\",\"shortDescription\":\"Description\"}");
+  }
+
+  @Test
+  void blocksBuyerApprovalBeforeProxyingAndAllowsAdminApproval() {
+    String path = "/api/v1/admin/organizer-applications/" + ORDER_ID + "/approve";
+    client
+        .post()
+        .uri(path)
+        .headers(h -> h.setBearerAuth(token("BUYER", "flash-ticket-api")))
+        .exchange()
+        .expectStatus()
+        .isForbidden();
+    assertEquals(0, CALLS.get());
+    client
+        .post()
+        .uri(path)
+        .headers(h -> h.setBearerAuth(token("ADMIN", "flash-ticket-api")))
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.service")
+        .isEqualTo("other");
+    assertEquals(1, CALLS.get());
+  }
+
+  @Test
   void routesListAndPaymentStartToBookingWithoutDroppingHeadersOrQuery() {
     String jwt = token("BUYER", "flash-ticket-api");
     client

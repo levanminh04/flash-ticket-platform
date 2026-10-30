@@ -98,6 +98,36 @@ class GatewaySecurityConfigurationTests {
     return reachedDownstream.get();
   }
 
+  @Test
+  void publicOrganizerAndProtectedUserWorkflowsUseTheirOwnPolicies() {
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/organizers/subject-1", null));
+    assertFalse(reachesDownstream(HttpMethod.GET, "/api/v1/organizers/subject-1/follow", null));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.PUT, "/api/v1/organizers/subject-1/follow", authenticatedAs("ROLE_BUYER")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.PUT,
+            "/api/v1/organizers/subject-1/follow",
+            authenticatedAs("ROLE_INTERNAL_SERVICE")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.POST,
+            "/api/v1/admin/organizer-applications/app/approve",
+            authenticatedAs("ROLE_BUYER")));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.POST,
+            "/api/v1/admin/organizer-applications/app/approve",
+            authenticatedAs("ROLE_ADMIN")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.POST, "/api/v1/organizers/me/logo", authenticatedAs("ROLE_BUYER")));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.POST, "/api/v1/organizers/me/logo", authenticatedAs("ROLE_ORGANIZER")));
+  }
+
   private Authentication authenticatedAs(String authority) {
     return UsernamePasswordAuthenticationToken.authenticated(
         "subject-1", "N/A", List.of(new SimpleGrantedAuthority(authority)));

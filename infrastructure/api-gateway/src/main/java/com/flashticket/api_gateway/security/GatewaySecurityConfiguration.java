@@ -50,6 +50,24 @@ public class GatewaySecurityConfiguration {
                 exchanges
                     .pathMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
+                    .pathMatchers(HttpMethod.GET, "/api/v1/organizers/*")
+                    .permitAll()
+                    .pathMatchers(
+                        "/api/v1/admin/organizer-applications",
+                        "/api/v1/admin/organizer-applications/**")
+                    .hasRole("ADMIN")
+                    .pathMatchers(
+                        "/api/v1/organizer-applications",
+                        "/api/v1/organizer-applications/**",
+                        "/api/v1/organizers/*/follow")
+                    .hasRole("BUYER")
+                    .pathMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/organizers/me/logo",
+                        "/api/v1/organizers/me/banner")
+                    .hasRole("ORGANIZER")
+                    .pathMatchers("/api/v1/me")
+                    .hasAnyRole("BUYER", "ORGANIZER", "ADMIN")
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*/availability")
                     .permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*")
