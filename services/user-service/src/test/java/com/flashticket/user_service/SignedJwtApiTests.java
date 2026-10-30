@@ -147,4 +147,25 @@ class SignedJwtApiTests {
           .andExpect(status().isForbidden());
     }
   }
+
+  @Test
+  void signedMachineTokenWithAccidentalBuyerRoleCannotCreateHumanProfile() throws Exception {
+    var claims =
+        new JWTClaimsSet.Builder()
+            .issuer(ISSUER)
+            .audience("flash-ticket-api")
+            .subject("machine-with-buyer")
+            .expirationTime(Date.from(Instant.now().plusSeconds(300)))
+            .claim("realm_access", Map.of("roles", List.of("INTERNAL_SERVICE", "BUYER")))
+            .build();
+    var signed =
+        new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims);
+    signed.sign(new RSASSASigner(KEY));
+    mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + signed.serialize()))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            get("/internal/v1/users/machine-with-buyer")
+                .header("Authorization", "Bearer " + signed.serialize()))
+        .andExpect(status().isNotFound());
+  }
 }

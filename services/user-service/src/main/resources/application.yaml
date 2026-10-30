@@ -3,8 +3,20 @@ spring:
     name: user-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${USER_IMAGE_MAX_FILE_SIZE:2MB}
+      max-request-size: ${USER_IMAGE_MAX_REQUEST_SIZE:3MB}
 
 user:
+  images:
+    cloud-name: ${USER_IMAGE_CLOUD_NAME:}
+    api-key: ${USER_IMAGE_API_KEY:}
+    api-secret: ${USER_IMAGE_API_SECRET:}
+    folder: ${USER_IMAGE_FOLDER:flash-ticket/organizers}
+    max-bytes: ${USER_IMAGE_MAX_BYTES:2097152}
+    max-pixels: ${USER_IMAGE_MAX_PIXELS:16000000}
+    timeout: ${USER_IMAGE_TIMEOUT:5s}
   mongodb:
     collection-prefix: ${USER_MONGO_COLLECTION_PREFIX:tbl_}
   keycloak-admin:

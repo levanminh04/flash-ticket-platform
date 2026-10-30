@@ -28,6 +28,7 @@ class KeycloakAdminClientTests {
   private boolean ignoreGrants;
   private boolean unauthorizedOnce;
   private volatile boolean slowRoles;
+  private boolean denyRealmCatalog;
 
   @BeforeEach
   void setup() throws Exception {
@@ -71,6 +72,18 @@ class KeycloakAdminClientTests {
                               .map(n -> new KeycloakAdminClient.Role(n + "-id", n))
                               .toList());
             }
+          } else if (path.endsWith("/role-mappings/realm/available")) {
+            body =
+                JsonMapper.builder()
+                    .build()
+                    .writeValueAsString(
+                        java.util.List.of("BUYER", "ORGANIZER").stream()
+                            .filter(n -> !roles.contains(n))
+                            .map(n -> new KeycloakAdminClient.Role(n + "-id", n))
+                            .toList());
+          } else if (path.contains("/roles/") && denyRealmCatalog) {
+            status = 403;
+            body = "{}";
           } else if (path.contains("/roles/")) {
             String name = path.substring(path.lastIndexOf('/') + 1);
             body = "{\"id\":\"" + name + "-id\",\"name\":\"" + name + "\",\"composite\":false}";
@@ -117,6 +130,14 @@ class KeycloakAdminClientTests {
     assertThat(roles).containsExactlyInAnyOrder("BUYER", "ORGANIZER");
     assertThat(tokens.get()).isEqualTo(1);
     assertThat(writes.get()).isEqualTo(1);
+  }
+
+  @Test
+  void grantsUsingExistingUserManagementPermissionsWithoutRealmCatalogAccess() {
+    denyRealmCatalog = true;
+    client(Duration.ofSeconds(3)).ensureOrganizer("buyer-subject");
+    assertThat(roles).containsExactlyInAnyOrder("BUYER", "ORGANIZER");
+    assertThat(writes).hasValue(1);
   }
 
   @Test

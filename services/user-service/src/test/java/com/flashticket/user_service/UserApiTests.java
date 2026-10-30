@@ -86,6 +86,49 @@ class UserApiTests {
   }
 
   @Test
+  void publicOrganizerIncludesStoredBrandingWithoutChangingTheApplicationSource() throws Exception {
+    mongo
+        .getCollection("tbl_organizer_profiles")
+        .insertOne(
+            new Document("_id", "profile")
+                .append("identitySubject", "organizer-branded")
+                .append("status", "ACTIVE")
+                .append("organizationName", "Organization")
+                .append("shortDescription", "Description")
+                .append("logoUrl", "https://res.cloudinary.com/test/image/upload/logo.png")
+                .append("bannerUrl", "https://res.cloudinary.com/test/image/upload/banner.png"));
+    mvc.perform(get("/api/v1/organizers/organizer-branded"))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.logoUrl").value("https://res.cloudinary.com/test/image/upload/logo.png"))
+        .andExpect(
+            jsonPath("$.bannerUrl")
+                .value("https://res.cloudinary.com/test/image/upload/banner.png"));
+  }
+
+  @Test
+  void organizerUploadValidatesRealImageBytesBeforeCallingStorage() throws Exception {
+    mongo
+        .getCollection("tbl_organizer_profiles")
+        .insertOne(
+            new Document("_id", "profile")
+                .append("identitySubject", "organizer-upload")
+                .append("status", "ACTIVE")
+                .append("organizationName", "Organization")
+                .append("shortDescription", "Description"));
+    mvc.perform(
+            multipart("/api/v1/organizers/me/logo")
+                .file(
+                    new org.springframework.mock.web.MockMultipartFile(
+                        "file", "logo.png", "image/png", new byte[] {1, 2, 3}))
+                .with(
+                    jwt()
+                        .jwt(j -> j.subject("organizer-upload"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void verifiedHumanGetsMinimalProfileWithoutEmailOrRoles() throws Exception {
     mvc.perform(get("/api/v1/me").with(buyer("buyer-1")))
         .andExpect(status().isOk())

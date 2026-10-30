@@ -25,6 +25,11 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/organizers/*")
                     .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/organizers/me/logo",
+                        "/api/v1/organizers/me/banner")
+                    .hasRole("ORGANIZER")
                     .requestMatchers("/internal/v1/**")
                     .hasRole("INTERNAL_SERVICE")
                     .requestMatchers("/api/v1/admin/**")

@@ -235,7 +235,20 @@ public final class UserStore {
         subject,
         p.getString("organizationName"),
         p.getString("shortDescription"),
-        followerCount(subject));
+        followerCount(subject),
+        p.getString("logoUrl"),
+        p.getString("bannerUrl"));
+  }
+
+  public PublicOrganizer updateBranding(String subject, boolean logo, String url) {
+    var result =
+        collection("organizer_profiles")
+            .updateOne(
+                and(eq("identitySubject", subject), eq("status", "ACTIVE")),
+                combine(set(logo ? "logoUrl" : "bannerUrl", url), set("refreshedAt", now())));
+    if (result.getMatchedCount() != 1)
+      throw new UserException(404, "ORGANIZER_NOT_FOUND", "Organizer not found");
+    return publicOrganizer(subject);
   }
 
   public FollowState follow(String buyer, String organizer) {

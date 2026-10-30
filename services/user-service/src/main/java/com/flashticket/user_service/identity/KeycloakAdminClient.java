@@ -102,14 +102,19 @@ public final class KeycloakAdminClient implements KeycloakRoles {
     Set<String> required = Set.of("BUYER", "ORGANIZER");
     List<Role> current = readRoles(subject, bearer);
     List<Role> missing = new ArrayList<>();
+    List<Role> available =
+        required.stream().allMatch(name -> current.stream().anyMatch(r -> name.equals(r.name())))
+            ? List.of()
+            : readRoles(subject, bearer, true);
     for (String name : required) {
       if (current.stream().noneMatch(r -> name.equals(r.name()))) {
+        // The deployed manage-users/view-users client can list this user's available roles.
+        // Reading the realm-wide role catalog requires additional privileges it does not have.
         Role role =
-            rest.get()
-                .uri(b -> b.pathSegment("admin", "realms", realm, "roles", name).build())
-                .headers(h -> h.setBearerAuth(bearer))
-                .retrieve()
-                .body(Role.class);
+            available.stream()
+                .filter(r -> name.equals(r.name()))
+                .findFirst()
+                .orElseThrow(KeycloakAdminClient::unavailable);
         if (role == null || role.id() == null || role.id().isBlank() || !name.equals(role.name()))
           throw unavailable();
         missing.add(role);
@@ -139,13 +144,19 @@ public final class KeycloakAdminClient implements KeycloakRoles {
   }
 
   private List<Role> readRoles(String subject, String bearer) {
+    return readRoles(subject, bearer, false);
+  }
+
+  private List<Role> readRoles(String subject, String bearer, boolean available) {
     List<Role> roles =
         rest.get()
             .uri(
-                b ->
-                    b.pathSegment(
-                            "admin", "realms", realm, "users", subject, "role-mappings", "realm")
-                        .build())
+                b -> {
+                  b.pathSegment(
+                      "admin", "realms", realm, "users", subject, "role-mappings", "realm");
+                  if (available) b.pathSegment("available");
+                  return b.build();
+                })
             .headers(
                 h -> {
                   h.setBearerAuth(bearer);

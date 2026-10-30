@@ -56,11 +56,15 @@ public final class UserModels {
     }
   }
 
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record PublicOrganizer(
       String organizerSubject,
       String organizationName,
       String shortDescription,
-      long followerCount) {}
+      long followerCount,
+      String logoUrl,
+      String bannerUrl) {}
 
   public record FollowState(String organizerSubject, boolean following, long followerCount) {}
 

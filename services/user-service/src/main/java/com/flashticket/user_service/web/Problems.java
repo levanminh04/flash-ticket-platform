@@ -80,11 +80,20 @@ public class Problems {
     HttpMessageNotReadableException.class,
     HandlerMethodValidationException.class,
     MethodArgumentTypeMismatchException.class,
-    org.springframework.web.bind.MissingServletRequestParameterException.class
+    org.springframework.web.bind.MissingServletRequestParameterException.class,
+    org.springframework.web.multipart.support.MissingServletRequestPartException.class
   })
   ResponseEntity<Problem> malformed(Exception ex, HttpServletRequest request) {
     return ResponseEntity.badRequest()
         .body(problem(request, "INVALID_REQUEST", "Invalid request", List.of()));
+  }
+
+  @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+  ResponseEntity<Problem> uploadSize(HttpServletRequest request) {
+    return ResponseEntity.status(413)
+        .body(
+            problem(
+                request, "IMAGE_TOO_LARGE", "Image exceeds the configured size limit", List.of()));
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
