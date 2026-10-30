@@ -25,6 +25,7 @@ import com.flashticket.booking_service.mapper.MappingValueConverter;
 import com.flashticket.booking_service.mapper.OrderMapperImpl;
 import com.flashticket.booking_service.messaging.BookingRabbitErrorHandler;
 import com.flashticket.booking_service.messaging.SalesConfigurationListener;
+import com.flashticket.booking_service.order.OrderExpiryWorker;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
 import com.flashticket.booking_service.order.service.impl.OrderServiceImpl;
@@ -234,7 +235,7 @@ class BookingPersistenceIT {
   @Autowired EntityManager em;
   @Autowired JdbcTemplate jdbc;
   @Autowired ApplicationContext context;
-  @Autowired OrderRepository orders;
+  @org.springframework.test.context.bean.override.mockito.MockitoSpyBean OrderRepository orders;
   @Autowired com.flashticket.booking_service.messaging.service.MessagingService messagingService;
   @Autowired RabbitTemplate relayRabbitTemplate;
   @Autowired com.flashticket.booking_service.promotion.service.PromotionService promotionService;
@@ -242,6 +243,537 @@ class BookingPersistenceIT {
   @Autowired AvailabilityService salesService;
   @Autowired EventSalesSnapshotRepository snapshots;
   @Autowired PlatformTransactionManager transactionManager;
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void selectsExpiredPendingOrderIdsWithBoundedCursor() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      for (int i = 0; i < 5; i++)
+        orderService.createOrder(
+            "query-buyer-" + i, UUID.randomUUID(), createOrderRequest(config, 1));
+      var cutoff =
+          jdbc.queryForObject(
+                  "select max(expires_at) from booking_schema.tbl_orders where event_id=?",
+                  java.sql.Timestamp.class,
+                  config.eventId())
+              .toInstant();
+      var ids =
+          jdbc.queryForList(
+              "select id from booking_schema.tbl_orders where event_id=? order by id",
+              UUID.class,
+              config.eventId());
+      jdbc.update(
+          "update booking_schema.tbl_orders set lifecycle_state='CANCELLED' where id=?",
+          ids.get(1));
+      var page = org.springframework.data.domain.PageRequest.of(0, 2);
+      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, null, page))
+          .containsExactly(ids.get(0), ids.get(2));
+      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, ids.get(2), page))
+          .containsExactly(ids.get(3), ids.get(4));
+      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, ids.get(4), page))
+          .isEmpty();
+      Instant firstExpiry =
+          jdbc.queryForObject(
+                  "select min(expires_at) from booking_schema.tbl_orders where event_id=?",
+                  java.sql.Timestamp.class,
+                  config.eventId())
+              .toInstant();
+      assertThat(
+              orders.findExpiredOrderIds(
+                  OrderState.PENDING_PAYMENT, firstExpiry.minusNanos(1000), null, page))
+          .isEmpty();
+      var index =
+          Arrays.stream(Order.class.getAnnotation(Table.class).indexes())
+              .filter(i -> i.name().equals("tbl_orders_expiry_idx"))
+              .findFirst()
+              .orElseThrow();
+      // Suite dùng DDL SQL sẵn; chạy DDL index từ annotation trên PostgreSQL test để kiểm tính hợp
+      // lệ.
+      jdbc.execute(
+          "create index if not exists "
+              + index.name()
+              + " on booking_schema.tbl_orders ("
+              + index.columnList()
+              + ")");
+      assertThat(
+              jdbc.queryForObject(
+                  "select indexdef from pg_indexes where schemaname='booking_schema' and indexname='tbl_orders_expiry_idx'",
+                  String.class))
+          .contains("lifecycle_state, expires_at, id");
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void expiresUnfrozenQuantityOrderAndReleasesHeldResources() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(1));
+      for (boolean voucher : List.of(false, true)) {
+        var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        if (voucher) {
+          var promo =
+              new PromotionConfig(
+                  UUID.randomUUID(),
+                  "SAVE",
+                  Instant.now().minusSeconds(60),
+                  Instant.now().plusSeconds(3600),
+                  "10",
+                  1,
+                  new PromotionConfig.PercentDiscount("PERCENT", 10));
+          config = with(with(config, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+          salesService.synchronizeSalesConfiguration(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  config));
+        }
+        var order =
+            orderService.createOrder(
+                "expiry-buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        if (voucher)
+          promotionService.applyPromotionToOrder(
+              "expiry-buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(5))
+            .until(
+                () ->
+                    Boolean.TRUE.equals(
+                        jdbc.queryForObject(
+                            "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                            Boolean.class,
+                            order.getOrderId())));
+        long inboxBefore =
+            jdbc.queryForObject(
+                "select count(*) from booking_schema.tbl_inbox_messages", Long.class);
+        orderService.expireOrder(order.getOrderId());
+        var stored =
+            jdbc.queryForMap(
+                "select * from booking_schema.tbl_orders where id=?", order.getOrderId());
+        assertThat(stored.get("lifecycle_state")).isEqualTo("EXPIRED");
+        assertThat(stored.get("frozen_purchase_snapshot")).isNull();
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                    Long.class,
+                    config.eventId()))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select held from booking_schema.tbl_purchase_limits where event_id=?",
+                    Integer.class,
+                    config.eventId()))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select state from booking_schema.tbl_reservations where order_id=?",
+                    String.class,
+                    order.getOrderId()))
+            .isEqualTo("RELEASED");
+        assertThat(
+                jdbc.queryForList(
+                    "select state from booking_schema.tbl_reservation_allocations where order_id=?",
+                    String.class,
+                    order.getOrderId()))
+            .containsOnly("RELEASED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                    Long.class,
+                    order.getOrderId()))
+            .isZero();
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from booking_schema.tbl_inbox_messages", Long.class))
+            .isEqualTo(inboxBefore);
+        if (voucher) {
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_promotion_usages where event_id=?",
+                      String.class,
+                      config.eventId()))
+              .isEqualTo("RELEASED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select held from booking_schema.tbl_promotion_inventory where event_id=?",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+        }
+        var before = captureOrderCreationState(config.eventId());
+        orderService.expireOrder(order.getOrderId());
+        assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void expiryWorkerExpiresTenOrdersThroughTheProductionBatchAndTransactionalService()
+      throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_orders where lifecycle_state='PENDING_PAYMENT' and expires_at<=clock_timestamp()",
+                  Long.class))
+          .as("isolated database has no unrelated expired orders")
+          .isZero();
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(1));
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var orderIds = new ArrayList<UUID>();
+      for (int i = 0; i < 10; i++) {
+        var order =
+            orderService.createOrder(
+                "expiry-worker-buyer-" + i, UUID.randomUUID(), createOrderRequest(config, 1));
+        orderIds.add(order.getOrderId());
+      }
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  jdbc.queryForObject(
+                          "select count(*) from booking_schema.tbl_orders where event_id=? and lifecycle_state='PENDING_PAYMENT' and expires_at<=clock_timestamp()",
+                          Long.class,
+                          config.eventId())
+                      == 10);
+
+      var worker = new OrderExpiryWorker(orders, orderService);
+      org.springframework.test.util.ReflectionTestUtils.setField(worker, "batchSize", 20);
+      worker.expireDueOrders();
+
+      for (UUID orderId : orderIds) {
+        assertThat(
+                jdbc.queryForObject(
+                    "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                    String.class,
+                    orderId))
+            .isEqualTo("EXPIRED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select state from booking_schema.tbl_reservations where order_id=?",
+                    String.class,
+                    orderId))
+            .isEqualTo("RELEASED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from booking_schema.tbl_reservation_allocations where order_id=? and state<>'RELEASED'",
+                    Long.class,
+                    orderId))
+            .isZero();
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and held<>0",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+
+      var stateAfterFirstBatch = captureOrderCreationState(config.eventId());
+      worker.expireDueOrders();
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(stateAfterFirstBatch);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void expiresFrozenOrderAndReleasesHeldPromotion() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(2));
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promo =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "10",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config = with(with(base, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      promotionService.applyPromotionToOrder(
+          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var money =
+          jdbc.queryForMap(
+              "select subtotal,discount,total,frozen_purchase_snapshot::text as frozen from booking_schema.tbl_orders where id=?",
+              order.getOrderId());
+      jdbc.update(
+          "update booking_schema.tbl_promotion_inventory set ends_at=clock_timestamp()-interval '1 second' where event_id=?",
+          config.eventId());
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForMap(
+                  "select subtotal,discount,total,frozen_purchase_snapshot::text as frozen from booking_schema.tbl_orders where id=?",
+                  order.getOrderId()))
+          .isEqualTo(money);
+      var released =
+          jdbc.queryForMap(
+              "select held,used from booking_schema.tbl_promotion_inventory where event_id=?",
+              config.eventId());
+      assertThat(released).containsEntry("held", 0L).containsEntry("used", 0L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_promotion_usages where event_id=?",
+                  String.class,
+                  config.eventId()))
+          .isEqualTo("RELEASED");
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForMap(
+                  "select held,used from booking_schema.tbl_promotion_inventory where event_id=?",
+                  config.eventId()))
+          .isEqualTo(released);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void expiresStandingOrderWithoutChangingTicketTypePool() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMillis(300));
+      var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.STANDING, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var pools =
+          jdbc.queryForList(
+              "select * from booking_schema.tbl_ticket_type_inventory where event_id=?",
+              config.eventId());
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForMap(
+                  "select held,purchased from booking_schema.tbl_sector_inventory where event_id=?",
+                  config.eventId()))
+          .containsEntry("held", 0L)
+          .containsEntry("purchased", 0L);
+      assertThat(
+              jdbc.queryForList(
+                  "select * from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  config.eventId()))
+          .isEqualTo(pools);
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("EXPIRED");
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void expiresSeatedOrderWithoutReleasingAnotherReservation() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMillis(300));
+      var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 4, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 1));
+      UUID seatId = config.seats().getFirst().seatId();
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForMap(
+                  "select state,current_reservation_id,reservation_generation from booking_schema.tbl_seat_inventory where seat_id=?",
+                  seatId))
+          .containsEntry("state", "AVAILABLE")
+          .containsEntry("current_reservation_id", null)
+          .containsEntry("reservation_generation", 1L);
+      var second =
+          orderService.createOrder("buyer2", UUID.randomUUID(), createOrderRequest(config, 1));
+      var before = captureOrderCreationState(config.eventId());
+      orderService.expireOrder(order.getOrderId());
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select current_reservation_id from booking_schema.tbl_seat_inventory where seat_id=?",
+                  UUID.class,
+                  seatId))
+          .isEqualTo(
+              jdbc.queryForObject(
+                  "select id from booking_schema.tbl_reservations where order_id=?",
+                  UUID.class,
+                  second.getOrderId()));
+      // Trạng thái ghế hidden theo schema thật phải UNAVAILABLE và không còn chủ giữ.
+      jdbc.update(
+          "update booking_schema.tbl_seat_inventory set is_hidden=true,state='UNAVAILABLE',current_reservation_id=null where seat_id=?",
+          seatId);
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          second.getOrderId())));
+      var inconsistent = captureOrderCreationState(config.eventId());
+      assertThatThrownBy(() -> orderService.expireOrder(second.getOrderId()))
+          .isInstanceOf(BusinessException.class);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(inconsistent);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void skipsUnexpiredAndTerminalOrdersDuringExpiry() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 5);
+      var pending =
+          orderService.createOrder("pending", UUID.randomUUID(), createOrderRequest(config, 1));
+      var before = captureOrderCreationState(config.eventId());
+      orderService.expireOrder(pending.getOrderId());
+      orderService.expireOrder(UUID.randomUUID());
+      assertThatThrownBy(() -> orderService.expireOrder(null))
+          .isInstanceOf(BusinessException.class);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      for (String state :
+          List.of("ISSUING", "COMPLETED", "ISSUANCE_FAILED", "EXPIRED", "CANCELLED")) {
+        var order =
+            orderService.createOrder(state, UUID.randomUUID(), createOrderRequest(config, 1));
+        if (List.of("ISSUING", "COMPLETED", "ISSUANCE_FAILED").contains(state)) {
+          var frozen = orderService.preparePurchaseSnapshot(state, order.getOrderId());
+          orderService.acceptPayment(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "booking.accept-payment.v1",
+                  1,
+                  order.getOrderId(),
+                  frozen.sourceOrderVersion(),
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  new AcceptPayment(
+                      order.getOrderId(),
+                      UUID.randomUUID(),
+                      UUID.randomUUID(),
+                      frozen.total(),
+                      frozen.currency(),
+                      frozen.sourceOrderVersion())));
+        }
+        jdbc.update(
+            "update booking_schema.tbl_orders set lifecycle_state=? where id=?",
+            state,
+            order.getOrderId());
+        var unchanged = captureOrderCreationState(config.eventId());
+        orderService.expireOrder(order.getOrderId());
+        assertThat(captureOrderCreationState(config.eventId())).isEqualTo(unchanged);
+      }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
 
   @Test
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -6349,6 +6881,644 @@ class BookingPersistenceIT {
       jdbc.execute(
           "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
       new RabbitAdmin(relayRabbitTemplate.getConnectionFactory()).purgeQueue(RELAY_QUEUE);
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void serializesConcurrentExpiryForTheSameOrder() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMillis(300));
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      var ready = new CountDownLatch(2);
+      var start = new CountDownLatch(1);
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var futures = new ArrayList<Future<?>>();
+        for (int i = 0; i < 2; i++)
+          futures.add(
+              executor.submit(
+                  () -> {
+                    ready.countDown();
+                    assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+                    orderService.expireOrder(order.getOrderId());
+                    return null;
+                  }));
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        for (var future : futures) future.get(10, TimeUnit.SECONDS);
+      } finally {
+        start.countDown();
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("EXPIRED");
+      assertThat(
+              jdbc.queryForMap(
+                  "select held,purchased from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  config.eventId()))
+          .containsEntry("held", 0L)
+          .containsEntry("purchased", 0L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_purchase_limits where event_id=?",
+                  Integer.class,
+                  config.eventId()))
+          .isZero();
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void arbitratesExpiryAgainstAcceptPaymentAfterLockWait() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      for (int scenario = 0; scenario < 3; scenario++) {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", Duration.ofSeconds(scenario == 0 ? 10 : 2));
+        var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        var frozen = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+        var payment =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                frozen.sourceOrderVersion(),
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                new AcceptPayment(
+                    order.getOrderId(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    frozen.total(),
+                    frozen.currency(),
+                    frozen.sourceOrderVersion()));
+        int current = scenario;
+        if (scenario == 1)
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(5))
+              .until(
+                  () ->
+                      Boolean.TRUE.equals(
+                          jdbc.queryForObject(
+                              "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                              Boolean.class,
+                              order.getOrderId())));
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+          if (scenario < 2) {
+            var first =
+                executor.submit(
+                    () ->
+                        new TransactionTemplate(transactionManager)
+                            .execute(
+                                status -> {
+                                  Object result;
+                                  if (current == 0) result = orderService.acceptPayment(payment);
+                                  else {
+                                    orderService.expireOrder(order.getOrderId());
+                                    result = "expired";
+                                  }
+                                  locked.countDown();
+                                  try {
+                                    assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+                                  } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IllegalStateException(e);
+                                  }
+                                  return result;
+                                }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            var second =
+                executor.submit(
+                    () -> {
+                      if (current == 0) {
+                        orderService.expireOrder(order.getOrderId());
+                        return null;
+                      }
+                      return orderService.acceptPayment(payment);
+                    });
+            try {
+              Awaitility.await()
+                  .atMost(Duration.ofSeconds(3))
+                  .until(
+                      () ->
+                          jdbc.queryForObject(
+                                  "select count(*) from pg_locks where not granted", Long.class)
+                              > 0);
+            } finally {
+              release.countDown();
+            }
+            first.get(10, TimeUnit.SECONDS);
+            var outcome = second.get(10, TimeUnit.SECONDS);
+            if (current == 1)
+              assertThat(
+                      ((com.flashticket.booking_service.dto.message.PaymentDecision) outcome)
+                          .outcome())
+                  .isEqualTo(
+                      com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.LATE);
+          } else {
+            // Payment đã giữ order nhưng chờ inventory đến quá deadline; không được ACCEPTED.
+            try (var blocker = jdbc.getDataSource().getConnection()) {
+              blocker.setAutoCommit(false);
+              try (var statement =
+                  blocker.prepareStatement(
+                      "select ticket_type_id from booking_schema.tbl_ticket_type_inventory where event_id=? for update")) {
+                statement.setObject(1, config.eventId());
+                statement.executeQuery().close();
+              }
+              var paid = executor.submit(() -> orderService.acceptPayment(payment));
+              try {
+                Awaitility.await()
+                    .atMost(Duration.ofSeconds(3))
+                    .until(
+                        () ->
+                            jdbc.queryForObject(
+                                    "select count(*) from pg_locks where not granted", Long.class)
+                                > 0);
+                var expired =
+                    executor.submit(
+                        () -> {
+                          orderService.expireOrder(order.getOrderId());
+                          return null;
+                        });
+                Awaitility.await()
+                    .atMost(Duration.ofSeconds(4))
+                    .until(
+                        () ->
+                            Boolean.TRUE.equals(
+                                jdbc.queryForObject(
+                                    "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                                    Boolean.class,
+                                    order.getOrderId())));
+                blocker.commit();
+                assertThat(paid.get(10, TimeUnit.SECONDS).outcome())
+                    .isEqualTo(
+                        com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.LATE);
+                expired.get(10, TimeUnit.SECONDS);
+              } finally {
+                blocker.rollback();
+              }
+            }
+          }
+        } finally {
+          release.countDown();
+        }
+        assertThat(
+                jdbc.queryForObject(
+                    "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                    String.class,
+                    order.getOrderId()))
+            .isEqualTo(scenario == 0 ? "ISSUING" : "EXPIRED");
+        assertThat(
+                jdbc.queryForMap(
+                    "select held,purchased from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                    config.eventId()))
+            .containsEntry("held", 0L)
+            .containsEntry("purchased", scenario == 0 ? 2L : 0L);
+      }
+      // Chỉ biên equality dùng spy clock; query/khóa và transaction vẫn là PostgreSQL thật.
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMinutes(15));
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("equality", UUID.randomUUID(), createOrderRequest(config, 1));
+      Instant expiresAt =
+          jdbc.queryForObject(
+                  "select expires_at from booking_schema.tbl_orders where id=?",
+                  java.sql.Timestamp.class,
+                  order.getOrderId())
+              .toInstant();
+      org.mockito.Mockito.doReturn(expiresAt).when(orders).currentDatabaseTime();
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("EXPIRED");
+    } finally {
+      org.mockito.Mockito.reset(orders);
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackExpiryWhenReservationDataConflicts() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(1));
+      for (int scenario = 0; scenario < 6; scenario++) {
+        var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var promo =
+            new PromotionConfig(
+                UUID.randomUUID(),
+                "SAVE",
+                Instant.now().minusSeconds(60),
+                Instant.now().plusSeconds(3600),
+                "10",
+                1,
+                new PromotionConfig.PercentDiscount("PERCENT", 10));
+        config = with(with(config, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        var order =
+            orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+        promotionService.applyPromotionToOrder(
+            "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+        if (scenario == 0)
+          jdbc.update(
+              "update booking_schema.tbl_ticket_type_inventory set held=0 where event_id=?",
+              config.eventId());
+        if (scenario == 1)
+          jdbc.update(
+              "update booking_schema.tbl_purchase_limits set held=0 where event_id=?",
+              config.eventId());
+        if (scenario == 2)
+          jdbc.update(
+              "update booking_schema.tbl_reservations set state='RELEASED' where order_id=?",
+              order.getOrderId());
+        if (scenario == 3)
+          jdbc.update(
+              "update booking_schema.tbl_promotion_usages set state='USED' where event_id=?",
+              config.eventId());
+        if (scenario == 4)
+          jdbc.update(
+              "update booking_schema.tbl_promotion_inventory set held=0 where event_id=?",
+              config.eventId());
+        if (scenario == 5) {
+          orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+          jdbc.update(
+              "update booking_schema.tbl_orders set accepted_charge_id=?,accepted_at=payment_frozen_at where id=?",
+              UUID.randomUUID(),
+              order.getOrderId());
+        }
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(5))
+            .until(
+                () ->
+                    Boolean.TRUE.equals(
+                        jdbc.queryForObject(
+                            "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                            Boolean.class,
+                            order.getOrderId())));
+        var before = captureOrderCreationState(config.eventId());
+        var usageBefore =
+            jdbc.queryForList(
+                "select * from booking_schema.tbl_promotion_usages where event_id=?",
+                config.eventId());
+        assertThatThrownBy(() -> orderService.expireOrder(order.getOrderId()))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.RESERVATION_DATA_CONFLICT));
+        assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+        assertThat(
+                jdbc.queryForList(
+                    "select * from booking_schema.tbl_promotion_usages where event_id=?",
+                    config.eventId()))
+            .isEqualTo(usageBefore);
+      }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackExpiryWhenCommitFailsAndRetriesSafely() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMillis(300));
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      jdbc.execute(
+          """
+          create function booking_schema.expiry_test_reject() returns trigger language plpgsql as $$
+          begin
+            if new.lifecycle_state = 'EXPIRED' then
+              raise exception 'expiry commit rejected' using errcode = '23514';
+            end if;
+            return new;
+          end $$
+          """);
+      jdbc.execute(
+          "create constraint trigger expiry_test_commit_failure after update on booking_schema.tbl_orders deferrable initially deferred for each row execute function booking_schema.expiry_test_reject()");
+      var before = captureOrderCreationState(config.eventId());
+      assertThatThrownBy(() -> orderService.expireOrder(order.getOrderId()))
+          .isInstanceOf(RuntimeException.class)
+          .hasStackTraceContaining("expiry commit rejected");
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      jdbc.execute("drop trigger expiry_test_commit_failure on booking_schema.tbl_orders");
+      orderService.expireOrder(order.getOrderId());
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("EXPIRED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+    } finally {
+      jdbc.execute(
+          "drop trigger if exists expiry_test_commit_failure on booking_schema.tbl_orders");
+      jdbc.execute("drop function if exists booking_schema.expiry_test_reject()");
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void preservesEventCancellationDuringOrderExpiry() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMillis(300));
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order = orderService.createOrder("due", UUID.randomUUID(), createOrderRequest(config, 2));
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofMinutes(15));
+      var unexpired =
+          orderService.createOrder("later", UUID.randomUUID(), createOrderRequest(config, 1));
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED',sale_ends_at=clock_timestamp()-interval '1 second' where event_id=?",
+          config.eventId());
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbc.queryForObject(
+                          "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                          Boolean.class,
+                          order.getOrderId())));
+      orderService.expireOrder(order.getOrderId());
+      orderService.expireOrder(unexpired.getOrderId());
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("CANCELLED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  unexpired.getOrderId()))
+          .isEqualTo("PENDING_PAYMENT");
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(1L);
+      var before = captureOrderCreationState(config.eventId());
+      orderService.expireOrder(order.getOrderId());
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void serializesExpiryWithPromotionAndSnapshotPreparation() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(2));
+      for (boolean snapshot : List.of(false, true)) {
+        for (boolean expiryFirst : List.of(false, true)) {
+          var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+          var promo =
+              new PromotionConfig(
+                  UUID.randomUUID(),
+                  "SAVE",
+                  Instant.now().minusSeconds(60),
+                  Instant.now().plusSeconds(3600),
+                  "10",
+                  1,
+                  new PromotionConfig.PercentDiscount("PERCENT", 10));
+          var config = with(with(base, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+          salesService.synchronizeSalesConfiguration(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  config));
+          var order =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          if (snapshot)
+            promotionService.applyPromotionToOrder(
+                "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+          if (expiryFirst)
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .until(
+                    () ->
+                        Boolean.TRUE.equals(
+                            jdbc.queryForObject(
+                                "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                                Boolean.class,
+                                order.getOrderId())));
+          var locked = new CountDownLatch(1);
+          var release = new CountDownLatch(1);
+          try (var executor = Executors.newFixedThreadPool(2)) {
+            var first =
+                executor.submit(
+                    () ->
+                        new TransactionTemplate(transactionManager)
+                            .execute(
+                                status -> {
+                                  if (expiryFirst) orderService.expireOrder(order.getOrderId());
+                                  else if (snapshot)
+                                    orderService.preparePurchaseSnapshot(
+                                        "buyer", order.getOrderId());
+                                  else
+                                    promotionService.applyPromotionToOrder(
+                                        "buyer",
+                                        order.getOrderId(),
+                                        new ApplyPromotionRequest("SAVE"));
+                                  locked.countDown();
+                                  try {
+                                    assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+                                  } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IllegalStateException(e);
+                                  }
+                                  return null;
+                                }));
+            assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+            var second =
+                executor.submit(
+                    () -> {
+                      try {
+                        if (!expiryFirst) {
+                          orderService.expireOrder(order.getOrderId());
+                          return null;
+                        }
+                        return snapshot
+                            ? orderService.preparePurchaseSnapshot("buyer", order.getOrderId())
+                            : promotionService.applyPromotionToOrder(
+                                "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+                      } catch (RuntimeException exception) {
+                        return exception;
+                      }
+                    });
+            try {
+              Awaitility.await()
+                  .atMost(Duration.ofSeconds(3))
+                  .until(
+                      () ->
+                          jdbc.queryForObject(
+                                  "select count(*) from pg_locks where not granted", Long.class)
+                              > 0);
+              if (!expiryFirst)
+                Awaitility.await()
+                    .atMost(Duration.ofSeconds(4))
+                    .until(
+                        () ->
+                            Boolean.TRUE.equals(
+                                jdbc.queryForObject(
+                                    "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                                    Boolean.class,
+                                    order.getOrderId())));
+            } finally {
+              release.countDown();
+            }
+            first.get(10, TimeUnit.SECONDS);
+            Object outcome = second.get(10, TimeUnit.SECONDS);
+            if (expiryFirst) assertThat(outcome).isInstanceOf(BusinessException.class);
+            else assertThat(outcome).isNull();
+          } finally {
+            release.countDown();
+          }
+          assertThat(
+                  jdbc.queryForObject(
+                      "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("EXPIRED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select held from booking_schema.tbl_promotion_inventory where event_id=?",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_promotion_usages where event_id=? and state='HELD'",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          if (expiryFirst)
+            assertThat(
+                    jdbc.queryForObject(
+                        "select payment_frozen_at from booking_schema.tbl_orders where id=?",
+                        java.sql.Timestamp.class,
+                        order.getOrderId()))
+                .isNull();
+        }
+      }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
     }
   }
 

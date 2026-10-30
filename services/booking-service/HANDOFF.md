@@ -1,5 +1,36 @@
 # Booking Service handoff
 
+## Order expiry worker — 2026-10-30
+
+- Implemented the approved expiry plan v0.3 after the user confirmed the
+  EXECUTING-PLANS list C1–C8, M1–M5, R1–R7, U1–U8/D1–D12. M6/M7 remain removed:
+  no validateReservationAllocations or releaseHeldPromotion helper was added.
+- OrderExpiryWorker polls expired PENDING_PAYMENT UUIDs with DB time, a bounded
+  batch and an in-memory UUID cursor. It advances past failed IDs and wraps at the
+  end so failed orders are retried without always blocking the first batch.
+- Each OrderService.expireOrder call has its own transaction through the service
+  proxy. It locks snapshot READ → order WRITE → buyer limit → selected inventory
+  in ID order → promotion inventory, then reads the DB clock again. Equality with
+  expiresAt is expired; a Payment winner already in ISSUING is skipped.
+- Existing inventory/limit helpers release HELD only. Reservation/allocations
+  become RELEASED; order becomes EXPIRED, or CANCELLED when the event marker is
+  cancelled. Terminal orders are skipped, repeated execution has no effect, and
+  any resource/commit failure rolls back the entire order transaction.
+- The promotion helper now uses PromotionUsage/PromotionInventory for both
+  Payment and expiry, including orders not yet frozen. Payment retains frozen
+  promotion matching in settlePendingPayment and its existing allocation guards.
+- Central config enables booking.expiry with PT5S fixed delay and batch20, reuses
+  reservation lock-timeout5s and configures the Boot scheduler pool to2. Tests
+  explicitly disable expiry except when testing worker configuration. Order has
+  the tbl_orders_expiry_idx on lifecycle_state/expires_at/id; runtime schema update
+  remains the project's existing ddl-auto:update approach.
+- Expiry emits no inbox/outbox or PaymentDecision and does not release PURCHASED
+  inventory/USED promotions. Buyer cancellation, event-wide cancellation, refund
+  and Payment/Ticket E2E remain separate tasks. No deployment/ClickUp update is
+  part of this change. Verification evidence is recorded in TESTING.md.
+- Final verify at 10:59:29 +07 on 2026-10-30: 372 unit + 106 integration tests,
+  zero failures/errors/skips, BUILD SUCCESS, including format/static checks.
+
 ## Booking issuance results — 2026-10-29
 
 - Implemented on dev/son after user approved EXECUTING-PLANS C1–C14,

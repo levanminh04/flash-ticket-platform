@@ -16,7 +16,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "tbl_orders", schema = "booking_schema")
+@Table(
+    name = "tbl_orders",
+    schema = "booking_schema",
+    indexes = @Index(name = "tbl_orders_expiry_idx", columnList = "lifecycle_state,expires_at,id"))
 @Getter
 @Setter
 @NoArgsConstructor

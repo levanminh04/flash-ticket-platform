@@ -31,6 +31,8 @@ spring:
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
 
 booking:
+  expiry:
+    enabled: false
   reservation:
     hold-duration: PT15M
     lock-timeout: 5s

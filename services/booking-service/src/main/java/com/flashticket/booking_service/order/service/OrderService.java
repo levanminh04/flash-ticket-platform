@@ -9,6 +9,8 @@ import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import java.util.UUID;
 
 public interface OrderService {
+  void expireOrder(UUID orderId);
+
   void processBookingIssuanceResult(
       Envelope<com.flashticket.booking_service.dto.message.BookingIssuanceResult> message);
 

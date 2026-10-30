@@ -31,6 +31,110 @@ import tools.jackson.databind.json.JsonMapper;
 
 class RuntimeConfigurationTests {
   @Test
+  void enablesOrderExpiryWorkerOnlyWhenConfigured() {
+    var runner =
+        new ApplicationContextRunner()
+            .withBean(
+                com.flashticket.booking_service.order.repository.OrderRepository.class,
+                () ->
+                    org.mockito.Mockito.mock(
+                        com.flashticket.booking_service.order.repository.OrderRepository.class))
+            .withBean(
+                com.flashticket.booking_service.order.service.OrderService.class,
+                () ->
+                    org.mockito.Mockito.mock(
+                        com.flashticket.booking_service.order.service.OrderService.class))
+            .withUserConfiguration(com.flashticket.booking_service.order.OrderExpiryWorker.class);
+    runner.run(
+        context ->
+            assertThat(context)
+                .doesNotHaveBean(com.flashticket.booking_service.order.OrderExpiryWorker.class));
+    runner
+        .withPropertyValues("booking.expiry.enabled=false")
+        .run(
+            context ->
+                assertThat(context)
+                    .doesNotHaveBean(
+                        com.flashticket.booking_service.order.OrderExpiryWorker.class));
+    runner
+        .withPropertyValues("booking.expiry.enabled=true")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasSingleBean(com.flashticket.booking_service.order.OrderExpiryWorker.class));
+    configuredRunner()
+        .withBean(
+            com.flashticket.booking_service.order.repository.OrderRepository.class,
+            () ->
+                org.mockito.Mockito.mock(
+                    com.flashticket.booking_service.order.repository.OrderRepository.class))
+        .withBean(
+            com.flashticket.booking_service.order.service.OrderService.class,
+            () ->
+                org.mockito.Mockito.mock(
+                    com.flashticket.booking_service.order.service.OrderService.class))
+        .withUserConfiguration(com.flashticket.booking_service.order.OrderExpiryWorker.class)
+        .run(
+            context -> {
+              assertThat(context)
+                  .hasSingleBean(com.flashticket.booking_service.order.OrderExpiryWorker.class);
+              assertThat(context.getEnvironment().getProperty("booking.expiry.poll-interval"))
+                  .isEqualTo("PT5S");
+              assertThat(
+                      context
+                          .getEnvironment()
+                          .getProperty("booking.expiry.batch-size", Integer.class))
+                  .isEqualTo(20);
+            });
+  }
+
+  @Test
+  void configuresTwoSchedulerThreadsForBookingWorkers() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var second = new java.util.concurrent.CountDownLatch(1);
+    try {
+      configuredRunner()
+          .withBean(
+              "org.springframework.scheduling.config.internalScheduledAnnotationProcessor",
+              org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor.class,
+              org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor::new)
+          .withConfiguration(
+              AutoConfigurations.of(
+                  org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
+                      .class))
+          .run(
+              context -> {
+                assertThat(context).hasNotFailed();
+                var scheduler =
+                    context.getBean(
+                        org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler.class);
+                assertThat(scheduler.getScheduledThreadPoolExecutor().getCorePoolSize())
+                    .isEqualTo(2);
+                scheduler.schedule(
+                    () -> {
+                      entered.countDown();
+                      try {
+                        release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                      } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                      }
+                    },
+                    java.time.Instant.now());
+                try {
+                  assertThat(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                  scheduler.schedule(second::countDown, java.time.Instant.now());
+                  assertThat(second.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                } finally {
+                  release.countDown();
+                }
+              });
+    } finally {
+      release.countDown();
+    }
+  }
+
+  @Test
   void feignScanIsLimitedToInternalClients() {
     var scan = BookingServiceApplication.class.getAnnotation(EnableFeignClients.class);
     assertThat(scan).isNotNull();

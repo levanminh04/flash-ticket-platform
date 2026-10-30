@@ -1,5 +1,74 @@
 # Booking Service tests
 
+## Order expiry worker — 2026-10-30
+
+Approved additions: OrderExpiryWorker/OrderExpiryWorkerTests, five production
+constructor/method declarations (M1–M5), U1–U8 and D1–D12. Existing Payment methods
+were changed only for shared promotion handling; allocation checks remain in
+settlePendingPayment. No additional Java helpers/types were introduced.
+
+Coverage includes DB-time/cursor selection, inclusive cutoff, bounded batch,
+failure/restart/interruption handling, enabled/missing/disabled config and a real
+two-thread Boot scheduler. PostgreSQL tests cover unfrozen orders with/without
+held promotion, frozen promotion release after promotion expiry, all inventory
+modes, terminal skips, repeated/concurrent expiry, Payment winners in both lock
+orders, Payment waiting past expiry, exact equality, promotion/snapshot races,
+resource conflicts and a deferred DB-trigger failure at commit followed by retry.
+Only equality uses a spy DB clock; other races use actual PostgreSQL locks and
+latches. The test trigger/function is dropped in finally and never touches DB119.
+
+The checked-in SQL schema forbids hidden HELD seats (hidden implies UNAVAILABLE).
+The seated test therefore proves normal HELD→AVAILABLE, preserves a newer holder
+on old expiry replay, and proves rollback when the current holder's seat has
+already become hidden/UNAVAILABLE. It does not weaken that schema constraint to
+manufacture a hidden HELD fixture. The existing helper's hidden mapping is retained.
+The suite initializes schema from SQL; the index test executes DDL using the
+entity's @Index name/columns and inspects pg_indexes on PostgreSQL test. This
+validates the index DDL, not a deployment or automatic schema update on server119.
+
+An additional isolated worker-path test creates ten valid orders and invokes the
+production `OrderExpiryWorker.expireDueOrders()` body against PostgreSQL
+Testcontainers. The worker uses the real repository query and calls the proxied
+`OrderService`, so each expiry commits in its own transaction. The test checks
+order/reservation/allocation states and released inventory/limits. It calls the
+scheduled method directly once; scheduling itself is covered separately by
+`RuntimeConfigurationTests`.
+
+Verification history:
+
+- Production compile passed. Targeted worker/runtime/AcceptPayment tests:
+  **17 passed**, zero skips.
+- Initial full verification lacked the root environment and stopped at the
+  existing Rabbit context smoke (unresolved RABBITMQ_HOST). Re-run injected .env
+  directly into the child process without printing credentials.
+- First environment-configured verify: **372 unit tests passed; 104/106
+  persistence tests passed**, two race observers timed out. A first observer
+  adjustment still timed out; both races passed after using the live pg_locks
+  waiting-lock view instead of matching/querying pg_stat_activity. Production
+  locking and guards were unchanged. Focused repair: **2/2 passed**.
+- Final `-P integration -Dit.test=BookingPersistenceIT verify` completed at
+  **10:59:29 +07:00, 2026-10-30**: **372 unit tests + 106 integration tests**,
+  zero failures/errors/skips, BUILD SUCCESS. Spotless/SpotBugs/JaCoCo lifecycle
+  checks passed; final git diff --check passed. Current-run Maven totals are
+  authoritative; do not sum stale XML files from previous focused runs.
+- After adding the worker-path method, targeted verify completed at
+  **11:30:29 +07:00, 2026-10-30**: **372 unit tests + 1 worker-path integration
+  test**, zero failures/errors/skips, BUILD SUCCESS. This was a focused run, not
+  a rerun of all 107 integration methods. `git diff --check` also passed.
+
+Logs: target/expiry-verify.log (first environment-configured run),
+target/expiry-repair.log, target/expiry-repair2.log (2/2 pass), and
+target/expiry-final-verify.log and target/expiry-worker-isolated-target.log.
+Unit tests include the pre-existing Rabbit119
+connection-only context smoke; business integration uses disposable PostgreSQL17
+and RabbitMQ4.3.6 Testcontainers, not shared DB119 or business queues.
+
+Docker Desktop initially could not start because of an inaccessible stale runtime
+analytics socket. Its stopped/crashed processes were restarted after moving the
+runtime directory to C:/Users/sondimid/AppData/Local/Docker/run.expiry-stale-20261030
+as a backup. No Docker data volume was deleted or reset; the engine then responded.
+This environment repair is unrelated to application schema or business data.
+
 ## Booking issuance results — 2026-10-29
 
 New approved methods: three in BookingIssuanceResultListenerTests, one in

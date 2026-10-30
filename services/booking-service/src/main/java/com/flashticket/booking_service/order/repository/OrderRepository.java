@@ -1,16 +1,32 @@
 package com.flashticket.booking_service.order.repository;
 
 import com.flashticket.booking_service.entity.Order;
+import com.flashticket.booking_service.enums.OrderState;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
+  @Query(
+      """
+      select o.id from Order o
+      where o.lifecycleState = :state and o.expiresAt <= :cutoff
+        and (:afterOrderId is null or o.id > :afterOrderId)
+      order by o.id asc
+      """)
+  List<UUID> findExpiredOrderIds(
+      @Param("state") OrderState state,
+      @Param("cutoff") Instant cutoff,
+      @Param("afterOrderId") UUID afterOrderId,
+      Pageable pageable);
+
   @Query("select o.eventId from Order o where o.id = :orderId")
   Optional<UUID> findEventIdById(@Param("orderId") UUID orderId);
 

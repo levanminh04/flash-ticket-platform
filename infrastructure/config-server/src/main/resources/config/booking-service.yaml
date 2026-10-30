@@ -2,6 +2,10 @@ server:
   port: ${BOOKING_SERVICE_PORT:8082}
 
 booking:
+  expiry:
+    enabled: true
+    poll-interval: PT5S
+    batch-size: 20
   outbox:
     enabled: true
     poll-interval: PT2S
@@ -13,6 +17,10 @@ booking:
     lock-timeout: 5s
 
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
   datasource:
     url: ${BOOKING_DB_URL}
     username: ${BOOKING_DB_USERNAME:booking_admin}
