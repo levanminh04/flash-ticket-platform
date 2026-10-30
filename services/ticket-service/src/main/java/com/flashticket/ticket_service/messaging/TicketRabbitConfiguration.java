@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration(proxyBeanMethods = false)
 public class TicketRabbitConfiguration {
   @Bean
+  @org.springframework.context.annotation.Primary
   MessageConverter ticketRabbitMessageConverter(JsonMapper json) {
     // Resolve concrete @RabbitListener argument types, not producer-specific Java DTO headers.
     return new JacksonJsonMessageConverter(

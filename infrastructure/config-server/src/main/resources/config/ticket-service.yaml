@@ -14,6 +14,10 @@ spring:
   sql:
     init:
       mode: never
+  task:
+    scheduling:
+      pool:
+        size: 3
   jpa:
     open-in-view: false
     hibernate:
@@ -63,11 +67,25 @@ spring:
             - ${TICKET_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 ticket:
+  features:
+    business-enabled: ${TICKET_BUSINESS_ENABLED:false}
+    listeners-enabled: ${TICKET_LISTENERS_ENABLED:false}
+    workers-enabled: ${TICKET_WORKERS_ENABLED:false}
   messaging:
     access-configured-queue: ${TICKET_ACCESS_CONFIGURED_QUEUE:ticket.access-configured.q}
     event-cancelled-queue: ${TICKET_EVENT_CANCELLED_QUEUE:ticket.event-cancelled.q}
     issuance-queue: ${TICKET_ISSUANCE_QUEUE:ticket.issuance.q}
-  # Reserved for the QR implementation; no key is generated or loaded by this foundation.
+    result-routing-key: ${TICKET_RESULT_ROUTING_KEY:ticket.issuance-result.v1}
+  outbox:
+    confirm-timeout: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:5s}
+    claim-lease: ${TICKET_OUTBOX_CLAIM_LEASE:30s}
+  delivery:
+    buyer-base-url: ${TICKET_BUYER_BASE_URL:}
+    from: ${TICKET_MAIL_FROM:}
+    claim-lease: ${TICKET_DELIVERY_CLAIM_LEASE:60s}
+  workers:
+    batch-size: ${TICKET_WORKER_BATCH_SIZE:20}
+    poll-delay: ${TICKET_WORKER_POLL_DELAY:1s}
   qr:
     active-key-version: ${TICKET_QR_ACTIVE_KEY_VERSION:}
     key-ring-location: ${TICKET_QR_KEY_RING_LOCATION:}
