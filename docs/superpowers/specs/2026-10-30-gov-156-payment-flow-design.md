@@ -1,6 +1,7 @@
 # Payment GOV-156 / GOV-157 — spec và phân rã triển khai để duyệt
 
 - Soạn: 30/10/2026. Trạng thái: **REVIEW_READY; chưa triển khai Java**.
+- Phạm vi được người dùng làm rõ: **chỉ công việc Payment**. Không triển khai, sửa cấu hình, schema, tài liệu hay test nội bộ Booking/Ticket hoặc service khác. Các service đó chỉ xuất hiện như hợp đồng bên ngoài mà Payment sử dụng.
 - Nguồn nghiệp vụ: yêu cầu người dùng trong task này, GOV-156 và GOV-157 được xác nhận/duyệt ngày **29/10/2026**, cùng ảnh `Đặt vé.png` đính kèm. Ảnh danh sách có năm subtask là phạm vi phân rã, không phải hợp đồng kỹ thuật.
 - Nhánh: `codex/gov-156-payment-flow`, từ `dev/tuan`, HEAD nền `e47b1f6`.
 - Các tên route/class/method/query/test bên dưới đều là **CANDIDATE**, chờ duyệt spec/plan và Shop App. Không coi việc duyệt GOV-157 là duyệt các tên này.
@@ -10,7 +11,7 @@
 
 Frontend tạo thanh toán trực tiếp tại Payment. Booking là owner của đơn, giá, voucher, reservation và inventory; Payment giữ bản PurchaseSnapshot bất biến và điều phối **một** Saga mua vé. Payment chỉ hoàn tất Saga sau bằng chứng Booking đã commit order COMPLETED.
 
-Trong phạm vi task, yêu cầu GOV-156/GOV-157 mới được người dùng cung cấp ưu tiên hơn hướng start/success cũ trong B13/B14 và GOV-149/GOV-150. Không tự đánh dấu toàn bộ tài liệu kiến trúc cũ là APPROVED hoặc sửa các quyết định lịch sử. Khi spec được duyệt, đồng bộ B13/B14/B14-01/B15 và mock prompt trước khi tích hợp.
+Trong phạm vi task, yêu cầu GOV-156/GOV-157 mới được người dùng cung cấp ưu tiên hơn hướng start/success cũ trong B13/B14 và GOV-149/GOV-150. Không tự đánh dấu toàn bộ tài liệu kiến trúc cũ là APPROVED hoặc sửa các quyết định lịch sử. Không đưa việc đồng bộ tài liệu kiến trúc toàn hệ thống hoặc mock service riêng vào kế hoạch Payment này.
 
 Đối chiếu workspace ngày soạn qua CodeGraph:
 
@@ -21,10 +22,9 @@ Trong phạm vi task, yêu cầu GOV-156/GOV-157 mới được người dùng c
 | PaymentService.handleIPN | Xác minh VNPay, lưu charge và cập nhật attempt | Ghi Saga WAITING_BOOKING và outbox AcceptPayment cùng commit trước phản hồi IPN |
 | PaymentSagaService / MessagingService | Interface rỗng; implementation mới chỉ có repository | Bổ sung handler, relay, recovery và quyết định trạng thái bền |
 | PurchaseSnapshotValidator / ContractHashService | Đã có validator và canonical hash | Tận dụng; không lấy giá FE hoặc tính lại snapshot ở Payment |
-| Booking / Ticket | Source ứng dụng hiện tại chỉ là scaffold | Cần owner thực hiện hợp đồng và contract fixture; Payment test với fake không chứng minh E2E |
 | DTO / tài liệu cũ | StartPayment/inbox start-requested; Ticket success gửi Booking; BookingIssuanceResult chỉ FAILED | Ngừng dùng start-requested trong luồng mới; success phải qua Payment; mở rộng hợp đồng kết quả để chuyển success tới Booking |
 
-Phạm vi chuẩn bị: spec, hợp đồng đề xuất, transaction, phục hồi và tiêu chí kiểm thử cho năm subtask. Ngoài phạm vi: frontend, triển khai production, tự viết toàn bộ Booking/Ticket, đổi payout/finance, đổi token QR vé hoặc thêm gateway mới. Khi triển khai Payment, Booking/Ticket phải có contract được Shop App duyệt hoặc fixture tương thích; không thay bằng truy cập DB chéo.
+Phạm vi chuẩn bị và triển khai sau duyệt: API, client gọi ra ngoài, adapter VNPay hiện có, DTO, repository, transaction, consumer, inbox/outbox, Saga, recovery và kiểm thử **trong Payment** cho năm subtask. Ngoài phạm vi: mọi thay đổi tại service khác, frontend, triển khai production, đổi payout/finance, đổi token QR vé hoặc thêm gateway mới. Kiểm thử Payment dùng stub/fake ở test source Payment cho các hợp đồng Booking/Ticket; không chờ hai service đó hoàn thiện mới làm Payment, không tạo mock service riêng và không truy cập DB chéo. Chỉ báo cáo bằng chứng phía Payment, không nhận nghiệm thu E2E toàn hệ thống.
 
 ## 2. Phương án
 
@@ -47,7 +47,7 @@ Booking start/outbox `payment.start-requested.v1`, freeze riêng rồi GET snaps
 | Payment → Booking | `booking.issuance-result.v1` / BookingIssuanceResult mở rộng | Success: orderId, chargeId, issuanceId, state COMPLETED, ticketCount, failureCode null. Failed giữ nghĩa hiện có; chốt DTO và validation tương thích trước đổi producer/consumer |
 | Booking → Payment | `booking.order-completed.v1` / OrderCompleted | orderId, chargeId, issuanceId, ticketCount; chỉ được tạo cùng commit order COMPLETED |
 
-Route POST nội bộ trả 200 sau commit; lỗi candidate: 404 cho không có/khác chủ đơn, 409 ORDER_EXPIRED/ORDER_NOT_PAYABLE; 401/403 cho credential sai. Timeout/5xx không cho Payment mở attempt mới khi chưa nhận snapshot hợp lệ. Không mô tả response đã nhận nhưng snapshot còn trong RAM.
+Hợp đồng response bên ngoài mà client Payment dự kiến nhận: 200 kèm snapshot đã commit; 404 cho không có/khác chủ đơn, 409 ORDER_EXPIRED/ORDER_NOT_PAYABLE; 401/403 cho credential sai. Chỉ triển khai cách client Payment gửi request, kiểm response và ánh xạ lỗi; không viết endpoint Booking. Timeout/5xx không cho Payment mở attempt mới khi chưa nhận snapshot hợp lệ.
 
 Public POST candidate: 201 khi tạo attempt mới, 200 khi tái dùng; 409 nếu key cũ có input khác hoặc đơn không payable; 503 khi Booking/provider tạm chưa xác định. Key được scope theo `(orderId, requestKey)` và luôn kiểm actor. Request hash gồm actor/orderId/provider; clientIp không được làm thay đổi định danh thanh toán của retry. Cùng key không bao giờ tạo attempt thứ hai; muốn attempt mới sau FAILED phải có key mới và Booking vẫn xác nhận payable. Nếu đã có unfinished attempt của key khác, trả 409 PAYMENT_IN_PROGRESS; không gán ngầm key mới vào attempt cũ rồi làm mất receipt cho lần retry sau.
 
@@ -55,30 +55,30 @@ Snapshot giữ field/money/version/canonical hash theo B13 và validator hiện 
 
 Tên lớp/phương thức còn lại đề xuất: `PaymentTransactionService.persistAttempt`, `PaymentSagaService.recordPaymentDecision`, `recordIssuanceResult`, `recordOrderCompleted`, `OutboxRelay.publishDue`, `PaymentSagaRecoveryService.recoverDue`. Query cần khóa snapshot/order, lookup attempt theo order/key, lookup unfinished attempt, khóa Saga theo order, lookup inbox theo consumer/messageId và outbox đến hạn. Chốt signature/query/test cụ thể trong plan sau duyệt; không sinh Java từ danh sách này.
 
-## 4. Booking chuẩn bị snapshot và phân xử voucher
+## 4. Trách nhiệm Payment khi lấy snapshot
 
-POST nội bộ làm **một transaction Booking**: xác thực nguồn/subject → lấy khóa theo thứ tự hiện có (event snapshot → order → tài nguyên cần thiết) → kiểm ownership, cancellation, order PENDING_PAYMENT và reservation còn hợp lệ → lấy đồng hồ DB sau khóa, đòi `decisionAt < expiresAt` → lưu hoặc trả snapshot.
+Payment gọi **một POST nội bộ** bằng client của mình, ngoài transaction Payment, gửi orderId và buyerSubject lấy từ JWT đã xác thực. Không thêm API freeze riêng, không gọi GET có tác dụng ghi và không đọc DB Booking.
 
-- Chưa có snapshot: dựng từ dữ liệu Booking đã có, bao gồm voucher HELD đã commit, ghi full frozen_purchase_snapshot + payment_frozen_at + payment_snapshot_version cùng transaction. Không tạo order/reservation/allocations lần nữa.
-- Có snapshot, đơn còn payable: trả **đúng bản đã lưu**, giữ frozenAt/version/amount/expiresAt; không tính giá mới hoặc gia hạn giữ chỗ.
-- Đơn EXPIRED/CANCELLED/ISSUING/COMPLETED hoặc đã đến deadline: từ chối, dù snapshot còn lưu. Không cho snapshot lịch sử trở thành quyền mở attempt.
-- Áp voucher và chuẩn bị snapshot phải lấy **cùng khóa order**, rồi kiểm trạng thái/freeze dưới khóa. Voucher commit trước: snapshot có discount đó. Snapshot commit trước: voucher rollback với `PRICE_FROZEN`, không giữ usage/counter mới.
-- Nếu response POST mất sau commit, retry trên đơn còn payable đọc bản cũ. Nếu retry đã hết hạn/hủy thì từ chối. Không tạo message start Payment hoặc thực hiện freeze qua GET.
+- Response thành công: kiểm orderId/subject, cấu trúc, tổng tiền, currency, frozenAt, version, expiry và canonical hash; dùng nguyên snapshot để lưu và tạo attempt. Không áp voucher hoặc tính lại giá ở Payment.
+- Retry: gọi lại cùng hợp đồng và chấp nhận bản snapshot đã lưu, không tự thay frozenAt/version/amount/expiresAt. Nếu khác snapshot Payment đã lưu thì từ chối xung đột.
+- Lỗi hết hạn/hủy/không payable: không tạo attempt mới và không trả URL để tiếp tục trả tiền. Timeout/response lỗi không được coi là đã đủ điều kiện thanh toán.
+- GOV-157 về voucher là bảo đảm của hợp đồng bên ngoài: voucher commit trước thì snapshot có giảm giá; snapshot commit trước thì voucher bị PRICE_FROZEN. Payment chỉ dùng số tiền trong snapshot; không triển khai khóa order, voucher usage hoặc race test bên Booking.
+- Mất response sau khi bên ngoài đã lưu snapshot: Payment retry POST, không phát `payment.start-requested` hoặc tự dựng snapshot thay thế. Stub trong test Payment mô phỏng snapshot ổn định và các lỗi có thể trả về.
 
 Không có atomic transaction xuyên Booking/Payment: đơn vẫn có thể hết hạn/hủy sau POST trước khi Payment commit. Payment kiểm expiresAt lần nữa trước ghi attempt, không hứa đóng hết khoảng đua cancellation. Quyền nhận tiền để phát vé cuối cùng do Booking AcceptPayment phân xử; tiền tới muộn vẫn vào nhánh hoàn có sẵn.
 
 ## 5. Các transaction và thứ tự theo ảnh
 
-| Bước ảnh | Hành động và commit bắt buộc | Sau commit |
+| Bước ảnh | Công việc phía Payment | Sau commit / điều kiện chờ |
 | --- | --- | --- |
-| 15–21 | FE POST Payment; Payment gọi POST Booking ngoài transaction Payment. Booking commit kiểm payable/freeze/snapshot | Payment mới bắt đầu transaction ghi |
+| 15–21 | Nhận FE POST; gọi POST Booking bằng client ngoài transaction Payment, kiểm response snapshot | Nhận snapshot hợp lệ mới bắt đầu transaction ghi Payment |
 | 22–26 | Payment validate; khóa theo thứ tự event finance → snapshot → attempt; upsert snapshot bất biến + attempt với request_key/hash. Snapshot xung đột hash/version phải fail. Unique unfinished/order và unique(order,key) phân xử cạnh tranh | Sau commit mới trả dữ liệu URL/QR cho FE |
 | 28–33 | Verify IPN; trong Payment TX ghi charge identity duy nhất, attempt SUCCEEDED, candidate Saga WAITING_BOOKING và outbox AcceptPayment | Commit thành công rồi phản hồi cổng. Không chờ Booking/Ticket để ACK IPN |
-| 34–38 | Booking inbox + khóa order/tài nguyên, kiểm charge đã nhận trước deadline mới; ACCEPTED ghi reservation/allocations COMMITTED, inventory/hạn mức/voucher và order ISSUING, kèm outbox PaymentDecision | Commit rồi relay trả quyết định nghiệp vụ |
+| 34–38 | Relay AcceptPayment tới Booking; giữ WAITING_BOOKING và chờ PaymentDecision | Broker confirm không thay thế quyết định nghiệp vụ; không triển khai transaction Booking |
 | 39–42 | Payment inbox + confirmation(order,charge) + Saga WAITING_TICKETS + outbox IssueTickets trong cùng TX | Relay yêu cầu Ticket phát vé |
-| 43–46 | Ticket tạo đủ bộ vé + issuance COMPLETED + outbox IssuanceResult **tới Payment** trong cùng TX | Sau commit mới báo success |
+| 43–46 | Relay IssueTickets; nhận IssuanceResult **tại Payment**, xác minh nguồn và dữ liệu | Chỉ coi success là kết quả nghiệp vụ Ticket đã commit; không triển khai phát vé |
 | 47 | Payment inbox result, kiểm order/charge/issuance/count và lưu kết quả bền cùng outbox BookingIssuanceResult COMPLETED | Saga vẫn WAITING_TICKETS; relay thông báo Booking |
-| 48–51 | Booking kiểm source Payment, acceptedCharge/issuance/count; inbox + order COMPLETED + outbox OrderCompleted trong cùng TX | Commit rồi báo Payment |
+| 48–51 | Gửi thông báo phát vé thành công tới Booking; giữ WAITING_TICKETS và chờ OrderCompleted | Không cập nhật DB/order thay Booking; broker ACK không đóng Saga |
 | 52–54 | Payment nhận OrderCompleted khớp confirmation và issuance result đã lưu; inbox + Saga COMPLETED cùng TX | Sau commit mới ACK message |
 
 Adapter URL hiện có là ký URL VNPay cục bộ: có thể tính/lưu URL trong TX lưu attempt nếu không gọi mạng, nhưng FE chỉ nhận sau commit. Nếu adapter tương lai gọi mạng: commit attempt trước, gọi ngoài TX với cùng provider identity, lưu URL trong TX riêng rồi trả. Timeout phải dùng UNKNOWN/query cùng identity; không sinh attempt mới để thử mù. Ảnh không xác nhận có API QR riêng; không tự thêm QR gateway hoặc fake QR thành tính năng đã tích hợp.
@@ -106,11 +106,11 @@ Inbox so hash trước dedupe; cùng ID khác payload là lỗi hợp đồng. M
 
 OrderCompleted chỉ nhận từ Booking, phải khớp order/charge/issuance/count đã lưu và confirmation; kết quả Ticket riêng hoặc probe không đủ để kết thúc Saga. Replay trên COMPLETED không đổi gì. COMPENSATING/COMPENSATED và marker event cancellation không bị hồi sinh bởi success đến trễ. Completion chưa có checkpoint phù hợp phải retry/cảnh báo, không tự điền dữ liệu để đóng Saga.
 
-## 7. Giữ các nhánh expiry/cancel/refund
+## 7. Giữ các nhánh expiry/cancel/refund phía Payment
 
-- Không gia hạn expiresAt khi freeze/retry. Tại Booking, bằng deadline là expired; confirm/expire/cancel tranh chấp cùng khóa. Accepted charge cũ được replay ACCEPTED trước xét thời gian hiện tại; đơn chưa accepted đã hết hạn/hủy không hồi sinh.
-- Buyer cancel vẫn hợp lệ khi PENDING_PAYMENT theo baseline, kể cả đã snapshot. Release theo reservation/generation/state đúng một lần. ISSUING/COMPLETED không cho buyer cancel.
-- Event cancellation đóng gate ở từng owner, chặn phát hành/completion tới trễ và hội tụ hoàn tiền. Fee config tới sau không xóa cancellation marker. Không thay fan-out hoặc mở thêm Saga.
+- Không gia hạn expiresAt khi lấy snapshot/retry; Payment kiểm `now < expiresAt` trước attempt mới. Dùng quyết định ACCEPTED/LATE/CANCELLED/DUPLICATE nhận từ Booking, không tự sửa đơn hoặc kiểm tra inventory thay Booking.
+- Buyer cancel và expiry được mô phỏng bằng response/decision bên ngoài trong test Payment. Khi nhận kết quả không payable, Payment không mở attempt mới; charge hợp lệ tới muộn vẫn lưu và xử lý nghĩa vụ hoàn.
+- Xử lý event cancellation ở Payment: giữ marker, chặn điều phối phát hành/completion tới trễ và hội tụ hoàn tiền. Fee config tới sau không xóa cancellation marker. Không sửa fan-out hoặc handler của các service khác, không mở thêm Saga.
 - Refund vẫn unique(charge), theo thứ tự nguyên nhân đã có: charge thừa → DUPLICATE_PAYMENT; accepted charge bị hủy event → EVENT_CANCELLED; Ticket có terminal FAILED fence → TICKET_ISSUANCE_FAILED; từ chối do deadline/buyer cancel → LATE_PAYMENT. Trigger sau không tạo nghĩa vụ hoàn thứ hai.
 - Timeout/404/PENDING từ Ticket không chứng minh phát vé thất bại. Chỉ terminal FAILED bảo đảm không còn bộ vé có hiệu lực và worker không thể commit success sau fence mới cho phép bù trừ lỗi phát hành.
 - Provider refund ngoài transaction; mất kết quả thì query/retry cùng request key. COMPENSATED theo rule hiện hành, không đồng nhất broker ACK với hội tụ toàn hệ thống.
@@ -121,14 +121,14 @@ OrderCompleted chỉ nhận từ Booking, phải khớp order/charge/issuance/co
 
 | Thứ tự / subtask trong ảnh | Thay đổi dự kiến | Điều kiện nghiệm thu |
 | --- | --- | --- |
-| 0. Chốt hợp đồng | Đồng bộ B13/B14/B14-01/B15, thay mock start-requested; fixture POST Booking và message ba owner; chốt naming/compatibility | Shop App duyệt tên, DTO, auth/error/idempotency và hướng routing; không còn tài liệu triển khai mới hướng Ticket → Booking success |
-| 1. API tạo link/QR | Public POST, client POST Booking ngoài TX, lưu snapshot+attempt, reuse/concurrency, adapter URL hiện có | Giá chỉ từ Booking; owner/deadline/voucher race đúng; commit trước response; retry không tạo thêm attempt |
+| 0. Chốt hợp đồng phía Payment | Chốt DTO/client/consumer và fixture trong test Payment; chốt naming, auth/error/idempotency và tương thích | Shop App duyệt tên và hợp đồng Payment sử dụng; không có task sửa service khác hoặc tài liệu toàn hệ thống |
+| 1. API tạo link/QR | Public POST, client POST Booking ngoài TX, lưu snapshot+attempt, reuse/concurrency, adapter URL hiện có | Giá chỉ từ snapshot; kiểm owner/deadline và lỗi client đúng; commit trước response; retry không tạo thêm attempt |
 | 2. Webhook xác nhận | Verify và transaction charge+attempt+Saga+AcceptPayment outbox, idempotency callback | Rollback bất kỳ ghi nào không trả ACK thành công; replay không tăng charge/outbox |
 | 3. Gọi Booking xác nhận | Outbox relay, inbox PaymentDecision, confirmation+WAITING_TICKETS+IssueTickets | Broker ACK không tiến Saga; chỉ Booking ACCEPTED sau commit mới phát lệnh Ticket |
-| 4. Yêu cầu phát vé | IssueTickets relay, nhận Ticket result tại Payment, checkpoint+success outbox tới Booking, giữ FAILED/fence | Cùng request chỉ một bộ vé; count/charge/hash mismatch không phát completion; restart không mất bước 47 |
-| 5. Hoàn tất đơn và Saga | Nhận OrderCompleted, so bằng chứng và đóng Saga; phục hồi, integration tests | Booking COMPLETED trước Payment COMPLETED; mất message/restart vẫn hội tụ; compensation không hồi sinh |
+| 4. Yêu cầu phát vé | IssueTickets relay, nhận Ticket result tại Payment, checkpoint+success outbox tới Booking, giữ nhánh FAILED | Replay giữ business identity; count/charge/hash mismatch không phát completion; restart không mất bước 47; không triển khai tạo vé |
+| 5. Thông báo Booking và hoàn tất Saga | Gửi success tới Booking; nhận OrderCompleted, so bằng chứng và đóng Saga; phục hồi và integration tests Payment | Ticket success/broker ACK chưa đủ; chỉ OrderCompleted hợp lệ mới đóng Saga; compensation không hồi sinh |
 
-Không sửa/chuyển các file Payment đang dở của người dùng trong lúc chuẩn bị. Khi được phép triển khai, kiểm tra lại diff và baseline trước refactor; không ghi đè việc tách controller/service đang có. Test build Payment không đủ nghiệm thu Booking voucher race hoặc Ticket commit; các owner phải chạy contract/race tests tương ứng.
+Không sửa/chuyển các file Payment đang dở của người dùng trong lúc chuẩn bị. Khi được phép triển khai, kiểm tra lại diff và baseline trước refactor; không ghi đè việc tách controller/service đang có. Mọi thay đổi runtime/test nằm trong `services/payment-service`; schema hay cấu hình dùng chung nếu thật sự cần chỉ đề xuất phần dành cho Payment. Không thêm test, endpoint hoặc consumer vào Booking/Ticket và không lấy tiến độ các service đó làm điều kiện hoàn thành phần Payment.
 
 ## 9. Ma trận kiểm thử bắt buộc sau duyệt
 
@@ -136,23 +136,22 @@ Tên test là CANDIDATE để Shop App xem cùng plan, không phải file đã t
 
 | Nhóm / test đề xuất | Tình huống và bằng chứng cần có |
 | --- | --- |
-| PreparePurchaseSnapshotContractTest | Service auth + actor; sai owner/state; expired/cancelled; retry snapshot byte/canonical hash/version/expiry không đổi; GET không ghi |
-| PreparePurchaseSnapshotConcurrencyTest (Booking owner) | Hai lịch commit voucher/snapshot có barrier; voucher trước có discount, snapshot trước trả PRICE_FROZEN và không rò usage; expiry/cancel cùng khóa |
+| BookingPurchaseClientContractTest | Stub HTTP tại test Payment kiểm một POST, credential + actor; ánh xạ 401/403/404/409/5xx/timeout; validate snapshot thành công và retry; không gọi freeze riêng/GET hoặc DB chéo |
 | DirectPaymentStartTest | Không có local snapshot vẫn gọi Booking; client chạy khi Payment TX không active; FE không điều khiển giá; snapshot invalid/hash conflict bị từ chối; commit rồi mới trả URL |
 | PaymentAttemptConcurrencyTest | Hai POST cùng/khác key; một unfinished attempt; cùng key khác input conflict; retry FAILED key cũ không tạo mới; UNKNOWN không tạo mới; unique loser rollback rồi đọc winner bằng TX mới |
 | PaymentWebhookSagaTest | Sai chữ ký/merchant/amount/currency; duplicate provider identity; rollback charge/attempt/Saga/outbox; ACK chỉ sau commit; late/extra linked charges vẫn xử lý đúng |
 | PaymentBookingDecisionTest | ACCEPTED commit mới có confirmation/IssueTickets; LATE/CANCELLED/DUPLICATE hoàn theo baseline; duplicate/mismatched decision không phát thêm vé; publisher confirm không đổi state |
-| TicketSuccessThroughPaymentTest | Ticket success gửi Payment; inbox/checkpoint+Booking success outbox atomic; không có direct success binding Ticket → Booking; thiếu/sai count/issuance/charge không hoàn tất |
-| BookingCompletionSagaTest | Ticket success và broker ACK vẫn WAITING_TICKETS; Booking chưa commit không được phát OrderCompleted; đúng completion mới COMPLETED; sai nguồn/correlation hoặc cancellation bị chặn |
-| PaymentSagaRecoveryTest | Crash sau mỗi commit và trước/sau publish/ACK, gồm bước 47 và 51; restart/replay cùng identity không tăng charge, inventory, voucher, ticket hoặc refund |
-| PaymentCompensationRegressionTest | Boundary deadline; buyer cancel sau snapshot; event cancel trước/sau acceptance/phát vé; terminal FAILED fence; timeout không tự refund; refund duplicate/unknown/retry giữ rule cũ |
-| PurchaseFlowContractIntegrationTest | Fixture thực ba owner + DB/broker: bước 15–54 đúng thứ tự commit, Ticket → Payment → Booking → Payment; ghi rõ fake vs service thật và giới hạn bằng chứng |
+| TicketSuccessThroughPaymentTest | Bơm Ticket result vào consumer Payment; inbox/checkpoint+Booking success outbox atomic; Payment gửi success tới Booking; thiếu/sai count/issuance/charge không hoàn tất |
+| BookingCompletionSagaTest | Ticket success và broker ACK vẫn WAITING_TICKETS; chưa nhận OrderCompleted thì không COMPLETED; đúng completion mới hoàn tất; sai nguồn/correlation hoặc cancellation bị chặn |
+| PaymentSagaRecoveryTest | Crash sau mỗi commit Payment và trước/sau publish/ACK; mô phỏng mất result/completion từ bên ngoài; restart/replay giữ identity và không tăng charge, confirmation, lệnh nghiệp vụ hoặc refund |
+| PaymentCompensationRegressionTest | Boundary deadline; stub báo buyer cancel/expiry sau snapshot; event cancel tại Payment; nhận terminal FAILED hợp lệ; timeout không tự refund; refund duplicate/unknown/retry giữ rule cũ |
+| PaymentFlowContractIntegrationTest | Chạy Payment + DB/broker với HTTP stub và message fixture bên ngoài: nhận snapshot → webhook → acceptance → Ticket result → Booking completion; kiểm mọi commit/state/outbox thuộc Payment, không gọi đây là E2E toàn hệ thống |
 
-Chạy unit/slice test Payment, repository/transaction tests PostgreSQL và broker tests có kiểm ACK/rollback; sau đó contract/race tests Booking/Ticket và E2E môi trường tích hợp. Chốt lệnh chạy và profile trong plan sau duyệt dựa trên cấu hình repo tại thời điểm đó. Lượt spec này không chạy/khẳng định Java tests vì không có thay đổi Java và đang có work-in-progress chưa thuộc task.
+Chỉ chạy unit/slice test Payment, client contract test bằng stub, repository/transaction tests PostgreSQL Payment và broker tests consumer/relay Payment có kiểm ACK/rollback. Không yêu cầu chạy ứng dụng hoặc kiểm thử nội bộ Booking/Ticket. Chốt lệnh chạy và profile trong plan sau duyệt dựa trên cấu hình repo tại thời điểm đó. Lượt spec này không chạy/khẳng định Java tests vì không có thay đổi Java và đang có work-in-progress chưa thuộc task.
 
 ## 10. Các điểm cần duyệt trước Java
 
-1. Duyệt thiết kế và phạm vi Payment ở đây; Booking/Ticket là hợp đồng phối hợp do owner tương ứng thực hiện.
+1. Phạm vi đã được người dùng làm rõ: chỉ Payment. Booking/Ticket là biên giao tiếp được mô phỏng trong test Payment, không phải công việc triển khai hoặc nghiệm thu của task.
 2. Shop App chốt các tên CANDIDATE ở mục 3 và mục 9, auth actor propagation, HTTP status/idempotency và mở rộng BookingIssuanceResult cho success.
 3. Duyệt checkpoint dùng inbox/outbox trong thời gian WAITING_TICKETS và yêu cầu retention/recovery; plan chi tiết phải thể hiện query thực thi được.
 4. Sau đó mới chốt plan chi tiết và triển khai Java. Chưa có bằng chứng Shop App duyệt trong chat này; không ghi trạng thái APPROVED hoặc tự gửi thông báo ra ngoài.
