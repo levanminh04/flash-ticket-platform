@@ -2,6 +2,7 @@ package com.flashticket.event_service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.flashticket.event_service.config.EventJsonConfig;
 import com.flashticket.event_service.integration.*;
@@ -146,6 +147,72 @@ class SummaryHttpTests {
             EventProblem.class,
             p -> assertThat(p.code()).isEqualTo("DEPENDENCY_CONTRACT_NOT_READY"));
     assertThat(requests.get()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"payment-service", "booking-service"})
+  void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty(String service) {
+    var discovery = mock(DiscoveryClient.class);
+    when(discovery.getInstances(service))
+        .thenThrow(new IllegalStateException("registry internal detail must not escape"));
+    var client =
+        new HttpEventSummaries(
+            new EventReadProperties(
+                true,
+                null,
+                null,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(5)),
+            discovery,
+            () -> "isolated-machine-token",
+            json);
+    assertThatThrownBy(
+            () -> {
+              if (service.equals("payment-service")) client.financial(EVENT, "owner", true);
+              else client.sales(EVENT, "owner");
+            })
+        .isInstanceOfSatisfying(
+            EventProblem.class,
+            p -> {
+              assertThat(p.status()).isEqualTo(503);
+              assertThat(p.code()).isEqualTo("UPSTREAM_UNAVAILABLE");
+              assertThat(p.getCause()).isNull();
+            });
+    assertThat(requests.get()).isZero();
+  }
+
+  @Test
+  void resolvesBothSourceServicesThroughRegistryWhenNoExplicitOriginIsConfigured() {
+    var discovery = mock(DiscoveryClient.class);
+    int port = server.getAddress().getPort();
+    when(discovery.getInstances("payment-service"))
+        .thenReturn(
+            List.of(
+                new org.springframework.cloud.client.DefaultServiceInstance(
+                    "payment-test", "payment-service", "127.0.0.1", port, false)));
+    when(discovery.getInstances("booking-service"))
+        .thenReturn(
+            List.of(
+                new org.springframework.cloud.client.DefaultServiceInstance(
+                    "booking-test", "booking-service", "127.0.0.1", port, false)));
+    var client =
+        new HttpEventSummaries(
+            new EventReadProperties(
+                true,
+                null,
+                null,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(5)),
+            discovery,
+            () -> "isolated-machine-token",
+            json);
+    assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+    assertThat(client.sales(EVENT, "owner").purchasedTicketCount()).isEqualTo("12");
+    assertThat(requests.get()).isEqualTo(2);
   }
 
   @ParameterizedTest

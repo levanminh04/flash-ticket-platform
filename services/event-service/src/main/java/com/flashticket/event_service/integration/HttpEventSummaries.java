@@ -103,12 +103,7 @@ public class HttpEventSummaries implements EventSummaries {
 
   private <T> T read(String service, URI configured, UUID event, String resource, Class<T> type) {
     if (!properties.enabled()) throw new EventProblem(503, "DEPENDENCY_CONTRACT_NOT_READY", null);
-    URI origin = configured;
-    if (origin == null) {
-      var instances = discovery.getInstances(service);
-      if (instances.isEmpty()) throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
-      origin = instances.getFirst().getUri();
-    }
+    URI origin = origin(service, configured);
     try {
       EventReadProperties.endpoint(origin);
       URI endpoint = origin.resolve("/internal/v1/events/" + event + "/" + resource);
@@ -139,6 +134,18 @@ public class HttpEventSummaries implements EventSummaries {
       throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
     } catch (tools.jackson.core.JacksonException | IllegalArgumentException error) {
       throw invalid();
+    }
+  }
+
+  private URI origin(String service, URI configured) {
+    if (configured != null) return configured;
+    try {
+      var instances = discovery.getInstances(service);
+      if (instances.isEmpty()) throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
+      return instances.getFirst().getUri();
+    } catch (RuntimeException error) {
+      // Discovery is an external dependency; never leak its implementation error or cause.
+      throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
     }
   }
 
