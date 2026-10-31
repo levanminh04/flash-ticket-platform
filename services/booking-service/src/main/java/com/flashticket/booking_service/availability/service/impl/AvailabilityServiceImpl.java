@@ -7,6 +7,7 @@ import com.flashticket.booking_service.availability.repository.SectorInventoryRe
 import com.flashticket.booking_service.availability.repository.TicketTypeInventoryRepository;
 import com.flashticket.booking_service.availability.service.AvailabilityService;
 import com.flashticket.booking_service.dto.message.Envelope;
+import com.flashticket.booking_service.dto.message.EventCancellation;
 import com.flashticket.booking_service.dto.snapshot.PromotionConfigurationSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.entity.EventSalesSnapshot;
@@ -54,6 +55,78 @@ public class AvailabilityServiceImpl implements AvailabilityService {
   private final InboxMessageRepository inboxMessageRepository;
   private final JsonMapper jsonMapper;
   private final Validator validator;
+
+  @Override
+  @Transactional
+  public void processEventCancellation(Envelope<EventCancellation> message) {
+    if (message == null || !validator.validate(message).isEmpty())
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE);
+    var cancellation = message.data();
+    var sales = cancellation.sales();
+    var access = cancellation.access();
+    if (!"event.cancelled.v1".equals(message.messageType())
+        || !message.aggregateId().equals(cancellation.eventId())
+        || !cancellation.eventId().equals(sales.eventId())
+        || !cancellation.eventId().equals(access.eventId())
+        || !message.aggregateVersion().equals(cancellation.sourceConfigVersion())
+        || !cancellation.sourceConfigVersion().equals(sales.sourceConfigVersion())
+        || !cancellation.sourceConfigVersion().equals(access.sourceConfigVersion())
+        || sales.eventStatus() != SalesConfiguration.EventStatus.CANCELLED
+        || access.eventStatus() != SalesConfiguration.EventStatus.CANCELLED
+        || !sales.organizerSubject().equals(access.organizerSubject()))
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE);
+    String payloadHash;
+    try {
+      payloadHash =
+          HexFormat.of()
+              .formatHex(
+                  MessageDigest.getInstance("SHA-256")
+                      .digest(jsonMapper.writeValueAsBytes(message)));
+    } catch (NoSuchAlgorithmException exception) {
+      throw new BusinessException(ErrorCode.INTERNAL_ERROR, exception);
+    }
+    // Khóa gate trước inbox; request giữ snapshot READ phải kết thúc trước khi hủy.
+    var snapshot = eventSalesSnapshotRepository.findByEventId(cancellation.eventId()).orElse(null);
+    var receiptId = new InboxMessageId();
+    receiptId.setConsumerName("booking.event-cancelled");
+    receiptId.setMessageId(message.messageId());
+    var receipt = inboxMessageRepository.findById(receiptId);
+    if (receipt.isPresent()) {
+      if (!payloadHash.equals(receipt.get().getPayloadHash()))
+        throw new BusinessException(ErrorCode.MESSAGE_ID_CONFLICT);
+      return;
+    }
+    if (snapshot != null
+        && (!snapshot.getOrganizerSubject().equals(sales.organizerSubject())
+            || snapshot.getSalesMode() != sales.mode()))
+      throw new BusinessException(ErrorCode.SALES_CONFIGURATION_CONFLICT);
+    var processedAt = Instant.now();
+    if (snapshot == null) {
+      // Hủy có thể tới trước config: đủ dữ liệu tạo gate, không tạo inventory bán vé.
+      snapshot = new EventSalesSnapshot();
+      snapshot.setEventId(cancellation.eventId());
+      snapshot.setOrganizerSubject(sales.organizerSubject());
+      snapshot.setSalesMode(sales.mode());
+      snapshot.setEventStatus(EventState.CANCELLED);
+      snapshot.setSaleStartsAt(sales.saleStartsAt());
+      snapshot.setSaleEndsAt(sales.saleEndsAt());
+      snapshot.setPurchaseLimit(sales.purchaseLimit());
+      snapshot.setConfigurationSnapshot(sales);
+      snapshot.setSourceConfigVersion(Long.valueOf(sales.sourceConfigVersion()));
+      snapshot.setReceivedAt(processedAt);
+      eventSalesSnapshotRepository.save(snapshot);
+    } else if (snapshot.getEventStatus() != EventState.CANCELLED) {
+      // Chỉ đóng gate; giữ JSON/version thương mại và counter cho worker trả từng đơn.
+      snapshot.setEventStatus(EventState.CANCELLED);
+      eventSalesSnapshotRepository.save(snapshot);
+    }
+    var incomingReceipt = new InboxMessage();
+    incomingReceipt.setId(receiptId);
+    incomingReceipt.setPayloadHash(payloadHash);
+    incomingReceipt.setProcessedAt(processedAt);
+    inboxMessageRepository.save(incomingReceipt);
+    // Version mới giữ null để INSERT; lỗi commit phải đi ra proxy, không ACK nhầm.
+  }
 
   @Override
   @Transactional

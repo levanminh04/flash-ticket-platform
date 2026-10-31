@@ -1,5 +1,139 @@
 # Booking Service tests
 
+## Event cancellation — 2026-10-31
+
+Execution approval: user answered **"đồng ý"** immediately after the execution
+list for spec v0.4 / plan v0.2. Added only C1/C8/C12/C16, the seven production
+method declarations M1–M3/M8–M11 and 22 test methods from that list. Constructor
+injection, field @Value and existing Booking listener/worker patterns were used.
+The five HELD helpers and releaseResourcesAfterIssuanceFailure are unchanged.
+
+Implemented gate/inbox transaction then AUTO ACK, a bounded polling worker,
+one release transaction/order and the active-reservation query. CANCELLED orders
+with COMMITTED reservations remain eligible after a late issuance completion.
+Added the standalone concurrent partial-index SQL. During finishing-task on
+2026-10-31, applied it on119 as booking_owner outside a transaction, before push;
+verified the exact table/column/predicate and indisvalid=true, indisready=true.
+The application role booking_admin has no schema DDL privilege; no grants or
+business rows were changed. Deployment results are tracked by exact-SHA CI/run
+and the task's ClickUp handoff comment, separately from local test evidence.
+
+Full Booking `-P integration -Dit.test=BookingPersistenceIT verify`: **383 unit +
+129 integration tests passed**, zero failures/errors/skips, exit0; IT report
+completed **21:38:39 +07 on2026-10-31**. Maven enforcer/format/static checks passed,
+SpotBugs reported **0 bugs**, JaCoCo report generated. Focused unit tests:
+**8 passed**. Initial integration selection: **11/14 passed**, with three test
+fixture timeouts. Two lock probes incorrectly depended on other sessions' query
+text, hidden from booking_owner; changed them to the existing pg_blocking_pids
+pattern. The ACK fixture incorrectly expected a DB failure to reach DLQ by a
+delivery limit; it now waits for the in-flight DB write, stops the consumer,
+observes requeue, removes the fault and verifies redelivery/commit/ACK. The first
+recheck exposed asynchronous queue-count visibility; Awaitility now observes
+the settled ready count. The two race tests and final ACK recheck passed.
+No production code was changed to accommodate these fixture failures.
+
+RabbitMQ4.3 distinguishes basic.nack requeue from failed-delivery counting; the
+test does not claim a delivery-limit bounds DB-error retries. Permanent invalid
+messages explicitly reject without requeue to DLQ. Production keeps the existing
+broker-redelivery policy, with no application retry/backoff added. Reference:
+[RabbitMQ quorum delivery count](https://www.rabbitmq.com/docs/quorum-queues#when-is-delivery-count-incremented).
+
+Config Server: **1 test passed** with the installed JetBrains JDK21.0.5. The first
+attempt used Booking's JDK23 and was correctly rejected by the module's enforcer.
+Booking's first full-verify attempt also exposed a missing local Rabbit endpoint
+for the existing contextLoads connection test. The subsequent verify uses a
+disposable localhost RabbitMQ, real PostgreSQL17 and the existing IT Rabbit4.3.6
+Testcontainers, without shared server119 fixtures or credentials.
+
+### Partial-index query measurements
+
+Used the **actual SQL emitted by Hibernate for M9**, including its static state
+literals. PostgreSQL17, isolated 512MiB container; 100,000 released historical
+orders across 1,000 cancelled events, 20,000 HELD orders on a published event,
+20 eligible HELD orders on a newly cancelled event. Kept unique order_id and
+baseline indexes, including the entity's expiry index. ANALYZE before measuring;
+three EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) samples/case, median below.
+
+| Case | Before index | After index | Returned rows |
+|---|---:|---:|---:|
+| First page | 213.465ms | 112.265ms | 20 |
+| Cursor page | 241.910ms | 63.202ms | 10 |
+| No candidates | 292.012ms | 145.652ms | 0 |
+| Forced generic prepared plan, first page | 332.309ms | 181.293ms | 20 |
+
+All four post-index plans used tbl_reservations_active_order_idx. Definition,
+indisvalid and indisready were checked; the full unique constraint remains.
+The index excludes RELEASED work but joins still inspect other active orders;
+LIMIT20 is not evidence that only20 rows are read. No additional order/event
+index was added or planner scan method disabled.
+
+SQL write-cost samples, three rolled-back batches per phase: inserting1,000
+orders/reservations measured502.862ms before and247.090ms after; updating20
+reservations to RELEASED measured3.706ms before and5.637ms after. These samples
+include cache/order effects, are not isolated index-overhead estimates or service
+throughput measurements, and do not establish a production latency/SLO. Release
+correctness is separately tested through real production service proxies.
+
+Ignored local evidence: `target/event-cancellation-focused.log`,
+`target/event-cancellation-recheck.log`, `target/event-cancellation-ack-recheck.log`,
+`target/event-cancellation-full-verify.log`, `target/event-index-hibernate-query.sql`,
+`target/event-index-benchmark-seed.sql`, `target/event-index-benchmark-results.json`,
+`target/event-index-write-overhead.json`. Benchmark data is synthetic query-only
+data, not a Payment/Ticket Saga or refund/void/check-in E2E test. Production
+deployment must apply/verify the index SQL outside a transaction before enabling
+the worker; health UP alone does not prove the partial index exists.
+All task-owned benchmark and suite Rabbit containers were removed; IT containers
+were managed by Testcontainers. No deploy, shared queue change or ClickUp write
+was performed. The two old persistence XML cases in surefire-reports are stale
+artifacts and are excluded from the383 unit total; the current129 IT results are
+from failsafe-reports.
+
+### Ten user cases through real HTTP, RabbitMQ and the scheduler
+
+User requested approximately10 diverse user tests after implementation. **10/10
+passed**, using the production JAR produced by verify, real curl POST requests,
+Keycloak26.8.0 buyer/internal JWTs, RabbitMQ4.3.6 quorum queues imported from the
+checked-in topology, PostgreSQL17 and the production @Scheduled worker. The
+outbox relay was active, with PaymentDecision/OrderCompleted observed on Rabbit.
+Every case checked independent PostgreSQL state/counters or rejection effects.
+
+| Case | Trigger and observed result |
+|---|---|
+| E1 | Pending QUANTITY: event message commits gate, worker releases held inventory/limit; subsequent create returns409 EVENT_NOT_ON_SALE |
+| E2 | Pending STANDING + HELD voucher: shared sector pool, buyer limit and voucher released |
+| E3 | Frozen SEATED + voucher: seat holder cleared and usage released; money/frozen snapshot/deadline preserved |
+| E4 | Accepted ISSUING + USED voucher: COMMITTED/purchased/limit/used released, accepted charge metadata retained |
+| E5 | COMPLETED SEATED: OrderCompleted delivered before cancellation; worker later cancels/releases purchased seat |
+| E6 | Same message replay and new messageId/same cancellation have no resource or gate-version effects; changed payload/same messageId goes to DLQ |
+| E7 | Charge after gate: real PaymentDecision.CANCELLED delivered, no new accepted charge or double release |
+| E8 | Gate ACK then late COMPLETED leaves CANCELLED+COMMITTED; app restart with worker enabled finds DB work and releases without republishing cancellation; no OrderCompleted after gate |
+| E9 | Deferred commit fault on one of3 orders: that order rolls back/remains HELD, the other2 finish; removing fault lets scheduler retry, without changing already completed orders |
+| E10 | Cancellation before config creates terminal gate without inventory; stale config ACKed, newer PUBLISHED config DLQed, create409 and no event resurrection |
+
+Worker timing/batch matched production defaults PT5S/20. E8 deliberately
+disabled only the worker while staging gate ACK and the late issuance result,
+then restarted the same JAR with it enabled. No mock service, manual invocation
+of a Java worker method, test-only Java endpoint or direct lifecycle SQL setup
+was used. E9 injected a PostgreSQL deferred trigger failure to test rollback.
+Other setup overrides: expiry disabled to isolate cancellation, hold duration
+PT15M, Redis health/Eureka disabled, checked-in schema plus partial index loaded
+directly and central Booking YAML supplied locally instead of Config Server.
+
+The first harness bootstrap hit Windows Java stderr encoding while locating the
+JDK, before any case ran; fixed decoding in the Python harness and reran. No
+production code or Java declarations were changed for these user tests.
+
+Ignored evidence: `target/event_cancel_user_runtime.py` (reuses the existing
+`target/cancel_curl_runtime.py` fixture utilities), `target/event-user-run.log`,
+`target/event-user-app.log`, `target/event-user-results.json`. JSON records the
+production JAR SHA256 and sanitized per-case results, with no JWT/credential
+values. The native Java process and3 labelled disposable containers/volumes were
+removed; the realm credential file was deleted and all five local test ports
+were verified closed. Shared119, production queues and ClickUp were untouched.
+Event/Payment messages were fixture producers using the real contracts; actual
+Payment refund and Ticket void/check-in services were not run, so these results
+do not establish distributed Saga/refund/void E2E completion.
+
 ## Buyer cancellation — 2026-10-30
 
 Execution approval: user confirmed "xác nhận" after the C1–C6, M1–M3,

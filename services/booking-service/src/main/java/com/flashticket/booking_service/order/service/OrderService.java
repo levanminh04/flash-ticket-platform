@@ -9,6 +9,8 @@ import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import java.util.UUID;
 
 public interface OrderService {
+  void cancelOrderForEventCancellation(UUID orderId);
+
   OrderView cancelOrder(String buyerSubject, UUID orderId);
 
   void expireOrder(UUID orderId);

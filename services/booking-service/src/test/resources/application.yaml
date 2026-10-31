@@ -31,6 +31,8 @@ spring:
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
 
 booking:
+  event-cancellation:
+    enabled: false
   expiry:
     enabled: false
   reservation:

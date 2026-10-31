@@ -10,6 +10,7 @@ import com.flashticket.booking_service.config.BookingJsonConfig;
 import com.flashticket.booking_service.dto.message.AcceptPayment;
 import com.flashticket.booking_service.dto.message.BookingIssuanceResult;
 import com.flashticket.booking_service.dto.message.Envelope;
+import com.flashticket.booking_service.dto.message.EventCancellation;
 import com.flashticket.booking_service.dto.request.ApplyPromotionRequest;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
@@ -25,6 +26,7 @@ import com.flashticket.booking_service.mapper.MappingValueConverter;
 import com.flashticket.booking_service.mapper.OrderMapperImpl;
 import com.flashticket.booking_service.messaging.BookingRabbitErrorHandler;
 import com.flashticket.booking_service.messaging.SalesConfigurationListener;
+import com.flashticket.booking_service.order.EventCancellationWorker;
 import com.flashticket.booking_service.order.OrderExpiryWorker;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
@@ -8420,6 +8422,1839 @@ class BookingPersistenceIT {
       jdbc.execute("drop function if exists booking_schema.cancel_test_reject()");
       org.springframework.test.util.ReflectionTestUtils.setField(
           target, "reservationLockTimeout", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void createsCancellationGateBeforeSalesConfigurationArrives() throws Exception {
+    try {
+      for (boolean empty : List.of(false, true)) {
+        var published = with(sales(), "eventId", UUID.randomUUID());
+        var cancelled =
+            with(
+                with(published, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                "sourceConfigVersion",
+                "2");
+        if (empty) cancelled = with(cancelled, "ticketTypes", List.of());
+        var data =
+            new EventCancellation(
+                published.eventId(),
+                UUID.randomUUID(),
+                "2",
+                Instant.now(),
+                "admin",
+                cancelled,
+                new EventCancellation.AccessConfiguration(
+                    published.eventId(),
+                    cancelled.organizerSubject(),
+                    SalesConfiguration.EventStatus.CANCELLED,
+                    cancelled.eventStartsAt(),
+                    cancelled.eventEndsAt(),
+                    "2"));
+        var message =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.cancelled.v1",
+                1,
+                published.eventId(),
+                "2",
+                Instant.now(),
+                published.eventId(),
+                null,
+                null,
+                data);
+        salesService.processEventCancellation(message);
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                published.eventId(),
+                "1",
+                Instant.now(),
+                published.eventId(),
+                null,
+                null,
+                published));
+        assertThat(
+                jdbc.queryForObject(
+                    "select event_status from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                    String.class,
+                    published.eventId()))
+            .isEqualTo("CANCELLED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select count(*) from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                    Long.class,
+                    published.eventId()))
+            .isZero();
+        var newerPublished = with(published, "sourceConfigVersion", "3");
+        assertThatThrownBy(
+                () ->
+                    salesService.synchronizeSalesConfiguration(
+                        new Envelope<>(
+                            UUID.randomUUID(),
+                            "event.sales-configured.v1",
+                            1,
+                            published.eventId(),
+                            "3",
+                            Instant.now(),
+                            published.eventId(),
+                            null,
+                            null,
+                            newerPublished)))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                e ->
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SALES_CONFIGURATION_CONFLICT));
+      }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void marksExistingEventCancelledWithoutResettingInventory() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var resourcesBefore = captureOrderCreationState(config.eventId());
+      var snapshotBefore =
+          new HashMap<>(
+              jdbc.queryForMap(
+                  "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  config.eventId()));
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data));
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(resourcesBefore);
+      var snapshotAfter =
+          new HashMap<>(
+              jdbc.queryForMap(
+                  "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  config.eventId()));
+      assertThat(snapshotAfter.get("event_status")).isEqualTo("CANCELLED");
+      snapshotBefore.remove("event_status");
+      snapshotBefore.remove("row_version");
+      snapshotAfter.remove("event_status");
+      snapshotAfter.remove("row_version");
+      assertThat(snapshotAfter).isEqualTo(snapshotBefore);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysEventCancellationAndRejectsMessageIdConflicts() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data);
+      salesService.processEventCancellation(message);
+      var before =
+          jdbc.queryForMap(
+              "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+              config.eventId());
+      salesService.processEventCancellation(message);
+      assertThatThrownBy(
+              () ->
+                  salesService.processEventCancellation(
+                      with(message, "data", with(data, "actorSubject", "other-admin"))))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.MESSAGE_ID_CONFLICT));
+      salesService.processEventCancellation(with(message, "messageId", UUID.randomUUID()));
+      assertThat(
+              jdbc.queryForMap(
+                  "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  config.eventId()))
+          .isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where consumer_name='booking.event-cancelled'",
+                  Long.class))
+          .isEqualTo(2L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackEventCancellationGateWhenCommitFails() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data);
+      var before =
+          jdbc.queryForMap(
+              "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+              config.eventId());
+      jdbc.execute(
+          "create function booking_schema.event_gate_reject() returns trigger language plpgsql as $$ begin if new.consumer_name='booking.event-cancelled' then raise exception 'gate commit rejected' using errcode='23514'; end if; return new; end $$");
+      jdbc.execute(
+          "create constraint trigger event_gate_commit_failure after insert on booking_schema.tbl_inbox_messages deferrable initially deferred for each row execute function booking_schema.event_gate_reject()");
+      assertThatThrownBy(() -> salesService.processEventCancellation(message))
+          .isInstanceOf(RuntimeException.class)
+          .hasStackTraceContaining("gate commit rejected");
+      assertThat(
+              jdbc.queryForMap(
+                  "select * from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  config.eventId()))
+          .isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where message_id=?",
+                  Long.class,
+                  message.messageId()))
+          .isZero();
+      jdbc.execute("drop trigger event_gate_commit_failure on booking_schema.tbl_inbox_messages");
+      salesService.processEventCancellation(message);
+      assertThat(
+              jdbc.queryForObject(
+                  "select event_status from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  String.class,
+                  config.eventId()))
+          .isEqualTo("CANCELLED");
+    } finally {
+      jdbc.execute(
+          "drop trigger if exists event_gate_commit_failure on booking_schema.tbl_inbox_messages");
+      jdbc.execute("drop function if exists booking_schema.event_gate_reject()");
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void validatesCancellationBoundaryAndAcknowledgesAfterGateCommit() throws Exception {
+    var connection = (CachingConnectionFactory) relayRabbitTemplate.getConnectionFactory();
+    var admin = new RabbitAdmin(connection);
+    String queue = "event-cancel-test-" + UUID.randomUUID(), dlq = queue + ".dlq";
+    admin.declareQueue(new Queue(dlq, true, false, false, Map.of("x-queue-type", "quorum")));
+    admin.declareQueue(
+        new Queue(
+            queue,
+            true,
+            false,
+            false,
+            Map.of(
+                "x-queue-type",
+                "quorum",
+                "x-delivery-limit",
+                3,
+                "x-dead-letter-exchange",
+                "",
+                "x-dead-letter-routing-key",
+                dlq)));
+    var methods =
+        new org.springframework.messaging.handler.annotation.support
+            .DefaultMessageHandlerMethodFactory();
+    methods.afterPropertiesSet();
+    var endpoint = new MethodRabbitListenerEndpoint();
+    endpoint.setId(queue);
+    endpoint.setBean(
+        new com.flashticket.booking_service.messaging.EventCancellationListener(salesService));
+    endpoint.setMethod(
+        com.flashticket.booking_service.messaging.EventCancellationListener.class.getMethod(
+            "handleEventCancelled", Envelope.class));
+    endpoint.setQueueNames(queue);
+    endpoint.setMessageHandlerMethodFactory(methods);
+    var factory = new SimpleRabbitListenerContainerFactory();
+    factory.setConnectionFactory(connection);
+    factory.setMessageConverter(relayRabbitTemplate.getMessageConverter());
+    factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+    factory.setPrefetchCount(1);
+    factory.setErrorHandler(new BookingRabbitErrorHandler());
+    var container = factory.createListenerContainer(endpoint);
+    container.afterPropertiesSet();
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var access =
+          new EventCancellation.AccessConfiguration(
+              config.eventId(),
+              config.organizerSubject(),
+              SalesConfiguration.EventStatus.CANCELLED,
+              config.eventStartsAt(),
+              config.eventEndsAt(),
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(), UUID.randomUUID(), "2", Instant.now(), "admin", cancelled, access);
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data);
+      for (var invalid :
+          List.of(
+              with(message, "aggregateId", UUID.randomUUID()),
+              with(message, "aggregateVersion", "9"),
+              with(message, "messageType", "event.sales-configured.v1"),
+              with(message, "data", with(data, "eventId", UUID.randomUUID())),
+              with(
+                  message,
+                  "data",
+                  with(
+                      data,
+                      "sales",
+                      with(cancelled, "eventStatus", SalesConfiguration.EventStatus.PUBLISHED))),
+              with(message, "data", with(data, "access", with(access, "sourceConfigVersion", "9"))),
+              with(
+                  message,
+                  "data",
+                  with(
+                      data,
+                      "access",
+                      with(access, "eventStatus", SalesConfiguration.EventStatus.PUBLISHED))))) {
+        assertThatThrownBy(() -> salesService.processEventCancellation(invalid))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_MESSAGE));
+      }
+      var otherOwner = with(data, "sales", with(cancelled, "organizerSubject", "other"));
+      otherOwner = with(otherOwner, "access", with(access, "organizerSubject", "other"));
+      var ownerMessage = with(message, "data", otherOwner);
+      assertThatThrownBy(() -> salesService.processEventCancellation(ownerMessage))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SALES_CONFIGURATION_CONFLICT));
+      var otherMode = with(with(cancelled, "mode", SalesMode.SEAT_MAP), "ticketTypes", List.of());
+      var modeMessage = with(message, "data", with(data, "sales", otherMode));
+      assertThatThrownBy(() -> salesService.processEventCancellation(modeMessage))
+          .isInstanceOf(BusinessException.class);
+      jdbc.execute(
+          "create function booking_schema.event_ack_reject() returns trigger language plpgsql as $$ begin if new.consumer_name='booking.event-cancelled' then perform pg_sleep(1); raise exception 'ack commit rejected' using errcode='23514'; end if; return new; end $$");
+      jdbc.execute(
+          "create constraint trigger event_ack_commit_failure after insert on booking_schema.tbl_inbox_messages deferrable initially deferred for each row execute function booking_schema.event_ack_reject()");
+      container.start();
+      relayRabbitTemplate.convertAndSend("", queue, message);
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .until(
+              () ->
+                  jdbc.queryForObject(
+                          "select count(*) from pg_locks where relation='booking_schema.tbl_inbox_messages'::regclass and mode='RowExclusiveLock' and granted",
+                          Long.class)
+                      > 0);
+      container.stop();
+      // DB lỗi phải requeue, không ACK; Rabbit4.3 không tính basic.nack vào delivery-limit.
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(() -> admin.getQueueInfo(queue).getMessageCount() == 1);
+      assertThat(admin.getQueueInfo(queue).getMessageCount()).isEqualTo(1);
+      assertThat(
+              jdbc.queryForObject(
+                  "select event_status from booking_schema.tbl_event_sales_snapshots where event_id=?",
+                  String.class,
+                  config.eventId()))
+          .isEqualTo("PUBLISHED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_inbox_messages where message_id=?",
+                  Long.class,
+                  message.messageId()))
+          .isZero();
+      jdbc.execute("drop trigger event_ack_commit_failure on booking_schema.tbl_inbox_messages");
+      container.start();
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(15))
+          .until(
+              () ->
+                  jdbc.queryForObject(
+                          "select count(*) from booking_schema.tbl_inbox_messages where consumer_name='booking.event-cancelled' and message_id=?",
+                          Long.class,
+                          message.messageId())
+                      == 1);
+      container.stop();
+      assertThat(admin.getQueueInfo(queue).getMessageCount()).isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("PENDING_PAYMENT");
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_reservations where order_id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("HELD");
+      assertThat(endpoint.getMethod().getAnnotation(RabbitListener.class).ackMode())
+          .isEqualTo("AUTO");
+      container.start();
+      relayRabbitTemplate.convertAndSend(
+          "", queue, with(message, "aggregateId", UUID.randomUUID()));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .until(() -> relayRabbitTemplate.receive(dlq) != null);
+      container.stop();
+      assertThat(admin.getQueueInfo(queue).getMessageCount()).isZero();
+    } finally {
+      container.stop();
+      container.destroy();
+      admin.deleteQueue(queue);
+      admin.deleteQueue(dlq);
+      jdbc.execute(
+          "drop trigger if exists event_ack_commit_failure on booking_schema.tbl_inbox_messages");
+      jdbc.execute("drop function if exists booking_schema.event_ack_reject()");
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void releasesHeldOrdersWhenEventIsCancelled() throws Exception {
+    try {
+      for (int mode = 0; mode < 3; mode++)
+        for (boolean promoted : List.of(false, true))
+          for (boolean frozen : List.of(false, true)) {
+            var config =
+                seedOrderCreationConfiguration(
+                    mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                    mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                    20,
+                    5);
+            if (promoted) {
+              var promo =
+                  new PromotionConfig(
+                      UUID.randomUUID(),
+                      "SAVE",
+                      Instant.now().minusSeconds(60),
+                      Instant.now().plusSeconds(3600),
+                      "10",
+                      1,
+                      new PromotionConfig.PercentDiscount("PERCENT", 10));
+              config = with(with(config, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+              salesService.synchronizeSalesConfiguration(
+                  new Envelope<>(
+                      UUID.randomUUID(),
+                      "event.sales-configured.v1",
+                      1,
+                      config.eventId(),
+                      "2",
+                      Instant.now(),
+                      config.eventId(),
+                      null,
+                      null,
+                      config));
+            }
+            var order =
+                orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+            if (promoted)
+              promotionService.applyPromotionToOrder(
+                  "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+            if (frozen) orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+            var moneyBefore =
+                jdbc.queryForMap(
+                    "select subtotal,discount,total,expires_at,frozen_purchase_snapshot,payment_frozen_at,payment_snapshot_version from booking_schema.tbl_orders where id=?",
+                    order.getOrderId());
+            var cancelled =
+                with(
+                    with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                    "sourceConfigVersion",
+                    "3");
+            var data =
+                new EventCancellation(
+                    config.eventId(),
+                    UUID.randomUUID(),
+                    "3",
+                    Instant.now(),
+                    "admin",
+                    cancelled,
+                    new EventCancellation.AccessConfiguration(
+                        config.eventId(),
+                        config.organizerSubject(),
+                        SalesConfiguration.EventStatus.CANCELLED,
+                        config.eventStartsAt(),
+                        config.eventEndsAt(),
+                        "3"));
+            salesService.processEventCancellation(
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "event.cancelled.v1",
+                    1,
+                    config.eventId(),
+                    "3",
+                    Instant.now(),
+                    config.eventId(),
+                    null,
+                    null,
+                    data));
+            orderService.cancelOrderForEventCancellation(order.getOrderId());
+            assertThat(
+                    jdbc.queryForObject(
+                        "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                        String.class,
+                        order.getOrderId()))
+                .isEqualTo("CANCELLED");
+            assertThat(
+                    jdbc.queryForObject(
+                        "select state from booking_schema.tbl_reservations where order_id=?",
+                        String.class,
+                        order.getOrderId()))
+                .isEqualTo("RELEASED");
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_reservation_allocations where order_id=? and state<>'RELEASED'",
+                        Long.class,
+                        order.getOrderId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and (held<>0 or purchased<>0)",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_ticket_type_inventory where event_id=? and (held<>0 or purchased<>0)",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_sector_inventory where event_id=? and (held<>0 or purchased<>0)",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and current_reservation_id is not null",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_promotion_inventory where event_id=? and (held<>0 or used<>0)",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForObject(
+                        "select count(*) from booking_schema.tbl_promotion_usages where event_id=? and state<>'RELEASED'",
+                        Long.class,
+                        config.eventId()))
+                .isZero();
+            assertThat(
+                    jdbc.queryForMap(
+                        "select subtotal,discount,total,expires_at,frozen_purchase_snapshot,payment_frozen_at,payment_snapshot_version from booking_schema.tbl_orders where id=?",
+                        order.getOrderId()))
+                .isEqualTo(moneyBefore);
+            assertThat(
+                    orders.findOrderIdsForEventCancellation(
+                        null, org.springframework.data.domain.PageRequest.of(0, 20)))
+                .doesNotContain(order.getOrderId());
+            var request = createOrderRequest(config, 1);
+            assertThatThrownBy(() -> orderService.createOrder("other", UUID.randomUUID(), request))
+                .isInstanceOfSatisfying(
+                    BusinessException.class,
+                    e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+          }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void releasesCommittedOrdersWhenEventIsCancelled() throws Exception {
+    try {
+      for (int mode = 0; mode < 3; mode++)
+        for (boolean completed : List.of(false, true)) {
+          var base =
+              seedOrderCreationConfiguration(
+                  mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                  mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                  20,
+                  5);
+          var promo =
+              new PromotionConfig(
+                  UUID.randomUUID(),
+                  "SAVE",
+                  Instant.now().minusSeconds(60),
+                  Instant.now().plusSeconds(3600),
+                  "10",
+                  1,
+                  new PromotionConfig.PercentDiscount("PERCENT", 10));
+          var config = with(with(base, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+          salesService.synchronizeSalesConfiguration(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  config));
+          var order =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          promotionService.applyPromotionToOrder(
+              "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+          var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+          var charge = UUID.randomUUID();
+          orderService.acceptPayment(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "booking.accept-payment.v1",
+                  1,
+                  order.getOrderId(),
+                  purchase.sourceOrderVersion(),
+                  Instant.now(),
+                  order.getOrderId(),
+                  null,
+                  null,
+                  new AcceptPayment(
+                      order.getOrderId(),
+                      charge,
+                      UUID.randomUUID(),
+                      purchase.total(),
+                      purchase.currency(),
+                      purchase.sourceOrderVersion())));
+          if (completed)
+            orderService.processBookingIssuanceResult(
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "ticket.issued.v1",
+                    1,
+                    order.getOrderId(),
+                    purchase.sourceOrderVersion(),
+                    Instant.now(),
+                    order.getOrderId(),
+                    null,
+                    null,
+                    new BookingIssuanceResult(
+                        order.getOrderId(),
+                        charge,
+                        UUID.randomUUID(),
+                        BookingIssuanceResult.State.COMPLETED,
+                        2,
+                        null)));
+          var moneyBefore =
+              jdbc.queryForMap(
+                  "select subtotal,discount,total,expires_at,frozen_purchase_snapshot,payment_frozen_at,payment_snapshot_version,accepted_charge_id,accepted_at from booking_schema.tbl_orders where id=?",
+                  order.getOrderId());
+          var outboxBefore =
+              jdbc.queryForList(
+                  "select * from booking_schema.tbl_outbox_messages where aggregate_id=? order by message_id",
+                  order.getOrderId());
+          var cancelled =
+              with(
+                  with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                  "sourceConfigVersion",
+                  "3");
+          var data =
+              new EventCancellation(
+                  config.eventId(),
+                  UUID.randomUUID(),
+                  "3",
+                  Instant.now(),
+                  "admin",
+                  cancelled,
+                  new EventCancellation.AccessConfiguration(
+                      config.eventId(),
+                      config.organizerSubject(),
+                      SalesConfiguration.EventStatus.CANCELLED,
+                      config.eventStartsAt(),
+                      config.eventEndsAt(),
+                      "3"));
+          salesService.processEventCancellation(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.cancelled.v1",
+                  1,
+                  config.eventId(),
+                  "3",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  data));
+          orderService.cancelOrderForEventCancellation(order.getOrderId());
+          assertThat(
+                  jdbc.queryForObject(
+                      "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("CANCELLED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_reservations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("RELEASED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and (held<>0 or purchased<>0)",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_ticket_type_inventory where event_id=? and (held<>0 or purchased<>0)",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_sector_inventory where event_id=? and (held<>0 or purchased<>0)",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and current_reservation_id is not null",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForMap(
+                      "select held,used from booking_schema.tbl_promotion_inventory where event_id=?",
+                      config.eventId()))
+              .containsEntry("held", 0L)
+              .containsEntry("used", 0L);
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_promotion_usages where event_id=?",
+                      String.class,
+                      config.eventId()))
+              .isEqualTo("RELEASED");
+          assertThat(
+                  jdbc.queryForMap(
+                      "select subtotal,discount,total,expires_at,frozen_purchase_snapshot,payment_frozen_at,payment_snapshot_version,accepted_charge_id,accepted_at from booking_schema.tbl_orders where id=?",
+                      order.getOrderId()))
+              .isEqualTo(moneyBefore);
+          assertThat(
+                  jdbc.queryForList(
+                      "select * from booking_schema.tbl_outbox_messages where aggregate_id=? order by message_id",
+                      order.getOrderId()))
+              .isEqualTo(outboxBefore);
+        }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void releasesAlreadyCancelledOrdersWithCommittedReservations() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+      var charge = UUID.randomUUID();
+      var accept =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              order.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              order.getOrderId(),
+              null,
+              null,
+              new AcceptPayment(
+                  order.getOrderId(),
+                  charge,
+                  UUID.randomUUID(),
+                  purchase.total(),
+                  purchase.currency(),
+                  purchase.sourceOrderVersion()));
+      orderService.acceptPayment(accept);
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data));
+      var result =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "ticket.issued.v1",
+              1,
+              order.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              order.getOrderId(),
+              null,
+              null,
+              new BookingIssuanceResult(
+                  order.getOrderId(),
+                  charge,
+                  UUID.randomUUID(),
+                  BookingIssuanceResult.State.COMPLETED,
+                  2,
+                  null));
+      orderService.processBookingIssuanceResult(result);
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("CANCELLED");
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_reservations where order_id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("COMMITTED");
+      assertThat(
+              orders.findOrderIdsForEventCancellation(
+                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+          .contains(order.getOrderId());
+      orderService.cancelOrderForEventCancellation(order.getOrderId());
+      assertThat(
+              jdbc.queryForObject(
+                  "select purchased from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  config.ticketTypes().getFirst().ticketTypeId()))
+          .isZero();
+      assertThat(
+              orders.findOrderIdsForEventCancellation(
+                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+          .doesNotContain(order.getOrderId());
+      var before = captureOrderCreationState(config.eventId());
+      orderService.processBookingIssuanceResult(with(result, "messageId", UUID.randomUUID()));
+      assertThat(orderService.acceptPayment(with(accept, "messageId", UUID.randomUUID())).outcome())
+          .isEqualTo(com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.ACCEPTED);
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=? and message_type='booking.order-completed.v1'",
+                  Long.class,
+                  order.getOrderId()))
+          .isZero();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void replaysEventOrderCancellationWithoutReleasingTwice() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 4, 5);
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data));
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var ready = new CountDownLatch(2);
+        var go = new CountDownLatch(1);
+        var tasks = new ArrayList<Future<?>>();
+        for (int i = 0; i < 2; i++)
+          tasks.add(
+              executor.submit(
+                  () -> {
+                    ready.countDown();
+                    if (!go.await(5, TimeUnit.SECONDS))
+                      throw new IllegalStateException("start timeout");
+                    orderService.cancelOrderForEventCancellation(order.getOrderId());
+                    return null;
+                  }));
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        go.countDown();
+        for (var task : tasks) task.get(10, TimeUnit.SECONDS);
+      }
+      var before = captureOrderCreationState(config.eventId());
+      orderService.cancelOrderForEventCancellation(order.getOrderId());
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and (held<>0 or purchased<>0)",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_outbox_messages where aggregate_id=?",
+                  Long.class,
+                  order.getOrderId()))
+          .isZero();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void resumesEventCancellationBatchAfterFailureAndWorkerRestart() throws Exception {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 5);
+      var ids = new ArrayList<UUID>();
+      for (int i = 0; i < 10; i++)
+        ids.add(
+            orderService
+                .createOrder("event-worker-" + i, UUID.randomUUID(), createOrderRequest(config, 2))
+                .getOrderId());
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data));
+      var orderedIds =
+          orders.findOrderIdsForEventCancellation(
+              null, org.springframework.data.domain.PageRequest.of(0, 20));
+      assertThat(orderedIds).containsExactlyInAnyOrderElementsOf(ids);
+      var bad = orderedIds.getFirst();
+      jdbc.execute(
+          "create function booking_schema.event_batch_reject() returns trigger language plpgsql as $$ begin if new.id='"
+              + bad
+              + "'::uuid and new.lifecycle_state='CANCELLED' then raise exception 'one batch order rejected' using errcode='23514'; end if; return new; end $$");
+      jdbc.execute(
+          "create constraint trigger event_batch_commit_failure after update on booking_schema.tbl_orders deferrable initially deferred for each row execute function booking_schema.event_batch_reject()");
+      var worker = new EventCancellationWorker(orders, orderService);
+      org.springframework.test.util.ReflectionTestUtils.setField(worker, "batchSize", 3);
+      for (int i = 0; i < 5; i++) worker.cancelOrdersForCancelledEvents();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_orders where event_id=? and lifecycle_state='CANCELLED'",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(9L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  config.ticketTypes().getFirst().ticketTypeId()))
+          .isEqualTo(2L);
+      assertThat(
+              orders.findOrderIdsForEventCancellation(
+                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+          .containsExactly(bad);
+      jdbc.execute("drop trigger event_batch_commit_failure on booking_schema.tbl_orders");
+      var restarted = new EventCancellationWorker(orders, orderService);
+      org.springframework.test.util.ReflectionTestUtils.setField(restarted, "batchSize", 3);
+      restarted.cancelOrdersForCancelledEvents();
+      assertThat(
+              orders.findOrderIdsForEventCancellation(
+                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+          .isEmpty();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_orders where event_id=? and lifecycle_state='CANCELLED'",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(10L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select held from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  config.ticketTypes().getFirst().ticketTypeId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_reservation_allocations where event_id=? and state<>'RELEASED'",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_purchase_limits where event_id=? and (held<>0 or purchased<>0)",
+                  Long.class,
+                  config.eventId()))
+          .isZero();
+      jdbc.execute(
+          Files.readString(
+              Path.of(System.getProperty("basedir", "."))
+                  .resolve("database/2026-10-31-event-cancellation-indexes.sql")));
+      assertThat(
+              jdbc.queryForObject(
+                  "select i.indisvalid and i.indisready from pg_index i join pg_class c on c.oid=i.indexrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='booking_schema' and c.relname='tbl_reservations_active_order_idx'",
+                  Boolean.class))
+          .isTrue();
+      assertThat(
+              jdbc.queryForObject(
+                  "select indexdef from pg_indexes where schemaname='booking_schema' and indexname='tbl_reservations_active_order_idx'",
+                  String.class))
+          .contains("order_id", "HELD", "COMMITTED");
+      var before = captureOrderCreationState(config.eventId());
+      restarted.cancelOrdersForCancelledEvents();
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+    } finally {
+      jdbc.execute(
+          "drop trigger if exists event_batch_commit_failure on booking_schema.tbl_orders");
+      jdbc.execute("drop function if exists booking_schema.event_batch_reject()");
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void preservesUnrelatedEventsAndReleasedTerminalOrders() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object duration =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      var other = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var untouched =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(other, 1));
+      var before = captureOrderCreationState(other.eventId());
+      orderService.cancelOrderForEventCancellation(untouched.getOrderId());
+      orderService.cancelOrderForEventCancellation(UUID.randomUUID());
+      assertThatThrownBy(() -> orderService.cancelOrderForEventCancellation(null))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+      assertThat(captureOrderCreationState(other.eventId())).isEqualTo(before);
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(1));
+      var expired =
+          orderService.createOrder("expired", UUID.randomUUID(), createOrderRequest(config, 1));
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", duration);
+      var failed =
+          orderService.createOrder("failed", UUID.randomUUID(), createOrderRequest(config, 1));
+      var purchase = orderService.preparePurchaseSnapshot("failed", failed.getOrderId());
+      var charge = UUID.randomUUID();
+      orderService.acceptPayment(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              failed.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              failed.getOrderId(),
+              null,
+              null,
+              new AcceptPayment(
+                  failed.getOrderId(),
+                  charge,
+                  UUID.randomUUID(),
+                  purchase.total(),
+                  purchase.currency(),
+                  purchase.sourceOrderVersion())));
+      orderService.processBookingIssuanceResult(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.issuance-failed.v1",
+              1,
+              failed.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              failed.getOrderId(),
+              null,
+              null,
+              new BookingIssuanceResult(
+                  failed.getOrderId(),
+                  charge,
+                  UUID.randomUUID(),
+                  BookingIssuanceResult.State.FAILED,
+                  0,
+                  "ERROR")));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(5))
+          .until(() -> !orders.currentDatabaseTime().isBefore(expired.getExpiresAt()));
+      orderService.expireOrder(expired.getOrderId());
+      var cancelled =
+          with(
+              with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "2");
+      var data =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "2",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "2"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              data));
+      var terminalBefore = captureOrderCreationState(config.eventId());
+      orderService.cancelOrderForEventCancellation(expired.getOrderId());
+      orderService.cancelOrderForEventCancellation(failed.getOrderId());
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(terminalBefore);
+      assertThat(
+              orders.findOrderIdsForEventCancellation(
+                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+          .isEmpty();
+      assertThat(captureOrderCreationState(other.eventId())).isEqualTo(before);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", duration);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void arbitratesEventCancellationWithCreateOrderAndPayment() throws Exception {
+    try {
+      for (boolean payment : List.of(false, true))
+        for (boolean gateFirst : List.of(false, true)) {
+          var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+          var initial =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          var purchase =
+              payment ? orderService.preparePurchaseSnapshot("buyer", initial.getOrderId()) : null;
+          var accept =
+              payment
+                  ? new Envelope<>(
+                      UUID.randomUUID(),
+                      "booking.accept-payment.v1",
+                      1,
+                      initial.getOrderId(),
+                      purchase.sourceOrderVersion(),
+                      Instant.now(),
+                      initial.getOrderId(),
+                      null,
+                      null,
+                      new AcceptPayment(
+                          initial.getOrderId(),
+                          UUID.randomUUID(),
+                          UUID.randomUUID(),
+                          purchase.total(),
+                          purchase.currency(),
+                          purchase.sourceOrderVersion()))
+                  : null;
+          var cancelled =
+              with(
+                  with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                  "sourceConfigVersion",
+                  "2");
+          var data =
+              new EventCancellation(
+                  config.eventId(),
+                  UUID.randomUUID(),
+                  "2",
+                  Instant.now(),
+                  "admin",
+                  cancelled,
+                  new EventCancellation.AccessConfiguration(
+                      config.eventId(),
+                      config.organizerSubject(),
+                      SalesConfiguration.EventStatus.CANCELLED,
+                      config.eventStartsAt(),
+                      config.eventEndsAt(),
+                      "2"));
+          var cancellation =
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.cancelled.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  data);
+          var entered = new CountDownLatch(1);
+          var finish = new CountDownLatch(1);
+          var blockerPid = new java.util.concurrent.atomic.AtomicInteger();
+          try (var executor = Executors.newFixedThreadPool(2)) {
+            var first =
+                executor.submit(
+                    () ->
+                        new org.springframework.transaction.support.TransactionTemplate(
+                                transactionManager)
+                            .execute(
+                                status -> {
+                                  Object result = null;
+                                  if (gateFirst)
+                                    salesService.processEventCancellation(cancellation);
+                                  else if (payment) result = orderService.acceptPayment(accept);
+                                  else
+                                    result =
+                                        orderService.createOrder(
+                                            "buyer",
+                                            UUID.randomUUID(),
+                                            createOrderRequest(config, 2));
+                                  blockerPid.set(
+                                      jdbc.queryForObject(
+                                          "select pg_backend_pid()", Integer.class));
+                                  entered.countDown();
+                                  try {
+                                    if (!finish.await(10, TimeUnit.SECONDS))
+                                      throw new IllegalStateException("commit timeout");
+                                  } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IllegalStateException(e);
+                                  }
+                                  return result;
+                                }));
+            try {
+              assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+              var second =
+                  executor.submit(
+                      () -> {
+                        try {
+                          if (!gateFirst) {
+                            salesService.processEventCancellation(cancellation);
+                            return null;
+                          }
+                          if (payment) return orderService.acceptPayment(accept);
+                          return orderService.createOrder(
+                              "buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+                        } catch (RuntimeException e) {
+                          return e;
+                        }
+                      });
+              Awaitility.await()
+                  .atMost(Duration.ofSeconds(3))
+                  .until(
+                      () ->
+                          jdbc.queryForObject(
+                              "select exists(select 1 from pg_stat_activity where ? = any(pg_blocking_pids(pid)))",
+                              Boolean.class,
+                              blockerPid.get()));
+              finish.countDown();
+              var firstResult = first.get(10, TimeUnit.SECONDS);
+              var secondResult = second.get(10, TimeUnit.SECONDS);
+              if (gateFirst && !payment)
+                assertThat(secondResult)
+                    .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+              else if (gateFirst)
+                assertThat(secondResult)
+                    .isInstanceOfSatisfying(
+                        com.flashticket.booking_service.dto.message.PaymentDecision.class,
+                        d ->
+                            assertThat(d.outcome())
+                                .isEqualTo(
+                                    com.flashticket.booking_service.dto.message.PaymentDecision
+                                        .Outcome.CANCELLED));
+              else {
+                assertThat(secondResult).isNull();
+                if (payment)
+                  assertThat(firstResult)
+                      .isInstanceOfSatisfying(
+                          com.flashticket.booking_service.dto.message.PaymentDecision.class,
+                          d ->
+                              assertThat(d.outcome())
+                                  .isEqualTo(
+                                      com.flashticket.booking_service.dto.message.PaymentDecision
+                                          .Outcome.ACCEPTED));
+                else assertThat(firstResult).isInstanceOf(OrderView.class);
+              }
+            } finally {
+              finish.countDown();
+            }
+          }
+          assertThatThrownBy(
+                  () ->
+                      promotionService.applyPromotionToOrder(
+                          "buyer", initial.getOrderId(), new ApplyPromotionRequest("SAVE")))
+              .isInstanceOf(BusinessException.class);
+          assertThatThrownBy(
+                  () -> orderService.preparePurchaseSnapshot("buyer", initial.getOrderId()))
+              .isInstanceOfSatisfying(
+                  BusinessException.class,
+                  e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ORDER_NOT_PAYABLE));
+          var worker = new EventCancellationWorker(orders, orderService);
+          org.springframework.test.util.ReflectionTestUtils.setField(worker, "batchSize", 20);
+          worker.cancelOrdersForCancelledEvents();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_orders where event_id=? and lifecycle_state<>'CANCELLED'",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+          assertThat(
+                  jdbc.queryForObject(
+                      "select count(*) from booking_schema.tbl_reservations where event_id=? and state<>'RELEASED'",
+                      Long.class,
+                      config.eventId()))
+              .isZero();
+        }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void arbitratesEventOrderCancellationWithIssuanceAndExpiry() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object duration =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      for (int scenario = 0; scenario < 4; scenario++)
+        for (boolean workerFirst : List.of(false, true)) {
+          final int action = scenario;
+          var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+          if (action == 2)
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                target, "reservationHoldDuration", Duration.ofSeconds(1));
+          var order =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target, "reservationHoldDuration", duration);
+          var purchase =
+              action < 2 ? orderService.preparePurchaseSnapshot("buyer", order.getOrderId()) : null;
+          var charge = UUID.randomUUID();
+          if (action < 2)
+            orderService.acceptPayment(
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "booking.accept-payment.v1",
+                    1,
+                    order.getOrderId(),
+                    purchase.sourceOrderVersion(),
+                    Instant.now(),
+                    order.getOrderId(),
+                    null,
+                    null,
+                    new AcceptPayment(
+                        order.getOrderId(),
+                        charge,
+                        UUID.randomUUID(),
+                        purchase.total(),
+                        purchase.currency(),
+                        purchase.sourceOrderVersion())));
+          var issuance =
+              action < 2
+                  ? new Envelope<>(
+                      UUID.randomUUID(),
+                      action == 0 ? "ticket.issued.v1" : "booking.issuance-failed.v1",
+                      1,
+                      order.getOrderId(),
+                      purchase.sourceOrderVersion(),
+                      Instant.now(),
+                      order.getOrderId(),
+                      null,
+                      null,
+                      new BookingIssuanceResult(
+                          order.getOrderId(),
+                          charge,
+                          UUID.randomUUID(),
+                          action == 0
+                              ? BookingIssuanceResult.State.COMPLETED
+                              : BookingIssuanceResult.State.FAILED,
+                          action == 0 ? 2 : 0,
+                          action == 0 ? null : "ERROR"))
+                  : null;
+          if (action == 2)
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .until(() -> !orders.currentDatabaseTime().isBefore(order.getExpiresAt()));
+          if (action == 3 && !workerFirst) orderService.cancelOrder("buyer", order.getOrderId());
+          var cancelled =
+              with(
+                  with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                  "sourceConfigVersion",
+                  "2");
+          var data =
+              new EventCancellation(
+                  config.eventId(),
+                  UUID.randomUUID(),
+                  "2",
+                  Instant.now(),
+                  "admin",
+                  cancelled,
+                  new EventCancellation.AccessConfiguration(
+                      config.eventId(),
+                      config.organizerSubject(),
+                      SalesConfiguration.EventStatus.CANCELLED,
+                      config.eventStartsAt(),
+                      config.eventEndsAt(),
+                      "2"));
+          salesService.processEventCancellation(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.cancelled.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  data));
+          var entered = new CountDownLatch(1);
+          var finish = new CountDownLatch(1);
+          var blockerPid = new java.util.concurrent.atomic.AtomicInteger();
+          try (var executor = Executors.newFixedThreadPool(2)) {
+            var first =
+                executor.submit(
+                    () ->
+                        new org.springframework.transaction.support.TransactionTemplate(
+                                transactionManager)
+                            .execute(
+                                status -> {
+                                  if (workerFirst || action == 3)
+                                    orderService.cancelOrderForEventCancellation(
+                                        order.getOrderId());
+                                  else if (action < 2)
+                                    orderService.processBookingIssuanceResult(issuance);
+                                  else orderService.expireOrder(order.getOrderId());
+                                  blockerPid.set(
+                                      jdbc.queryForObject(
+                                          "select pg_backend_pid()", Integer.class));
+                                  entered.countDown();
+                                  try {
+                                    if (!finish.await(10, TimeUnit.SECONDS))
+                                      throw new IllegalStateException("commit timeout");
+                                  } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IllegalStateException(e);
+                                  }
+                                  return null;
+                                }));
+            try {
+              assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+              var second =
+                  executor.submit(
+                      () -> {
+                        if (!workerFirst)
+                          orderService.cancelOrderForEventCancellation(order.getOrderId());
+                        else if (action < 2) orderService.processBookingIssuanceResult(issuance);
+                        else if (action == 2) orderService.expireOrder(order.getOrderId());
+                        else orderService.cancelOrder("buyer", order.getOrderId());
+                        return null;
+                      });
+              Awaitility.await()
+                  .atMost(Duration.ofSeconds(3))
+                  .until(
+                      () ->
+                          jdbc.queryForObject(
+                              "select exists(select 1 from pg_stat_activity where ? = any(pg_blocking_pids(pid)))",
+                              Boolean.class,
+                              blockerPid.get()));
+              finish.countDown();
+              first.get(10, TimeUnit.SECONDS);
+              second.get(10, TimeUnit.SECONDS);
+            } finally {
+              finish.countDown();
+            }
+          }
+          assertThat(
+                  jdbc.queryForObject(
+                      "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("CANCELLED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_reservations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("RELEASED");
+          assertThat(
+                  jdbc.queryForObject(
+                      "select held+purchased from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                      Long.class,
+                      config.ticketTypes().getFirst().ticketTypeId()))
+              .isZero();
+          assertThat(
+                  orders.findOrderIdsForEventCancellation(
+                      null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              .doesNotContain(order.getOrderId());
+        }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", duration);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void rollsBackEventOrderCancellationWhenCommitFails() throws Exception {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object timeout =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationLockTimeout");
+    try {
+      for (boolean committed : List.of(false, true))
+        for (int failure = 0; failure < 3; failure++) {
+          var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+          var promo =
+              new PromotionConfig(
+                  UUID.randomUUID(),
+                  "SAVE",
+                  Instant.now().minusSeconds(60),
+                  Instant.now().plusSeconds(3600),
+                  "10",
+                  1,
+                  new PromotionConfig.PercentDiscount("PERCENT", 10));
+          var config = with(with(base, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+          salesService.synchronizeSalesConfiguration(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  config.eventId(),
+                  "2",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  config));
+          var order =
+              orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          promotionService.applyPromotionToOrder(
+              "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+          if (committed) {
+            var purchase = orderService.preparePurchaseSnapshot("buyer", order.getOrderId());
+            orderService.acceptPayment(
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "booking.accept-payment.v1",
+                    1,
+                    order.getOrderId(),
+                    purchase.sourceOrderVersion(),
+                    Instant.now(),
+                    order.getOrderId(),
+                    null,
+                    null,
+                    new AcceptPayment(
+                        order.getOrderId(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        purchase.total(),
+                        purchase.currency(),
+                        purchase.sourceOrderVersion())));
+          }
+          var cancelled =
+              with(
+                  with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                  "sourceConfigVersion",
+                  "3");
+          var data =
+              new EventCancellation(
+                  config.eventId(),
+                  UUID.randomUUID(),
+                  "3",
+                  Instant.now(),
+                  "admin",
+                  cancelled,
+                  new EventCancellation.AccessConfiguration(
+                      config.eventId(),
+                      config.organizerSubject(),
+                      SalesConfiguration.EventStatus.CANCELLED,
+                      config.eventStartsAt(),
+                      config.eventEndsAt(),
+                      "3"));
+          salesService.processEventCancellation(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.cancelled.v1",
+                  1,
+                  config.eventId(),
+                  "3",
+                  Instant.now(),
+                  config.eventId(),
+                  null,
+                  null,
+                  data));
+          if (failure < 2) {
+            jdbc.execute(
+                "create function booking_schema.event_order_reject() returns trigger language plpgsql as $$ begin raise exception 'event order write rejected' using errcode='23514'; return new; end $$");
+            if (failure == 0)
+              jdbc.execute(
+                  "create trigger event_order_resource_failure before update on booking_schema.tbl_promotion_inventory for each row execute function booking_schema.event_order_reject()");
+            else
+              jdbc.execute(
+                  "create constraint trigger event_order_commit_failure after update on booking_schema.tbl_orders deferrable initially deferred for each row execute function booking_schema.event_order_reject()");
+          }
+          var before = captureOrderCreationState(config.eventId());
+          var promoBefore =
+              jdbc.queryForList(
+                  "select * from booking_schema.tbl_promotion_inventory where event_id=?",
+                  config.eventId());
+          var usageBefore =
+              jdbc.queryForList(
+                  "select * from booking_schema.tbl_promotion_usages where event_id=?",
+                  config.eventId());
+          if (failure == 2) {
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                target, "reservationLockTimeout", "250ms");
+            try (var blocker = jdbc.getDataSource().getConnection()) {
+              blocker.setAutoCommit(false);
+              try {
+                try (var statement =
+                    blocker.prepareStatement(
+                        "select ticket_type_id from booking_schema.tbl_ticket_type_inventory where event_id=? for update")) {
+                  statement.setObject(1, config.eventId());
+                  statement.executeQuery().close();
+                }
+                assertThatThrownBy(
+                        () -> orderService.cancelOrderForEventCancellation(order.getOrderId()))
+                    .isInstanceOf(RuntimeException.class);
+              } finally {
+                blocker.rollback();
+              }
+            }
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                target, "reservationLockTimeout", timeout);
+          } else
+            assertThatThrownBy(
+                    () -> orderService.cancelOrderForEventCancellation(order.getOrderId()))
+                .isInstanceOf(RuntimeException.class)
+                .hasStackTraceContaining("event order write rejected");
+          assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+          assertThat(
+                  jdbc.queryForList(
+                      "select * from booking_schema.tbl_promotion_inventory where event_id=?",
+                      config.eventId()))
+              .isEqualTo(promoBefore);
+          assertThat(
+                  jdbc.queryForList(
+                      "select * from booking_schema.tbl_promotion_usages where event_id=?",
+                      config.eventId()))
+              .isEqualTo(usageBefore);
+          jdbc.execute(
+              "drop trigger if exists event_order_resource_failure on booking_schema.tbl_promotion_inventory");
+          jdbc.execute(
+              "drop trigger if exists event_order_commit_failure on booking_schema.tbl_orders");
+          jdbc.execute("drop function if exists booking_schema.event_order_reject()");
+          orderService.cancelOrderForEventCancellation(order.getOrderId());
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_reservations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("RELEASED");
+          assertThat(
+                  jdbc.queryForMap(
+                      "select held,used from booking_schema.tbl_promotion_inventory where event_id=?",
+                      config.eventId()))
+              .containsEntry("held", 0L)
+              .containsEntry("used", 0L);
+        }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationLockTimeout", timeout);
+      jdbc.execute(
+          "drop trigger if exists event_order_resource_failure on booking_schema.tbl_promotion_inventory");
+      jdbc.execute(
+          "drop trigger if exists event_order_commit_failure on booking_schema.tbl_orders");
+      jdbc.execute("drop function if exists booking_schema.event_order_reject()");
       jdbc.execute(
           "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
     }

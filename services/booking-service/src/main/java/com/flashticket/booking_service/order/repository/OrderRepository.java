@@ -17,6 +17,24 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   @Query(
       """
       select o.id from Order o
+      join Reservation r on r.order = o
+      join EventSalesSnapshot s on s.eventId = o.eventId
+      where s.eventStatus = com.flashticket.booking_service.enums.EventState.CANCELLED
+        and r.state in (com.flashticket.booking_service.enums.ReservationState.HELD,
+                        com.flashticket.booking_service.enums.ReservationState.COMMITTED)
+        and o.lifecycleState in (com.flashticket.booking_service.enums.OrderState.PENDING_PAYMENT,
+                                 com.flashticket.booking_service.enums.OrderState.ISSUING,
+                                 com.flashticket.booking_service.enums.OrderState.COMPLETED,
+                                 com.flashticket.booking_service.enums.OrderState.CANCELLED)
+        and (:afterOrderId is null or o.id > :afterOrderId)
+      order by o.id asc
+      """)
+  List<UUID> findOrderIdsForEventCancellation(
+      @Param("afterOrderId") UUID afterOrderId, Pageable pageable);
+
+  @Query(
+      """
+      select o.id from Order o
       where o.lifecycleState = :state and o.expiresAt <= :cutoff
         and (:afterOrderId is null or o.id > :afterOrderId)
       order by o.id asc
