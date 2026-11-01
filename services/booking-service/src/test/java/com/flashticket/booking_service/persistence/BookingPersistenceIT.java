@@ -10260,6 +10260,586 @@ class BookingPersistenceIT {
     }
   }
 
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityReturnsQuantityCounters() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 5, 5);
+      var paidOrder =
+          orderService.createOrder("paid-buyer", UUID.randomUUID(), createOrderRequest(config, 3));
+      var purchase = orderService.preparePurchaseSnapshot("paid-buyer", paidOrder.getOrderId());
+      orderService.acceptPayment(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              paidOrder.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              new AcceptPayment(
+                  paidOrder.getOrderId(),
+                  UUID.randomUUID(),
+                  UUID.randomUUID(),
+                  purchase.total(),
+                  purchase.currency(),
+                  purchase.sourceOrderVersion())));
+      var first = salesService.getAvailability(config.eventId());
+      assertThat(first.getEventId()).isEqualTo(config.eventId());
+      assertThat(first.getSourceConfigVersion()).isEqualTo("1");
+      assertThat(first.getAsOf()).isBetween(Instant.now().minusSeconds(10), Instant.now());
+      assertThat(first.getTicketTypes()).extracting(t -> t.getAvailable()).containsExactly("2");
+      assertThat(first.getSectors()).isEmpty();
+      assertThat(first.getSeats()).isEmpty();
+      orderService.createOrder("held-buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      assertThat(
+              jdbc.queryForMap(
+                  "select configured_capacity,held,purchased from booking_schema.tbl_ticket_type_inventory where event_id=?",
+                  config.eventId()))
+          .containsEntry("configured_capacity", 5L)
+          .containsEntry("held", 2L)
+          .containsEntry("purchased", 3L);
+      assertThat(salesService.getAvailability(config.eventId()).getTicketTypes())
+          .extracting(t -> t.getAvailable())
+          .containsExactly("0");
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityUsesSharedStandingPool() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.STANDING, 10, 5);
+      orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var available = salesService.getAvailability(config.eventId());
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getTicketTypeId())
+          .containsExactlyElementsOf(
+              config.ticketTypes().stream()
+                  .map(SalesConfiguration.TicketTypeConfig::ticketTypeId)
+                  .toList());
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getAvailable())
+          .containsExactly("8", "8");
+      assertThat(available.getSectors()).extracting(s -> s.getAvailable()).containsExactly("8");
+      assertThat(available.getSectors().getFirst().getKind()).isEqualTo(SectorType.STANDING);
+      assertThat(available.getSeats()).isEmpty();
+      assertThat(
+              jdbc.queryForObject(
+                  "select configured_capacity-held-purchased from booking_schema.tbl_sector_inventory where event_id=?",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(8L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityCountsAvailableSeatsInMixedSectors() {
+    try {
+      var base = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 6, 5);
+      var standingSector = UUID.randomUUID();
+      var standingType = UUID.randomUUID();
+      var types = new ArrayList<>(base.ticketTypes());
+      types.add(
+          new SalesConfiguration.TicketTypeConfig(
+              standingType, "Standing", "100", Currency.VND, standingSector, null, null));
+      var seats = new ArrayList<>(base.seats());
+      seats.set(5, with(seats.get(5), "isHidden", true));
+      var config =
+          with(
+              with(
+                  with(
+                      with(base, "ticketTypes", types),
+                      "sectors",
+                      List.of(
+                          base.sectors().getFirst(),
+                          new SalesConfiguration.SectorConfig(
+                              standingSector, SectorType.STANDING, "10"))),
+                  "seats",
+                  seats),
+              "sourceConfigVersion",
+              "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var paid =
+          orderService.createOrder(
+              "paid",
+              UUID.randomUUID(),
+              new CreateOrderRequest(
+                  config.eventId(),
+                  "buyer@example.com",
+                  new OrderSelection.SeatedSelection(
+                      base.sectors().getFirst().sectorId(), List.of(seats.get(3).seatId()))));
+      var purchase = orderService.preparePurchaseSnapshot("paid", paid.getOrderId());
+      orderService.acceptPayment(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.accept-payment.v1",
+              1,
+              paid.getOrderId(),
+              purchase.sourceOrderVersion(),
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              new AcceptPayment(
+                  paid.getOrderId(),
+                  UUID.randomUUID(),
+                  UUID.randomUUID(),
+                  purchase.total(),
+                  purchase.currency(),
+                  purchase.sourceOrderVersion())));
+      orderService.createOrder(
+          "held",
+          UUID.randomUUID(),
+          new CreateOrderRequest(
+              config.eventId(),
+              "buyer@example.com",
+              new OrderSelection.SeatedSelection(
+                  base.sectors().getFirst().sectorId(),
+                  List.of(seats.get(1).seatId(), seats.get(2).seatId()))));
+      orderService.createOrder(
+          "standing",
+          UUID.randomUUID(),
+          new CreateOrderRequest(
+              config.eventId(),
+              "buyer@example.com",
+              new OrderSelection.StandingSelection(
+                  standingSector, List.of(new OrderSelection.QuantityItem(standingType, 3)))));
+      var available = salesService.getAvailability(config.eventId());
+      assertThat(available.getSourceConfigVersion()).isEqualTo("2");
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getAvailable())
+          .containsExactly("2", "0", "7");
+      assertThat(available.getSectors())
+          .extracting(s -> s.getAvailable())
+          .containsExactly("2", "7");
+      assertThat(available.getSectors())
+          .extracting(s -> s.getKind())
+          .containsExactly(SectorType.SEATED, SectorType.STANDING);
+      assertThat(available.getSeats())
+          .extracting(s -> s.getSeatId())
+          .containsExactlyElementsOf(
+              seats.stream().map(SalesConfiguration.SeatConfig::seatId).toList());
+      assertThat(available.getSeats())
+          .extracting(s -> s.getState())
+          .containsExactly(
+              SeatState.AVAILABLE,
+              SeatState.HELD,
+              SeatState.HELD,
+              SeatState.PURCHASED,
+              SeatState.AVAILABLE,
+              SeatState.UNAVAILABLE);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_seat_inventory where event_id=? and state='AVAILABLE'",
+                  Long.class,
+                  config.eventId()))
+          .isEqualTo(2L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityExcludesRetiredAndOtherEventResources() {
+    try {
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var other = seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.SEATED, 4, 5);
+      var retired = base.ticketTypes().getFirst();
+      var currentTypes = new ArrayList<SalesConfiguration.TicketTypeConfig>();
+      for (int i = 0; i < 2; i++)
+        currentTypes.add(
+            new SalesConfiguration.TicketTypeConfig(
+                UUID.randomUUID(), "Current " + i, "100", Currency.VND, null, "7", null));
+      currentTypes.sort(
+          Comparator.comparing(t -> t.ticketTypeId().toString(), Comparator.reverseOrder()));
+      var allTypes = new ArrayList<>(currentTypes);
+      allTypes.add(retired);
+      var second = with(with(base, "ticketTypes", allTypes), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              base.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              second));
+      var third = with(with(second, "ticketTypes", currentTypes), "sourceConfigVersion", "3");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              base.eventId(),
+              "3",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              third));
+      var available = salesService.getAvailability(base.eventId());
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getTicketTypeId())
+          .containsExactlyElementsOf(
+              currentTypes.stream().map(SalesConfiguration.TicketTypeConfig::ticketTypeId).toList())
+          .doesNotContain(retired.ticketTypeId(), other.ticketTypes().getFirst().ticketTypeId());
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getAvailable())
+          .containsExactly("7", "7");
+      assertThat(available.getSourceConfigVersion()).isEqualTo("3");
+      assertThat(available.getSectors()).isEmpty();
+      assertThat(available.getSeats()).isEmpty();
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_ticket_type_inventory where ticket_type_id=?",
+                  Long.class,
+                  retired.ticketTypeId()))
+          .isEqualTo(1L);
+      // SEATED cũng chỉ trả current seats; row ghế bỏ khỏi config vẫn còn để giữ lịch sử.
+      var keptSeats = new ArrayList<>(other.seats().subList(0, 3));
+      Collections.reverse(keptSeats);
+      var nextSeats = with(with(other, "seats", keptSeats), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              other.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              nextSeats));
+      var seated = salesService.getAvailability(other.eventId());
+      assertThat(seated.getSeats())
+          .extracting(s -> s.getSeatId())
+          .containsExactlyElementsOf(
+              keptSeats.stream().map(SalesConfiguration.SeatConfig::seatId).toList());
+      assertThat(seated.getSectors()).extracting(s -> s.getAvailable()).containsExactly("3");
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from booking_schema.tbl_seat_inventory where event_id=?",
+                  Long.class,
+                  other.eventId()))
+          .isEqualTo(4L);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityDoesNotChangePersistentState() {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previous =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      var promo =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "10",
+              1,
+              new PromotionConfig.PercentDiscount("PERCENT", 10));
+      var config = with(with(base, "promotions", List.of(promo)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", Duration.ofSeconds(3));
+      var order =
+          orderService.createOrder("buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      promotionService.applyPromotionToOrder(
+          "buyer", order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .until(() -> !orders.currentDatabaseTime().isBefore(order.getExpiresAt()));
+      var before = captureOrderCreationState(config.eventId());
+      var unchanged = new LinkedHashMap<String, List<Map<String, Object>>>();
+      for (String table :
+          List.of(
+              "tbl_event_sales_snapshots",
+              "tbl_promotion_inventory",
+              "tbl_promotion_usages",
+              "tbl_inbox_messages",
+              "tbl_outbox_messages"))
+        unchanged.put(
+            table, jdbc.queryForList("select * from booking_schema." + table + " order by 1,2"));
+      var available = salesService.getAvailability(config.eventId());
+      assertThat(available.getTicketTypes())
+          .extracting(t -> t.getAvailable())
+          .containsExactly("18");
+      assertThat(captureOrderCreationState(config.eventId())).isEqualTo(before);
+      for (var entry : unchanged.entrySet())
+        assertThat(
+                jdbc.queryForList(
+                    "select * from booking_schema." + entry.getKey() + " order by 1,2"))
+            .as(entry.getKey())
+            .isEqualTo(entry.getValue());
+      assertThat(
+              jdbc.queryForObject(
+                  "select state from booking_schema.tbl_reservations where order_id=?",
+                  String.class,
+                  order.getOrderId()))
+          .isEqualTo("HELD");
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previous);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityRejectsMissingOrUnpublishedSnapshots() {
+    try {
+      assertThatThrownBy(() -> salesService.getAvailability(UUID.randomUUID()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CONFIG_NOT_READY));
+      for (var state : SalesConfiguration.EventStatus.values()) {
+        if (state == SalesConfiguration.EventStatus.PUBLISHED) continue;
+        var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var next = with(with(base, "eventStatus", state), "sourceConfigVersion", "2");
+        if (state == SalesConfiguration.EventStatus.CANCELLED) {
+          var data =
+              new EventCancellation(
+                  base.eventId(),
+                  UUID.randomUUID(),
+                  "2",
+                  Instant.now(),
+                  "admin",
+                  next,
+                  new EventCancellation.AccessConfiguration(
+                      base.eventId(),
+                      base.organizerSubject(),
+                      state,
+                      base.eventStartsAt(),
+                      base.eventEndsAt(),
+                      "2"));
+          salesService.processEventCancellation(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.cancelled.v1",
+                  1,
+                  base.eventId(),
+                  "2",
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  data));
+          assertThat(
+                  snapshots
+                      .findById(base.eventId())
+                      .orElseThrow()
+                      .getConfigurationSnapshot()
+                      .eventStatus())
+              .isEqualTo(SalesConfiguration.EventStatus.PUBLISHED);
+        } else
+          salesService.synchronizeSalesConfiguration(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "event.sales-configured.v1",
+                  1,
+                  base.eventId(),
+                  "2",
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  next));
+        assertThatThrownBy(() -> salesService.getAvailability(base.eventId()))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+      }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityRemainsReadableOutsideSaleWindow() {
+    try {
+      for (boolean beforeSale : List.of(true, false)) {
+        var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+        var now = orders.currentDatabaseTime();
+        var config =
+            with(
+                with(
+                    with(
+                        base,
+                        "saleStartsAt",
+                        beforeSale ? now.plusSeconds(600) : now.minusSeconds(3600)),
+                    "saleEndsAt",
+                    beforeSale ? now.plusSeconds(3600) : now.minusSeconds(60)),
+                "sourceConfigVersion",
+                "2");
+        salesService.synchronizeSalesConfiguration(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "event.sales-configured.v1",
+                1,
+                config.eventId(),
+                "2",
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                config));
+        assertThat(salesService.getAvailability(config.eventId()).getTicketTypes())
+            .extracting(t -> t.getAvailable())
+            .containsExactly("20");
+        assertThatThrownBy(
+                () ->
+                    orderService.createOrder(
+                        "buyer", UUID.randomUUID(), createOrderRequest(config, 1)))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+      }
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityReadsOneCommittedSnapshotDuringConcurrentChanges() throws Exception {
+    var locked = new CountDownLatch(1);
+    var finishWriter = new CountDownLatch(1);
+    var writerPid = new java.util.concurrent.atomic.AtomicInteger();
+    try {
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 10, 5);
+      var next =
+          with(
+              with(
+                  base,
+                  "ticketTypes",
+                  List.of(with(base.ticketTypes().getFirst(), "configuredQuantity", "20"))),
+              "sourceConfigVersion",
+              "2");
+      try (var executor = Executors.newFixedThreadPool(2)) {
+        var writer =
+            executor.submit(
+                () ->
+                    new TransactionTemplate(transactionManager)
+                        .execute(
+                            status -> {
+                              jdbc.execute("set local lock_timeout='5s'");
+                              jdbc.execute(
+                                  "lock table booking_schema.tbl_ticket_type_inventory in access exclusive mode");
+                              writerPid.set(
+                                  jdbc.queryForObject("select pg_backend_pid()", Integer.class));
+                              locked.countDown();
+                              try {
+                                if (!finishWriter.await(10, TimeUnit.SECONDS))
+                                  throw new IllegalStateException("writer timeout");
+                              } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new IllegalStateException(e);
+                              }
+                              salesService.synchronizeSalesConfiguration(
+                                  new Envelope<>(
+                                      UUID.randomUUID(),
+                                      "event.sales-configured.v1",
+                                      1,
+                                      base.eventId(),
+                                      "2",
+                                      Instant.now(),
+                                      UUID.randomUUID(),
+                                      null,
+                                      null,
+                                      next));
+                              return null;
+                            }));
+        try {
+          assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+          var reader = executor.submit(() -> salesService.getAvailability(base.eventId()));
+          // GET đã qua SELECT snapshot, đang chờ inventory: writer được phép commit cấu hình mới.
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(5))
+              .until(
+                  () ->
+                      jdbc.queryForObject(
+                          "select exists(select 1 from pg_stat_activity where ? = any(pg_blocking_pids(pid)))",
+                          Boolean.class,
+                          writerPid.get()));
+          assertThat(reader.isDone()).isFalse();
+          finishWriter.countDown();
+          writer.get(10, TimeUnit.SECONDS);
+          var first = reader.get(10, TimeUnit.SECONDS);
+          assertThat(first.getSourceConfigVersion()).isEqualTo("1");
+          assertThat(first.getTicketTypes())
+              .extracting(t -> t.getAvailable())
+              .containsExactly("10");
+          var afterCommit = salesService.getAvailability(base.eventId());
+          assertThat(afterCommit.getSourceConfigVersion()).isEqualTo("2");
+          assertThat(afterCommit.getTicketTypes())
+              .extracting(t -> t.getAvailable())
+              .containsExactly("20");
+        } finally {
+          finishWriter.countDown();
+          executor.shutdownNow();
+          assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+        }
+      }
+    } finally {
+      finishWriter.countDown();
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
   private SalesConfiguration seedOrderCreationConfiguration(
       SalesMode mode, SectorType sectorType, long capacity, int purchaseLimit) {
     Instant now =
