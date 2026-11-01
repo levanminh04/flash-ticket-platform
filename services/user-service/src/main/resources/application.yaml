@@ -19,6 +19,9 @@ user:
     timeout: ${USER_IMAGE_TIMEOUT:5s}
   mongodb:
     collection-prefix: ${USER_MONGO_COLLECTION_PREFIX:tbl_}
+  role-grant:
+    lease-duration: ${USER_ROLE_GRANT_LEASE_DURATION:60s}
+    wait-timeout: ${USER_ROLE_GRANT_WAIT_TIMEOUT:5s}
   keycloak-admin:
     base-url: ${USER_KEYCLOAK_ADMIN_BASE_URL:}
     realm: ${USER_KEYCLOAK_ADMIN_REALM:}

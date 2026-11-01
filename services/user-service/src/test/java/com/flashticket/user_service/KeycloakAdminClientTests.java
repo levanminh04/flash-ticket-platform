@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -29,6 +31,7 @@ class KeycloakAdminClientTests {
   private boolean unauthorizedOnce;
   private volatile boolean slowRoles;
   private boolean denyRealmCatalog;
+  private int grantFailureStatus;
 
   @BeforeEach
   void setup() throws Exception {
@@ -61,6 +64,10 @@ class KeycloakAdminClientTests {
               if (!ignoreGrants) input.forEach(n -> roles.add(n.get("name").asString()));
               status = 204;
               body = "";
+              if (grantFailureStatus != 0) {
+                status = grantFailureStatus;
+                body = "{}";
+              }
             } else {
               if (!exchange.getRequestMethod().equals("GET"))
                 throw new AssertionError("Role changes must be additive");
@@ -159,6 +166,24 @@ class KeycloakAdminClientTests {
     client(Duration.ofSeconds(3)).ensureOrganizer("buyer-subject");
     assertThat(tokens.get()).isEqualTo(2);
     assertThat(roles).contains("BUYER", "ORGANIZER");
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {409, 500})
+  void confirmsRoleAfterProviderCommitsGrantButReturnsError(int status) {
+    grantFailureStatus = status;
+    client(Duration.ofSeconds(3)).ensureOrganizer("buyer-subject");
+    assertThat(roles).containsExactlyInAnyOrder("BUYER", "ORGANIZER");
+    assertThat(writes).hasValue(1);
+  }
+
+  @Test
+  void providerErrorWithoutConfirmedGrantRemainsRetryable() {
+    grantFailureStatus = 500;
+    ignoreGrants = true;
+    assertThatThrownBy(() -> client(Duration.ofSeconds(3)).ensureOrganizer("buyer-subject"))
+        .isInstanceOfSatisfying(UserException.class, e -> assertThat(e.status()).isEqualTo(503));
+    assertThat(roles).containsExactly("BUYER");
   }
 
   @Test

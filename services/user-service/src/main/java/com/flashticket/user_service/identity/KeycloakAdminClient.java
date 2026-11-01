@@ -25,6 +25,8 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public final class KeycloakAdminClient implements KeycloakRoles {
+  private static final Set<String> REQUIRED_ROLES = Set.of("BUYER", "ORGANIZER");
+
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record Role(String id, String name) {}
 
@@ -90,6 +92,13 @@ public final class KeycloakAdminClient implements KeycloakRoles {
         ensureRoles(subject, accessToken());
       }
     } catch (RuntimeException ex) {
+      // A failed response can follow a committed write or another grant winner.
+      // Confirm the actual subject's roles, never infer success from an error code.
+      try {
+        if (hasRequiredRoles(readRoles(subject, accessToken()))) return;
+      } catch (RuntimeException unconfirmed) {
+        // Retain the safe retryable error; provider details must not escape.
+      }
       outcome = "unavailable";
       // Do not propagate provider response bodies, token requests or secret-bearing exceptions.
       throw unavailable();
@@ -99,7 +108,7 @@ public final class KeycloakAdminClient implements KeycloakRoles {
   }
 
   private void ensureRoles(String subject, String bearer) {
-    Set<String> required = Set.of("BUYER", "ORGANIZER");
+    Set<String> required = REQUIRED_ROLES;
     List<Role> current = readRoles(subject, bearer);
     List<Role> missing = new ArrayList<>();
     List<Role> available =
@@ -141,6 +150,11 @@ public final class KeycloakAdminClient implements KeycloakRoles {
     if (!required.stream()
         .allMatch(name -> confirmed.stream().anyMatch(r -> name.equals(r.name()))))
       throw unavailable();
+  }
+
+  private static boolean hasRequiredRoles(List<Role> roles) {
+    return REQUIRED_ROLES.stream()
+        .allMatch(name -> roles.stream().anyMatch(role -> name.equals(role.name())));
   }
 
   private List<Role> readRoles(String subject, String bearer) {

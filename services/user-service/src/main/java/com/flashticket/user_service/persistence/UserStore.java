@@ -14,6 +14,7 @@ import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.UpdateOptions;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -158,16 +159,20 @@ public final class UserStore {
             inc("version", 1L)));
   }
 
-  public boolean touchGrant(Application a) {
-    return collection("organizer_applications")
-            .updateOne(
-                grantFilter(a),
-                combine(
-                    set("roleGrant.attemptedAt", now()),
-                    set("updatedAt", now()),
-                    inc("version", 1L)))
-            .getMatchedCount()
-        == 1;
+  public Application retryGrant(Application a, Duration leaseDuration) {
+    // UNKNOWN is released by an attempt that finished without confirmation.
+    // REQUESTED remains owned until its lease expires (including after a crash).
+    return changed(
+        and(
+            grantFilter(a),
+            or(
+                eq("roleGrant.status", "UNKNOWN"),
+                lte("roleGrant.attemptedAt", Date.from(clock.instant().minus(leaseDuration))))),
+        combine(
+            set("roleGrant.status", "REQUESTED"),
+            set("roleGrant.attemptedAt", now()),
+            set("updatedAt", now()),
+            inc("version", 1L)));
   }
 
   public void grantUnknown(Application a) {
@@ -288,6 +293,7 @@ public final class UserStore {
     return and(
         eq("_id", a.id()),
         eq("status", "PENDING"),
+        eq("version", a.version()),
         eq("roleGrant.operationId", a.roleGrant().operationId()));
   }
 
