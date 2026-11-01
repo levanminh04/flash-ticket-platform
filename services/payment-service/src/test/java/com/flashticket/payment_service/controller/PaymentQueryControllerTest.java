@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.flashticket.payment_service.dto.response.PaymentView;
-import com.flashticket.payment_service.service.payment.PaymentService;
+import com.flashticket.payment_service.service.PaymentService;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;

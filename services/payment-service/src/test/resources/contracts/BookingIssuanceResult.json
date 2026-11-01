@@ -3,5 +3,6 @@
   "chargeId": "10000000-0000-0000-0000-000000000011",
   "issuanceId": "10000000-0000-0000-0000-000000000012",
   "state": "FAILED",
+  "ticketCount": 0,
   "failureCode": "TICKET_FAILURE"
 }

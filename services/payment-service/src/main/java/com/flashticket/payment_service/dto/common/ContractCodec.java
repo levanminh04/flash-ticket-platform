@@ -36,6 +36,11 @@ public final class ContractCodec {
     return decode(json, mapper.constructType(type));
   }
 
+  public <T> Envelope<T> readEnvelope(String json, Class<T> payloadType) {
+    return decode(
+        json, mapper.getTypeFactory().constructParametricType(Envelope.class, payloadType));
+  }
+
   public <T> T read(String json, TypeReference<T> type) {
     return decode(json, mapper.constructType(type));
   }

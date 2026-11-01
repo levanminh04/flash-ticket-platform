@@ -63,6 +63,10 @@ public final class PaymentExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<ApiResponse<Problem>> unexpected(Exception e, HttpServletRequest request) {
+    if (e instanceof org.springframework.web.bind.MissingRequestHeaderException) {
+      return ResponseEntity.badRequest()
+          .body(problem(request, PaymentErrorCode.INVALID_REQUEST, List.of()));
+    }
     log.error(
         "Payment request failed correlationId={} exceptionType={}",
         PaymentCorrelationFilter.correlationId(request),

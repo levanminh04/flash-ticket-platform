@@ -4,6 +4,10 @@ import org.springframework.http.HttpStatus;
 
 /** Stable public error codes for Payment use cases and HTTP boundaries. */
 public enum PaymentErrorCode {
+  PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "A payment attempt is still in progress."),
+  IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "The payment request key has different input."),
+  PURCHASE_SNAPSHOT_CONFLICT(HttpStatus.CONFLICT, "The stored purchase snapshot differs."),
+  BOOKING_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Booking is temporarily unavailable."),
   PAYMENT_NOT_READY(HttpStatus.NOT_FOUND, "Payment is not ready."),
   RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource was not found."),
   AUTHENTICATION_REQUIRED(HttpStatus.UNAUTHORIZED, "A valid bearer token is required."),

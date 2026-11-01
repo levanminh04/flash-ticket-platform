@@ -11,7 +11,6 @@ import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.hashing.ContractHashService;
 import com.flashticket.payment_service.mapper.*;
 import com.flashticket.payment_service.repository.*;
-import com.flashticket.payment_service.service.payment.PaymentService;
 import com.flashticket.payment_service.util.VNPayUtil;
 import com.flashticket.payment_service.validation.PaymentContractFixtures;
 import java.math.BigDecimal;
@@ -29,6 +28,10 @@ class CinemaVNPayServiceTest {
   final ChargeRepository charges = mock(ChargeRepository.class);
   final VNPayConfig config = mock(VNPayConfig.class);
   final ContractHashService hashes = mock(ContractHashService.class);
+  final com.flashticket.payment_service.client.BookingPurchaseClient bookingClient =
+      mock(com.flashticket.payment_service.client.BookingPurchaseClient.class);
+  final com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot purchase =
+      mock(com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot.class);
   final PaymentService service =
       new PaymentService(
           snapshots,
@@ -42,7 +45,12 @@ class CinemaVNPayServiceTest {
           new MessageJsonMapper(F.codec),
           config,
           charges,
-          hashes);
+          hashes,
+          bookingClient,
+          new org.springframework.transaction.support.TransactionTemplate(
+              mock(org.springframework.transaction.PlatformTransactionManager.class)),
+          mock(OrderPaymentSnapshotMapper.class),
+          mock(PaymentSagaService.class));
   final OrderPaymentSnapshot snapshot = PaymentReadFixtures.snapshot(null, "buyer");
   final PaymentAttempt attempt =
       PaymentAttempt.pending(
@@ -63,6 +71,14 @@ class CinemaVNPayServiceTest {
 
   @BeforeEach
   void setup() {
+    when(bookingClient.preparePurchaseSnapshot(any(), any())).thenReturn(purchase);
+    when(purchase.orderId()).thenAnswer(i -> snapshot.getOrderId());
+    when(purchase.buyerSubject()).thenReturn("buyer");
+    when(purchase.expiresAt()).thenAnswer(i -> snapshot.getExpiresAt());
+    when(purchase.currency()).thenReturn("VND");
+    when(hashes.purchaseHash(any())).thenReturn("fixture");
+    attempt.setRequestHash("request-hash");
+    when(charges.save(any())).thenAnswer(i -> i.getArgument(0));
     when(config.getHashSecret()).thenReturn("fixture-secret");
     when(config.getTmnCode()).thenReturn("test");
     when(config.getVersion()).thenReturn("2.1.0");
@@ -86,7 +102,10 @@ class CinemaVNPayServiceTest {
     request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
     var created =
         service.createPayment(
-            new CreatePaymentRequest(snapshot.getOrderId(), null), request, "buyer");
+            new CreatePaymentRequest(snapshot.getOrderId(), null),
+            request,
+            "buyer",
+            attempt.getRequestKey());
     assertThat(created.amount()).isEqualTo("10");
     assertThat(created.paymentUrl())
         .contains(
@@ -95,35 +114,50 @@ class CinemaVNPayServiceTest {
             "vnp_TxnRef=" + created.attemptId(),
             "vnp_OrderType=billpayment",
             "vnp_SecureHash=");
-    when(attempts.findFirstByOrderIdOrderByStartedAtDescIdDesc(snapshot.getOrderId()))
+    attempt.setId(created.attemptId());
+    attempt.setPaymentUrl(created.paymentUrl());
+    when(attempts.findByOrderIdAndRequestKey(snapshot.getOrderId(), attempt.getRequestKey()))
         .thenReturn(Optional.of(attempt));
     var reused =
         service.createPayment(
-            new CreatePaymentRequest(snapshot.getOrderId(), "198.51.100.7"), request, "buyer");
+            new CreatePaymentRequest(snapshot.getOrderId(), "198.51.100.7"),
+            request,
+            "buyer",
+            attempt.getRequestKey());
     assertThat(reused.attemptId()).isEqualTo(attempt.getId());
-    assertThat(reused.paymentUrl()).contains("vnp_IpAddr=198.51.100.7");
+    assertThat(reused.paymentUrl()).isEqualTo(created.paymentUrl());
   }
 
   @Test
   void rejectsForeignExpiredAndAlreadyPaidOrders() {
     var request = new CreatePaymentRequest(snapshot.getOrderId(), null);
     assertThatThrownBy(
-            () -> service.createPayment(request, new MockHttpServletRequest(), "someone-else"))
+            () ->
+                service.createPayment(
+                    request, new MockHttpServletRequest(), "someone-else", attempt.getRequestKey()))
         .isInstanceOf(PaymentException.class);
     snapshot.setExpiresAt(Instant.now().minusSeconds(1));
-    assertThatThrownBy(() -> service.createPayment(request, new MockHttpServletRequest(), "buyer"))
+    assertThatThrownBy(
+            () ->
+                service.createPayment(
+                    request, new MockHttpServletRequest(), "buyer", attempt.getRequestKey()))
         .isInstanceOf(PaymentException.class);
     snapshot.setExpiresAt(Instant.now().plusSeconds(600));
     attempt.setState(PaymentAttemptState.SUCCEEDED);
     when(attempts.findFirstByOrderIdOrderByStartedAtDescIdDesc(snapshot.getOrderId()))
         .thenReturn(Optional.of(attempt));
-    assertThatThrownBy(() -> service.createPayment(request, new MockHttpServletRequest(), "buyer"))
+    assertThatThrownBy(
+            () ->
+                service.createPayment(
+                    request, new MockHttpServletRequest(), "buyer", attempt.getRequestKey()))
         .isInstanceOf(PaymentException.class);
     verify(attempts, never()).save(any());
   }
 
   @Test
   void recordsVerifiedSuccessAndAcknowledgesDuplicatesWithoutAnotherCharge() {
+    when(charges.existsByProviderAndMerchantAccountAndProviderChargeId(any(), any(), any()))
+        .thenReturn(false, true);
     var params = callback("00");
     assertThat(service.handleIPN(params)).contains("\"RspCode\":\"00\"");
     assertThat(attempt.getState()).isEqualTo(PaymentAttemptState.SUCCEEDED);
@@ -204,12 +238,14 @@ class CinemaVNPayServiceTest {
     assertThat(attempt.getFinishedAt()).isNull();
     when(attempts.findFirstByOrderIdOrderByStartedAtDescIdDesc(snapshot.getOrderId()))
         .thenReturn(Optional.of(attempt));
+    when(attempts.existsByOrderIdAndFinishedAtIsNull(snapshot.getOrderId())).thenReturn(true);
     assertThatThrownBy(
             () ->
                 service.createPayment(
                     new CreatePaymentRequest(snapshot.getOrderId(), null),
                     new MockHttpServletRequest(),
-                    "buyer"))
+                    "buyer",
+                    attempt.getRequestKey()))
         .isInstanceOf(PaymentException.class);
     verify(charges, never()).save(any());
     assertThat(service.handleIPN(callback("00"))).contains("\"RspCode\":\"00\"");

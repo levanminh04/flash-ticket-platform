@@ -10,6 +10,8 @@ import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import jakarta.validation.Validation;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -58,8 +60,8 @@ class ContractCodecTest {
     FACTORY.close();
   }
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(
+  @ParameterizedTest
+  @ValueSource(
       strings = {
         "FinanceConfiguration",
         "EventCancellation",

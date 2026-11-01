@@ -1,5 +1,6 @@
-package com.flashticket.payment_service.service.payment;
+package com.flashticket.payment_service.service;
 
+import com.flashticket.payment_service.client.BookingPurchaseClient;
 import com.flashticket.payment_service.config.VNPayConfig;
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.message.PaymentProvider;
@@ -10,6 +11,7 @@ import com.flashticket.payment_service.dto.response.PaymentStart;
 import com.flashticket.payment_service.dto.response.PaymentView;
 import com.flashticket.payment_service.dto.response.StartRequestState;
 import com.flashticket.payment_service.dto.response.StartRequestView;
+import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import com.flashticket.payment_service.entity.*;
 import com.flashticket.payment_service.entity.enums.*;
 import com.flashticket.payment_service.entity.id.InboxMessageId;
@@ -32,9 +34,12 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
@@ -55,49 +60,87 @@ public class PaymentService {
   VNPayConfig vnPayConfig;
   ChargeRepository charges;
   ContractHashService hashes;
+  BookingPurchaseClient bookingPurchaseClient;
+  TransactionTemplate paymentTransactionTemplate;
+  OrderPaymentSnapshotMapper snapshotMapper;
+  PaymentSagaService paymentSagaService;
 
-  @Transactional
+  @Transactional(propagation = Propagation.NEVER)
   public PaymentStart createPayment(
-      CreatePaymentRequest request, HttpServletRequest httpRequest, String buyerSubject) {
+      CreatePaymentRequest request,
+      HttpServletRequest httpRequest,
+      String buyerSubject,
+      UUID requestKey) {
     if (buyerSubject == null || buyerSubject.isBlank())
       throw new PaymentException(PaymentErrorCode.AUTHENTICATION_REQUIRED);
-    var snapshot =
-        snapshots
-            .findForUpdateByOrderId(request.orderId())
-            .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_READY));
-    if (!buyerSubject.equals(snapshot.getBuyerSubject()))
+    if (requestKey == null) throw new PaymentException(PaymentErrorCode.INVALID_REQUEST);
+    // HTTP hoàn tất trước khi mở TX Payment; Booking là nguồn xác nhận còn payable.
+    var incomingPurchase =
+        bookingPurchaseClient.preparePurchaseSnapshot(request.orderId(), buyerSubject);
+    if (!request.orderId().equals(incomingPurchase.orderId()))
+      throw new PaymentException(PaymentErrorCode.PURCHASE_SNAPSHOT_CONFLICT);
+    String clientIp = resolveClientIp(request, httpRequest);
+    try {
+      return paymentTransactionTemplate.execute(
+          status -> savePaymentAttempt(incomingPurchase, buyerSubject, requestKey, clientIp));
+    } catch (DataIntegrityViolationException ex) {
+      // Unique race: TX trước đã rollback; đọc bản thắng bằng TX hoàn toàn mới.
+      return paymentTransactionTemplate.execute(
+          status -> savePaymentAttempt(incomingPurchase, buyerSubject, requestKey, clientIp));
+    }
+  }
+
+  private PaymentStart savePaymentAttempt(
+      PurchaseSnapshot incomingPurchase, String buyerSubject, UUID requestKey, String clientIp) {
+    String incomingHash = hashes.purchaseHash(incomingPurchase);
+    if (!buyerSubject.equals(incomingPurchase.buyerSubject()))
       throw new PaymentException(PaymentErrorCode.RESOURCE_NOT_FOUND);
-    if (!snapshot.getExpiresAt().isAfter(Instant.now()))
+    if (!incomingPurchase.expiresAt().isAfter(Instant.now()))
       throw new PaymentException(PaymentErrorCode.PAYMENT_EXPIRED);
-    if (!"VND".equals(snapshot.getCurrency()) || !"VND".equals(vnPayConfig.getCurrencyCode()))
+    if (!"VND".equals(incomingPurchase.currency()) || !"VND".equals(vnPayConfig.getCurrencyCode()))
       throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_INVALID);
+    var snapshot = snapshots.findForUpdateByOrderId(incomingPurchase.orderId()).orElse(null);
+    if (snapshot == null) {
+      snapshot =
+          snapshots.save(snapshotMapper.toEntity(incomingPurchase, incomingHash, Instant.now()));
+    } else if (!incomingHash.equals(snapshot.getSnapshotHash())) {
+      throw new PaymentException(PaymentErrorCode.PURCHASE_SNAPSHOT_CONFLICT);
+    }
     if (confirmations.existsById(snapshot.getOrderId()))
       throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_INVALID);
-
-    var existing = attempts.findFirstByOrderIdOrderByStartedAtDescIdDesc(snapshot.getOrderId());
-    var payment = existing.orElse(null);
-    if (payment != null
-        && (payment.getState() == PaymentAttemptState.SUCCEEDED
-            || payment.getState() == PaymentAttemptState.UNKNOWN))
-      throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_INVALID);
-    if (payment == null || payment.getState() != PaymentAttemptState.PENDING) {
-      payment =
-          PaymentAttempt.pending(
-              UUID.randomUUID(),
-              snapshot.getOrderId(),
-              "VNPAY",
-              vnPayConfig.getTmnCode(),
-              snapshot.getExpectedAmount(),
-              snapshot.getCurrency(),
-              Instant.now(),
-              UUID.randomUUID(),
-              hashes.requestHash(snapshot.getOrderId(), PaymentProvider.VNPAY, buyerSubject));
+    String requestHash =
+        hashes.requestHash(snapshot.getOrderId(), PaymentProvider.VNPAY, buyerSubject);
+    var storedAttempt =
+        attempts.findByOrderIdAndRequestKey(snapshot.getOrderId(), requestKey).orElse(null);
+    if (storedAttempt != null) {
+      if (!requestHash.equals(storedAttempt.getRequestHash()))
+        throw new PaymentException(PaymentErrorCode.IDEMPOTENCY_CONFLICT);
+      if (storedAttempt.getState() == PaymentAttemptState.UNKNOWN)
+        throw new PaymentException(PaymentErrorCode.PAYMENT_IN_PROGRESS);
+      return starts.toDto(storedAttempt, incomingPurchase.expiresAt());
     }
-    String clientIp = resolveClientIp(request, httpRequest);
+    if (attempts.existsByOrderIdAndFinishedAtIsNull(snapshot.getOrderId()))
+      throw new PaymentException(PaymentErrorCode.PAYMENT_IN_PROGRESS);
+    var latestAttempt =
+        attempts.findFirstByOrderIdOrderByStartedAtDescIdDesc(snapshot.getOrderId());
+    if (latestAttempt.isPresent()
+        && latestAttempt.get().getState() == PaymentAttemptState.SUCCEEDED)
+      throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_INVALID);
+    var payment =
+        PaymentAttempt.pending(
+            UUID.randomUUID(),
+            snapshot.getOrderId(),
+            "VNPAY",
+            vnPayConfig.getTmnCode(),
+            snapshot.getExpectedAmount(),
+            snapshot.getCurrency(),
+            Instant.now(),
+            requestKey,
+            requestHash);
     payment.setPaymentUrl(buildVNPayUrl(snapshot, payment, clientIp));
     var saved = attempts.save(payment);
     log.info("Payment created: orderId={}, attemptId={}", snapshot.getOrderId(), saved.getId());
-    return starts.toDto(saved, snapshot.getExpiresAt());
+    return starts.toDto(saved, incomingPurchase.expiresAt());
   }
 
   @Transactional
@@ -112,15 +155,18 @@ public class PaymentService {
     } catch (IllegalArgumentException ex) {
       return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
     }
+    var observedAttempt = attempts.findById(attemptId).orElse(null);
+    if (observedAttempt == null) return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
+    // Cùng thứ tự snapshot -> attempt -> Saga, tránh deadlock với start/decision.
+    snapshots
+        .findForUpdateByOrderId(observedAttempt.getOrderId())
+        .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_READY));
     var payment = attempts.findForUpdateById(attemptId).orElse(null);
     if (payment == null || !"VNPAY".equals(payment.getProvider()))
       return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
     if (!payment.getMerchantAccount().equals(params.get("vnp_TmnCode"))
         || !vnPayConfig.getTmnCode().equals(params.get("vnp_TmnCode")))
       return "{\"RspCode\":\"97\",\"Message\":\"Invalid merchant\"}";
-    if (payment.getState() != PaymentAttemptState.PENDING
-        && payment.getState() != PaymentAttemptState.UNKNOWN)
-      return "{\"RspCode\":\"02\",\"Message\":\"Order already confirmed\"}";
     if (params.get("vnp_Amount") == null)
       return "{\"RspCode\":\"04\",\"Message\":\"Amount invalid\"}";
     try {
@@ -161,8 +207,15 @@ public class PaymentService {
       if (charges.existsByProviderAndMerchantAccountAndProviderChargeId(
           payment.getProvider(), payment.getMerchantAccount(), transactionNo))
         return "{\"RspCode\":\"02\",\"Message\":\"Order already confirmed\"}";
-      charges.save(Charge.received(payment, transactionNo, chargedAt, Instant.now()));
+      var receivedCharge =
+          charges.save(Charge.received(payment, transactionNo, chargedAt, Instant.now()));
+      paymentSagaService.recordSuccessfulCharge(receivedCharge);
     }
+    // Callback không thành công đến trễ không được hạ SUCCEEDED về FAILED/UNKNOWN.
+    if (!success
+        && (payment.getState() == PaymentAttemptState.SUCCEEDED
+            || payment.getState() == PaymentAttemptState.FAILED))
+      return "{\"RspCode\":\"02\",\"Message\":\"Order already confirmed\"}";
     payment.setState(
         success
             ? PaymentAttemptState.SUCCEEDED

@@ -21,9 +21,12 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @ActiveProfiles({"mapping-test", "local-foundation"})
@@ -94,7 +97,7 @@ class EntityMappingTest {
   }
 
   @Test
-  @org.springframework.transaction.annotation.Transactional
+  @Transactional
   void persistsAllTablesAndNavigatesCompositeRelationshipsBothWays() {
     var f = new PaymentEntityFixtures(em);
     em.clear();
@@ -159,7 +162,7 @@ class EntityMappingTest {
   }
 
   @Test
-  @org.springframework.transaction.annotation.Transactional
+  @Transactional
   void databaseRejectsMismatchedCompositeAmount() {
     var f = new PaymentEntityFixtures(em);
     var invalid =
@@ -181,8 +184,8 @@ class EntityMappingTest {
         "23503");
   }
 
-  @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(
+  @ParameterizedTest
+  @ValueSource(
       strings = {
         "provider",
         "refundAmount",
@@ -193,7 +196,7 @@ class EntityMappingTest {
         "crossOrder",
         "currency"
       })
-  @org.springframework.transaction.annotation.Transactional
+  @Transactional
   void enforcesFinancialForeignKeysAndUniqueness(String scenario) {
     var f = new PaymentEntityFixtures(em);
     Object invalid =
@@ -268,7 +271,7 @@ class EntityMappingTest {
   }
 
   @Test
-  @org.springframework.transaction.annotation.Transactional
+  @Transactional
   void roundTripsNineteenDigitMoneyAndMicrosecondTime() {
     var s =
         make(

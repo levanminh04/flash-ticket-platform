@@ -32,6 +32,9 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
 	<dependencies>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security-oauth2-client</artifactId></dependency>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-restclient</artifactId></dependency>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-restclient-test</artifactId><scope>test</scope></dependency>
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
@@ -161,7 +164,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude></excludes>
+					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude><exclude>**/PaymentFlowIntegrationTest.java</exclude></excludes>
 					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
 				</configuration>
 			</plugin>

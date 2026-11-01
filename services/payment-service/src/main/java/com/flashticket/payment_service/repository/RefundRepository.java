@@ -6,5 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RefundRepository extends JpaRepository<Refund, UUID> {
+  java.util.Optional<Refund> findByChargeId(UUID chargeId);
+
   List<Refund> findAllByOrderIdOrderByCreatedAtAscIdAsc(UUID orderId);
 }

@@ -1,9 +1,12 @@
 package com.flashticket.payment_service.config;
 
 import com.flashticket.payment_service.security.*;
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.*;
@@ -12,10 +15,10 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PaymentJwtProperties.class)
-@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
-@io.swagger.v3.oas.annotations.security.SecurityScheme(
+@EnableMethodSecurity
+@SecurityScheme(
     name = "bearerAuth",
-    type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP,
+    type = SecuritySchemeType.HTTP,
     scheme = "bearer",
     bearerFormat = "JWT")
 public class PaymentSecurityConfiguration {

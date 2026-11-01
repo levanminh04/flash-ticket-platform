@@ -2,7 +2,7 @@ package com.flashticket.payment_service.controller;
 
 import com.flashticket.payment_service.dto.request.CreatePaymentRequest;
 import com.flashticket.payment_service.dto.response.*;
-import com.flashticket.payment_service.service.payment.PaymentService;
+import com.flashticket.payment_service.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -38,10 +38,11 @@ public class PaymentController {
   @PreAuthorize("hasRole('BUYER')")
   public ApiResponse<PaymentStart> createPayment(
       @Valid @RequestBody CreatePaymentRequest request,
+      @RequestHeader("Idempotency-Key") UUID requestKey,
       HttpServletRequest httpRequest,
       @AuthenticationPrincipal Jwt jwt) {
     return ApiResponse.success(
-        paymentService.createPayment(request, httpRequest, jwt.getSubject()),
+        paymentService.createPayment(request, httpRequest, jwt.getSubject(), requestKey),
         "Payment created successfully");
   }
 

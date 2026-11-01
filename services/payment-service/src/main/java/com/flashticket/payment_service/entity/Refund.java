@@ -30,6 +30,19 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Refund {
+  public static Refund pending(Charge charge, RefundReason reason, Instant createdAt) {
+    var refund = new Refund();
+    refund.id = UUID.randomUUID();
+    refund.orderId = charge.getOrderId();
+    refund.chargeId = charge.getId();
+    refund.amount = charge.getAmount();
+    refund.currency = charge.getCurrency();
+    refund.reason = reason;
+    refund.state = RefundState.PENDING;
+    refund.createdAt = createdAt;
+    return refund;
+  }
+
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;

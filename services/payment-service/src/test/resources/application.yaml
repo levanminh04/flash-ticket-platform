@@ -1,6 +1,18 @@
 spring:
   application:
     name: payment-service
+  security:
+    oauth2:
+      client:
+        registration:
+          booking:
+            provider: booking
+            client-id: payment-test
+            client-secret: test-only
+            authorization-grant-type: client_credentials
+        provider:
+          booking:
+            token-uri: http://127.0.0.1:1/not-used
   config:
     import: "optional:configserver:"
   cloud:
@@ -17,6 +29,12 @@ spring:
 eureka:
   client:
     enabled: false
+
+payment:
+  worker:
+    enabled: false
+  booking:
+    base-url: https://booking.example.test
 
 flashticket:
   payment:

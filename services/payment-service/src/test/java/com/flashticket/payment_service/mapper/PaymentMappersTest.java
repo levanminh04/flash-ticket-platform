@@ -17,16 +17,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import tools.jackson.databind.json.JsonMapper;
 
-@org.springframework.context.annotation.Import(
-    com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
-@org.springframework.boot.test.context.SpringBootTest
+@Import(com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
+@SpringBootTest
 class PaymentMappersTest {
-  @org.springframework.beans.factory.annotation.Autowired OrderPaymentSnapshotMapper snapshotMapper;
-  @org.springframework.beans.factory.annotation.Autowired PaymentStartMapper startMapper;
-  @org.springframework.beans.factory.annotation.Autowired RefundMapper refundMapper;
-  @org.springframework.beans.factory.annotation.Autowired PaymentViewMapper viewMapper;
+  @Autowired OrderPaymentSnapshotMapper snapshotMapper;
+  @Autowired PaymentStartMapper startMapper;
+  @Autowired RefundMapper refundMapper;
+  @Autowired PaymentViewMapper viewMapper;
 
   static <T> T empty(Class<T> type) throws Exception {
     var ctor = type.getDeclaredConstructor();

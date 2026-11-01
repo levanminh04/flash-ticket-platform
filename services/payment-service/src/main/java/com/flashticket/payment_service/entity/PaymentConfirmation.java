@@ -25,6 +25,16 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentConfirmation {
+  public static PaymentConfirmation accepted(Charge charge, Instant confirmedAt) {
+    var confirmation = new PaymentConfirmation();
+    confirmation.orderId = charge.getOrderId();
+    confirmation.chargeId = charge.getId();
+    confirmation.amount = charge.getAmount();
+    confirmation.currency = charge.getCurrency();
+    confirmation.confirmedAt = confirmedAt;
+    return confirmation;
+  }
+
   @Id
   @Column(name = "order_id", nullable = false)
   private UUID orderId;

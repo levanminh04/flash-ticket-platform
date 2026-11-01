@@ -10,6 +10,11 @@ import org.springframework.context.annotation.Bean;
 @TestConfiguration(proxyBeanMethods = false)
 public class PaymentReadRepositoryTestConfiguration {
   @Bean
+  org.springframework.transaction.PlatformTransactionManager paymentTransactionManager() {
+    return mock(org.springframework.transaction.PlatformTransactionManager.class);
+  }
+
+  @Bean
   ChargeRepository chargeRepository() {
     return mock(ChargeRepository.class);
   }
@@ -37,5 +42,40 @@ public class PaymentReadRepositoryTestConfiguration {
   @Bean
   InboxMessageRepository inboxMessageRepository() {
     return mock(InboxMessageRepository.class);
+  }
+
+  @Bean
+  EventFinanceSnapshotRepository eventFinanceSnapshotRepository() {
+    return mock(EventFinanceSnapshotRepository.class);
+  }
+
+  @Bean
+  EventPayoutRepository eventPayoutRepository() {
+    return mock(EventPayoutRepository.class);
+  }
+
+  @Bean
+  RefundAttemptRepository refundAttemptRepository() {
+    return mock(RefundAttemptRepository.class);
+  }
+
+  @Bean
+  EventRefundRunRepository eventRefundRunRepository() {
+    return mock(EventRefundRunRepository.class);
+  }
+
+  @Bean
+  EventRefundItemRepository eventRefundItemRepository() {
+    return mock(EventRefundItemRepository.class);
+  }
+
+  @Bean
+  PaymentSagaRepository paymentSagaRepository() {
+    return mock(PaymentSagaRepository.class);
+  }
+
+  @Bean
+  OutboxMessageRepository outboxMessageRepository() {
+    return mock(OutboxMessageRepository.class);
   }
 }

@@ -11,7 +11,6 @@ import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.*;
 import com.flashticket.payment_service.repository.*;
-import com.flashticket.payment_service.service.payment.PaymentService;
 import com.flashticket.payment_service.validation.PaymentContractFixtures;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -36,7 +35,11 @@ class PaymentServiceTest {
           new MessageJsonMapper(F.codec),
           mock(com.flashticket.payment_service.config.VNPayConfig.class),
           mock(ChargeRepository.class),
-          mock(com.flashticket.payment_service.hashing.ContractHashService.class));
+          mock(com.flashticket.payment_service.hashing.ContractHashService.class),
+          mock(com.flashticket.payment_service.client.BookingPurchaseClient.class),
+          mock(org.springframework.transaction.support.TransactionTemplate.class),
+          mock(OrderPaymentSnapshotMapper.class),
+          mock(PaymentSagaService.class));
   final UUID order = UUID.randomUUID();
 
   @AfterAll

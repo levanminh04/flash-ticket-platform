@@ -20,6 +20,24 @@ import tools.jackson.databind.JsonNode;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OutboxMessage {
+  public static OutboxMessage pending(
+      com.flashticket.payment_service.dto.common.Envelope<?> envelope, JsonNode payload) {
+    var message = new OutboxMessage();
+    message.messageId = envelope.messageId();
+    message.aggregateId = envelope.aggregateId();
+    message.aggregateVersion = Long.valueOf(envelope.aggregateVersion());
+    message.messageType = envelope.messageType();
+    message.schemaVersion = envelope.schemaVersion();
+    message.payload = payload;
+    message.occurredAt = envelope.occurredAt();
+    message.correlationId = envelope.correlationId();
+    message.causationId = envelope.causationId();
+    message.traceparent = envelope.traceparent();
+    message.attempts = 0;
+    message.nextAttemptAt = envelope.occurredAt();
+    return message;
+  }
+
   @Id
   @Column(name = "message_id", nullable = false)
   private UUID messageId;

@@ -26,6 +26,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -42,6 +43,11 @@ class PaymentJwtSecurityTest {
   @Autowired PaymentConfirmationRepository confirmations;
   @Autowired RefundRepository refunds;
   @Autowired InboxMessageRepository inbox;
+
+  @MockitoBean com.flashticket.payment_service.client.BookingPurchaseClient bookingClient;
+
+  @Autowired com.flashticket.payment_service.dto.common.ContractCodec codec;
+  @Autowired com.flashticket.payment_service.hashing.ContractHashService hashes;
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry r) {
@@ -250,12 +256,37 @@ class PaymentJwtSecurityTest {
     mvc.perform(get("/api/v1/payments/vnpay/anything-else")).andExpect(status().isUnauthorized());
     var snapshot = PaymentReadFixtures.snapshot(null, "buyer");
     snapshot.setOrderId(order);
+    var node =
+        (tools.jackson.databind.node.ObjectNode)
+            codec.toTree(
+                codec.read(
+                    com.flashticket.payment_service.validation.PaymentContractFixtures.resource(
+                        "purchase.json"),
+                    com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot.class));
+    node.put("orderId", order.toString())
+        .put("buyerSubject", "buyer")
+        .put("subtotal", "10")
+        .put("total", "10");
+    ((tools.jackson.databind.node.ObjectNode) node.withArray("items").get(0))
+        .put("unitPrice", "10")
+        .put("lineSubtotal", "10");
+    var purchase =
+        codec.fromTree(node, com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot.class);
+    snapshot.setSnapshotHash(hashes.purchaseHash(purchase));
+    when(bookingClient.preparePurchaseSnapshot(order, "buyer")).thenReturn(purchase);
     when(snapshots.findForUpdateByOrderId(order)).thenReturn(Optional.of(snapshot));
     when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
     mvc.perform(
             post("/api/v1/payments")
                 .contentType("application/json")
                 .header("Authorization", "Bearer " + valid())
+                .content("{\"orderId\":\"" + order + "\"}"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(
+            post("/api/v1/payments")
+                .contentType("application/json")
+                .header("Authorization", "Bearer " + valid())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .content("{\"orderId\":\"" + order + "\",\"clientIp\":\"203.0.113.5\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.orderId").value(order.toString()))

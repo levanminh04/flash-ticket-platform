@@ -26,6 +26,19 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PaymentSaga {
+  public static PaymentSaga waitingBooking(
+      UUID orderId, UUID chargeId, UUID commandId, Instant createdAt) {
+    var saga = new PaymentSaga();
+    saga.orderId = orderId;
+    saga.chargeId = chargeId;
+    saga.commandId = commandId;
+    saga.state = PaymentSagaState.WAITING_BOOKING;
+    saga.createdAt = createdAt;
+    saga.updatedAt = createdAt;
+    saga.nextAttemptAt = createdAt.plusSeconds(30);
+    return saga;
+  }
+
   @Id
   @Column(name = "order_id", nullable = false)
   private UUID orderId;

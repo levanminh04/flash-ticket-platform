@@ -2,6 +2,9 @@ package com.flashticket.payment_service.validation;
 
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
+import com.flashticket.payment_service.dto.message.IssuanceResult;
+import com.flashticket.payment_service.dto.message.OrderCompleted;
+import com.flashticket.payment_service.dto.message.PaymentDecision;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.hashing.ContractHashService;
 import java.util.Objects;
@@ -42,5 +45,28 @@ public final class MessageInvariantValidator {
 
   private static void fail(String field, String code) {
     throw new ContractValidationException(field, code);
+  }
+
+  public void validatePaymentDecision(Envelope<PaymentDecision> envelope) {
+    var decision = envelope.data();
+    if (!"booking.payment-decision.v1".equals(envelope.messageType())
+        || !Objects.equals(envelope.aggregateId(), decision.orderId())
+        || !Objects.equals(envelope.correlationId(), decision.orderId())
+        || !decision.isAcceptanceConsistent()) fail("$", "PAYMENT_DECISION_MISMATCH");
+  }
+
+  public void validateIssuanceResult(Envelope<IssuanceResult> envelope) {
+    var result = envelope.data();
+    if (!"ticket.issuance-result.v1".equals(envelope.messageType())
+        || !Objects.equals(envelope.aggregateId(), result.orderId())
+        || !Objects.equals(envelope.correlationId(), result.orderId())
+        || !result.isResultConsistent()) fail("$", "ISSUANCE_RESULT_MISMATCH");
+  }
+
+  public void validateOrderCompleted(Envelope<OrderCompleted> envelope) {
+    if (!"booking.order-completed.v1".equals(envelope.messageType())
+        || !Objects.equals(envelope.aggregateId(), envelope.data().orderId())
+        || !Objects.equals(envelope.correlationId(), envelope.data().orderId()))
+      fail("$", "ORDER_COMPLETED_MISMATCH");
   }
 }
