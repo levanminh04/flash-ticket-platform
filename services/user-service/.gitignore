@@ -33,3 +33,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Local User Service documentation and migration checks
+/database/test-role-grant-actor.cjs
+/README.md

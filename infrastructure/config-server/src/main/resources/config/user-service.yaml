@@ -10,9 +10,10 @@ spring:
   rabbitmq:
     host: ${USER_RABBITMQ_HOST:${RABBITMQ_HOST}}
     port: ${USER_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
-    username: ${USER_RABBITMQ_USERNAME:${RABBITMQ_USERNAME}}
+    username: ${USER_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
     password: ${USER_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
-    connection-timeout: 5s
+    virtual-host: ${USER_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 2s
     dynamic: false
     listener:
       simple:
@@ -28,6 +29,14 @@ spring:
             - ${USER_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 logging:
+  charset:
+    console: UTF-8
   structured:
     format:
       console: logstash
+    json:
+      # Native Boot filtering/renaming; never include arbitrary MDC fields.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
