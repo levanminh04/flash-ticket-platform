@@ -14,6 +14,8 @@ deploy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(deploy)
 GOOD = "sha256:" + "a" * 64
 BAD = "sha256:" + "b" * 64
+GOOD_REVISION = "1" * 40
+BAD_REVISION = "2" * 40
 PROJECT = "flash-ticket-user-predeploy-" + "1" * 32
 
 
@@ -28,6 +30,9 @@ class DockerAndHttp:
         self.resume = threading.Event()
         self.blocked_once = False
         self.project = PROJECT
+        self.revisions = {GOOD: GOOD_REVISION, BAD: BAD_REVISION}
+        self.wrong_version = False
+        self.pulled = False
 
     def command(self, args, environment=None):
         if args[:3] == ["docker", "ps", "-aq"]:
@@ -36,9 +41,13 @@ class DockerAndHttp:
             image = self.current["image"]
             if self.wrong_image and image == BAD:
                 image = "sha256:" + "c" * 64
-            return json.dumps([{"Image": image, "Config": {"Image": self.current["image"], "Env": [k + "=" + v for k, v in self.current["values"].items()], "Labels": {"com.docker.compose.project": self.project}}, "State": {"Running": True, "OOMKilled": False}, "RestartCount": 0}])
+            values = dict(self.current["values"])
+            if self.wrong_version and image == BAD:
+                values["USER_SERVICE_VERSION"] = "stale-container-version"
+            return json.dumps([{"Image": image, "Config": {"Image": self.current["image"], "Env": [k + "=" + v for k, v in values.items()], "Labels": {"com.docker.compose.project": self.project}}, "State": {"Running": True, "OOMKilled": False}, "RestartCount": 0}])
         if args[:3] == ["docker", "image", "inspect"]:
-            return args[3]
+            labels = {"org.opencontainers.image.revision": self.revisions.get(args[3])}
+            return json.dumps([{"Id": args[3].split("@")[-1], "Config": {"Labels": labels}}])
         if args[:2] != ["docker", "compose"]:
             raise AssertionError("Unexpected operation: " + repr(args))
         env_path = Path(args[args.index("--env-file") + 1])
@@ -56,10 +65,13 @@ class DockerAndHttp:
                 self.resume.wait(5)
             return ""
         if "up" in args:
-            self.current = {"image": image, "values": effective}
+            self.current = {"image": image.split("@")[-1], "values": effective}
             if self.fail_up_once and image == BAD:
                 self.fail_up_once = False
                 raise RuntimeError("command_failed_docker")
+            return ""
+        if "pull" in args:
+            self.pulled = True
             return ""
         if "stop" in args:
             self.current = None
@@ -84,8 +96,8 @@ class DeploymentFailureTests(unittest.TestCase):
         self.env = self.root / "first" / "runtime.env"
         self.other_env = self.root / "second" / "runtime.env"
         self.compose = self.root / "compose.yaml"
-        self.compose.write_text("services:\n  user-service:\n    image: ${USER_IMAGE}\n    environment:\n      USER_SERVICE_PORT: ${USER_SERVICE_PORT}\n      USER_SERVER_ADDRESS: ${USER_SERVER_ADDRESS}\n      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL}\n      USER_MONGO_URI: ${USER_MONGO_URI}\n")
-        self.values = {"USER_SERVICE_PORT": "18085", "USER_SERVER_ADDRESS": "127.0.0.1", "CONFIG_SERVER_URL": "http://approved-config:18888", "USER_MONGO_URI": "mongodb://fixture-user:fixture-only@approved-host/fixture"}
+        self.compose.write_text("services:\n  user-service:\n    image: ${USER_IMAGE}\n    environment:\n      USER_SERVICE_PORT: ${USER_SERVICE_PORT}\n      USER_SERVER_ADDRESS: ${USER_SERVER_ADDRESS}\n      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL}\n      USER_MONGO_URI: ${USER_MONGO_URI}\n      USER_SERVICE_VERSION: ${USER_SERVICE_VERSION}\n")
+        self.values = {"USER_SERVICE_PORT": "18085", "USER_SERVER_ADDRESS": "127.0.0.1", "CONFIG_SERVER_URL": "http://approved-config:18888", "USER_MONGO_URI": "mongodb://fixture-user:fixture-only@approved-host/fixture", "USER_SERVICE_VERSION": "old-env-version"}
         self.write_env(self.env, self.values)
         self.write_env(self.other_env, self.values)
         self.fake = DockerAndHttp()
@@ -147,6 +159,91 @@ class DeploymentFailureTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.execute(BAD)
         self.assertEqual(self.fake.current["image"], GOOD)
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
+
+    def test_image_revision_overrides_stale_env_and_shell_version(self):
+        with patch.dict(os.environ, {"USER_SERVICE_VERSION": "old-shell-version"}):
+            self.execute()
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
+        state = self.root / "releases" / PROJECT
+        pointer = json.loads((state / "last-good.json").read_text())
+        snapshot = deploy.dotenv(state / pointer["release"] / "runtime.env")
+        self.assertEqual(snapshot["USER_SERVICE_VERSION"], GOOD_REVISION)
+        self.assertEqual(deploy.dotenv(self.env)["USER_SERVICE_VERSION"], "old-env-version")
+
+    def test_missing_or_invalid_image_revision_keeps_previous_container(self):
+        self.execute()
+        previous = dict(self.fake.current)
+        pointer = self.root / "releases" / PROJECT / "last-good.json"
+        saved_pointer = pointer.read_text()
+        for revision in [None, "", "local-dev", "bad\nlabel"]:
+            with self.subTest(revision=revision):
+                self.fake.revisions[BAD] = revision
+                with self.assertRaisesRegex(RuntimeError, "invalid_image_revision"):
+                    self.execute(BAD)
+                self.assertEqual(self.fake.current, previous)
+                self.assertEqual(pointer.read_text(), saved_pointer)
+
+    def test_expected_workflow_revision_is_checked_after_pull_before_replacement(self):
+        self.execute()
+        previous = dict(self.fake.current)
+        image = "ghcr.io/levanminh04/flash-ticket-platform/user-service@" + BAD
+        self.fake.revisions[image] = BAD_REVISION
+        args = self.arguments(image) + ["--revision", GOOD_REVISION]
+        with patch("sys.argv", args):
+            with self.assertRaisesRegex(RuntimeError, "image_revision_mismatch"):
+                deploy.main()
+        self.assertTrue(self.fake.pulled)
+        self.assertEqual(self.fake.current, previous)
+
+    def test_expected_revision_success_is_reported_and_saved(self):
+        output = io.StringIO()
+        image = "ghcr.io/levanminh04/flash-ticket-platform/user-service@" + GOOD
+        self.fake.revisions[image] = GOOD_REVISION
+        self.fake.project = "flash-ticket-user"
+        args = ["deploy-user.py", image, "--revision", GOOD_REVISION, "--env-file", str(self.env), "--compose-file", str(self.compose)]
+        with patch("sys.argv", args), patch("sys.stdout", output):
+            deploy.main()
+        report = json.loads(output.getvalue().splitlines()[-1])
+        self.assertEqual(report["revision"], GOOD_REVISION)
+        self.assertEqual(report["imageId"], GOOD)
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
+        self.assertTrue(self.fake.pulled)
+        pointer = json.loads((self.root / "releases" / "flash-ticket-user" / "last-good.json").read_text())
+        self.assertEqual(pointer["revision"], GOOD_REVISION)
+
+    def test_runtime_version_does_not_require_an_env_file_entry(self):
+        values = dict(self.values)
+        del values["USER_SERVICE_VERSION"]
+        self.write_env(self.env, values)
+        self.execute()
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
+
+    def test_invalid_expected_revision_is_rejected_before_deployment(self):
+        with patch("sys.argv", self.arguments() + ["--revision", "short-sha"]):
+            with self.assertRaisesRegex(RuntimeError, "invalid_expected_revision"):
+                deploy.main()
+        self.assertIsNone(self.fake.current)
+
+    def test_running_container_with_wrong_version_triggers_rollback(self):
+        self.execute()
+        self.fake.wrong_version = True
+        with self.assertRaisesRegex(RuntimeError, "deployment_failed_after_replacement"):
+            self.execute(BAD)
+        self.assertEqual(self.fake.current["image"], GOOD)
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
+
+    def test_rollback_supports_old_pointer_without_revision(self):
+        self.execute()
+        pointer = self.root / "releases" / PROJECT / "last-good.json"
+        previous = json.loads(pointer.read_text())
+        previous.pop("revision", None)
+        pointer.write_text(json.dumps(previous))
+        self.fake.fail_up_once = True
+        with self.assertRaisesRegex(RuntimeError, "deployment_failed_after_replacement"):
+            self.execute(BAD)
+        self.assertEqual(self.fake.current["image"], GOOD)
+        self.assertEqual(self.fake.current["values"]["USER_SERVICE_VERSION"], GOOD_REVISION)
 
     def test_image_verification_failure_restores_previous_release(self):
         self.execute()

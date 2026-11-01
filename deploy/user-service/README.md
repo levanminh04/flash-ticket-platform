@@ -1,7 +1,8 @@
 # Deploy User Service lên AWS #2
 
 Workflow và script dưới đây chỉ deploy User Service; Config Server được build và
-triển khai riêng. Workflow chỉ chạy thủ công trên nhánh `dev/tuyen`.
+triển khai riêng. Workflow tự chạy khi push thay đổi thuộc User/deploy User hoặc
+workflow này lên `dev/tuyen`, bỏ qua thay đổi chỉ có file `.md`; vẫn hỗ trợ chạy thủ công.
 
 ## Bố cục source trong deploy/user-service
 
@@ -130,7 +131,10 @@ khóa chỉ trong RAM, nên cơ chế giành claim áp dụng cả giữa các p
 ## GitHub Actions
 
 [deploy-user.yml](../../.github/workflows/deploy-user.yml) verify Maven trước khi
-build/publish image, rồi deploy đúng digest. Chỉ sử dụng `workflow_dispatch`.
+build/publish image, rồi deploy đúng digest. Trigger `push` chỉ áp dụng trên
+`dev/tuyen` với `services/user-service/**`, `deploy/user-service/**` hoặc chính
+workflow này, loại trừ file `.md`. Có thể chạy thủ công bằng `workflow_dispatch`.
+Thay đổi YAML tại Config Server cần rollout Config riêng, không kích hoạt workflow User.
 
 | Loại | Tên | Nội dung |
 |---|---|---|
@@ -153,6 +157,7 @@ Không kích hoạt workflow trước khi hoàn tất điều kiện rollout ph�
 ```bash
 bash deploy/user-service/deploy-user.sh \
   ghcr.io/levanminh04/flash-ticket-platform/user-service@sha256:<digest> \
+  --revision <full-commit-sha> \
   --env-file /home/<user>/<runtime-directory>/.env
 ```
 
@@ -161,14 +166,35 @@ Config thiếu audience hoặc còn metadata log trùng. Lock theo project và p
 ngăn deploy đồng thời, kể cả khi hai lệnh chỉ định hai file môi trường khác nhau.
 Biến runtime trong shell không được ghi đè file môi trường đã kiểm tra.
 
+Sau khi pull, script đọc label `org.opencontainers.image.revision` từ chính image,
+yêu cầu SHA Git đủ 40 ký tự và đối chiếu `--revision` nếu được truyền vào.
+Workflow luôn truyền SHA đang build; label thiếu/sai hoặc không khớp sẽ dừng trước
+khi thay container. Lệnh deploy thủ công có thể bỏ `--revision` để dùng SHA trong
+label, nhưng image vẫn bắt buộc có label hợp lệ.
+
+Script tự đặt `USER_SERVICE_VERSION` theo label đã xác minh, bỏ qua giá trị cũ
+trong `.env` hoặc shell và không sửa file `.env` gốc. Snapshot lưu version này;
+sau khi health UP, script kiểm tra cả image ID và version trong container trước
+khi ghi nhận thành công. Log `serviceVersion` đọc cùng biến môi trường đó.
+Kết quả deploy và `last-good.json` có trường `revision` để đối chiếu.
+
 Mỗi release lưu bản Compose và môi trường quyền 0600 tại
 `~/.flash-ticket-user-deploy/<project>/release-*`. Khi thay container hoặc kiểm tra
 health/image thất bại, script khôi phục image, Compose và môi trường của release
 tốt trước đó; lần đầu thất bại thì dừng service vừa tạo. Không tự tiếp quản container
 được tạo ngoài bộ deploy mà thiếu snapshot. Snapshot chứa secret: bảo vệ cả thư mục,
 giữ release cần rollback và dọn bản hết hạn theo chính sách vận hành.
+Rollback dùng version trong snapshot cũ, kể cả snapshot tạo trước khi bổ sung
+trường `revision`; không lấy version của image vừa deploy thất bại.
 
 ## Bằng chứng kiểm thử
+
+Kiểm tra bổ sung cho version tự động ngày 01/11/2026: **15 test deploy PASS**
+trên Linux với Docker/HTTP giả lập; cú pháp Bash của script và các bước workflow
+hợp lệ. Docker Compose local render đúng version bằng fixture. Đã kiểm tra
+`.env`/shell còn version cũ, thiếu/sai label, SHA workflow không khớp, version
+container bị lệch và rollback về snapshot cũ. Chưa chạy workflow GHCR thực tế
+hoặc redeploy AWS cho bản sửa version này.
 
 Các lần chạy Docker tạm trên AWS #2 kết nối Mongo và Config tạm ở AWS #1 qua SSH.
 Mỗi lần dùng database, Rabbit exchange/queue/user riêng; không đọc queue chung.

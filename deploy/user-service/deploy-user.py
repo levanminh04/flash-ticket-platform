@@ -99,7 +99,7 @@ def release_environment(release, image):
     return environment
 
 
-def verify_running(compose, environment, project, expected, address, port):
+def verify_running(compose, environment, project, expected, address, port, revision=None):
     for _ in range(90):
         try:
             with urllib.request.urlopen(f"http://{address}:{port}/actuator/health", timeout=3) as response:
@@ -118,12 +118,16 @@ def verify_running(compose, environment, project, expected, address, port):
             or actual["State"].get("OOMKilled")
             or actual["Config"].get("Labels", {}).get("com.docker.compose.project") != project):
         raise RuntimeError("image_or_memory_verification_failed")
+    versions = [value.split("=", 1)[1] for value in actual["Config"].get("Env", []) if value.startswith("USER_SERVICE_VERSION=")]
+    if revision is not None and versions != [revision]:
+        raise RuntimeError("running_service_version_mismatch")
     return container, actual
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
+    parser.add_argument("--revision", help="Expected full Git commit SHA; must match the pulled image label")
     parser.add_argument("--env-file", required=True, type=Path)
     parser.add_argument("--compose-file", type=Path, default=Path(__file__).with_name("docker-compose.user.yml"))
     parser.add_argument("--project", default="flash-ticket-user")
@@ -131,6 +135,8 @@ def main():
     parser.add_argument("--local-image", action="store_true",
                         help="Deploy an immutable image ID verified and loaded over SSH; no registry pull")
     args = parser.parse_args()
+    if args.revision is not None and not re.fullmatch(r"[a-f0-9]{40}", args.revision):
+        raise RuntimeError("invalid_expected_revision")
     repository = os.environ.get("USER_IMAGE_REPOSITORY", "ghcr.io/levanminh04/flash-ticket-platform/user-service")
     official = re.fullmatch(re.escape(repository) + r"@sha256:[a-f0-9]{64}", args.image)
     local = (args.predeploy or args.local_image) and re.fullmatch(r"sha256:[a-f0-9]{64}", args.image)
@@ -194,24 +200,36 @@ def main():
             raise RuntimeError("config_server_conflicting_logging_fields")
         if official:
             command(compose + ["pull", "user-service"], environment)
-        expected = command(["docker", "image", "inspect", args.image, "--format", "{{.Id}}"])
+        image = json.loads(command(["docker", "image", "inspect", args.image]))[0]
+        expected = image["Id"]
+        revision = (image["Config"].get("Labels") or {}).get("org.opencontainers.image.revision")
+        if not isinstance(revision, str) or not re.fullmatch(r"[a-f0-9]{40}", revision):
+            raise RuntimeError("invalid_image_revision")
+        if args.revision is not None and revision != args.revision:
+            raise RuntimeError("image_revision_mismatch")
+        # The image is the source of version metadata. Never reuse a stale version
+        # from the server .env or the caller's shell; leave the original .env intact.
+        values["USER_SERVICE_VERSION"] = revision
+        environment = canonical_release(release, release / "compose.yaml", values, args.image)
+        command(compose + ["config", "--quiet"], environment)
         print("PREVIOUS user-service " + (previous["image"] if previous else "none"), flush=True)
         try:
             command(compose + ["up", "-d", "--no-deps", "--no-build", "user-service"], environment)
-            container, actual = verify_running(compose, environment, args.project, expected, address, port)
+            container, actual = verify_running(compose, environment, args.project, expected, address, port, revision)
         except Exception:
             if previous:
                 previous_release = state / previous["release"]
                 restored_compose = compose_command(args.project, previous_release)
                 restored_environment = release_environment(previous_release, previous["image"])
                 command(restored_compose + ["up", "-d", "--no-deps", "--no-build", "user-service"], restored_environment)
-                verify_running(restored_compose, restored_environment, args.project, previous["imageId"], "127.0.0.1", previous["port"])
+                restored_version = dotenv(previous_release / "runtime.env").get("USER_SERVICE_VERSION")
+                verify_running(restored_compose, restored_environment, args.project, previous["imageId"], "127.0.0.1", previous["port"], restored_version)
                 print("ROLLBACK_SUCCESS user-service", flush=True)
             else:
                 command(compose + ["stop", "user-service"], environment)
             raise RuntimeError("deployment_failed_after_replacement") from None
-        private_write(state / "last-good.json", json.dumps({"image": args.image, "imageId": expected, "release": release.name, "port": port}))
-        print(json.dumps({"event": "DEPLOY_SUCCESS", "project": args.project, "container": container, "imageId": expected, "health": "UP", "port": port, "restartCount": actual["RestartCount"], "predeploy": args.predeploy}), flush=True)
+        private_write(state / "last-good.json", json.dumps({"image": args.image, "imageId": expected, "revision": revision, "release": release.name, "port": port}))
+        print(json.dumps({"event": "DEPLOY_SUCCESS", "project": args.project, "container": container, "imageId": expected, "revision": revision, "health": "UP", "port": port, "restartCount": actual["RestartCount"], "predeploy": args.predeploy}), flush=True)
 
 
 if __name__ == "__main__":

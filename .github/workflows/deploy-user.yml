@@ -1,6 +1,13 @@
 name: Deploy User Service
 
 on:
+  push:
+    branches: [dev/tuyen]
+    paths:
+      - services/user-service/**
+      - deploy/user-service/**
+      - .github/workflows/deploy-user.yml
+      - '!**/*.md'
   workflow_dispatch:
 
 concurrency:
@@ -102,6 +109,7 @@ jobs:
           [[ "$DEPLOY_DIRECTORY" == "/home/$SSH_USER/"* && "$DEPLOY_DIRECTORY" == */deploy/user-service ]]
           [[ "$ENV_FILE" == "/home/$SSH_USER/"* && "$ENV_FILE" == */.env ]]
           [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
           ssh_dir=$(mktemp -d "$RUNNER_TEMP/user-ssh.XXXXXXXX")
           trap 'rm -rf -- "$ssh_dir"' EXIT
           printf '%s\n' "$SSH_KEY" > "$ssh_dir/key"
@@ -115,5 +123,6 @@ jobs:
           image="$USER_REPOSITORY@$IMAGE_DIGEST"
           printf '%s\n' "$REGISTRY_TOKEN" |
             ssh "${options[@]}" -p "$SSH_PORT" "$destination" \
-              "bash '$release_directory/deploy-user.sh' --registry-user '$REGISTRY_USER' '$image' --env-file '$ENV_FILE' --compose-file '$release_directory/docker-compose.user.yml'"
+              "bash '$release_directory/deploy-user.sh' --registry-user '$REGISTRY_USER' '$image' --revision '$GITHUB_SHA' --env-file '$ENV_FILE' --compose-file '$release_directory/docker-compose.user.yml'"
           printf 'User image: `%s`\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+          printf 'User revision: `%s`\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
