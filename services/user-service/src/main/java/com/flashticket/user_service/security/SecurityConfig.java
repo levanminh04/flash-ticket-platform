@@ -8,11 +8,21 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
+  @Bean
+  OAuth2TokenValidator<Jwt> requiredJwtExpiry() {
+    JwtTimestampValidator validator = new JwtTimestampValidator();
+    validator.setAllowEmptyExpiryClaim(false);
+    return validator;
+  }
+
   @Bean
   SecurityFilterChain security(HttpSecurity http, Problems problems) throws Exception {
     JwtAuthenticationConverter converter = new JwtAuthenticationConverter();

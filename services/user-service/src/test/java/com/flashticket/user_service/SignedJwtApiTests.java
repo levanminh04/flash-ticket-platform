@@ -131,6 +131,34 @@ class SignedJwtApiTests {
   }
 
   @Test
+  void signedTokensWithoutExpiryAreRejectedForHumanAdminAndInternalApis() throws Exception {
+    for (var target :
+        List.of(
+            Map.entry("BUYER", "/api/v1/me"),
+            Map.entry("ADMIN", "/api/v1/admin/organizer-applications"),
+            Map.entry("INTERNAL_SERVICE", "/internal/v1/users/missing-expiry"))) {
+      var claims =
+          new JWTClaimsSet.Builder()
+              .issuer(ISSUER)
+              .audience("flash-ticket-api")
+              .subject("missing-expiry-" + target.getKey())
+              .issueTime(Date.from(Instant.now().minusSeconds(10)))
+              .claim("realm_access", Map.of("roles", List.of(target.getKey())))
+              .build();
+      var signed =
+          new SignedJWT(
+              new JWSHeader.Builder(JWSAlgorithm.RS256)
+                  .keyID("test-key")
+                  .type(JOSEObjectType.JWT)
+                  .build(),
+              claims);
+      signed.sign(new RSASSASigner(KEY));
+      mvc.perform(get(target.getValue()).header("Authorization", "Bearer " + signed.serialize()))
+          .andExpect(status().isUnauthorized());
+    }
+  }
+
+  @Test
   void verifiedMachineAndUnknownRolesCannotUseHumanApi() throws Exception {
     for (String role : List.of("INTERNAL_SERVICE", "SUPER_ADMIN")) {
       mvc.perform(
