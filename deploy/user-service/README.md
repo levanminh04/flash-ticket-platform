@@ -22,6 +22,18 @@ trong `deploy/user-service/`. Workflow GitHub vẫn ở `.github/workflows/deplo
 Không duy trì bản YAML thứ hai trong deploy. Việc đổi tên/source local không tự
 thay bản đang chạy trên AWS; release và snapshot rollback cũ trên server giữ nguyên.
 
+## Chuyển MongoDB sang AWS #2
+
+MongoDB được quản lý riêng bằng [bộ deploy Mongo](../mongodb/README.md), theo target B11-C/B12.
+User trên AWS #2 dùng `USER_MONGO_URI` tới `127.0.0.1:27017`, giữ nguyên credential/database/authSource.
+Đặt `USER_MONGO_TUNNEL_ENABLED=false` trong tunnel.env; systemd chỉ forward Config AWS #1 qua 18888.
+`USER_MONGO_TUNNEL_ENABLED` mặc định `true` trong launcher để tương thích cấu hình tunnel cũ;
+mẫu cấu hình mới chọn `false` cho topology Mongo cùng AWS #2.
+
+Từ IDE/laptop, mở tunnel 17017 tới Mongo AWS #2, thay đích SSH AWS #1 trước đây.
+Config Server tiếp tục dùng User YAML hiện có; không cần sửa hoặc rebuild Config.
+Các đoạn rehearsal/rollout đầu dưới đây ghi Mongo AWS #1 là **lịch sử trước migration**.
+
 ## Trạng thái ghi nhận tại đợt triển khai ngày 01/11/2026
 
 Đã deploy commit `209381b3fec1d3bd4aff88fa1d4e837769344791` bằng image bất biến
