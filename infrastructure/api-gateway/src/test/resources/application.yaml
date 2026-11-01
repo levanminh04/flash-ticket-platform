@@ -12,7 +12,6 @@ spring:
         jwt:
           issuer-uri: https://issuer.invalid/realms/flashticket
           jwk-set-uri: https://issuer.invalid/realms/flashticket/protocol/openid-connect/certs
-          audiences: flashticket-api
 
 eureka:
   client:

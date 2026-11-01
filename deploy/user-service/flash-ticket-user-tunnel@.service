@@ -1,0 +1,19 @@
+[Unit]
+Description=Flash Ticket User MongoDB and Config tunnel (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=%i
+EnvironmentFile=/home/%i/.config/flash-ticket-user/tunnel.env
+ExecStart=/usr/local/libexec/flash-ticket-user-tunnel
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

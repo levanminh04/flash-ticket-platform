@@ -6,6 +6,25 @@ spring:
   cloud:
     config:
       enabled: false
+  security:
+    oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: test-only
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://127.0.0.1:1/token
+      resourceserver:
+        jwt:
+          issuer-uri: https://issuer.example.test/realms/booking
+          jwk-set-uri: http://127.0.0.1:1/jwks
+          audiences:
+            - flash-ticket-api
 # Test-only isolation: production configuration comes from Config Server and
 # requires the real PostgreSQL and RabbitMQ endpoints.
   autoconfigure:
@@ -17,3 +36,12 @@ spring:
 eureka:
   client:
     enabled: false
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.booking_service.observability.BookingLogCustomizer
+      stacktrace:
+        printer: com.flashticket.booking_service.observability.SafeStackTracePrinter

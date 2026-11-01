@@ -3,3 +3,41 @@ spring:
     name: user-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${USER_IMAGE_MAX_FILE_SIZE:2MB}
+      max-request-size: ${USER_IMAGE_MAX_REQUEST_SIZE:3MB}
+
+user:
+  images:
+    cloud-name: ${USER_IMAGE_CLOUD_NAME:}
+    api-key: ${USER_IMAGE_API_KEY:}
+    api-secret: ${USER_IMAGE_API_SECRET:}
+    folder: ${USER_IMAGE_FOLDER:flash-ticket/organizers}
+    max-bytes: ${USER_IMAGE_MAX_BYTES:2097152}
+    max-pixels: ${USER_IMAGE_MAX_PIXELS:16000000}
+    timeout: ${USER_IMAGE_TIMEOUT:5s}
+  mongodb:
+    collection-prefix: ${USER_MONGO_COLLECTION_PREFIX:tbl_}
+  role-grant:
+    lease-duration: ${USER_ROLE_GRANT_LEASE_DURATION:60s}
+    wait-timeout: ${USER_ROLE_GRANT_WAIT_TIMEOUT:5s}
+  keycloak-admin:
+    base-url: ${USER_KEYCLOAK_ADMIN_BASE_URL:}
+    realm: ${USER_KEYCLOAK_ADMIN_REALM:}
+    client-id: ${USER_KEYCLOAK_ADMIN_CLIENT_ID:user-management}
+    client-secret: ${USER_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    timeout: ${USER_KEYCLOAK_ADMIN_TIMEOUT:5s}
+  identity:
+    enabled: ${USER_IDENTITY_ENABLED:true}
+    queue: ${USER_IDENTITY_QUEUE:user.identity.q}
+    max-message-bytes: ${USER_IDENTITY_MAX_MESSAGE_BYTES:65536}
+  recovery:
+    enabled: ${USER_RECOVERY_ENABLED:true}
+    delay: ${USER_RECOVERY_DELAY:30s}
+    batch-size: ${USER_RECOVERY_BATCH_SIZE:20}
+
+logging:
+  structured:
+    json:
+      customizer: com.flashticket.user_service.observability.UserLogCustomizer

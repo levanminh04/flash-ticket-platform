@@ -50,6 +50,34 @@ class GatewaySecurityConfigurationTests {
   }
 
   @Test
+  void protectsEventWritesAndAdminReviewsWhileAllowingPublicCatalog() {
+    var buyer = authenticatedAs("ROLE_BUYER");
+    var organizer = authenticatedAs("ROLE_ORGANIZER");
+    var admin = authenticatedAs("ROLE_ADMIN");
+    for (String path : List.of("/api/v1/events", "/api/v1/categories", "/api/v1/venues"))
+      assertTrue(reachesDownstream(HttpMethod.GET, path, null));
+    for (String path :
+        List.of("/api/v1/organizer/events", "/api/v1/organizer/events/event-1/cancel")) {
+      assertFalse(reachesDownstream(HttpMethod.POST, path, buyer));
+      assertTrue(reachesDownstream(HttpMethod.POST, path, organizer));
+      assertFalse(reachesDownstream(HttpMethod.POST, path, null));
+    }
+    assertFalse(
+        reachesDownstream(HttpMethod.GET, "/api/v1/organizer/events/event-1/statistics", buyer));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.GET, "/api/v1/organizer/events/event-1/statistics", organizer));
+    for (String path :
+        List.of(
+            "/api/v1/admin/events/event-1/approve",
+            "/api/v1/admin/cancellation-requests/request-1/reject")) {
+      assertFalse(reachesDownstream(HttpMethod.POST, path, organizer));
+      assertFalse(reachesDownstream(HttpMethod.POST, path, buyer));
+      assertTrue(reachesDownstream(HttpMethod.POST, path, admin));
+    }
+  }
+
+  @Test
   void appliesApprovedCoarseRoleChecks() {
     Authentication buyer = authenticatedAs("ROLE_BUYER");
     Authentication organizer = authenticatedAs("ROLE_ORGANIZER");
@@ -80,6 +108,36 @@ class GatewaySecurityConfigurationTests {
     }
 
     return reachedDownstream.get();
+  }
+
+  @Test
+  void publicOrganizerAndProtectedUserWorkflowsUseTheirOwnPolicies() {
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/organizers/subject-1", null));
+    assertFalse(reachesDownstream(HttpMethod.GET, "/api/v1/organizers/subject-1/follow", null));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.PUT, "/api/v1/organizers/subject-1/follow", authenticatedAs("ROLE_BUYER")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.PUT,
+            "/api/v1/organizers/subject-1/follow",
+            authenticatedAs("ROLE_INTERNAL_SERVICE")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.POST,
+            "/api/v1/admin/organizer-applications/app/approve",
+            authenticatedAs("ROLE_BUYER")));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.POST,
+            "/api/v1/admin/organizer-applications/app/approve",
+            authenticatedAs("ROLE_ADMIN")));
+    assertFalse(
+        reachesDownstream(
+            HttpMethod.POST, "/api/v1/organizers/me/logo", authenticatedAs("ROLE_BUYER")));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.POST, "/api/v1/organizers/me/logo", authenticatedAs("ROLE_ORGANIZER")));
   }
 
   private Authentication authenticatedAs(String authority) {

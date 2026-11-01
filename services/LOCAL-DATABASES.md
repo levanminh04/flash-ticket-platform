@@ -7,45 +7,44 @@ continues serving the existing Keycloak database. MongoDB remains a separate ser
 
 All connections use host `127.0.0.1`.
 
-| Service | Engine | Port | Database | Schema / authSource | Read-only username | Local password file |
+| Service | Engine | Port | Database | Schema / authSource | Read-only username | Local password variable |
 | --- | --- | --- | --- | --- | --- | --- |
-| Booking | PostgreSQL 16.15 | 5432 | booking_db | booking_schema | booking_erd | [booking-service/.env.booking-db](booking-service/.env.booking-db) |
-| Event | PostgreSQL 16.15 | 5432 | event_db | event_schema | event_erd | [event-service/.env.event-db](event-service/.env.event-db) |
-| Payment | PostgreSQL 16.15 | 5432 | payment_db | payment_schema | payment_erd | [payment-service/.env.payment-db](payment-service/.env.payment-db) |
-| Ticket | PostgreSQL 16.15 | 5432 | ticket_db | ticket_schema | ticket_erd | [ticket-service/.env.ticket-db](ticket-service/.env.ticket-db) |
-| User | MongoDB 8.0.28 | 27017 | user_db | user_db (authSource) | user_erd | [user-service/.env.user-db](user-service/.env.user-db) |
+| Booking | PostgreSQL 16.15 | 5432 | booking_db | booking_schema | booking_erd | `BOOKING_DB_VIEWER_PASSWORD` in root `.env` |
+| Event | PostgreSQL 16.15 | 5432 | event_db | event_schema | event_erd | `EVENT_DB_VIEWER_PASSWORD` in root `.env` |
+| Payment | PostgreSQL 16.15 | 5432 | payment_db | payment_schema | payment_erd | `PAYMENT_DB_VIEWER_PASSWORD` in root `.env` |
+| Ticket | PostgreSQL 16.15 | 5432 | ticket_db | ticket_schema | ticket_erd | `TICKET_DB_VIEWER_PASSWORD` in root `.env` |
+| User | MongoDB 8.0.28 | 27017 | user_db | user_db (authSource) | user_erd | `USER_DB_VIEWER_PASSWORD` in root `.env` |
 
 Passwords remain unchanged after consolidation. Use `<SERVICE>_DB_VIEWER_PASSWORD`
-from the corresponding ignored local env file. PostgreSQL accounts can connect
+from the root `.env`. PostgreSQL accounts can connect
 only to their own business database; reader accounts have SELECT access.
-The four `*_DB_PORT=5432` entries are client connection hints; PostgreSQL publishes
-one shared port in the deployment Compose file.
+PostgreSQL publishes one shared port, `5432`, in the deployment Compose file.
 
 ## Start or stop
 
 From the repository root, start the shared PostgreSQL service:
 
 ```powershell
-docker compose --env-file deploy/.env.dev -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
 ```
 
-For a fresh checkout, prepare `deploy/.env.dev` and copy each business service's
-`.env.<service>-db.example` to its local env file, replacing placeholder passwords.
-The shared Compose reads all four credential files. The initializer creates
+For a fresh checkout, copy `.env.example` to `.env` and fill in the application
+and database passwords. This one file supplies both database Compose setup and
+application runtime. The initializer creates
 separate owner, maintenance and reader roles for each database, applies canonical
 B12 DDL, grants read access and adds the `tbl_` table prefix.
 
 MongoDB starts separately:
 
 ```powershell
-docker compose --env-file services/user-service/.env.user-db -f services/user-service/compose.db.yaml up -d --wait
+docker compose --env-file .env -f services/user-service/compose.db.yaml up -d --wait user-db
 ```
 
 Stop PostgreSQL with the shared Compose service; this also stops DB access for
 all four business services and Keycloak:
 
 ```powershell
-docker compose --env-file deploy/.env.dev -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml stop postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml stop postgres
 ```
 
 There are no per-service PostgreSQL Compose files. Data persist in the shared

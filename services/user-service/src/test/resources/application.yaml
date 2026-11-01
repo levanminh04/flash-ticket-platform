@@ -18,3 +18,14 @@ spring:
 eureka:
   client:
     enabled: false
+
+user:
+  identity:
+    enabled: false
+  recovery:
+    enabled: false
+
+logging:
+  level:
+    de.bwaldvogel: WARN
+    org.mongodb.driver: WARN
