@@ -92,7 +92,6 @@ public class EventService {
     repository.transition(
         event, "APPROVED", ContractRules.fee(input.feeRate()), ContractRules.text(admin, "admin"));
     var next = load(id, false);
-    outbox.append(next, EventSnapshots.FINANCE, EventSnapshots.finance(next));
     audit.committed("approve", event.status(), next, admin);
     return EventViews.owner(next);
   }
@@ -105,6 +104,8 @@ public class EventService {
     version(event, expected);
     repository.transition(event, "PUBLISHED", null, null);
     var next = load(id, false);
+    // Defer delivery until publication while preserving the fee version fixed at approval.
+    outbox.append(event, EventSnapshots.FINANCE, EventSnapshots.finance(event));
     outbox.append(next, EventSnapshots.SALES, EventSnapshots.sales(next));
     outbox.append(next, EventSnapshots.ACCESS, EventSnapshots.access(next));
     audit.committed("publish", event.status(), next, actor);

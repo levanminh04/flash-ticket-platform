@@ -20,6 +20,8 @@ import java.sql.DriverManager;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -989,6 +991,10 @@ class EventFlowTests {
                 .content("{\"rowVersion\":\"2\",\"feeRate\":\"0.1\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("APPROVED"));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
     for (int attempt = 0; attempt < 2; attempt++) {
       mvc.perform(
               post(base + "/publish")
@@ -1067,14 +1073,49 @@ class EventFlowTests {
             "admin-a",
             new EventCommands.Approval(pending.rowVersion(), "0.125"));
     assertThat(approved.feeRate()).isEqualTo("0.12500000");
+    assertThat(approved.status()).isEqualTo("APPROVED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
     var published = service.publish(created.eventId(), "organizer-a", approved.rowVersion());
     assertThat(published.status()).isEqualTo("PUBLISHED");
+    var messageIds =
+        jdbc.queryForList(
+            "SELECT message_id FROM event_schema.tbl_outbox_messages ORDER BY message_id",
+            UUID.class);
     var replay = service.publish(created.eventId(), "organizer-a", approved.rowVersion());
     assertThat(replay.rowVersion()).isEqualTo(published.rowVersion());
+    assertThat(
+            jdbc.queryForList(
+                "SELECT message_id FROM event_schema.tbl_outbox_messages ORDER BY message_id",
+                UUID.class))
+        .isEqualTo(messageIds);
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
         .isEqualTo(3);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT message_type FROM event_schema.tbl_outbox_messages", String.class))
+        .containsExactlyInAnyOrder(
+            "event.finance-configured.v1",
+            "event.sales-configured.v1",
+            "event.access-configured.v1");
+    var finance =
+        json.readTree(
+            jdbc.queryForObject(
+                "SELECT payload::text FROM event_schema.tbl_outbox_messages WHERE message_type='event.finance-configured.v1'",
+                String.class));
+    assertThat(finance.path("feeRate").stringValue()).isEqualTo("0.12500000");
+    assertThat(finance.path("sourceFeeVersion").stringValue())
+        .isEqualTo(approved.sourceConfigVersion())
+        .isNotEqualTo(published.sourceConfigVersion());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT aggregate_version FROM event_schema.tbl_outbox_messages WHERE message_type='event.finance-configured.v1'",
+                Long.class))
+        .isEqualTo(Long.valueOf(approved.sourceConfigVersion()));
     mvc.perform(get("/api/v1/events/" + created.eventId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ticketTypes[0].unitPrice").value("100005"))
@@ -1127,7 +1168,7 @@ class EventFlowTests {
   }
 
   @Test
-  void outboxFailureRollsBackApproval() {
+  void approvalFreezesFeeWithoutDependingOnOutboxStorage() {
     var created = service.create("a", draft("Original"));
     var pending = service.submit(created.eventId(), "a", "0");
     doThrow(
@@ -1135,23 +1176,81 @@ class EventFlowTests {
                 "simulated storage failure"))
         .when(outbox)
         .append(any(), any(), any());
-    assertThatThrownBy(
-            () ->
-                service.approve(
-                    created.eventId(),
-                    "admin",
-                    new EventCommands.Approval(pending.rowVersion(), "0.1")))
-        .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
+    var approved =
+        service.approve(
+            created.eventId(), "admin", new EventCommands.Approval(pending.rowVersion(), "0.1"));
+    assertThat(approved.approvedAt()).isNotNull();
     assertThat(jdbc.queryForObject("SELECT status FROM event_schema.tbl_events", String.class))
-        .isEqualTo("PENDING_APPROVAL");
+        .isEqualTo("APPROVED");
+    assertThat(jdbc.queryForObject("SELECT approved_by FROM event_schema.tbl_events", String.class))
+        .isEqualTo("admin");
     assertThat(
             jdbc.queryForObject(
                 "SELECT fee_rate FROM event_schema.tbl_events", java.math.BigDecimal.class))
-        .isNull();
+        .isEqualByComparingTo("0.1");
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
         .isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "event.finance-configured.v1",
+        "event.sales-configured.v1",
+        "event.access-configured.v1"
+      })
+  void failureOfAnyConfigurationMessageRollsBackWholePublication(String failedType) {
+    var created = service.create("a", draft("Publication rollback"));
+    var pending = service.submit(created.eventId(), "a", created.rowVersion());
+    var approved =
+        service.approve(
+            created.eventId(), "admin", new EventCommands.Approval(pending.rowVersion(), "0.1"));
+    doThrow(
+            new org.springframework.dao.DataAccessResourceFailureException(
+                "simulated storage failure"))
+        .when(outbox)
+        .append(any(), eq(failedType), any());
+    assertThatThrownBy(() -> service.publish(created.eventId(), "a", approved.rowVersion()))
+        .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
+    var current = service.readOwned(created.eventId(), "a");
+    assertThat(current.status()).isEqualTo("APPROVED");
+    assertThat(current.rowVersion()).isEqualTo(approved.rowVersion());
+    assertThat(current.sourceConfigVersion()).isEqualTo(approved.sourceConfigVersion());
+    assertThat(current.feeRate()).isEqualTo(approved.feeRate());
+    assertThat(current.approvedAt()).isEqualTo(approved.approvedAt());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+    doCallRealMethod().when(outbox).append(any(), eq(failedType), any());
+    var published = service.publish(created.eventId(), "a", approved.rowVersion());
+    service.publish(created.eventId(), "a", approved.rowVersion());
+    assertThat(published.status()).isEqualTo("PUBLISHED");
+    assertThat(
+            jdbc.queryForList(
+                "SELECT message_type FROM event_schema.tbl_outbox_messages", String.class))
+        .containsExactlyInAnyOrder(
+            "event.finance-configured.v1",
+            "event.sales-configured.v1",
+            "event.access-configured.v1");
+  }
+
+  @Test
+  void cancellingApprovedEventBeforePublicationQueuesOnlyCancellation() {
+    var created = service.create("a", draft("Cancel before publication"));
+    var pending = service.submit(created.eventId(), "a", created.rowVersion());
+    var approved =
+        service.approve(
+            created.eventId(), "admin", new EventCommands.Approval(pending.rowVersion(), "0.1"));
+    var cancelled =
+        cancellationTransactions.cancel(created.eventId(), "admin", approved.rowVersion(), false);
+    assertThat(cancelled.status()).isEqualTo("CANCELLED");
+    assertThat(
+            jdbc.queryForList(
+                "SELECT message_type FROM event_schema.tbl_outbox_messages", String.class))
+        .containsExactly("event.cancelled.v1");
   }
 
   @Test
@@ -1376,9 +1475,7 @@ class EventFlowTests {
   @Test
   void expiredLeaseFencesOlderWorkerAndPreservesMessageIdentity() {
     var created = service.create("a", draft("Leasing"));
-    var submitted = service.submit(created.eventId(), "a", "0");
-    service.approve(
-        created.eventId(), "admin", new EventCommands.Approval(submitted.rowVersion(), "0.1"));
+    cancellationTransactions.cancel(created.eventId(), "admin", created.rowVersion(), false);
     var first = outbox.claim(java.time.Duration.ofSeconds(30)).getFirst();
     assertThat(outbox.claim(java.time.Duration.ofSeconds(30))).isEmpty();
     jdbc.update(
