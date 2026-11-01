@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -14,6 +15,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.io.FileSystemResource;
 
 public final class LogCapture implements AutoCloseable {
@@ -47,17 +49,15 @@ public final class LogCapture implements AutoCloseable {
     var application = new SpringApplication(LoggingProbe.class);
     application.setWebApplicationType(WebApplicationType.NONE);
     var source =
-        new YamlPropertySourceLoader()
-            .load("booking", new FileSystemResource("src/main/resources/application.yaml"))
-            .getFirst();
-    application.setDefaultProperties(
-        Map.of(
-            "logging.structured.format.console",
-                source.getProperty("logging.structured.format.console"),
-            "logging.structured.json.customizer",
-                source.getProperty("logging.structured.json.customizer"),
-            "logging.structured.json.stacktrace.printer",
-                source.getProperty("logging.structured.json.stacktrace.printer")));
+        (EnumerablePropertySource<?>)
+            new YamlPropertySourceLoader()
+                .load("booking", new FileSystemResource("src/main/resources/application.yaml"))
+                .getFirst();
+    Map<String, Object> properties = new HashMap<>();
+    for (String key : source.getPropertyNames()) {
+      if (key.startsWith("logging.")) properties.put(key, source.getProperty(key));
+    }
+    application.setDefaultProperties(properties);
     return application.run(
         "--spring.config.location=optional:file:target/logging-probe-isolation.yaml",
         "--spring.cloud.config.enabled=false",

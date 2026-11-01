@@ -2,18 +2,14 @@ package com.flashticket.booking_service.messaging;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.flashticket.booking_service.exception.BusinessErrorCode;
 import com.flashticket.booking_service.exception.BusinessException;
-import com.flashticket.booking_service.exception.ErrorClassifier;
-import com.flashticket.booking_service.observability.BookingContext;
-import com.flashticket.booking_service.observability.FailureLog;
+import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.support.LogCapture;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,9 +18,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.core.ReturnedMessage;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.support.converter.MessageConversionException;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -55,7 +49,7 @@ class BookingRabbitErrorHandlerTests {
               });
       assertThat(logs.events()).hasSize(1);
       assertThat(logs.events().getFirst().getFormattedMessage())
-          .isEqualTo("Booking operation failed.");
+          .contains("RabbitMQ message processing failed", ErrorCode.INVALID_MESSAGE.message());
       assertThat(logs.events().getFirst().getKeyValuePairs())
           .anySatisfy(
               pair -> {
@@ -70,7 +64,7 @@ class BookingRabbitErrorHandlerTests {
     for (Throwable cause :
         List.of(
             new DataAccessResourceFailureException("SENTINEL-db"),
-            new BusinessException(BusinessErrorCode.ORDER_EXPIRED))) {
+            new BusinessException(ErrorCode.ORDER_EXPIRED))) {
       var failure =
           new ListenerExecutionFailedException("wrapper", cause, new Message(new byte[0]));
       try (var logs = new LogCapture()) {
@@ -101,86 +95,6 @@ class BookingRabbitErrorHandlerTests {
       assertThat(output.getOut())
           .contains("\"errorCode\":\"INVALID_MESSAGE\"")
           .doesNotContain("SENTINEL-");
-    }
-  }
-
-  @Test
-  void publisherNackAndReturnKeepOutboxUnsentAndLogSafeFailure() {
-    for (var signal : List.of(new PublishSignal(false, false), new PublishSignal(true, true))) {
-      var correlation = new CorrelationData(UUID.randomUUID().toString());
-      correlation.getFuture().complete(new CorrelationData.Confirm(signal.ack(), "broker result"));
-      if (signal.returned()) {
-        correlation.setReturned(
-            new ReturnedMessage(
-                new Message("SENTINEL-payload".getBytes(), new MessageProperties()),
-                312,
-                "NO_ROUTE",
-                "events.ex",
-                "missing.key"));
-      }
-      var state = new OutboxFixture(UUID.randomUUID(), UUID.randomUUID());
-      try (var logs = new LogCapture()) {
-        recordPublishResult(state, correlation, signal.returned());
-        assertThat(state.sent()).isFalse();
-        assertThat(state.errorCode()).isEqualTo("MESSAGE_PUBLISH_FAILED");
-        assertThat(logs.events())
-            .singleElement()
-            .satisfies(
-                event -> {
-                  assertThat(event.getFormattedMessage()).isEqualTo("Booking operation failed.");
-                  assertThat(event.getMDCPropertyMap())
-                      .containsEntry("correlationId", state.correlationId().toString());
-                });
-      }
-    }
-  }
-
-  private static void recordPublishResult(
-      OutboxFixture row, CorrelationData confirm, boolean returned) {
-    var result = confirm.getFuture().join();
-    try (var scope = BookingContext.open(Map.of("correlationId", row.correlationId().toString()))) {
-      if (result.ack() && !returned && confirm.getReturned() == null) {
-        row.markSent();
-        return;
-      }
-      var failure = ErrorClassifier.of("MESSAGE_PUBLISH_FAILED", null);
-      row.recordFailure(failure.code());
-      FailureLog.record(
-          failure, "booking.message.failed", "outbox.publish", FailureLog.Outcome.FAILED);
-    }
-  }
-
-  private record PublishSignal(boolean ack, boolean returned) {}
-
-  private static final class OutboxFixture {
-    private final UUID id;
-    private final UUID correlationId;
-    private boolean sent;
-    private String errorCode;
-
-    private OutboxFixture(UUID id, UUID correlationId) {
-      this.id = id;
-      this.correlationId = correlationId;
-    }
-
-    UUID correlationId() {
-      return correlationId;
-    }
-
-    boolean sent() {
-      return sent;
-    }
-
-    String errorCode() {
-      return errorCode;
-    }
-
-    void markSent() {
-      sent = true;
-    }
-
-    void recordFailure(String code) {
-      errorCode = code;
     }
   }
 

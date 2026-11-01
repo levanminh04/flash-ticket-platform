@@ -10,6 +10,7 @@ import com.flashticket.booking_service.dto.message.StartPayment;
 import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.enums.SalesMode;
+import com.flashticket.booking_service.enums.SectorType;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.HashSet;
@@ -31,7 +32,8 @@ public final class ContractRules {
           "payment.start-requested.v1", StartPayment.class,
           "ticket.issuance-result.v1", IssuanceResult.class,
           "booking.order-completed.v1", OrderCompleted.class,
-          "booking.issuance-result.v1", BookingIssuanceResult.class);
+          "ticket.issued.v1", BookingIssuanceResult.class,
+          "booking.issuance-failed.v1", BookingIssuanceResult.class);
 
   private ContractRules() {}
 
@@ -66,6 +68,7 @@ public final class ContractRules {
   public static boolean validSalesConfiguration(SalesConfiguration value) {
     return value != null
         && value.schemaVersion() == 1
+        && value.mode() != null
         && validUInt64(value.sourceConfigVersion())
         && validWindow(value.saleStartsAt(), value.saleEndsAt())
         && validWindow(value.eventStartsAt(), value.eventEndsAt())
@@ -85,14 +88,24 @@ public final class ContractRules {
             .allMatch(
                 seat ->
                     value.sectors().stream()
-                            .anyMatch(s -> Objects.equals(s.sectorId(), seat.sectorId()))
+                            .anyMatch(
+                                s ->
+                                    Objects.equals(s.sectorId(), seat.sectorId())
+                                        && s.kind() == SectorType.SEATED)
                         && value.ticketTypes().stream()
-                            .anyMatch(t -> Objects.equals(t.ticketTypeId(), seat.ticketTypeId())))
+                            .anyMatch(
+                                t ->
+                                    Objects.equals(t.ticketTypeId(), seat.ticketTypeId())
+                                        && Objects.equals(t.sectorId(), seat.sectorId())))
         && value.ticketTypes().stream()
             .allMatch(
                 t ->
-                    t.sectorId() == null
-                        || value.sectors().stream()
+                    value.mode() == SalesMode.QUANTITY
+                        ? t.sectorId() == null
+                            && t.configuredQuantity() != null
+                            && validMoney(t.configuredQuantity())
+                            && new BigInteger(t.configuredQuantity()).compareTo(UINT64_MAX) <= 0
+                        : value.sectors().stream()
                             .anyMatch(s -> Objects.equals(s.sectorId(), t.sectorId())))
         && value.promotions().stream().allMatch(p -> p.isValidWindow());
   }

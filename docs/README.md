@@ -1,5 +1,7 @@
 # Chỉ mục tài liệu
 
+> Luồng đặt vé hiện hành 29/10: [ảnh ClickUp/GOV-156](evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md), B13/B14/B15-v0.3 REVIEW_READY; thay hướng start/result 03/10 ở bảng lịch sử bên dưới.
+
 Thư mục này là nguồn sự thật cho quá trình phân tích, thiết kế, hiện thực và đánh giá đồ án FlashTicket Platform.
 
 > **Đề tài chính thức:** *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*. Nguồn hiện hành do Minh xác nhận ngày 18/09/2026: [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md).

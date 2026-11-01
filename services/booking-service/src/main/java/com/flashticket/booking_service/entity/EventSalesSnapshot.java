@@ -9,6 +9,7 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -51,4 +52,10 @@ public class EventSalesSnapshot {
 
   @Column(name = "received_at", nullable = false)
   private Instant receivedAt;
+
+  // Version JPA độc lập version cấu hình Event; để null khi tạo mới để repository INSERT.
+  @Version
+  @ColumnDefault("0")
+  @Column(name = "row_version", nullable = false)
+  private Long rowVersion;
 }

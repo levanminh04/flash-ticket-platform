@@ -2,8 +2,8 @@ package com.flashticket.booking_service.dto.message;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
 
 public record BookingIssuanceResult(
@@ -11,14 +11,20 @@ public record BookingIssuanceResult(
     @NotNull UUID chargeId,
     @NotNull UUID issuanceId,
     @NotNull State state,
-    @NotBlank String failureCode) {
+    @NotNull @PositiveOrZero Integer ticketCount,
+    String failureCode) {
   @AssertTrue
   @JsonIgnore
-  public boolean isValidFailure() {
-    return state == State.FAILED && failureCode != null && !failureCode.isBlank();
+  public boolean isConsistent() {
+    return state != null
+        && ticketCount != null
+        && (state == State.COMPLETED
+            ? ticketCount > 0 && failureCode == null
+            : ticketCount == 0 && failureCode != null && !failureCode.isBlank());
   }
 
   public enum State {
+    COMPLETED,
     FAILED
   }
 }

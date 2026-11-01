@@ -16,7 +16,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest
+@SpringBootTest(
+    properties = {
+      "spring.rabbitmq.host=${RABBITMQ_HOST}",
+      "spring.rabbitmq.port=${RABBITMQ_PORT:5672}",
+      "spring.rabbitmq.username=${RABBITMQ_USERNAME}",
+      "spring.rabbitmq.password=${RABBITMQ_PASSWORD}",
+      "spring.rabbitmq.connection-timeout=5s",
+      "spring.rabbitmq.dynamic=false",
+      "spring.rabbitmq.listener.simple.auto-startup=false",
+      "spring.rabbitmq.listener.direct.auto-startup=false",
+      "booking.outbox.enabled=false"
+    })
+@org.springframework.context.annotation.Import(
+    org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration.class)
 @MockitoBean(
     types = {
       EventSalesSnapshotRepository.class,
@@ -33,7 +46,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       ReservationRepository.class
     })
 class BookingServiceApplicationTests {
+  @org.springframework.beans.factory.annotation.Autowired
+  org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
   @Test
-  void contextLoads() {}
+  void contextLoads() {
+    // Chỉ mở kết nối thật; không bật listener, scheduler hoặc declare queue live.
+    try (var connection = rabbitTemplate.getConnectionFactory().createConnection()) {
+      org.assertj.core.api.Assertions.assertThat(connection.isOpen()).isTrue();
+    }
+  }
 }

@@ -1,0 +1,344 @@
+package com.flashticket.booking_service.order.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.flashticket.booking_service.config.BookingJsonConfig;
+import com.flashticket.booking_service.config.SecurityConfig;
+import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.enums.Currency;
+import com.flashticket.booking_service.enums.OrderState;
+import com.flashticket.booking_service.exception.BusinessException;
+import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.exception.GlobalExceptionHandler;
+import com.flashticket.booking_service.order.service.OrderService;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.json.JsonMapper;
+
+@WebMvcTest({OrderController.class, InternalOrderController.class})
+@Import({SecurityConfig.class, BookingJsonConfig.class, GlobalExceptionHandler.class})
+class OrderControllerTests {
+  @Autowired MockMvc mvc;
+  @Autowired JsonMapper objectMapper;
+  @MockitoBean OrderService orderService;
+  @MockitoBean com.flashticket.booking_service.promotion.service.PromotionService promotionService;
+
+  @Test
+  void cancelsOrderUsingAuthenticatedBuyer() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(orderService.cancelOrder("buyer", id))
+        .thenReturn(
+            new OrderView(
+                id,
+                UUID.randomUUID(),
+                OrderState.CANCELLED,
+                "buyer@example.com",
+                Currency.VND,
+                "100",
+                "0",
+                "100",
+                Instant.now().plusSeconds(900),
+                null,
+                "1",
+                List.of()));
+    mvc.perform(
+            post("/api/v1/orders/" + id + "/cancel")
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("CANCELLED"));
+    verify(orderService).cancelOrder("buyer", id);
+    for (ErrorCode code :
+        List.of(
+            ErrorCode.ORDER_NOT_FOUND,
+            ErrorCode.ORDER_EXPIRED,
+            ErrorCode.ORDER_NOT_CANCELLABLE,
+            ErrorCode.RESOURCE_BUSY)) {
+      when(orderService.cancelOrder("buyer", id)).thenThrow(new BusinessException(code));
+      mvc.perform(
+              post("/api/v1/orders/" + id + "/cancel")
+                  .with(
+                      jwt()
+                          .jwt(t -> t.subject("buyer"))
+                          .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{}"))
+          .andExpect(status().is(code.status().value()))
+          .andExpect(jsonPath("$.code").value(code.name()));
+      org.mockito.Mockito.reset(orderService);
+    }
+  }
+
+  @Test
+  void requiresBuyerAuthenticationForCancellation() throws Exception {
+    String path = "/api/v1/orders/" + UUID.randomUUID() + "/cancel";
+    mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(
+            post(path)
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void rejectsInvalidCancellationCommand() throws Exception {
+    for (String body : List.of("", "null", "[]", "{", "{\"buyerSubject\":\"other\"}"))
+      mvc.perform(
+              post("/api/v1/orders/" + UUID.randomUUID() + "/cancel")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    mvc.perform(
+            post("/api/v1/orders/not-a-uuid/cancel")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void appliesPromotionUsingAuthenticatedBuyer() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(promotionService.applyPromotionToOrder(eq("buyer"), eq(id), any()))
+        .thenReturn(
+            new OrderView(
+                id,
+                UUID.randomUUID(),
+                OrderState.PENDING_PAYMENT,
+                "buyer@example.com",
+                Currency.VND,
+                "200",
+                "20",
+                "180",
+                Instant.now().plusSeconds(900),
+                null,
+                "1",
+                List.of()));
+    mvc.perform(
+            post("/api/v1/orders/" + id + "/promotion")
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"SAVE\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value("180"));
+    verify(promotionService).applyPromotionToOrder(eq("buyer"), eq(id), any());
+  }
+
+  @Test
+  void rejectsInvalidPromotionRequest() throws Exception {
+    for (String body : List.of("{}", "{\"code\":\" \"}"))
+      mvc.perform(
+              post("/api/v1/orders/" + UUID.randomUUID() + "/promotion")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    verifyNoInteractions(promotionService);
+  }
+
+  @Test
+  void rejectsUnauthorizedPromotionRequest() throws Exception {
+    String path = "/api/v1/orders/" + UUID.randomUUID() + "/promotion";
+    mvc.perform(post(path)).andExpect(status().isUnauthorized());
+    mvc.perform(post(path).with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(promotionService);
+  }
+
+  @Test
+  void preparesSnapshotForInternalCaller() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(orderService.preparePurchaseSnapshot("buyer", id))
+        .thenReturn(com.flashticket.booking_service.support.BookingFixtures.purchase());
+    mvc.perform(
+            post("/internal/v1/orders/" + id + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"buyerSubject\":\"buyer\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value("200"));
+    verify(orderService).preparePurchaseSnapshot("buyer", id);
+  }
+
+  @Test
+  void rejectsInvalidSnapshotRequest() throws Exception {
+    for (String body : List.of("{}", "{\"buyerSubject\":\"\"}"))
+      mvc.perform(
+              post("/internal/v1/orders/" + UUID.randomUUID() + "/purchase-snapshot")
+                  .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE")))
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void rejectsBuyerOnInternalSnapshotRoute() throws Exception {
+    mvc.perform(
+            post("/internal/v1/orders/" + UUID.randomUUID() + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void doesNotExposeSeparateFreezeOrSnapshotGet() throws Exception {
+    String path = "/internal/v1/orders/" + UUID.randomUUID();
+    mvc.perform(
+            post(path + "/freeze-payment")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE"))))
+        .andExpect(status().isNotFound());
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    path + "/purchase-snapshot")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE"))))
+        .andExpect(status().isMethodNotAllowed());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void createsOrderUsingAuthenticatedSubjectAndIdempotencyKey() throws Exception {
+    UUID key = UUID.randomUUID();
+    UUID orderId = UUID.randomUUID();
+    UUID eventId = UUID.fromString("11111111-1111-4111-8111-111111111111");
+    OrderView response =
+        new OrderView(
+            orderId,
+            eventId,
+            OrderState.PENDING_PAYMENT,
+            "buyer@example.com",
+            Currency.VND,
+            "100",
+            "0",
+            "100",
+            Instant.parse("2026-10-28T12:15:00Z"),
+            null,
+            "1",
+            List.of());
+    when(orderService.createOrder(eq("buyer-subject"), eq(key), any())).thenReturn(response);
+
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(
+                    jwt()
+                        .jwt(token -> token.subject("buyer-subject"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .header("Idempotency-Key", key.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                {"eventId":"11111111-1111-4111-8111-111111111111",
+                 "customerEmail":"buyer@example.com",
+                 "selection":{"mode":"QUANTITY","items":[
+                   {"ticketTypeId":"22222222-2222-4222-8222-222222222222","quantity":1}]}}
+                """))
+        .andExpect(status().isCreated())
+        .andExpect(header().string("Location", "/api/v1/orders/" + orderId))
+        .andExpect(jsonPath("$.orderId").value(orderId.toString()))
+        .andExpect(jsonPath("$.state").value("PENDING_PAYMENT"));
+    verify(orderService).createOrder(eq("buyer-subject"), eq(key), any());
+  }
+
+  @Test
+  void rejectsMissingIdempotencyKey() throws Exception {
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"invalid", " "})
+  void rejectsInvalidIdempotencyKey(String key) throws Exception {
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"eventId\":\"11111111-1111-4111-8111-111111111111\",\"customerEmail\":\"wrong\",\"selection\":{\"mode\":\"QUANTITY\",\"items\":[{\"ticketTypeId\":\"22222222-2222-4222-8222-222222222222\",\"quantity\":1}]}}",
+        "{\"eventId\":\"11111111-1111-4111-8111-111111111111\",\"customerEmail\":\"buyer@example.com\",\"selection\":{\"mode\":\"QUANTITY\",\"items\":[{\"ticketTypeId\":\"22222222-2222-4222-8222-222222222222\",\"quantity\":0}]}}",
+        "{\"eventId\":\"11111111-1111-4111-8111-111111111111\",\"customerEmail\":\"buyer@example.com\",\"buyerSubject\":\"another-user\",\"selection\":{\"mode\":\"QUANTITY\",\"items\":[{\"ticketTypeId\":\"22222222-2222-4222-8222-222222222222\",\"quantity\":1}]}}",
+        "{\"eventId\":\"11111111-1111-4111-8111-111111111111\",\"customerEmail\":\"buyer@example.com\",\"selection\":{\"mode\":\"QUANTITY\",\"items\":[]}}"
+      })
+  void rejectsInvalidCreateOrderBody(String body) throws Exception {
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void requiresAuthenticationAndBuyerRole() throws Exception {
+    mvc.perform(post("/api/v1/orders")).andExpect(status().isUnauthorized());
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  void returnsBusinessProblemFromOrderService() throws Exception {
+    when(orderService.createOrder(any(), any(), any()))
+        .thenThrow(new BusinessException(ErrorCode.SEAT_UNAVAILABLE));
+    mvc.perform(
+            post("/api/v1/orders")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                {"eventId":"11111111-1111-4111-8111-111111111111",
+                 "customerEmail":"buyer@example.com",
+                 "selection":{"mode":"QUANTITY","items":[
+                   {"ticketTypeId":"22222222-2222-4222-8222-222222222222","quantity":1}]}}
+                """))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("SEAT_UNAVAILABLE"));
+  }
+}

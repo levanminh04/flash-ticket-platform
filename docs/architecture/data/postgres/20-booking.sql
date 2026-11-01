@@ -14,6 +14,7 @@ CREATE TABLE event_sales_snapshots (
   purchase_limit integer NOT NULL CHECK (purchase_limit > 0),
   configuration_snapshot jsonb NOT NULL CHECK (jsonb_typeof(configuration_snapshot) = 'object' AND configuration_snapshot @> '{"schemaVersion":1}'),
   source_config_version bigint NOT NULL CHECK (source_config_version > 0), received_at timestamptz NOT NULL,
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   CHECK (sale_starts_at < sale_ends_at), UNIQUE (event_id, sales_mode)
 );
 CREATE TABLE orders (
@@ -168,6 +169,7 @@ CREATE TABLE idempotency_requests (
   request_hash nonempty_text NOT NULL, resource_id uuid NOT NULL,
   response_status integer NOT NULL CHECK (response_status BETWEEN 200 AND 299),
   created_at timestamptz NOT NULL DEFAULT now(),
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   PRIMARY KEY (actor_subject, operation, request_key)
 );
 COMMENT ON TABLE idempotency_requests IS 'Create-order replay returns original order rather than creating another hold. Record success in order transaction; conflicting payload returns conflict. Trade-off: storage and retention, not a replacement for reservation state guards.';
@@ -186,6 +188,7 @@ CREATE TABLE inbox_messages (
   consumer_name nonempty_text NOT NULL, message_id uuid NOT NULL,
   payload_hash nonempty_text NOT NULL, processed_at timestamptz NOT NULL DEFAULT now(),
   response_payload jsonb CHECK (jsonb_typeof(response_payload) = 'object'),
+  row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   PRIMARY KEY (consumer_name, message_id)
 );
 COMMENT ON TABLE outbox_messages IS 'Business update and outgoing event/command commit together. Trade-off: relay and duplicate delivery; published_at only after broker confirm. Payload follows B13 named versioned contract, not arbitrary business JSON.';

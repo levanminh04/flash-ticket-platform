@@ -25,6 +25,8 @@ spring:
     properties:
       hibernate:
         default_schema: ticket_schema
+        type:
+          json_format_mapper: jackson3
         jdbc:
           time_zone: UTC
   rabbitmq:
@@ -91,6 +93,9 @@ ticket:
     key-ring-location: ${TICKET_QR_KEY_RING_LOCATION:}
 
 management:
+  health:
+    mail:
+      enabled: ${TICKET_MAIL_HEALTH_ENABLED:true}
   endpoints:
     web:
       exposure:
@@ -98,3 +103,24 @@ management:
   endpoint:
     health:
       show-details: never
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Chỉ giữ các trường log được cho phép, tránh ghi dữ liệu MDC tùy ý.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+      add:
+        serviceName: ticket-service
+        serviceVersion: ${TICKET_SERVICE_VERSION:local-dev}
+        instanceId: ${TICKET_INSTANCE_ID:${random.uuid}}
+        environment: ${TICKET_ENVIRONMENT:local}
+      customizer: com.flashticket.ticket_service.config.TicketLogFields
+      stacktrace:
+        printer: com.flashticket.ticket_service.config.SafeStackTracePrinter

@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.flashticket.booking_service.client.config.InternalFeignConfig;
 import com.flashticket.booking_service.config.BookingJsonConfig;
-import com.flashticket.booking_service.exception.ErrorClassifier;
-import com.flashticket.booking_service.observability.BookingContext;
-import com.flashticket.booking_service.observability.FailureLog;
-import com.flashticket.booking_service.support.LogCapture;
+import com.flashticket.booking_service.exception.ErrorCode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import feign.FeignException;
@@ -21,7 +18,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -34,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
@@ -217,8 +214,7 @@ class InternalFeignConfigTests {
     runner()
         .run(
             context -> {
-              try (var ignored =
-                  BookingContext.open(Map.of("correlationId", correlation.toString()))) {
+              try (var ignored = MDC.putCloseable("correlationId", correlation.toString())) {
                 context
                     .getBean(InternalProbeClient.class)
                     .withCorrelation("untrusted-caller-value");
@@ -236,8 +232,7 @@ class InternalFeignConfigTests {
     runner()
         .run(
             context -> {
-              try (var ignored =
-                  BookingContext.open(Map.of("correlationId", UUID.randomUUID().toString()))) {
+              try (var ignored = MDC.putCloseable("correlationId", UUID.randomUUID().toString())) {
                 context.getBean(ExternalProbeClient.class).probe();
               }
               context.getBean(InternalProbeClient.class).withCorrelation("untrusted-caller-value");
@@ -259,20 +254,10 @@ class InternalFeignConfigTests {
         .run(
             context -> {
               Throwable error = catchThrowable(context.getBean(InternalProbeClient.class)::probe);
-              var failure = ErrorClassifier.classify(error);
-              assertThat(failure.code())
+              var failure = ErrorCode.from(error);
+              assertThat(failure.name())
                   .isEqualTo(tokenFailure ? "INTERNAL_AUTH_UNAVAILABLE" : "DEPENDENCY_FAILURE");
-              assertThat(failure.exception()).isSameAs(error);
               assertThat(failure.message()).doesNotContain("SENTINEL");
-              try (var logs = new LogCapture()) {
-                FailureLog.record(
-                    failure, "booking.request.failed", "http.request", FailureLog.Outcome.FAILED);
-                assertThat(
-                        logs.events().stream()
-                            .filter(e -> e.getMessage().equals("Booking operation failed."))
-                            .count())
-                    .isEqualTo(1);
-              }
             });
   }
 

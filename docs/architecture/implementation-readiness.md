@@ -1,5 +1,7 @@
 # Sẵn sàng hiện thực — từ bộ thiết kế đến lát cắt chạy được
 
+> **Hiện hành 29/10/2026 — GOV-156:** theo ảnh Đặt vé.png trên ClickUp, FE → Payment → Booking lấy PurchaseSnapshot; Ticket → Payment → Booking commit COMPLETED → Payment kết thúc Saga. Hướng start/result theo GOV-149/150 ở nội dung 03/10 bên dưới là lịch sử, đã được thay thế trong phạm vi này. Xem [đối chiếu mới](../evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md). B13/B14/B15-v0.3 REVIEW_READY; route/freeze/QR chưa tự động được duyệt.
+
 > **Cập nhật ngữ cảnh 18/09:** theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md) và [phân công](../project/roles.md). Tám project khung đã có trong commit `091fca1`; chưa có bằng chứng build/E2E đạt. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian (`PRJ-035`); chuẩn kỹ thuật được duyệt 14/09 giữ nguyên.
 
 - Phiên bản: `READY-v0.2`; ngày: 2026-10-03; trạng thái: `REVIEW_READY`.
@@ -73,7 +75,7 @@ Startup import bỏ qua realm đã tồn tại; muốn chứng minh cấu hình 
 | 0 — nền chạy | Một bộ version/build; credential theo owner; JWT; error envelope; correlation; outbox/inbox worker theo B13/B14 | Một request có log/trace xuyên HTTP và message; rollback business không phát message; service không truy DB khác |
 | 1 — sự kiện bán được | Event draft→duyệt→công bố; Booking nhận snapshot; User identity/profile tối thiểu; FE adapter seat map | Reload giữ ghế ẩn và loại vé; không bán hidden; cấu hình version cũ không ghi đè mới |
 | 2 — đặt và trả giữ chỗ | Booking tạo đơn, áp mã, hạn mua, expiry/cancel; email đơn | Các ca tranh chấp cuối nguồn cung, trả lặp, deadline đều đạt; money integer/HALF_UP đúng vector B13 |
-| 3 — thu tiền và phát vé | Booking freeze/receipt/outbox start; Payment attempt/verify/Saga và API poll; Ticket atomic issuance → Booking completion → Payment completion; hoàn muộn/thừa/thất bại xác định | Hợp đồng v0.2 được rà/duyệt; V21/V22/V25 đạt; sandbox chạy một đơn; callback lặp không phát thêm vé; timeout không bị coi thành thất bại cuối |
+| 3 — thu tiền và phát vé | FE start tại Payment; Payment lấy snapshot Booking và lưu cùng attempt; Ticket atomic issuance → Payment → Booking completion → Payment completion; hoàn muộn/thừa/thất bại xác định | Hợp đồng v0.2 được rà/duyệt; V21/V22/V25 đạt; sandbox chạy một đơn; callback lặp không phát thêm vé; timeout không bị coi thành thất bại cuối |
 | 4 — giao vé và check-in | Mail/QR tải lại; kiểm API check-in; hủy event một chiều và refund progress. App mobile scan chỉ làm khi thực sự dư thời gian (PRJ-035) | Gửi lỗi không hoàn tiền; hai scan chỉ một thành công; hủy hội tụ, không mở lại nguồn cung |
 | 5 — phần phạm vi còn lại | Hồ sơ organizer/follow đơn giản; đọc đơn/đối soát/chi trả/CRUD đã duyệt | Không tự bỏ nghiệp vụ đã duyệt vì ít ưu tiên; không chặn lát cắt 1–4 để tô điểm CRUD |
 | 6 — tải, lỗi, RCA | Workload, cổng giả lập, fault injection có kiểm soát và thu evidence | Luồng chính đã đúng; B15/B16 có run manifest, dữ liệu đủ; đánh giá RCA theo bộ RCA |

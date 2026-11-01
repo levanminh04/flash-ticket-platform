@@ -1,5 +1,7 @@
 # Trạng thái triển khai plan
 
+> **Hiện hành 29/10/2026 — GOV-156:** theo ảnh Đặt vé.png trên ClickUp, FE → Payment → Booking lấy PurchaseSnapshot; Ticket → Payment → Booking commit COMPLETED → Payment kết thúc Saga. Hướng start/result theo GOV-149/150 ở nội dung 03/10 bên dưới là lịch sử, đã được thay thế trong phạm vi này. Xem [đối chiếu mới](../evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md). B13/B14/B15-v0.3 REVIEW_READY; route/freeze/QR chưa tự động được duyệt.
+
 - **Delta tài liệu 2026-10-03:** Minh xác nhận GOV-149/150 theo sequence trong image: Frontend → Booking freeze → Payment tạo thanh toán, poll Payment; Ticket → Booking commit COMPLETED → Payment kết thúc Saga. B13/B14/B15/READY-v0.2 hiện REVIEW_READY; phê duyệt v0.1 ở mốc 14/09 không tự lan sang hợp đồng sửa. Xem [bảng đối chiếu](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md). Chưa sửa code, DDL, AWS hoặc chạy V21–V25; B13-OPEN-01 giữ câu hỏi định dạng/lưu QR payment độc lập.
 
 - **Cập nhật hiện hành 2026-09-18:** tên/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm **Minh, Sơn, Tuấn, Tuyến** theo [roles.md](roles.md). Minh lead giai đoạn đầu và chính RCA; mobile chỉ làm khi thực sự thừa thời gian (`PRJ-035`).

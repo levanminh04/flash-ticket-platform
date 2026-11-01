@@ -9,6 +9,8 @@ import com.flashticket.booking_service.entity.*;
 import com.flashticket.booking_service.entity.Order;
 import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.enums.Currency;
+import com.flashticket.booking_service.exception.BusinessException;
+import com.flashticket.booking_service.exception.ErrorCode;
 import jakarta.validation.ConstraintViolationException;
 import java.math.BigDecimal;
 import java.util.*;
@@ -55,15 +57,19 @@ class MapperTests {
   @ValueSource(strings = {"-1", "1.01", "10000000000000000000"})
   void rejectsInvalidMoney(String input) {
     assertThatThrownBy(() -> converter.toMoney(new BigDecimal(input)))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MONEY_VALUE);
   }
 
   @Test
   void rejectsNullMoneyAndInvalidVersion() {
-    assertThatThrownBy(() -> converter.toMoney(null)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> converter.toMoney(null))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MONEY_VALUE);
     for (Long version : Arrays.asList(null, 0L, -1L)) {
       assertThatThrownBy(() -> converter.toUInt64(version))
-          .isInstanceOf(IllegalArgumentException.class);
+          .isInstanceOf(BusinessException.class)
+          .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_VERSION);
     }
     assertThat(converter.toUInt64(Long.MAX_VALUE)).isEqualTo("9223372036854775807");
   }
@@ -82,14 +88,16 @@ class MapperTests {
   void typedJsonRoundTripRejectsMissingAndMalformedPayload() {
     var tree = converter.toTree(purchase());
     assertThat(converter.fromTree(tree, purchase().getClass())).isEqualTo(purchase());
-    assertThatThrownBy(() -> converter.toTree(null)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> converter.toTree(null)).isInstanceOf(BusinessException.class);
     assertThatThrownBy(() -> converter.fromTree(null, Object.class))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class);
     assertThatThrownBy(() -> converter.fromTree(jsonMapper().nullNode(), Object.class))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class);
     assertThatThrownBy(
             () -> converter.fromTree(jsonMapper().readTree("{\"bad\":1}"), purchase().getClass()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MESSAGE_PAYLOAD)
+        .hasCauseInstanceOf(tools.jackson.core.JacksonException.class);
   }
 
   @Test
@@ -157,7 +165,7 @@ class MapperTests {
 
   @Test
   void invalidEnvelopesAreRejectedBeforeMapping() {
-    assertThatThrownBy(() -> outbox.toEntity(null)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> outbox.toEntity(null)).isInstanceOf(BusinessException.class);
     var valid =
         envelope("booking.order-completed.v1", payloads().get("booking.order-completed.v1"));
     for (String field : List.of("data", "aggregateVersion", "messageType", "correlationId")) {
@@ -172,20 +180,24 @@ class MapperTests {
   @Test
   void invalidRowsAndTypeRequestsAreRejected() {
     assertThatThrownBy(() -> outbox.toEnvelope(null, Object.class))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MESSAGE_ENVELOPE);
     var row = outbox.toEntity(envelope("event.sales-configured.v1", sales()));
     assertThatThrownBy(() -> outbox.toEnvelope(row, purchase().getClass()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MESSAGE_TYPE);
     row.setSchemaVersion(2);
     assertThatThrownBy(() -> outbox.toEnvelope(row, sales().getClass()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_MESSAGE_SCHEMA);
     row.setSchemaVersion(1);
     row.setAggregateVersion(0L);
     assertThatThrownBy(() -> outbox.toEnvelope(row, sales().getClass()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_VERSION);
     row.setAggregateVersion(1L);
     row.setPayload(null);
     assertThatThrownBy(() -> outbox.toEnvelope(row, sales().getClass()))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(BusinessException.class);
   }
 }

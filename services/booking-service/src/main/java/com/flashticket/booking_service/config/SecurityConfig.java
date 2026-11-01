@@ -1,15 +1,12 @@
 package com.flashticket.booking_service.config;
 
-import com.flashticket.booking_service.exception.ErrorClassifier;
 import com.flashticket.booking_service.security.KeycloakRealmRoleConverter;
-import com.flashticket.booking_service.web.error.ProblemResponses;
 import jakarta.servlet.DispatcherType;
-import java.util.List;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,11 +16,14 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
+/** Cấu hình xác thực JWT và quyền truy cập API của Booking. */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfig {
 
+  /** Áp dụng JWT stateless, phân quyền từng nhóm API và nối xử lý lỗi Security. */
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
@@ -65,40 +65,31 @@ public class SecurityConfig {
         .build();
   }
 
+  /** Chuyển lỗi thiếu hoặc sai JWT vào global handler để trả 401 kèm Bearer challenge. */
   @Bean
-  AuthenticationEntryPoint problemAuthenticationEntryPoint(ProblemResponses responses) {
+  AuthenticationEntryPoint problemAuthenticationEntryPoint(
+      @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
     return (request, response, exception) -> {
       response.setHeader(
           HttpHeaders.WWW_AUTHENTICATE,
           exception instanceof OAuth2AuthenticationException
               ? "Bearer error=\"invalid_token\""
               : "Bearer");
-      responses.write(
-          request,
-          response,
-          responses.response(
-              request,
-              HttpStatus.UNAUTHORIZED,
-              ErrorClassifier.of("UNAUTHENTICATED", exception),
-              List.of()));
+      resolver.resolveException(request, response, null, exception);
     };
   }
 
+  /** Chuyển lỗi đã xác thực nhưng thiếu quyền vào global handler để trả 403. */
   @Bean
-  AccessDeniedHandler problemAccessDeniedHandler(ProblemResponses responses) {
+  AccessDeniedHandler problemAccessDeniedHandler(
+      @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
     return (request, response, exception) -> {
       response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer error=\"insufficient_scope\"");
-      responses.write(
-          request,
-          response,
-          responses.response(
-              request,
-              HttpStatus.FORBIDDEN,
-              ErrorClassifier.of("ACCESS_DENIED", exception),
-              List.of()));
+      resolver.resolveException(request, response, null, exception);
     };
   }
 
+  /** Gắn bộ đọc role Keycloak khi chuyển JWT thành Authentication của Spring. */
   @Bean
   JwtAuthenticationConverter keycloakJwtAuthenticationConverter(
       KeycloakRealmRoleConverter keycloakRealmRoleConverter) {
@@ -107,6 +98,7 @@ public class SecurityConfig {
     return converter;
   }
 
+  /** Đăng ký bộ chuyển realm role để dùng trong quá trình xác thực JWT. */
   @Bean
   KeycloakRealmRoleConverter keycloakRealmRoleConverter() {
     return new KeycloakRealmRoleConverter();

@@ -37,7 +37,7 @@ B12 DDL, grants read access and adds the `tbl_` table prefix.
 MongoDB starts separately:
 
 ```powershell
-docker compose --env-file .env -f services/user-service/compose.db.yaml up -d --wait user-db
+docker compose --env-file .env -f deploy/mongodb/compose.yaml up -d --wait user-db
 ```
 
 Stop PostgreSQL with the shared Compose service; this also stops DB access for
@@ -56,7 +56,7 @@ databases/roles rather than replacing them.
 
 All local business tables and User collections use `tbl_<original_name>`.
 The canonical B12 files retain their original names; local initialization applies
-`services/99-table-prefix.sql` and User's `99-collection-prefix.js`.
+`services/99-table-prefix.sql` and `deploy/mongodb/99-collection-prefix.js`.
 Existing Visual Paradigm connections must use port **5432**; run Reverse Database
 again to show the renamed tables.
 

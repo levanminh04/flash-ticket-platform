@@ -2,6 +2,8 @@ package com.flashticket.booking_service.mapper;
 
 import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.entity.OutboxMessage;
+import com.flashticket.booking_service.exception.BusinessException;
+import com.flashticket.booking_service.exception.ErrorCode;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
@@ -32,7 +34,7 @@ public abstract class OutboxMessageMapper {
 
   protected Long parseAggregateVersion(String value) {
     if (!com.flashticket.booking_service.validation.ContractRules.validUInt64(value))
-      throw new IllegalArgumentException("aggregateVersion is out of range");
+      throw new BusinessException(ErrorCode.INVALID_VERSION);
     return Long.valueOf(value);
   }
 
@@ -42,15 +44,14 @@ public abstract class OutboxMessageMapper {
   }
 
   public <T> Envelope<T> toEnvelope(OutboxMessage row, Class<T> payloadType) {
-    if (row == null
-        || row.getSchemaVersion() == null
-        || row.getSchemaVersion() != 1
-        || row.getAggregateVersion() == null
-        || row.getAggregateVersion() < 1)
-      throw new IllegalArgumentException("Unsupported schemaVersion");
+    if (row == null) throw new BusinessException(ErrorCode.INVALID_MESSAGE_ENVELOPE);
+    if (row.getSchemaVersion() == null || row.getSchemaVersion() != 1)
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE_SCHEMA);
+    if (row.getAggregateVersion() == null || row.getAggregateVersion() < 1)
+      throw new BusinessException(ErrorCode.INVALID_VERSION);
     if (!com.flashticket.booking_service.validation.ContractRules.matchesPayload(
         row.getMessageType(), payloadType))
-      throw new IllegalArgumentException("messageType does not match payload type");
+      throw new BusinessException(ErrorCode.INVALID_MESSAGE_TYPE);
     T data = converter.fromTree(row.getPayload(), payloadType);
     Envelope<T> result =
         new Envelope<>(
@@ -69,7 +70,7 @@ public abstract class OutboxMessageMapper {
   }
 
   private void validateEnvelope(Envelope<?> envelope) {
-    if (envelope == null) throw new IllegalArgumentException("Envelope is required");
+    if (envelope == null) throw new BusinessException(ErrorCode.INVALID_MESSAGE_ENVELOPE);
     Set<ConstraintViolation<Envelope<?>>> violations = validator.validate(envelope);
     if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
   }

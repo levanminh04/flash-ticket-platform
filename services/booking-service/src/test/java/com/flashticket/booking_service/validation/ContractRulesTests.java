@@ -125,6 +125,11 @@ class ContractRulesTests {
             with(with(sales(), "mode", SalesMode.SEAT_MAP), "sectors", List.of(sector)),
             "seats",
             List.of(seat));
+    valid =
+        with(
+            valid,
+            "ticketTypes",
+            List.of(with(sales().ticketTypes().getFirst(), "sectorId", SECTOR)));
     assertThat(ContractRules.validSalesConfiguration(valid)).isTrue();
     assertThat(ContractRules.validSalesConfiguration(with(valid, "sectors", List.of()))).isFalse();
     assertThat(ContractRules.validSalesConfiguration(with(valid, "ticketTypes", List.of())))
@@ -133,6 +138,17 @@ class ContractRulesTests {
             ContractRules.validSalesConfiguration(with(valid, "sectors", List.of(sector, sector))))
         .isFalse();
     assertThat(ContractRules.validSalesConfiguration(with(valid, "seats", List.of(seat, seat))))
+        .isFalse();
+    assertThat(
+            ContractRules.validSalesConfiguration(
+                with(valid, "sectors", List.of(with(sector, "kind", SectorType.STANDING)))))
+        .isFalse();
+    assertThat(
+            ContractRules.validSalesConfiguration(
+                with(
+                    sales(),
+                    "ticketTypes",
+                    List.of(with(sales().ticketTypes().getFirst(), "configuredQuantity", null)))))
         .isFalse();
   }
 
