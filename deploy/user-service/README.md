@@ -138,9 +138,9 @@ Thay đổi YAML tại Config Server cần rollout Config riêng, không kích h
 
 | Loại | Tên | Nội dung |
 |---|---|---|
-| Secret | `USER_DEPLOY_SSH_PRIVATE_KEY` | Key deploy AWS #2, định dạng OpenSSH |
-| Variable | `USER_DEPLOY_SSH_KNOWN_HOSTS` | Host key AWS #2 đã xác minh ngoài băng |
-| Variable | `USER_DEPLOY_SSH_HOST`, `USER_DEPLOY_SSH_USER`, `USER_DEPLOY_SSH_PORT` | Đích SSH AWS #2 |
+| Secret | `FT84_SSH_PRIVATE_KEY` | Key deploy AWS #2, định dạng OpenSSH |
+| Variable | `FT84_SSH_KNOWN_HOSTS` | Host key AWS #2 đã xác minh ngoài băng |
+| Variable | `FT84_SSH_HOST`, `FT84_SSH_USER`, `FT84_SSH_PORT` | Đích SSH AWS #2 |
 | Variable | `USER_DEPLOY_DIRECTORY` | Thư mục dưới home user, kết thúc bằng `/deploy/user-service` |
 | Variable | `USER_DEPLOY_ENV_FILE` | File dưới home user, kết thúc bằng `/.env`, quyền 0600 |
 

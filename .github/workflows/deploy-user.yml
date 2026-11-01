@@ -87,11 +87,11 @@ jobs:
           persist-credentials: false
       - name: Deploy only User on AWS2
         env:
-          SSH_KEY: ${{ secrets.USER_DEPLOY_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ vars.USER_DEPLOY_SSH_KNOWN_HOSTS }}
-          SSH_HOST: ${{ vars.USER_DEPLOY_SSH_HOST }}
-          SSH_USER: ${{ vars.USER_DEPLOY_SSH_USER }}
-          SSH_PORT: ${{ vars.USER_DEPLOY_SSH_PORT }}
+          SSH_KEY: ${{ secrets.FT84_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.FT84_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.FT84_SSH_HOST }}
+          SSH_USER: ${{ vars.FT84_SSH_USER }}
+          SSH_PORT: ${{ vars.FT84_SSH_PORT }}
           DEPLOY_DIRECTORY: ${{ vars.USER_DEPLOY_DIRECTORY }}
           ENV_FILE: ${{ vars.USER_DEPLOY_ENV_FILE }}
           REGISTRY_USER: ${{ github.actor }}
