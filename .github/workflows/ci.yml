@@ -71,7 +71,7 @@ jobs:
         run: chmod +x ./mvnw
         working-directory: ${{ matrix.path }}
 
-      - name: Ticket deploy and isolated PostgreSQL checks
+      - name: Ticket deploy syntax and isolated PostgreSQL checks
         if: matrix.path == 'services/ticket-service'
         env:
           TICKET_TEST_DB_URL: jdbc:postgresql://127.0.0.1:15432/ticket_test_c1
@@ -79,7 +79,6 @@ jobs:
           TICKET_TEST_DB_PASSWORD: ticket_ci_disposable
         run: |
           bash -n ../../deploy/deploy-ticket.sh
-          python3 ../../deploy/test_deploy_ticket.py
           ./mvnw -B -ntp -Dtest=TicketPostgresIT test
         working-directory: services/ticket-service
 

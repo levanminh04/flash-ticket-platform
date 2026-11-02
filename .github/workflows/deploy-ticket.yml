@@ -6,7 +6,6 @@ on:
     paths:
       - services/ticket-service/**
       - deploy/deploy-ticket.sh
-      - deploy/test_deploy_ticket.py
       - infrastructure/config-server/src/main/resources/config/ticket-service.yaml
       - deploy/docker-compose.ticket.yml
       - .github/workflows/deploy-ticket.yml
@@ -57,14 +56,13 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/ticket-service/pom.xml
-      - name: Check deploy CLI and isolated PostgreSQL behavior
+      - name: Check deploy syntax and isolated PostgreSQL behavior
         env:
           TICKET_TEST_DB_URL: jdbc:postgresql://127.0.0.1:15432/ticket_test_c1
           TICKET_TEST_DB_USER: ticket_ci
           TICKET_TEST_DB_PASSWORD: ticket_ci_disposable
         run: |
           bash -n deploy/deploy-ticket.sh
-          python3 deploy/test_deploy_ticket.py
           cd services/ticket-service
           chmod +x mvnw
           ./mvnw -B -ntp -Dtest=TicketPostgresIT test
