@@ -134,7 +134,8 @@ done
 [[ "$business" == true || ( "$listeners" == false && "$workers" == false ) ]] || fail business_required_for_background_work
 qr_directory=$(jq -er '.services["ticket-service"].volumes[] |
   select(.type == "bind" and .target == "/run/ticket-qr" and .read_only == true and
-    .bind.create_host_path == false) | .source' "$work/model.json") || fail missing_read_only_qr_mount
+    (.bind.create_host_path // false) == false) | .source' "$work/model.json") || fail missing_read_only_qr_mount
+# Compose 2.40 omits create_host_path:false from JSON; true remains forbidden.
 [[ "$qr_directory" == /* && "$qr_directory" != *,* && -d "$qr_directory" && ! -L "$qr_directory" ]] || fail unsafe_qr_directory
 if [[ "$business" == true ]]; then
   key_location=$(setting TICKET_QR_KEY_RING_LOCATION) || fail missing_keyring_location
