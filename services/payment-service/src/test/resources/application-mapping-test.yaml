@@ -1,0 +1,28 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
+  datasource:
+    url: ${PAYMENT_TEST_DB_URL}
+    username: ${PAYMENT_TEST_DB_USERNAME}
+    password: ${PAYMENT_TEST_DB_PASSWORD}
+  sql:
+    init:
+      mode: never
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
+        jdbc:
+          time_zone: UTC
+eureka:
+  client:
+    enabled: false

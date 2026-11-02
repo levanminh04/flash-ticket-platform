@@ -1,0 +1,101 @@
+# Chạy Payment cùng ngrok bằng Docker
+
+Chạy lệnh bên dưới tại thư mục gốc repository. Compose chỉ chạy Payment và ngrok;
+Config Server, Booking, PostgreSQL, RabbitMQ và Keycloak phải sẵn sàng trước.
+Payment dùng Java 21 bên trong image, máy không cần cài Java để build/chạy container.
+
+## Cấu hình một lần
+
+1. Lấy authtoken và **domain được cấp cho tài khoản** trong dashboard ngrok.
+   Gói miễn phí có một dev domain cố định, không đổi khi khởi động lại agent.
+   Dùng đúng hostname được cấp, không tự đặt tên domain.
+2. Giữ các biến Payment đang chạy được trong `.env` ở thư mục gốc. Thêm:
+
+   ```dotenv
+   NGROK_DOMAIN=your-assigned-domain.ngrok-free.app
+   NGROK_AUTHTOKEN=your-own-token
+   ```
+
+   `NGROK_DOMAIN` chỉ chứa hostname, không có `https://`, đường dẫn hoặc dấu `/` cuối.
+   Không commit `.env`. Token chỉ được truyền cho container ngrok, không đưa vào image Payment.
+3. Đăng ký IPN với VNPay cho đúng merchant `VNPAY_TMN_CODE`:
+
+   ```text
+   https://<NGROK_DOMAIN>/api/v1/payments/vnpay/ipn
+   ```
+
+   Compose tự tính `VNPAY_RETURN_URL` và `VNPAY_IPN_URL` từ domain mỗi lần tạo container,
+   ghi đè các URL cũ trong `.env` mà không sửa file. Compose không đăng nhập hoặc thay
+   cấu hình merchant bên VNPay. Đăng ký IPN một lần nếu giữ nguyên domain và merchant.
+
+## Chạy
+
+Dừng Payment trong IntelliJ trước để tránh trùng cổng và hai bản cùng xử lý queue.
+Giữ Config Server chạy trên máy ở cổng 8888 và Booking ở cổng 8082.
+Nếu đang dùng SSH tunnel PostgreSQL/Booking, giữ các tunnel chạy.
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.payment.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.payment.yml ps
+docker compose --env-file .env -f deploy/docker-compose.payment.yml logs -f payment-service ngrok
+```
+
+Ngrok chỉ khởi động sau khi Payment qua healthcheck HTTP. Chờ log ngrok báo endpoint
+đã mở thành công; container đang chạy chưa chứng minh tunnel đã kết nối tài khoản.
+Lần sau chạy lại cùng lệnh; Docker tái sử dụng cache build và domain giữ nguyên.
+`restart: unless-stopped` cho phép tự khởi động lại khi Docker khởi động; sau `down`
+hoặc dừng thủ công, cần chạy `up` để bật lại.
+
+- API Postman: `http://localhost:8083/api/v1/payments`.
+- Theo dõi IPN/Return: `http://localhost:4040`.
+- Dừng cả hai: `docker compose --env-file .env -f deploy/docker-compose.payment.yml down`.
+
+## Dịch vụ ngoài Docker
+
+`localhost` bên trong container là container đó. Các đường dẫn mặc định của Compose:
+
+| Dịch vụ | Địa chỉ Payment dùng |
+| --- | --- |
+| Config Server trên máy | `http://host.docker.internal:8888` |
+| Booking trên máy hoặc SSH tunnel | `http://host.docker.internal:8082` |
+| PostgreSQL trên máy hoặc SSH tunnel | `jdbc:postgresql://host.docker.internal:5432/payment_db` |
+| RabbitMQ/Keycloak | Theo `.env`, dùng địa chỉ container truy cập được |
+
+Có thể đổi `PAYMENT_DOCKER_CONFIG_SERVER_URL`, `PAYMENT_DOCKER_BOOKING_URL`,
+`PAYMENT_DOCKER_DB_URL` nếu dùng trực tiếp server hoặc network khác.
+Nếu RabbitMQ hoặc Keycloak chạy trên máy, dùng hostname Docker truy cập được;
+giữ `KEYCLOAK_ISSUER_URI` khớp chính xác issuer của token, còn URL JWK/token phải
+truy cập được từ container. Với Docker Desktop, kiểm tra firewall và tunnel nếu
+container không tới được cổng trên Windows. Eureka bị tắt trong Compose này;
+Postman gọi thẳng Payment, không qua discovery/Gateway.
+
+`PAYMENT_DOCKER_PORT` chỉ đổi cổng truy cập trên máy; bên trong Payment vẫn là 8083.
+`NGROK_INSPECTOR_PORT` đổi cổng theo dõi trên máy nếu 4040 đang bận.
+
+## Test callback
+
+1. Gọi GET `https://<NGROK_DOMAIN>/api/v1/payments/vnpay/ipn` không kèm tham số.
+   Kết quả mong đợi là HTTP 200, JSON `RspCode=97` vì thiếu chữ ký. Lệnh này không
+   cập nhật giao dịch; nó xác nhận tunnel đã tới đúng endpoint. Nếu trình duyệt
+   hiện trang cảnh báo ngrok, chọn tiếp tục; dùng Postman để xem JSON trực tiếp.
+2. Tạo order còn hạn, dùng JWT BUYER và `Idempotency-Key` để POST tạo thanh toán.
+   Kiểm tra `vnp_ReturnUrl` trong link mới dùng đúng domain ngrok.
+3. Thanh toán sandbox, xem ngrok inspector có request `/ipn` và response JSON
+   `RspCode=00`, rồi gọi GET `/api/v1/orders/{orderId}/payment` với JWT BUYER.
+
+Link đã lưu trong attempt cũ không tự đổi khi thay domain. Cùng idempotency key
+trả lại link cũ; key mới trên order vẫn có attempt PENDING có thể trả 409.
+Khi đổi cấu hình callback, dùng order mới còn hạn để test rõ ràng.
+Nếu trình duyệt không mở được `flash-ticket://payment-return`, đó là app deep link;
+kiểm tra IPN và API trạng thái. Return không tự xác nhận thu tiền.
+
+Nếu chỉ có `/return`, kiểm tra đăng ký IPN bên VNPay. Nếu nhận tiền nhưng order chưa
+hoàn tất/phát vé, kiểm tra worker, queue và hợp đồng Ticket → Booking; tunnel không
+sửa khác biệt routing giữa các service.
+
+## Nguồn
+
+- [ngrok Docker](https://ngrok.com/download/docker)
+- [Domain cố định của gói miễn phí](https://ngrok.com/docs/pricing-limits/free-plan-limits)
+- [Cấu hình agent v3](https://ngrok.com/docs/gateway/agent/config/v3)
+- [VNPay IPN và Return](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html)

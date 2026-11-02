@@ -1,0 +1,118 @@
+package com.flashticket.payment_service.dto;
+
+import static org.assertj.core.api.Assertions.*;
+
+import com.flashticket.payment_service.dto.common.ContractValidationException;
+import com.flashticket.payment_service.dto.message.SectorConfig;
+import com.flashticket.payment_service.dto.message.StartPaymentResult;
+import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.node.ObjectNode;
+
+class ContractValidationTest {
+  @Test
+  void rejectsDuplicateJsonKeysBeforeBuildingTree() throws Exception {
+    String json = ContractCodecTest.purchaseJson();
+    for (String bad :
+        new String[] {
+          json.replace(
+              "\"buyerSubject\":\"buyer-1\"",
+              "\"buyerSubject\":\"buyer-1\",\"buyerSubject\":\"other\""),
+          json.replace("\"quantity\":1", "\"quantity\":1,\"quantity\":1"),
+          json.replace("\"seats\":[]", "\"seats\":[{\"seatId\":\"a\",\"seatId\":\"b\"}]")
+        }) {
+      var failure = catchThrowable(() -> ContractCodecTest.CODEC.read(bad, PurchaseSnapshot.class));
+      assertThat(failure).isInstanceOf(ContractValidationException.class);
+      assertThat(((ContractValidationException) failure).field()).isEqualTo("$");
+      assertThat(((ContractValidationException) failure).code()).isEqualTo("INVALID_JSON");
+    }
+  }
+
+  @Test
+  void doesNotChangeApplicationJsonMapper() {
+    var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+    try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+      new com.flashticket.payment_service.dto.common.ContractCodec(mapper, factory.getValidator());
+    }
+    assertThat(mapper.readTree("{\"x\":1,\"x\":2}").get("x").asInt()).isEqualTo(2);
+  }
+
+  @Test
+  void malformedTimestampAndEnumIdentifyTheirField() throws Exception {
+    String json = ContractCodecTest.purchaseJson();
+    for (String[] sample :
+        new String[][] {
+          {json.replace("2030-01-02T03:00:00Z", "invalidZ"), "$.eventEndsAt"},
+          {json.replace("QUANTITY", "WRONG"), "$.mode"}
+        }) {
+      var failure =
+          catchThrowable(() -> ContractCodecTest.CODEC.read(sample[0], PurchaseSnapshot.class));
+      assertThat(failure).isInstanceOf(ContractValidationException.class);
+      assertThat(((ContractValidationException) failure).field()).isEqualTo(sample[1]);
+      assertThat(((ContractValidationException) failure).code()).isEqualTo("INVALID_VALUE");
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"-1", "1.5", "1e2", "+1", "01", "10000000000000000000", " 1", ""})
+  void rejectsNonCanonicalMoney(String money) throws Exception {
+    var tree =
+        (ObjectNode)
+            ContractCodecTest.CODEC.toTree(
+                ContractCodecTest.CODEC.read(
+                    ContractCodecTest.purchaseJson(), PurchaseSnapshot.class));
+    tree.put("total", money);
+    assertThatThrownBy(() -> ContractCodecTest.CODEC.fromTree(tree, PurchaseSnapshot.class))
+        .isInstanceOf(ContractValidationException.class);
+  }
+
+  @Test
+  void rejectsWrongTokensMissingNullableAndNestedUnknownFields() throws Exception {
+    String json = ContractCodecTest.purchaseJson();
+    for (String bad :
+        new String[] {
+          json.replace("\"total\":\"9999999999999999999\"", "\"total\":100"),
+          json.replace("\"venueName\":null,", ""),
+          json.replace("\"quantity\":1", "\"quantity\":1.5"),
+          json.replace("\"seats\":[]", "\"extra\":1,\"seats\":[]"),
+          json.replace("9223372036854775807", "9223372036854775808"),
+          json.replace("2030-01-01T01:00:00Z", "2030-01-01T08:00:00+07:00"),
+          json.replace("\"buyerSubject\":\"buyer-1\"", "\"buyerSubject\":null")
+        }) {
+      assertThatThrownBy(() -> ContractCodecTest.CODEC.read(bad, PurchaseSnapshot.class))
+          .isInstanceOf(ContractValidationException.class);
+    }
+  }
+
+  @Test
+  void rejectsInconsistentStartResults() {
+    String bad =
+        """
+    {"requestId":"10000000-0000-0000-0000-000000000005","orderId":"10000000-0000-0000-0000-000000000001","state":"CREATED","attemptId":null,"failureCode":null}
+    """;
+    assertThatThrownBy(() -> ContractCodecTest.CODEC.read(bad, StartPaymentResult.class))
+        .isInstanceOf(ContractValidationException.class);
+    assertThatThrownBy(
+            () ->
+                ContractCodecTest.CODEC.read(
+                    bad.replace("CREATED", "REJECTED"), StartPaymentResult.class))
+        .isInstanceOf(ContractValidationException.class);
+  }
+
+  @Test
+  void boundsConfigurationCountersToPostgresBigintWhileAllowingZero() {
+    String json =
+        """
+    {"sectorId":"10000000-0000-0000-0000-000000000003","kind":"STANDING","configuredCapacity":"0"}
+    """;
+    assertThat(ContractCodecTest.CODEC.read(json, SectorConfig.class).configuredCapacity())
+        .isEqualTo("0");
+    assertThatThrownBy(
+            () ->
+                ContractCodecTest.CODEC.read(
+                    json.replace("\"0\"", "\"9223372036854775808\""), SectorConfig.class))
+        .isInstanceOf(ContractValidationException.class);
+  }
+}

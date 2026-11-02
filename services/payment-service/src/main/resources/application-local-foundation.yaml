@@ -1,0 +1,16 @@
+# Activate explicitly with SPRING_PROFILES_ACTIVE=local-foundation.
+# Config Server and PostgreSQL remain required.
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+      direct:
+        auto-startup: false
+eureka:
+  client:
+    enabled: false
+management:
+  health:
+    rabbit:
+      enabled: false
