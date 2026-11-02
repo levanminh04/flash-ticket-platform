@@ -4808,6 +4808,11 @@ class BookingPersistenceIT {
       messagingService.publishBookingMessage(responseId);
       var received = relayRabbitTemplate.receive(RELAY_QUEUE, 5000);
       assertThat(received).isNotNull();
+      assertThat(received.getMessageProperties().getHeaders())
+          .doesNotContainKeys("__TypeId__", "__ContentTypeId__", "__KeyTypeId__");
+      assertThat(received.getMessageProperties().getContentType()).isEqualTo("application/json");
+      assertThat(received.getMessageProperties().getCorrelationId())
+          .isEqualTo(message.correlationId().toString());
       assertThat(received.getMessageProperties().getReceivedDeliveryMode())
           .isEqualTo(org.springframework.amqp.core.MessageDeliveryMode.PERSISTENT);
       assertThat(received.getMessageProperties().getMessageId()).isEqualTo(responseId.toString());
@@ -6801,6 +6806,11 @@ class BookingPersistenceIT {
       for (int i = 0; i < 2; i++) {
         var received = relayRabbitTemplate.receive(RELAY_QUEUE, 10000);
         assertThat(received).isNotNull();
+        assertThat(received.getMessageProperties().getHeaders())
+            .doesNotContainKeys("__TypeId__", "__ContentTypeId__", "__KeyTypeId__");
+        assertThat(received.getMessageProperties().getContentType()).isEqualTo("application/json");
+        assertThat(received.getMessageProperties().getCorrelationId())
+            .isEqualTo(message.correlationId().toString());
         assertThat(received.getMessageProperties().getReceivedDeliveryMode())
             .isEqualTo(org.springframework.amqp.core.MessageDeliveryMode.PERSISTENT);
         var json = JsonMapper.builder().build().readTree(received.getBody());

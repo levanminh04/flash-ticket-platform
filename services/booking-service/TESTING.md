@@ -1,5 +1,75 @@
 # Booking Service tests
 
+## Booking message compatibility — 2026-11-02
+
+Current production code still uses the configured Jackson message converter and
+removes Java type headers before send. Direct JsonMapper serialization was discussed
+but is not part of this change. Envelope body, messageId/correlationId, persistent
+delivery, publisher confirms and outbox retry behavior are preserved.
+
+Focused real RabbitMQ/PostgreSQL run passed both existing methods:
+publishesPaymentDecisionWithConfirmAndPersistentEnvelope and
+relaysOrderCompletedThroughRabbitMq: **2 tests, zero failures/errors/skips; exit 0**.
+The latter also exercises rollback/redelivery and unroutable-message retry.
+Command selection used -P integration with test-compile, failsafe:integration-test
+and failsafe:verify; this was not the full integration suite.
+
+Fetched dev/tuan at 32db391c086258268f57213b9d27132097b26d46. The Booking relay's
+generated messages passed that Payment revision's actual ContractCodec and
+MessageInvariantValidator for ACCEPTED/LATE/DUPLICATE/CANCELLED and OrderCompleted:
+**5/5 passed**. Wire checks used mocked broker/repositories, so they establish
+payload/header compatibility, not Payment Saga/DB or sandbox E2E completion.
+The independent live-broker tests above establish Booking relay delivery.
+
+Two reverse-direction mismatches remain in Payment source: issuance results use
+booking.issuance-result.v1 instead of the two Booking queue types in B13; Saga
+recovery uses Saga aggregateVersion while the AcceptPayment payload preserves
+sourceOrderVersion. Reproduced rejection of both issuance states and recovery
+aggregateVersion=3/sourceOrderVersion=1 using Booking's current handlers.
+No Payment code or deployed environment was changed during this comparison.
+Evidence: target/direct-envelope-baseline.log and
+target/payment-compatibility-32db391/{source.json,wire-check.log,results.json}.
+
+## Plain console logging — 2026-11-02
+
+User requested minimal YAML and default text logs, then explicitly chose to remove
+the JSON-only logging tests/helpers rather than rename and rewrite them.
+Main, Config Server and test YAML now keep only logging.charset.console=UTF-8.
+Removed BookingLogFields, SafeStackTracePrinter, RcaLoggingTests (three tests),
+the JSON console test in BookingRabbitErrorHandlerTests and LogCapture's JSON
+bootstrap method/nested probe. The event-capture helper and existing error handling,
+error code and ACK/DLQ behavior tests remain. No new Java declaration or dependency.
+
+Clean verify loaded the root .env through python-dotenv, using Maven 3.9.9 and
+Java 23.0.1: **384 unit tests passed, zero failures/errors/skips; exit 0**.
+Spotless and SpotBugs checks passed. Boot test contexts emitted default text logs.
+This replaces the two JSON logging failures in the earlier header-fix run below.
+No integration-profile execution or deployment is claimed.
+Latest evidence: target/plain-logging-verify.log, target/surefire-reports and
+target/spotbugsXml.xml. Clean verify replaces earlier ignored target artifacts.
+
+## Outbound JSON type headers — 2026-11-02
+
+User confirmed removing Java type headers after conversion and before sending.
+Updated only the existing publishBookingMessage body and two existing relay tests;
+no Java class/method, dependency, transaction or acknowledgement change.
+Both booking.payment-decision.v1 and booking.order-completed.v1 now omit
+__TypeId__, __ContentTypeId__ and __KeyTypeId__.
+
+Direct relay checks with the real Jackson converter and a mocked broker observed
+both messages fail the header check before the fix and pass afterwards. JSON body,
+content type, messageId, correlationId and persistent delivery mode were preserved.
+The broker mock intentionally times out confirmation; this check does not establish
+broker delivery or Payment consumption. test-compile and spotless:check passed.
+
+Full unit run loaded the project .env using python-dotenv: 388 tests, 386 passed,
+one failure (BookingRabbitErrorHandlerTests.nativeFatalLoggerDoesNotDumpMessage)
+and one error (RcaLoggingTests.actualJsonLogsHaveRcaContextAndExcludeSensitiveValues).
+Full regression is not green. The two relay integration tests could not start
+because Docker Engine was unavailable. No deployment or Payment E2E is claimed.
+Historical evidence was generated under target/message-type-header-*.log and
+target/check-message-type-headers.jsh before the later clean verify above.
+
 ## Event availability GET — 2026-11-01
 
 Execution approval: user answered **"triển khai cho tôi"** immediately after the
