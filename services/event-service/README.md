@@ -51,8 +51,8 @@ organizer; endpoint organizer yêu cầu `ORGANIZER` và đúng chủ sở hữu
 | GET `/admin/events/{id}` | ADMIN | Owner để duyệt |
 | POST `/admin/events/{id}/return-to-draft` | ADMIN | `{rowVersion}` → Owner |
 | POST `/admin/events/{id}/approve` | ADMIN | `{rowVersion,feeRate}` → Owner |
-| GET `/events` | Công khai | Page EventPublic, chỉ PUBLISHED/QUANTITY |
-| GET `/events/{id}` | Công khai | EventPublic, chỉ PUBLISHED/QUANTITY |
+| GET `/events` | Công khai | Page EventPublic, chỉ PUBLISHED, QUANTITY hoặc SEAT_MAP |
+| GET `/events/{id}` | Công khai | EventPublic, chỉ PUBLISHED, QUANTITY hoặc SEAT_MAP |
 | GET `/categories`, GET `/venues` | Công khai | Mảng `{id,name,address}` |
 
 `/actuator/health`, health component và `/actuator/info` yêu cầu `INTERNAL_SERVICE`.
@@ -193,12 +193,16 @@ trước child, kiểm expected rowVersion và tăng row/config version. Lưu to
 và các snapshot liên quan trọn vẹn trong một transaction PostgreSQL.
 
 Approve nhận feeRate dạng chuỗi fraction 0–1, tối đa 8 số thập phân ("0.1" = 10%),
-lưu người/mốc duyệt và đóng băng phí. Cùng transaction ghi
-`event.finance-configured.v1` với sourceFeeVersion tại lần duyệt. Publish ghi
-`event.sales-configured.v1` và `event.access-configured.v1`. Gọi publish lại khi
-PUBLISHED trả kết quả hiện tại, không tăng version hoặc ghi thêm outbox; không
-tạo lại FinanceConfiguration đã đóng băng. Finance có thể tới trước Access;
-consumer phải xử lý theo contract/version của chính snapshot.
+lưu người/mốc duyệt và đóng băng phí; chưa ghi message vào outbox. Theo điều chỉnh
+ngày31/10/2026, chỉ khi organizer publish, cùng transaction chuyển PUBLISHED mới ghi
+đủ `event.finance-configured.v1`, `event.sales-configured.v1` và
+`event.access-configured.v1`. Finance giữ sourceFeeVersion và aggregateVersion
+của lần duyệt; Sales/Access dùng sourceConfigVersion tại lần công bố. Worker chỉ
+đọc được các message sau khi transaction commit. Một append lỗi thì rollback cả
+trạng thái và ba message; có thể publish lại với phiên bản APPROVED còn nguyên.
+Gọi publish lại khi PUBLISHED trả kết quả hiện tại, không tăng version hoặc tạo
+messageId mới. Không bảo đảm thứ tự nhận giữa các queue; consumer vẫn kiểm
+contract/version của từng snapshot. Luồng cancellation giữ nguyên.
 
 Outbox lưu `data` và metadata riêng, dựng Envelope schemaVersion=1 khi gửi.
 Worker claim một message bằng `FOR UPDATE SKIP LOCKED`, tăng attempts/đặt lease,
@@ -247,7 +251,27 @@ Test tích hợp dùng PostgreSQL 16.15 Docker **cô lập**, canonical SQL/pref
 container test; tuyệt đối không dùng URL DB chung cho test. Test bao gồm HTTP
 lifecycle/quyền/strict JSON, transaction rollback, concurrent save/submit/publish,
 lease fence, real-signed JWT với JWKS test và publisher fault bằng mock.
-Confirm/return thực tế với broker chung và consumer liên service chưa được test.
+`RabbitTransportTests` dùng RabbitMQ 4.3.6 thật trong container cô lập, quorum queue:
+confirm/persistent envelope cho bốn loại message, mandatory return, retry sau phục
+hồi binding và reconnect/replay giữ nguyên bytes/messageId. Test mặc định không
+kết nối EC2. Chỉ dùng `EVENT_TEST_AMQP_*` cho vhost/user tạm riêng có tên
+`event-verify-<32 hex>`; không dùng credential/vhost nghiệp vụ chung.
+Kết quả kiểm AWS và phần consumer chưa hoàn thiện ở
+[INTEGRATION-VERIFICATION](INTEGRATION-VERIFICATION.md).
+Helper runtime có tùy chọn `-Smoke -GatewayRead` để kiểm thêm public Event API đi
+qua Gateway thật và correlation header, có đợi cache Eureka cập nhật.
+
+## Bộ deploy và CI Event
+
+Hai file chạy chính nằm trực tiếp trong `deploy/`: [deploy-event.sh](../../deploy/deploy-event.sh)
+và [docker-compose.event.yml](../../deploy/docker-compose.event.yml), đồng bộ bố cục Booking/User.
+[deploy-event.yml](../../.github/workflows/deploy-event.yml) chạy Java 21/UTC Maven verify,
+publish image theo digest và deploy riêng Event trên AWS #2. Giữ JWT health, Config contract,
+snapshot/rollback và đường runtime env hiện có; không tự rollout Config Server.
+Tài liệu thao tác và test/tunnel/mẫu env giữ local tại `deploy/README-event.md`, cùng convention User.
+Workflow dùng SSH secrets/variables `FT84_*` cùng User và hai Variables riêng Event:
+`EVENT_DEPLOY_DIRECTORY` (thư mục deploy trên AWS #2), `EVENT_DEPLOY_ENV_FILE` (file `.env` private hiện có).
+Thay đổi bộ deploy trong source chưa đồng nghĩa đã chạy workflow hoặc cập nhật AWS.
 
 ## Handoff tích hợp Gateway
 
@@ -255,6 +279,7 @@ Source Gateway đã bổ sung route/security cho toàn bộ API Event ở trên,
 API bước1–4. Dùng method/path cụ thể; availability vẫn Booking, check-ins vẫn
 Ticket, internal API không public. Áp dụng code Gateway mới cần build JAR, rebuild
 image và recreate riêng api-gateway theo Compose; restart image cũ không nạp code
-mới. Lượt coding này chưa recreate/deploy Gateway Docker. Không sửa code các
-business service khác. Hoàn tất riêng Event không đồng nghĩa đã nghiệm thu mua vé,
+mới. Gateway đã được rebuild/recreate ngày 30/10/2026; trạng thái runtime và giới
+hạn kiểm chứng được ghi trong verification. Không sửa code các business service
+khác. Hoàn tất riêng Event không đồng nghĩa đã nghiệm thu mua vé,
 đóng bán/vô hiệu vé/hoàn tiền xuyên service.
