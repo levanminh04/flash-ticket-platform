@@ -1,0 +1,70 @@
+name: flash-ticket-ticket
+
+services:
+  ticket-service:
+    image: ${TICKET_IMAGE:?Set the verified Ticket image digest}
+    network_mode: host
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    mem_limit: ${TICKET_MEMORY_LIMIT:-512m}
+    volumes:
+      - type: bind
+        source: ${TICKET_QR_HOST_DIRECTORY:?Set the private QR directory on the Linux server}
+        target: /run/ticket-qr
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      JAVA_TOOL_OPTIONS: ${TICKET_JAVA_OPTIONS:--XX:MaxRAMPercentage=50.0 -Duser.timezone=UTC -Djava.awt.headless=true}
+      SERVER_ADDRESS: ${TICKET_SERVER_ADDRESS:-127.0.0.1}
+      TICKET_SERVICE_PORT: ${TICKET_SERVICE_PORT:-8084}
+      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL:?Set the reachable Ticket Config Server endpoint}
+      EUREKA_CLIENT_ENABLED: "${EUREKA_CLIENT_ENABLED:-false}"
+      TICKET_DB_URL: ${TICKET_DB_URL:?Set ticket_db JDBC URL for this server}
+      TICKET_DB_USERNAME: ${TICKET_DB_USERNAME:-ticket_admin}
+      TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD:?Set Ticket DB credential}
+      TICKET_RABBITMQ_HOST: ${TICKET_RABBITMQ_HOST:?Set broker host}
+      TICKET_RABBITMQ_PORT: ${TICKET_RABBITMQ_PORT:-5672}
+      TICKET_RABBITMQ_USERNAME: ${TICKET_RABBITMQ_USERNAME:?Set scoped Ticket broker username}
+      TICKET_RABBITMQ_PASSWORD: ${TICKET_RABBITMQ_PASSWORD:?Set broker credential}
+      TICKET_RABBITMQ_VHOST: ${TICKET_RABBITMQ_VHOST:-/}
+      TICKET_RABBITMQ_BUSINESS_EXCHANGE: ${TICKET_RABBITMQ_BUSINESS_EXCHANGE:-business.ex}
+      TICKET_KEYCLOAK_ISSUER_URI: ${TICKET_KEYCLOAK_ISSUER_URI:?Set exact JWT issuer}
+      TICKET_KEYCLOAK_JWK_SET_URI: ${TICKET_KEYCLOAK_JWK_SET_URI:?Set reachable JWKS URI}
+      TICKET_KEYCLOAK_AUDIENCE: ${TICKET_KEYCLOAK_AUDIENCE:-flash-ticket-api}
+      TICKET_KEYCLOAK_TOKEN_URI: ${TICKET_KEYCLOAK_TOKEN_URI:?Set token endpoint for protected health checks}
+      TICKET_INTERNAL_SERVICE_CLIENT_SECRET: ${TICKET_INTERNAL_SERVICE_CLIENT_SECRET:?Set health client credential}
+      MAIL_HOST: ${MAIL_HOST:?Set SMTP host}
+      MAIL_PORT: ${MAIL_PORT:?Set SMTP port}
+      MAIL_USERNAME: ${MAIL_USERNAME:?Set SMTP username}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?Set SMTP credential}
+      MAIL_SMTP_AUTH: "${MAIL_SMTP_AUTH:-true}"
+      MAIL_SMTP_STARTTLS_ENABLE: "${MAIL_SMTP_STARTTLS_ENABLE:-true}"
+      MAIL_SMTP_STARTTLS_REQUIRED: "${MAIL_SMTP_STARTTLS_REQUIRED:-true}"
+      TICKET_BUSINESS_ENABLED: "${TICKET_BUSINESS_ENABLED:-false}"
+      TICKET_LISTENERS_ENABLED: "${TICKET_LISTENERS_ENABLED:-false}"
+      TICKET_WORKERS_ENABLED: "${TICKET_WORKERS_ENABLED:-false}"
+      TICKET_ACCESS_CONFIGURED_QUEUE: ${TICKET_ACCESS_CONFIGURED_QUEUE:-ticket.access-configured.q}
+      TICKET_EVENT_CANCELLED_QUEUE: ${TICKET_EVENT_CANCELLED_QUEUE:-ticket.event-cancelled.q}
+      TICKET_ISSUANCE_QUEUE: ${TICKET_ISSUANCE_QUEUE:-ticket.issuance.q}
+      TICKET_RESULT_ROUTING_KEY: ${TICKET_RESULT_ROUTING_KEY:-ticket.issuance-result.v1}
+      TICKET_OUTBOX_CONFIRM_TIMEOUT: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:-5s}
+      TICKET_OUTBOX_CLAIM_LEASE: ${TICKET_OUTBOX_CLAIM_LEASE:-30s}
+      TICKET_WORKER_BATCH_SIZE: ${TICKET_WORKER_BATCH_SIZE:-20}
+      TICKET_WORKER_POLL_DELAY: ${TICKET_WORKER_POLL_DELAY:-1s}
+      TICKET_DELIVERY_CLAIM_LEASE: ${TICKET_DELIVERY_CLAIM_LEASE:-60s}
+      TICKET_DELIVERY_DISPLAY_ZONE: ${TICKET_DELIVERY_DISPLAY_ZONE:-Asia/Ho_Chi_Minh}
+      TICKET_BUYER_BASE_URL: ${TICKET_BUYER_BASE_URL:-}
+      TICKET_MAIL_FROM: ${TICKET_MAIL_FROM:-}
+      TICKET_QR_ACTIVE_KEY_VERSION: ${TICKET_QR_ACTIVE_KEY_VERSION:-}
+      TICKET_QR_KEY_RING_LOCATION: ${TICKET_QR_KEY_RING_LOCATION:-file:/run/ticket-qr/keys.json}
+      TICKET_SERVICE_VERSION: ${TICKET_SERVICE_VERSION:-local-dev}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

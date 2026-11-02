@@ -1,0 +1,4 @@
+**
+!target/
+!target/ticket-service-*.jar
+!Dockerfile
