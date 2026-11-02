@@ -13,11 +13,13 @@ WORKDIR /build
 COPY .mvn/ .mvn/
 COPY mvnw mvnw.cmd ./
 COPY pom.xml ./
-RUN ./mvnw -B -ntp dependency:go-offline -q
+# Git on Windows may check out the wrapper with CRLF and without execute permission.
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw
 
 # Copy source and build (Spotless check runs in verify; skip tests here for image build)
 COPY src/ src/
-RUN ./mvnw -B -ntp package -DskipTests -q
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    ./mvnw -B -ntp package -Dmaven.test.skip=true
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine AS runtime
@@ -30,7 +32,7 @@ USER payment
 COPY --from=builder /build/target/payment-service-*.jar app.jar
 
 # Expose default Spring Boot port
-EXPOSE 8080
+EXPOSE 8083
 
 # JVM tuning: container-aware heap, virtual threads friendly
 ENTRYPOINT ["java", \

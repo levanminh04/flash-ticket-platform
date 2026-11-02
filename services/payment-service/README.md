@@ -1,5 +1,8 @@
 # Payment Service — API trạng thái và VNPay theo Cinema
 
+Chạy Payment cùng ngrok bằng một lệnh Docker Compose: xem
+[hướng dẫn Payment Docker + ngrok](../../deploy/README.payment.md).
+
 Payment có 13 JPA entity, DTO/MapStruct, contract boundary và API đọc trạng thái với JWT, ownership. Phần VNPay được chuyển từ Cinema: `VNPayConfig`, `VNPayUtil` và các phương thức tạo URL/IPN/return trong `PaymentService`. DTO/message và schema hiện có được giữ nguyên; chưa có runtime consumer, outbox relay hoặc Saga.
 
 `GET /api/v1/orders/{orderId}/payment` trả `ApiResponse<PaymentView>`. `POST /api/v1/payments` tạo URL VNPay, hai GET `/api/v1/payments/vnpay/ipn` và `/api/v1/payments/vnpay/return` nhận callback. PaymentController gọi PaymentService; dữ liệu được đọc/ghi qua repository cục bộ.
