@@ -565,6 +565,11 @@ class PaymentFlowIntegrationTest {
         orderId);
     sagas.recoverSaga(orderId);
     assertThat(outbox.count()).isEqualTo(2);
+    for (var command : outbox.findAll()) {
+      var envelope = codec.readEnvelope(command.getPayload().toString(), AcceptPayment.class);
+      assertThat(envelope.aggregateVersion()).isEqualTo(purchase.sourceOrderVersion());
+      assertThat(envelope.data().sourceOrderVersion()).isEqualTo(envelope.aggregateVersion());
+    }
     worker.publishOutbox();
     assertThat(rabbitTemplate.receive("payment.gov156.test.accept", 2000)).isNotNull();
     assertThat(rabbitTemplate.receive("payment.gov156.test.accept", 2000)).isNotNull();
