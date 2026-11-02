@@ -2,6 +2,20 @@ server:
   port: ${PAYMENT_SERVICE_PORT:8083}
 
 spring:
+  sql:
+    init:
+      mode: never
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        jdbc:
+          time_zone: UTC
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
   datasource:
     url: ${PAYMENT_DB_URL}
     username: ${PAYMENT_DB_USERNAME:payment_admin}
@@ -10,17 +24,6 @@ spring:
       connection-init-sql: SET ROLE payment_owner
       maximum-pool-size: 5
       minimum-idle: 1
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: none
-    properties:
-      hibernate:
-        default_schema: payment_schema
-        type:
-          json_format_mapper: jackson3
-        jdbc:
-          time_zone: UTC
   security:
     oauth2:
       resourceserver:
@@ -42,6 +45,25 @@ spring:
       simple:
         acknowledge-mode: manual
         prefetch: 20
+
+flashticket:
+  payment:
+    jwt:
+      issuer-uri: ${KEYCLOAK_ISSUER_URI}
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+      audience: ${KEYCLOAK_AUDIENCE}
+
+vnpay:
+  tmn-code: ${VNPAY_TMN_CODE}
+  hash-secret: ${VNPAY_HASH_SECRET}
+  payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+  return-url: ${VNPAY_RETURN_URL}
+  ipn-url: ${VNPAY_IPN_URL}
+  app-return-url: ${VNPAY_APP_RETURN_URL:flash-ticket://payment-return}
+  version: 2.1.0
+  command: pay
+  currency-code: VND
+  locale: vn
 
 logging:
   charset:

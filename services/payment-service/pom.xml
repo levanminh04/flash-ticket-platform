@@ -29,8 +29,22 @@
 	<properties>
 		<java.version>21</java.version>
 		<spring-cloud.version>2025.1.3</spring-cloud.version>
+		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
 	<dependencies>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security-oauth2-client</artifactId></dependency>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-restclient</artifactId></dependency>
+		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-restclient-test</artifactId><scope>test</scope></dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+			<version>3.1.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -126,11 +140,38 @@
 		</dependencies>
 	</dependencyManagement>
 
+	<profiles>
+		<profile>
+			<id>mapping-tests</id>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration><excludes combine.self="override"/></configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>query-tests</id>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration><excludes combine.self="override"/></configuration>
+			</plugin></plugins></build>
+		</profile>
+	</profiles>
 	<build>
 		<plugins>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude><exclude>**/PaymentFlowIntegrationTest.java</exclude></excludes>
+					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration><mainClass>com.flashticket.payment_service.PaymentServiceApplication</mainClass></configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -144,6 +185,16 @@
 						</goals>
 						<configuration>
 							<annotationProcessorPaths>
+								<path>
+									<groupId>org.mapstruct</groupId>
+									<artifactId>mapstruct-processor</artifactId>
+									<version>${mapstruct.version}</version>
+								</path>
+								<path>
+									<groupId>org.projectlombok</groupId>
+									<artifactId>lombok-mapstruct-binding</artifactId>
+									<version>0.2.0</version>
+								</path>
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>

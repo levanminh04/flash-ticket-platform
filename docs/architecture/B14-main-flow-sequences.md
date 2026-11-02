@@ -58,6 +58,8 @@ Thất bại dứt điểm: Ticket transaction khóa issuance, bảo đảm khô
 
 Booking nhận FAILED: nếu đã hủy event giữ CANCELLED; nếu ISSUING thì ISSUANCE_FAILED. Theo xác nhận user ngày 29/10/2026 “cứ đưa về. còn khi đặt thì check event rồi nên ko lo”, trả promotion, inventory đã chốt và purchase limit đúng một lần kể cả event hết giờ bán hoặc CANCELLED; createOrder vẫn kiểm eventStatus/sale window trước khi nhận đơn. Dùng trạng thái allocations/usage và quyền giữ reservation của ghế để không trả hai lần hoặc sửa tài nguyên của reservation mới. Quyết định này chỉ áp dụng nhánh FAILED dứt điểm, không thay fan-out hủy ở §5; Order COMPLETED không bị hạ trạng thái bởi FAILED mâu thuẫn. Refund hoàn tất không tự thay order hoặc ticket state. Chi tiết: [spec issuance-result v0.4](../java-workflow/specs/2026-10-29-booking-issuance-result-design.md), gate EXECUTING-PLANS đã được user xác nhận, kết quả chạy ghi trong plan.
 
+**Checkpoint và recovery Payment (đồng bộ 02/11):** nhận COMPLETED từ Ticket thì lưu outbox ticket.issued.v1 với version snapshot và giữ WAITING_TICKETS; nhận OrderCompleted phải khớp checkpoint đã lưu mới đóng Saga. Không cần chờ published_at để chấp nhận reply. Recovery có checkpoint kết quả gửi lại kết quả đó, không phát lệnh ticket.issue mới; transport retry giữ messageId. FAILED giữ nhánh nghĩa vụ refund hiện có và gửi booking.issuance-failed.v1 cho Booking release; không suy timeout là FAILED. Phần này không triển khai fan-out hủy/refund provider ở §5.
+
 ## 4. Hết hạn, buyer hủy và hoàn tiền
 
 Sơ đồ: [B14-02](../diagrams/src/B14-02-expiry-refund-cancellation-sequence.puml).
