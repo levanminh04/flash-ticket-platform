@@ -68,14 +68,47 @@ class TicketApiTests {
                 .accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(header().string("Cache-Control", "no-store"))
-        .andExpect(jsonPath("$.qrToken").value("opaque-token"));
+        .andExpect(jsonPath("$.qrToken").value("A".repeat(43)));
     assertThat(operations.ticketId).isEqualTo(TICKET);
     assertThat(operations.actor).isEqualTo(ACTOR);
+  }
+
+  @Test
+  void pngDownloadContainsTheExistingTokenAndCannotBeCached() throws Exception {
+    byte[] png =
+        mvc.perform(
+                get("/api/v1/tickets/" + TICKET + "/qr")
+                    .principal(principal)
+                    .accept(MediaType.IMAGE_PNG))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.IMAGE_PNG))
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+    assertThat(com.flashticket.ticket_service.qr.QrImageAssertions.decode(png))
+        .isEqualTo("A".repeat(43));
+    assertThat(operations.ticketId).isEqualTo(TICKET);
+    assertThat(operations.actor).isEqualTo(ACTOR);
+  }
+
+  @Test
+  void qrWithoutAnAcceptHeaderKeepsTheExistingJsonContract() throws Exception {
+    mvc.perform(get("/api/v1/tickets/" + TICKET + "/qr").principal(principal))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.qrToken").value("A".repeat(43)));
+  }
+
+  @Test
+  void pngDownloadDoesNotBypassOwnership() throws Exception {
+    operations.failure = new TicketProblem(404, "NOT_FOUND");
     mvc.perform(
             get("/api/v1/tickets/" + TICKET + "/qr")
                 .principal(principal)
                 .accept(MediaType.IMAGE_PNG))
-        .andExpect(status().isNotAcceptable());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("NOT_FOUND"));
   }
 
   @Test
@@ -260,7 +293,7 @@ class TicketApiTests {
       called();
       this.ticketId = ticketId;
       this.actor = actor;
-      return "opaque-token";
+      return "A".repeat(43);
     }
 
     @Override

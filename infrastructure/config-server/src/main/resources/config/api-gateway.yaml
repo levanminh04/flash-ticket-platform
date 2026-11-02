@@ -93,6 +93,8 @@ resilience4j:
         slidingWindowType: COUNT_BASED
   timelimiter:
     instances:
+      eventImageServiceBreaker:
+        timeoutDuration: ${EVENT_IMAGES_GATEWAY_TIME_LIMIT:50s}
       eventServiceBreaker:
         timeoutDuration: 10s
       bookingServiceBreaker:

@@ -3,3 +3,11 @@ spring:
     name: event-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${EVENT_IMAGES_MAX_BYTES:5242880}B
+      max-request-size: ${EVENT_IMAGES_MAX_REQUEST_BYTES:6291456}B
+server:
+  tomcat:
+    # Consume bounded rejected bodies so clients receive the JSON 413 response.
+    max-swallow-size: ${EVENT_IMAGES_MAX_REQUEST_BYTES:6291456}B

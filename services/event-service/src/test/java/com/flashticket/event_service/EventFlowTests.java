@@ -41,7 +41,9 @@ import org.testcontainers.utility.MountableFile;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
+      "spring.cloud.config.enabled=false",
       "spring.autoconfigure.exclude=org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration",
       "event.outbox.enabled=false",
       "event.read-model.cancellation-max-age=1s",
@@ -92,6 +94,29 @@ class EventFlowTests {
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) {
+    // Test application.yaml intentionally disables Config Server. Load only the
+    // actual production multipart/Tomcat settings, without importing live config.
+    try {
+      var source =
+          new org.springframework.boot.env.YamlPropertySourceLoader()
+              .load(
+                  "production-image-settings",
+                  new org.springframework.core.io.FileSystemResource(
+                      Path.of(System.getProperty("basedir", "."))
+                          .resolve("src/main/resources/application.yaml")))
+              .getFirst();
+      var sources = new org.springframework.core.env.MutablePropertySources();
+      sources.addLast(source);
+      var resolver = new org.springframework.core.env.PropertySourcesPropertyResolver(sources);
+      for (String key :
+          List.of(
+              "spring.servlet.multipart.max-file-size",
+              "spring.servlet.multipart.max-request-size",
+              "server.tomcat.max-swallow-size"))
+        registry.add(key, () -> resolver.getRequiredProperty(key));
+    } catch (java.io.IOException failure) {
+      throw new java.io.UncheckedIOException(failure);
+    }
     registry.add(
         "spring.datasource.url",
         () ->
@@ -111,7 +136,10 @@ class EventFlowTests {
   @Autowired JdbcTemplate jdbc;
   @Autowired MockMvc mvc;
   @Autowired JsonMapper json;
+  @org.springframework.boot.test.web.server.LocalServerPort int httpPort;
+  @MockitoBean org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
   @MockitoBean RabbitTemplate rabbit;
+  @MockitoBean com.flashticket.event_service.integration.EventImageStorage imageStorage;
   @MockitoSpyBean OutboxStore outbox;
   @MockitoSpyBean HttpEventSummaries summaries;
   @Autowired CancellationTransactions cancellationTransactions;
@@ -157,6 +185,288 @@ class EventFlowTests {
                 "2027-01-01T14:00:00Z",
                 "5",
                 new EventCommands.Discount("PERCENT", null, 10))));
+  }
+
+  @Test
+  void ownerCanListImagesAndPublishedPublicDetailIncludesOrderedImages() throws Exception {
+    var event = service.create("a", draft("Images"));
+    mvc.perform(
+            get("/api/v1/organizer/events/" + event.eventId() + "/images")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].objectReference").value("events/poster"));
+    var pending = service.submit(event.eventId(), "a", event.rowVersion());
+    var approved =
+        service.approve(
+            event.eventId(), "admin", new EventCommands.Approval(pending.rowVersion(), "0.1"));
+    service.publish(event.eventId(), "a", approved.rowVersion());
+    mvc.perform(get("/api/v1/events/" + event.eventId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.images[0].objectReference").value("events/poster"));
+  }
+
+  @Test
+  void realServletAcceptsMultipartPostAndPutAndRejectsOversizedUpload() throws Exception {
+    var event = service.create("a", draft("Real multipart"));
+    var jwt =
+        org.springframework.security.oauth2.jwt.Jwt.withTokenValue("image-fixture-token")
+            .header("alg", "RS256")
+            .subject("a")
+            .claim("realm_access", Map.of("roles", List.of("ORGANIZER")))
+            .build();
+    when(jwtDecoder.decode("image-fixture-token")).thenReturn(jwt);
+    when(imageStorage.upload(eq(event.eventId()), any()))
+        .thenReturn(
+            new com.flashticket.event_service.integration.EventImageStorage.Uploaded(
+                "https://res.cloudinary.com/test/image/upload/http.png", "asset"));
+    var client =
+        java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(3))
+            .build();
+    String base =
+        "http://127.0.0.1:" + httpPort + "/api/v1/organizer/events/" + event.eventId() + "/images";
+    String part =
+        "--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"image.png\"\r\nContent-Type: image/png\r\n\r\n";
+    var body =
+        (part + "fixture\r\n--boundary--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    var first =
+        client.send(
+            java.net.http.HttpRequest.newBuilder(
+                    java.net.URI.create(base + "?rowVersion=0&displayOrder=1"))
+                .header("Authorization", "Bearer image-fixture-token")
+                .header("Content-Type", "multipart/form-data; boundary=boundary")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body))
+                .build(),
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+    assertThat(first.statusCode()).isEqualTo(201);
+    var current = service.readOwned(event.eventId(), "a");
+    var second =
+        client.send(
+            java.net.http.HttpRequest.newBuilder(
+                    java.net.URI.create(
+                        base + "/" + current.images().get(1).imageId() + "?rowVersion=1"))
+                .header("Authorization", "Bearer image-fixture-token")
+                .header("Content-Type", "multipart/form-data; boundary=boundary")
+                .PUT(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body))
+                .build(),
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+    assertThat(second.statusCode()).isEqualTo(200);
+    var large =
+        (part + "x".repeat(5242881) + "\r\n--boundary--\r\n")
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    var rejected =
+        client.send(
+            java.net.http.HttpRequest.newBuilder(
+                    java.net.URI.create(base + "?rowVersion=2&displayOrder=2"))
+                .header("Authorization", "Bearer image-fixture-token")
+                .header("Content-Type", "multipart/form-data; boundary=boundary")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(large))
+                .build(),
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+    assertThat(rejected.statusCode()).isEqualTo(413);
+    assertThat(json.readTree(rejected.body()).path("code").asString()).isEqualTo("IMAGE_TOO_LARGE");
+    verify(imageStorage, times(2)).upload(eq(event.eventId()), any());
+  }
+
+  @Test
+  void imageUploadReplaceReorderAndDetachAdvanceVersionAndPreserveOtherConfiguration()
+      throws Exception {
+    var event = service.create("a", draft("Image mutations"));
+    String url = "https://res.cloudinary.com/test/image/upload/new.png";
+    var uploaded =
+        new com.flashticket.event_service.integration.EventImageStorage.Uploaded(url, "new-asset");
+    when(imageStorage.upload(eq(event.eventId()), any())).thenReturn(uploaded);
+    String base = "/api/v1/organizer/events/" + event.eventId() + "/images";
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "x.png", "image/png", new byte[] {1});
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", event.rowVersion())
+                .param("displayOrder", "1")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.rowVersion").value("1"))
+        .andExpect(jsonPath("$.images[1].objectReference").value(url));
+    var next = service.readOwned(event.eventId(), "a");
+    var image = next.images().get(1);
+    assertThat(next.ticketTypes()).isEqualTo(event.ticketTypes());
+    mvc.perform(
+            patch(base + "/" + image.imageId())
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"1\",\"displayOrder\":0}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.images[0].imageId").value(image.imageId().toString()))
+        .andExpect(jsonPath("$.images[1].displayOrder").value(1));
+    mvc.perform(
+            multipart(org.springframework.http.HttpMethod.PUT, base + "/" + image.imageId())
+                .file(file)
+                .param("rowVersion", "2")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rowVersion").value("3"));
+    mvc.perform(
+            delete(base + "/" + image.imageId())
+                .param("rowVersion", "3")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rowVersion").value("4"))
+        .andExpect(jsonPath("$.images.length()").value(1));
+    verify(imageStorage, never()).discard(any());
+    assertThat(service.readOwned(event.eventId(), "a").sourceConfigVersion()).isEqualTo("5");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void imageEndpointsEnforceOwnerRoleVersionStateAndMembershipBeforeUpload() throws Exception {
+    var event = service.create("a", draft("Protected images"));
+    String base = "/api/v1/organizer/events/" + event.eventId() + "/images";
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "x.png", "image/png", new byte[] {1});
+    mvc.perform(multipart(base).file(file).param("rowVersion", "0").param("displayOrder", "1"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "1")
+                .with(actor("a", "BUYER")))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "1")
+                .with(actor("b", "ORGANIZER")))
+        .andExpect(status().isNotFound());
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "9")
+                .param("displayOrder", "1")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isConflict());
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "0")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isConflict());
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "-1")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isUnprocessableEntity());
+    mvc.perform(
+            delete(base + "/" + UUID.randomUUID())
+                .param("rowVersion", "0")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isNotFound());
+    service.submit(event.eventId(), "a", "0");
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "1")
+                .param("displayOrder", "1")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isConflict());
+    verifyNoInteractions(imageStorage);
+  }
+
+  @Test
+  void failedImageReplacementPreservesExistingReferenceAndVersion() throws Exception {
+    var event = service.create("a", draft("Image storage failure"));
+    when(imageStorage.upload(eq(event.eventId()), any()))
+        .thenThrow(new EventProblem(503, "IMAGE_STORAGE_UNAVAILABLE", null));
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "x.png", "image/png", new byte[] {1});
+    mvc.perform(
+            multipart(
+                    org.springframework.http.HttpMethod.PUT,
+                    "/api/v1/organizer/events/"
+                        + event.eventId()
+                        + "/images/"
+                        + event.images().getFirst().imageId())
+                .file(file)
+                .param("rowVersion", "0")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isServiceUnavailable());
+    assertThat(service.readOwned(event.eventId(), "a")).isEqualTo(event);
+  }
+
+  @Test
+  void uploadCountLimitAndMissingMultipartPartAreRejectedWithoutProviderCalls() throws Exception {
+    var event = service.create("a", draft("Image count"));
+    for (int i = 1; i < 20; i++)
+      jdbc.update(
+          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order) VALUES(?,?,?,?)",
+          UUID.randomUUID(),
+          event.eventId(),
+          "legacy/image-" + i,
+          i);
+    String base = "/api/v1/organizer/events/" + event.eventId() + "/images";
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "x.png", "image/png", new byte[] {1});
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "20")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("IMAGE_LIMIT_REACHED"));
+    mvc.perform(
+            multipart(base)
+                .param("rowVersion", "0")
+                .param("displayOrder", "20")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(imageStorage);
+  }
+
+  @Test
+  void concurrentDraftChangeDuringUploadCannotAttachStaleImageAndCompensatesNewAsset()
+      throws Exception {
+    var event = service.create("a", draft("Image race"));
+    var uploaded =
+        new com.flashticket.event_service.integration.EventImageStorage.Uploaded(
+            "https://res.cloudinary.com/test/image/upload/race.png", "race-asset");
+    when(imageStorage.upload(eq(event.eventId()), any()))
+        .thenAnswer(
+            invocation -> {
+              service.save(
+                  event.eventId(), "a", new EventCommands.Save("0", draft("Concurrent edit")));
+              return uploaded;
+            });
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "x.png", "image/png", new byte[] {1});
+    mvc.perform(
+            multipart("/api/v1/organizer/events/" + event.eventId() + "/images")
+                .file(file)
+                .param("rowVersion", "0")
+                .param("displayOrder", "1")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STALE_EVENT_VERSION"));
+    verify(imageStorage).discard(uploaded);
+    var current = service.readOwned(event.eventId(), "a");
+    assertThat(current.rowVersion()).isEqualTo("1");
+    assertThat(current.title()).isEqualTo("Concurrent edit");
+    assertThat(current.images())
+        .extracting(com.flashticket.event_service.api.EventViews.Image::objectReference)
+        .containsExactly("events/poster");
   }
 
   static RequestPostProcessor actor(String sub, String role) {

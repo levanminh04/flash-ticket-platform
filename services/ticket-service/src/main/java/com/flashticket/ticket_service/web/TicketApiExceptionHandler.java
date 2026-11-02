@@ -59,6 +59,7 @@ public class TicketApiExceptionHandler {
       int status, String code, HttpServletRequest request, HttpServletResponse response) {
     var correlation = TicketRequestContext.correlation(request, response);
     return ResponseEntity.status(status)
+        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
         .body(
             Map.of(
                 "code",

@@ -47,7 +47,10 @@ public class GatewayRouteConfiguration {
   RouteLocator customRouteLocator(
       RouteLocatorBuilder builder,
       RedisRateLimiter redisRateLimiter,
-      KeyResolver remoteAddressKeyResolver) {
+      KeyResolver remoteAddressKeyResolver,
+      @org.springframework.beans.factory.annotation.Value(
+              "${gateway.event-images.response-timeout-ms:45000}")
+          long imageResponseTimeout) {
     return UserGatewayRoutes.addTo(
             builder.routes(),
             filters ->
@@ -418,6 +421,42 @@ public class GatewayRouteConfiguration {
                                 remoteAddressKeyResolver,
                                 "eventServiceBreaker",
                                 "event"))
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-images",
+            route ->
+                route
+                    .order(191)
+                    .path("/api/v1/organizer/events/*/images")
+                    .and()
+                    .method(HttpMethod.GET, HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventImageServiceBreaker",
+                                "event"))
+                    .metadata("response-timeout", imageResponseTimeout)
+                    .uri("lb://event-service"))
+        .route(
+            "event-organizer-image",
+            route ->
+                route
+                    .order(192)
+                    .path("/api/v1/organizer/events/*/images/*")
+                    .and()
+                    .method(HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "eventImageServiceBreaker",
+                                "event"))
+                    .metadata("response-timeout", imageResponseTimeout)
                     .uri("lb://event-service"))
         .route(
             "event-admin-reads",

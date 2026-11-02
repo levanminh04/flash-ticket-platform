@@ -86,9 +86,11 @@ public final class EventViews {
       Instant endsAt,
       String venueName,
       String mode,
+      List<Image> images,
       List<TicketType> ticketTypes,
       SeatMap seatMap) {
     public Public {
+      images = List.copyOf(images);
       ticketTypes = List.copyOf(ticketTypes);
     }
   }
@@ -155,6 +157,9 @@ public final class EventViews {
         event.endsAt(),
         event.venueName(),
         event.mode(),
+        event.images().stream()
+            .map(i -> new Image(i.id(), i.objectReference(), i.displayOrder()))
+            .toList(),
         event.ticketTypes().stream().map(EventViews::ticketType).toList(),
         event.seatMap() == null ? null : event.seatMap().publicView());
   }

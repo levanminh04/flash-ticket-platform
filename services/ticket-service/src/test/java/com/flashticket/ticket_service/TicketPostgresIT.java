@@ -26,6 +26,7 @@ class TicketPostgresIT {
   static final JsonMapper JSON = JsonMapper.builder().build();
   @TempDir Path temp;
   TicketService service;
+  QrTokens tokens;
   UUID event, order, charge;
   String buyer = "buyer-test", organizer = "organizer-test";
 
@@ -85,12 +86,9 @@ class TicketPostgresIT {
     var ring = temp.resolve("ring.json");
     Files.writeString(
         ring, "{\"keys\":{\"v1\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}}");
+    tokens = new QrTokens(new FileSystemResource(ring), "v1");
     service =
-        new TicketService(
-            jdbc,
-            JSON,
-            new JdbcTransactionManager(jdbc.getDataSource()),
-            new QrTokens(new FileSystemResource(ring), "v1"));
+        new TicketService(jdbc, JSON, new JdbcTransactionManager(jdbc.getDataSource()), tokens);
     event = UUID.randomUUID();
     order = UUID.randomUUID();
     charge = UUID.randomUUID();
@@ -622,7 +620,7 @@ class TicketPostgresIT {
   }
 
   @Test
-  void smtpFailureRetriesSameJobWithoutChangingTicketsOrExposingQr() {
+  void smtpFailureRetriesSameJobWithInlineQrWithoutChangingTickets() throws Exception {
     service.issue(issue());
     var mail = new RecordingMail();
     mail.fail = true;
@@ -633,7 +631,9 @@ class TicketPostgresIT {
             mail,
             "https://buyer.example.test",
             "tickets@example.test",
-            java.time.Duration.ofSeconds(30));
+            java.time.Duration.ofSeconds(30),
+            new com.flashticket.ticket_service.worker.TicketEmailComposer(
+                tokens, JSON, "Asia/Ho_Chi_Minh"));
     assertThat(worker.deliverBatch(1)).isZero();
     assertThat(
             jdbc.queryForObject(
@@ -644,11 +644,28 @@ class TicketPostgresIT {
     mail.fail = false;
     assertThat(worker.deliverBatch(1)).isEqualTo(1);
     assertThat(mail.sent).hasSize(1);
-    assertThat(mail.sent.getFirst().getTo()).containsExactly("buyer@example.test");
-    assertThat(mail.sent.getFirst().getText())
-        .contains("https://buyer.example.test/orders/" + order + "/tickets")
-        .doesNotContain(
-            service.qr(service.listTickets(order, buyer).tickets().getFirst().ticketId(), buyer));
+    mail.sent.getFirst().saveChanges();
+    assertThat(mail.sent.getFirst().getAllRecipients()[0].toString())
+        .isEqualTo("buyer@example.test");
+    var parts = mailParts(mail.sent.getFirst());
+    var images = parts.stream().filter(p -> mime(p, "image/png")).toList();
+    assertThat(images).hasSize(2);
+    var decoded = new HashSet<String>();
+    for (var image : images) {
+      try (var input = image.getInputStream()) {
+        decoded.add(
+            com.flashticket.ticket_service.qr.QrImageAssertions.decode(input.readAllBytes()));
+      }
+    }
+    for (var ticket : service.listTickets(order, buyer).tickets())
+      assertThat(decoded).contains(service.qr(ticket.ticketId(), buyer));
+    var html = parts.stream().filter(p -> mime(p, "text/html")).findFirst().orElseThrow();
+    assertThat((String) html.getContent())
+        .contains("https://buyer.example.test/orders/" + order + "/tickets");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_ticket_deliveries", Integer.class))
+        .isEqualTo(1);
     assertThat(jdbc.queryForObject("SELECT count(*) FROM ticket_schema.tbl_tickets", Integer.class))
         .isEqualTo(2);
     assertThat(
@@ -668,7 +685,9 @@ class TicketPostgresIT {
             mail,
             "https://buyer.example.test",
             "tickets@example.test",
-            java.time.Duration.ofSeconds(30));
+            java.time.Duration.ofSeconds(30),
+            new com.flashticket.ticket_service.worker.TicketEmailComposer(
+                tokens, JSON, "Asia/Ho_Chi_Minh"));
     mail.onSend =
         () -> jdbc.update("UPDATE ticket_schema.tbl_ticket_deliveries SET attempts=attempts+1");
     assertThat(worker.deliverBatch(1)).isZero();
@@ -687,6 +706,39 @@ class TicketPostgresIT {
             jdbc.queryForObject(
                 "SELECT outcome FROM ticket_schema.tbl_ticket_deliveries", String.class))
         .isEqualTo("NOT_SENT");
+  }
+
+  @Test
+  void missingQrKeyDefersEmailAndRecoverySendsTheOriginalTickets() throws Exception {
+    service.issue(issue());
+    String original =
+        service.qr(service.listTickets(order, buyer).tickets().getFirst().ticketId(), buyer);
+    var mail = new RecordingMail();
+    var worker =
+        new com.flashticket.ticket_service.worker.TicketDeliveryWorker(
+            jdbc,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            mail,
+            "https://buyer.example.test",
+            "tickets@example.test",
+            java.time.Duration.ofSeconds(30),
+            new com.flashticket.ticket_service.worker.TicketEmailComposer(tokens, JSON, "UTC"));
+    Path ring = temp.resolve("ring.json");
+    String keys = Files.readString(ring);
+    Files.delete(ring);
+    assertThat(worker.deliverBatch(1)).isZero();
+    assertThat(mail.sent).isEmpty();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT failure_code FROM ticket_schema.tbl_ticket_deliveries", String.class))
+        .isEqualTo("QR_UNAVAILABLE");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM ticket_schema.tbl_tickets", Integer.class))
+        .isEqualTo(2);
+    Files.writeString(ring, keys);
+    jdbc.update("UPDATE ticket_schema.tbl_ticket_deliveries SET next_attempt_at=clock_timestamp()");
+    assertThat(worker.deliverBatch(1)).isEqualTo(1);
+    assertThat(service.qr(service.listTickets(order, buyer).tickets().getFirst().ticketId(), buyer))
+        .isEqualTo(original);
   }
 
   static final class RecordingRabbit extends org.springframework.amqp.rabbit.core.RabbitTemplate {
@@ -719,13 +771,29 @@ class TicketPostgresIT {
   static final class RecordingMail extends org.springframework.mail.javamail.JavaMailSenderImpl {
     boolean fail;
     Runnable onSend = () -> {};
-    final List<org.springframework.mail.SimpleMailMessage> sent = new ArrayList<>();
+    final List<jakarta.mail.internet.MimeMessage> sent = new ArrayList<>();
 
     @Override
-    public void send(org.springframework.mail.SimpleMailMessage message) {
+    public void send(jakarta.mail.internet.MimeMessage... messages) {
       if (fail) throw new org.springframework.mail.MailSendException("sensitive SMTP fixture");
-      sent.add(new org.springframework.mail.SimpleMailMessage(message));
+      sent.addAll(Arrays.asList(messages));
       onSend.run();
     }
+  }
+
+  static boolean mime(jakarta.mail.Part part, String type) {
+    try {
+      return part.isMimeType(type);
+    } catch (Exception e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  static List<jakarta.mail.Part> mailParts(jakarta.mail.Part part) throws Exception {
+    if (!part.isMimeType("multipart/*")) return List.of(part);
+    var content = (jakarta.mail.Multipart) part.getContent();
+    var result = new ArrayList<jakarta.mail.Part>();
+    for (int i = 0; i < content.getCount(); i++) result.addAll(mailParts(content.getBodyPart(i)));
+    return result;
   }
 }

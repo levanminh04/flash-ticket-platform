@@ -3,7 +3,8 @@
 Triển khai `QUANTITY` và `SEAT_MAP`: tạo/sửa bản nháp, gửi duyệt, trả về nháp,
 duyệt/công bố, hủy và yêu cầu hủy; đọc/tìm sự kiện; transactional outbox gửi snapshot.
 Thống kê có adapter đọc với contract đề xuất, mặc định chưa bật. Cấu hình
-ảnh là object reference, không upload hoặc tải URL từ server. Venue/category chỉ
+ảnh hỗ trợ upload PNG/JPEG lên Cloudinary, DB lưu URL HTTPS trong objectReference;
+không tải URL do client gửi. Venue/category chỉ
 tra cứu dữ liệu có sẵn, chưa có API quản trị hai danh mục này.
 
 ## Căn cứ và phạm vi
@@ -112,6 +113,78 @@ hình đầy đủ và fee/approvedAt nullable. EventPublic giữ đúng B13, kh
 version, phí hay promotion; QUANTITY có `seatMap:null`, `sectorId:null`.
 Owner/admin detail có `seatMap` đầy đủ (gồm hidden) để sửa/xét duyệt; public view
 lọc hidden theo B13. Không dùng public endpoint để admin đọc bản nháp.
+
+## Ảnh Event — bổ sung 02/11/2026
+
+Theo yêu cầu tham khảo repo cũ, bổ sung upload/quản lý ảnh bằng Cloudinary. Giữ
+schema canonical `tbl_event_images(id,event_id,object_reference,display_order)`,
+không migrate hoặc mang bảng metadata cũ sang. PNG/JPEG được kiểm bytes thực,
+MIME khớp định dạng, decode hợp lệ, mặc định tối đa5MiB và16 triệu pixel.
+WEBP/SVG không được hỗ trợ ở adapter hiện tại. Không nhận URL để upload/fetch;
+không dùng tên file client làm publicId. HTTP provider dùng Basic Authorization
+server-side, timeout hữu hạn; không log secret/provider response.
+
+| Method/path sau `/api/v1` | Input | Output |
+|---|---|---|
+| GET `/organizer/events/{id}/images` | JWT organizer/chủ sở hữu | Mảng Image theo displayOrder |
+| POST `/organizer/events/{id}/images` | Multipart: file, rowVersion, displayOrder | 201 Owner cập nhật |
+| PUT `/organizer/events/{id}/images/{imageId}` | Multipart: file, rowVersion | 200 Owner; giữ imageId/thứ tự |
+| PATCH `/organizer/events/{id}/images/{imageId}` | JSON `{rowVersion,displayOrder}` | 200 Owner; đổi chỗ nếu vị trí đã có ảnh |
+| DELETE `/organizer/events/{id}/images/{imageId}?rowVersion=...` | JWT organizer/chủ sở hữu | 200 Owner; gỡ tham chiếu |
+
+Mọi mutation chỉ DRAFT; kiểm owner, child thuộc đúng event và rowVersion. Mỗi
+mutation thành công tăng rowVersion/sourceConfigVersion, không tạo business
+outbox; cấu hình vé/khuyến mãi/seatmap giữ nguyên. POST từ chối displayOrder trùng,
+không âm; giới hạn thêm ảnh qua upload mặc định20/event. Draft JSON cũ vẫn nhận
+objectReference như trước; giới hạn upload không phải quota cho dữ liệu legacy.
+Không có imageType/isPrimary/altText/resize tự động như repo cũ; FE dùng displayOrder.
+
+Upload provider diễn ra ngoài transaction/lock DB. Sau upload khóa lại Event để
+kiểm state/version trước attach. Upload lỗi giữ nguyên ảnh cũ. Nếu attach bị từ
+chối nghiệp vụ trước ghi, thử dọn riêng asset mới khi DB xác nhận không tham chiếu.
+Nếu transaction/COMMIT có kết quả chưa rõ hoặc DB không truy vấn được, giữ asset;
+không suy ra rollback từ một lần SELECT. Timeout/provider trả lời không hợp lệ có
+thể để lại asset: log `IMAGE_UPLOAD_UNCONFIRMED`/`IMAGE_CLEANUP_DEFERRED` có generated
+publicId để đối soát; chưa có durable GC/retry cleanup. Xóa/thay ảnh hoặc PUT Draft
+bỏ ảnh chỉ gỡ metadata, không destroy file cũ trên Cloudinary vì có thể dùng làm
+background/reference khác. Chưa quản trị vòng đời asset toàn cục.
+
+Public `GET /events` và `GET /events/{id}` bổ sung `images:[{imageId,objectReference,displayOrder}]`
+đã sắp thứ tự, chỉ PUBLISHED. Client giải mã JSON nghiêm ngặt cần nhận thêm field này.
+Ảnh nền seatmap dùng URL ảnh đã upload làm backgroundImageReference trong PUT seat-map.
+Giữ hàng ảnh tương ứng để FE quản lý; không tự sửa background khi gỡ ảnh khỏi gallery.
+
+Ví dụ upload (curl trên Linux; không ghi token vào lịch sử lệnh):
+
+```bash
+curl -X POST "$EVENT_BASE/api/v1/organizer/events/$EVENT_ID/images" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F "rowVersion=$ROW_VERSION" -F 'displayOrder=0' -F 'file=@poster.png;type=image/png'
+```
+
+Đọc lại Owner và dùng rowVersion mới cho lần tiếp theo. Khi timeout/mất response,
+GET Owner trước khi retry; endpoint upload chưa cam kết exactly-once/idempotency-key.
+Retry cùng version không tạo ảnh thứ hai sau một commit thành công.
+
+Provision ngoài Git cho process/container Event:
+`EVENT_IMAGES_CLOUD_NAME`, `EVENT_IMAGES_API_KEY`, `EVENT_IMAGES_API_SECRET`.
+Thiếu credential trả503 IMAGE_STORAGE_UNAVAILABLE khi upload; các API đọc/ghi Event
+khác vẫn hoạt động. Có thể cấu hình `EVENT_IMAGES_FOLDER`, `EVENT_IMAGES_MAX_BYTES`,
+`EVENT_IMAGES_MAX_REQUEST_BYTES`, `EVENT_IMAGES_MAX_PIXELS`, `EVENT_IMAGES_MAX_COUNT`,
+`EVENT_IMAGES_TIMEOUT`. Không tự dùng key User hoặc demo cloud cũ. Mặc định multipart
+request6MiB; khi tăng file limit phải tăng request limit và đánh giá RAM tương ứng.
+
+Deploy cần đồng bộ YAML Event trong Config Server dùng chung (bảo toàn Booking/User),
+cấp env Event private rồi build/deploy Event. Gateway thêm đúng route ảnh/CORS PATCH,
+response timeout riêng45s và image circuit time limit50s; cần đồng bộ YAML Gateway
+và rebuild/recreate Gateway nếu gọi qua đó. Không tự thay lb:// bằng public IP.
+Những thay đổi source này chưa được rollout AWS; chưa kiểm upload Cloudinary thật.
+
+Kiểm local cuối02/11/2026: Event142 test/Gateway27 test PASS, Spotless/SpotBugs
+PASS;2 ca Compose thật/YAML parse PASS. Có HTTP servlet multipart POST/PUT,
+file lớn trả JSON413 và CORS PATCH preflight; Cloudinary HTTP được fixture.
+Image local build PASS; decoder PNG/JPEG chạy được trong đúng JRE Alpine nonroot,
+read-only + tmpfs. Chưa kiểm byte forwarding xuyên Gateway hay Cloudinary thật.
 
 ## SEAT_MAP, đổi mode và ticket types theo sector
 
@@ -269,8 +342,9 @@ và [docker-compose.event.yml](../../deploy/docker-compose.event.yml), đồng b
 publish image theo digest và deploy riêng Event trên AWS #2. Giữ JWT health, Config contract,
 snapshot/rollback và đường runtime env hiện có; không tự rollout Config Server.
 Tài liệu thao tác và test/tunnel/mẫu env giữ local tại `deploy/README-event.md`, cùng convention User.
-Workflow dùng SSH secrets/variables `FT84_*` cùng User và hai Variables riêng Event:
-`EVENT_DEPLOY_DIRECTORY` (thư mục deploy trên AWS #2), `EVENT_DEPLOY_ENV_FILE` (file `.env` private hiện có).
+Workflow dùng SSH secrets/variables `FT84_*` cùng User. Đường dẫn có sẵn trong workflow:
+`DEPLOY_DIRECTORY=/home/ubuntu/flash-ticket-event/deploy`, `ENV_FILE=/home/ubuntu/flash-ticket-event/runtime/.env`;
+không cần hai GitHub Variables `EVENT_DEPLOY_DIRECTORY`, `EVENT_DEPLOY_ENV_FILE`.
 Thay đổi bộ deploy trong source chưa đồng nghĩa đã chạy workflow hoặc cập nhật AWS.
 
 ## Handoff tích hợp Gateway

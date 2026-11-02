@@ -29,7 +29,7 @@ luồng nghiệp vụ có ghi dữ liệu. Đây là Mongo placement + runtime s
 
 ## Cấu hình
 
-- Compose: `docker-compose.mongodb.yml`; cấu hình môi trường dựa trên `mongodb.env.example`.
+- Compose: `docker-compose.mongodb.yml`; tham khảo phần MongoDB deploy trong [.env.example ở root](../../.env.example). File `mongodb.env` thực trên AWS và admin.env quyền0600 vẫn giữ riêng; không dùng nguyên env laptop để deploy.
 - Image được pin digest và giữ đúng MongoDB 8.0.28 của nguồn; migration không nâng cấp server/FCV.
 - Volume external phải được provision/import trước. Không chạy initializer/bootstrap lại trên dữ liệu được chuyển.
 - Chỉ publish `127.0.0.1:27017`; User Service trên cùng host dùng endpoint này.

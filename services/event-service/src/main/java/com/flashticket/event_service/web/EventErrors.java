@@ -53,7 +53,8 @@ public class EventErrors {
     HttpMessageNotReadableException.class,
     MethodArgumentTypeMismatchException.class,
     ConstraintViolationException.class,
-    org.springframework.web.bind.MissingServletRequestParameterException.class
+    org.springframework.web.bind.MissingServletRequestParameterException.class,
+    org.springframework.web.multipart.support.MissingServletRequestPartException.class
   })
   ResponseEntity<ProblemResponses.Problem> malformed(
       Exception problem, HttpServletRequest request) {
@@ -63,6 +64,11 @@ public class EventErrors {
   @ExceptionHandler(NoResourceFoundException.class)
   ResponseEntity<ProblemResponses.Problem> missing(HttpServletRequest request) {
     return response(request, 404, "RESOURCE_NOT_FOUND", List.of());
+  }
+
+  @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+  ResponseEntity<ProblemResponses.Problem> imageTooLarge(HttpServletRequest request) {
+    return response(request, 413, "IMAGE_TOO_LARGE", List.of());
   }
 
   @ExceptionHandler({

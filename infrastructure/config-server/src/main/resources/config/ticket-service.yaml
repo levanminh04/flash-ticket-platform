@@ -80,6 +80,7 @@ ticket:
     confirm-timeout: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:5s}
     claim-lease: ${TICKET_OUTBOX_CLAIM_LEASE:30s}
   delivery:
+    display-zone: ${TICKET_DELIVERY_DISPLAY_ZONE:Asia/Ho_Chi_Minh}
     buyer-base-url: ${TICKET_BUYER_BASE_URL:}
     from: ${TICKET_MAIL_FROM:}
     claim-lease: ${TICKET_DELIVERY_CLAIM_LEASE:60s}

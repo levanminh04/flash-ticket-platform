@@ -53,6 +53,15 @@ spring:
             - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 event:
+  images:
+    cloud-name: ${EVENT_IMAGES_CLOUD_NAME:}
+    api-key: ${EVENT_IMAGES_API_KEY:}
+    api-secret: ${EVENT_IMAGES_API_SECRET:}
+    folder: ${EVENT_IMAGES_FOLDER:flash-ticket/events}
+    max-bytes: ${EVENT_IMAGES_MAX_BYTES:5242880}
+    max-pixels: ${EVENT_IMAGES_MAX_PIXELS:16000000}
+    max-count: ${EVENT_IMAGES_MAX_COUNT:20}
+    timeout: ${EVENT_IMAGES_TIMEOUT:10s}
   read-model:
     enabled: ${EVENT_READ_MODEL_ENABLED:false}
     payment-base-url: ${EVENT_PAYMENT_BASE_URL:}
