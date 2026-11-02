@@ -13,16 +13,16 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration(proxyBeanMethods = false)
 public class RabbitMqConfig {
 
-  @Value("${payment.exchange:flash-ticket.v1}")
+  @Value("${payment.exchange:business.ex}")
   private String exchangeName;
 
-  @Value("${payment.queues.decision:payment.booking-decision.v1}")
+  @Value("${payment.queues.decision:payment.decision.q}")
   private String decisionQueue;
 
-  @Value("${payment.queues.issuance:payment.ticket-result.v1}")
+  @Value("${payment.queues.issuance:payment.ticket-issuance-failed.q}")
   private String issuanceQueue;
 
-  @Value("${payment.queues.completed:payment.booking-completed.v1}")
+  @Value("${payment.queues.completed:payment.order-completed.q}")
   private String completedQueue;
 
   @Bean

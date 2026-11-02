@@ -32,10 +32,7 @@ public class InboxMessage {
 
   @EmbeddedId @Setter private InboxMessageId id;
 
-  @Column(
-      name = "payload_hash",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "payload_hash", nullable = false, columnDefinition = "nonempty_text")
   private String payloadHash;
 
   @Column(name = "processed_at", nullable = false)

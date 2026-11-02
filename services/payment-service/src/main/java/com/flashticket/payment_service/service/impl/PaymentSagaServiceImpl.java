@@ -73,10 +73,22 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
   @Transactional
   public void recordPaymentDecision(Envelope<PaymentDecision> incomingEnvelope) {
     var decision = incomingEnvelope.data();
-    var observedSnapshot = snapshots.findById(decision.orderId()).orElseThrow();
+    var observedSnapshot =
+        snapshots
+            .findById(decision.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SNAPSHOT_NOT_FOUND"));
     var eventMarker = finance.findForUpdateByEventId(observedSnapshot.getEventId());
-    var snapshot = snapshots.findForUpdateByOrderId(decision.orderId()).orElseThrow();
-    var saga = paymentSagaRepository.findForUpdateByOrderId(decision.orderId()).orElseThrow();
+    var snapshot =
+        snapshots
+            .findForUpdateByOrderId(decision.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SNAPSHOT_NOT_FOUND"));
+    var saga =
+        paymentSagaRepository
+            .findForUpdateByOrderId(decision.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SAGA_NOT_FOUND"));
     if (!saga.getChargeId().equals(decision.chargeId()))
       throw new ContractValidationException("chargeId", "SAGA_CHARGE_MISMATCH");
     if (!messaging.recordInbox(
@@ -198,11 +210,27 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
   @Transactional
   public void recordOrderCompleted(Envelope<OrderCompleted> incomingEnvelope) {
     var result = incomingEnvelope.data();
-    var observedSnapshot = snapshots.findById(result.orderId()).orElseThrow();
+    var observedSnapshot =
+        snapshots
+            .findById(result.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SNAPSHOT_NOT_FOUND"));
     var eventMarker = finance.findForUpdateByEventId(observedSnapshot.getEventId());
-    var snapshot = snapshots.findForUpdateByOrderId(result.orderId()).orElseThrow();
-    var saga = paymentSagaRepository.findForUpdateByOrderId(result.orderId()).orElseThrow();
-    var confirmation = confirmations.findById(result.orderId()).orElseThrow();
+    var snapshot =
+        snapshots
+            .findForUpdateByOrderId(result.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SNAPSHOT_NOT_FOUND"));
+    var saga =
+        paymentSagaRepository
+            .findForUpdateByOrderId(result.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_SAGA_NOT_FOUND"));
+    var confirmation =
+        confirmations
+            .findById(result.orderId())
+            .orElseThrow(
+                () -> new ContractValidationException("orderId", "PAYMENT_CONFIRMATION_NOT_FOUND"));
     if (!saga.getChargeId().equals(result.chargeId())
         || !confirmation.getChargeId().equals(result.chargeId()))
       throw new ContractValidationException("chargeId", "SAGA_CHARGE_MISMATCH");
@@ -221,26 +249,45 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
       var notification =
-          outbox
-              .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                  result.orderId(), "booking.issuance-result.v1")
-              .orElseThrow(() -> new IllegalStateException("Waiting for issuance checkpoint"));
-      var ticketResult =
-          codec
-              .readEnvelope(notification.getPayload().toString(), BookingIssuanceResult.class)
-              .data();
+          outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+              result.orderId(), "booking.issuance-result.v1");
       var purchase = codec.fromTree(snapshot.getPurchaseSnapshot(), PurchaseSnapshot.class);
-      if (ticketResult.state() != BookingIssuanceState.COMPLETED
-          || !ticketResult.issuanceId().equals(result.issuanceId())
-          || !ticketResult.chargeId().equals(result.chargeId())
-          || !ticketResult.ticketCount().equals(result.ticketCount())
-          || result.ticketCount() != purchases.expectedTicketCount(purchase))
+      if (result.ticketCount() != purchases.expectedTicketCount(purchase))
         throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
+      // Topology hiện tại gửi Ticket thành công thẳng sang Booking; checkpoint cũ là tùy chọn.
+      if (notification.isPresent()) {
+        var ticketResult =
+            codec
+                .readEnvelope(
+                    notification.get().getPayload().toString(), BookingIssuanceResult.class)
+                .data();
+        if (ticketResult.state() != BookingIssuanceState.COMPLETED
+            || !ticketResult.issuanceId().equals(result.issuanceId())
+            || !ticketResult.chargeId().equals(result.chargeId())
+            || !ticketResult.ticketCount().equals(result.ticketCount()))
+          throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
+      }
+      if (saga.getState() != PaymentSagaState.WAITING_TICKETS
+          && saga.getState() != PaymentSagaState.COMPLETED)
+        throw new ContractValidationException("state", "SAGA_STATE_MISMATCH");
+      // Metadata cố định theo order giúp phát hiện completion mâu thuẫn dù messageId khác nhau.
+      messaging.recordInbox(
+          "payment.order-completed.checkpoint.v1",
+          new Envelope<>(
+              result.orderId(),
+              "booking.order-completed.v1",
+              1,
+              result.orderId(),
+              snapshot.getSourceOrderVersion().toString(),
+              snapshot.getReceivedAt(),
+              result.orderId(),
+              null,
+              null,
+              result),
+          codec.toTree(result));
       if (!messaging.recordInbox(
           "payment.order-completed.v1", incomingEnvelope, codec.toTree(result))) return;
       if (saga.getState() == PaymentSagaState.COMPLETED) return;
-      if (saga.getState() != PaymentSagaState.WAITING_TICKETS)
-        throw new ContractValidationException("state", "SAGA_STATE_MISMATCH");
       saga.setState(PaymentSagaState.COMPLETED);
     }
     saga.setUpdatedAt(Instant.now());

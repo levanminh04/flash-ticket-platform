@@ -56,10 +56,7 @@ public class OrderPaymentSnapshot {
   @Column(name = "event_id", nullable = false)
   private UUID eventId;
 
-  @Column(
-      name = "buyer_subject",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "buyer_subject", nullable = false, columnDefinition = "nonempty_text")
   private String buyerSubject;
 
   @Column(
@@ -67,13 +64,10 @@ public class OrderPaymentSnapshot {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal expectedAmount;
 
-  @Column(
-      name = "currency",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"currency_code\"")
+  @Column(name = "currency", nullable = false, columnDefinition = "currency_code")
   private String currency;
 
   @Column(name = "expires_at", nullable = false)
@@ -86,10 +80,7 @@ public class OrderPaymentSnapshot {
   @Column(name = "purchase_snapshot", nullable = false, columnDefinition = "jsonb")
   private JsonNode purchaseSnapshot;
 
-  @Column(
-      name = "snapshot_hash",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "snapshot_hash", nullable = false, columnDefinition = "nonempty_text")
   private String snapshotHash;
 
   @Column(name = "received_at", nullable = false)

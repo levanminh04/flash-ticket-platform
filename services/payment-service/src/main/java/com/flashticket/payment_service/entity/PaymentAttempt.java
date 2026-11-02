@@ -60,16 +60,10 @@ public class PaymentAttempt {
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
-  @Column(
-      name = "provider",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "provider", nullable = false, columnDefinition = "nonempty_text")
   private String provider;
 
-  @Column(
-      name = "merchant_account",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "merchant_account", nullable = false, columnDefinition = "nonempty_text")
   private String merchantAccount;
 
   @Column(
@@ -77,13 +71,10 @@ public class PaymentAttempt {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal expectedAmount;
 
-  @Column(
-      name = "currency",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"currency_code\"")
+  @Column(name = "currency", nullable = false, columnDefinition = "currency_code")
   private String currency;
 
   @Column(name = "started_at", nullable = false)
@@ -99,10 +90,7 @@ public class PaymentAttempt {
   @Column(name = "request_key", nullable = false)
   private UUID requestKey;
 
-  @Column(
-      name = "request_hash",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "request_hash", nullable = false, columnDefinition = "nonempty_text")
   private String requestHash;
 
   @Column(name = "payment_url", nullable = true)

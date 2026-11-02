@@ -40,6 +40,7 @@ class EntityMappingTest {
     try (var connection = datasource.getConnection()) {
       assertThat(connection.getMetaData().getDatabaseProductName()).isEqualTo("PostgreSQL");
       assertThat(connection.getCatalog()).isEqualTo("payment_db");
+      assertThat(connection.getSchema()).isEqualTo("payment_schema");
     }
     assertThat(
             environment.getProperty("spring.rabbitmq.listener.simple.auto-startup", Boolean.class))

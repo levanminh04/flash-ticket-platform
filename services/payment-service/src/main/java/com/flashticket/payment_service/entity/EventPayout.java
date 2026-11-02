@@ -23,16 +23,10 @@ public class EventPayout {
   @Column(name = "event_id", nullable = false)
   private UUID eventId;
 
-  @Column(
-      name = "organizer_subject",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "organizer_subject", nullable = false, columnDefinition = "nonempty_text")
   private String organizerSubject;
 
-  @Column(
-      name = "currency",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"currency_code\"")
+  @Column(name = "currency", nullable = false, columnDefinition = "currency_code")
   private String currency;
 
   @Column(
@@ -40,7 +34,7 @@ public class EventPayout {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal validGross;
 
   @Column(
@@ -48,7 +42,7 @@ public class EventPayout {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal validRefunds;
 
   @Column(
@@ -56,7 +50,7 @@ public class EventPayout {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal feeAmount;
 
   @Column(
@@ -64,7 +58,7 @@ public class EventPayout {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal netAmount;
 
   @Column(name = "fee_rate", nullable = false, precision = 9, scale = 8)
@@ -85,25 +79,16 @@ public class EventPayout {
   @Column(name = "as_of", nullable = false)
   private Instant asOf;
 
-  @Column(
-      name = "reconciled_by",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "reconciled_by", nullable = true, columnDefinition = "nonempty_text")
   private String reconciledBy;
 
   @Column(name = "reconciled_at", nullable = true)
   private Instant reconciledAt;
 
-  @Column(
-      name = "reconciliation_evidence",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "reconciliation_evidence", nullable = true, columnDefinition = "nonempty_text")
   private String reconciliationEvidence;
 
-  @Column(
-      name = "paid_by",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "paid_by", nullable = true, columnDefinition = "nonempty_text")
   private String paidBy;
 
   @Column(name = "paid_at", nullable = true)

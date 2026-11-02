@@ -17,10 +17,7 @@ import lombok.NoArgsConstructor;
 public class InboxMessageId implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  @Column(
-      name = "consumer_name",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "consumer_name", nullable = false, columnDefinition = "nonempty_text")
   private String consumerName;
 
   @Column(name = "message_id", nullable = false)

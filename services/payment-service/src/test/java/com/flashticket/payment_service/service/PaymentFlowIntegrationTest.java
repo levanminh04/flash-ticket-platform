@@ -319,105 +319,127 @@ class PaymentFlowIntegrationTest {
 
   @Test
   void forwardsTicketSuccessAndWaitsForBookingCompletion() {
-    var started =
-        payments.createPayment(
-            new CreatePaymentRequest(orderId, null),
-            new MockHttpServletRequest(),
-            "buyer-1",
-            requestKey);
-    ipn.put("vnp_TxnRef", started.attemptId().toString());
-    ipn.put(
-        "vnp_SecureHash",
-        VNPayUtil.hmacSHA512(
-            "fixture-secret",
-            ipn.entrySet().stream()
-                .map(e -> e.getKey() + "=" + e.getValue())
-                .collect(java.util.stream.Collectors.joining("&"))));
-    payments.handleIPN(ipn);
-    var charge = charges.findAll().getFirst();
-    sagas.recordPaymentDecision(
-        new Envelope<>(
-            UUID.randomUUID(),
-            "booking.payment-decision.v1",
-            1,
-            orderId,
-            "1",
-            Instant.now(),
-            orderId,
-            null,
-            null,
-            new PaymentDecision(
+    for (boolean withTicketCheckpoint : new boolean[] {false, true}) {
+      setUp();
+      var started =
+          payments.createPayment(
+              new CreatePaymentRequest(orderId, null),
+              new MockHttpServletRequest(),
+              "buyer-1",
+              requestKey);
+      ipn.put("vnp_TxnRef", started.attemptId().toString());
+      ipn.put(
+          "vnp_SecureHash",
+          VNPayUtil.hmacSHA512(
+              "fixture-secret",
+              ipn.entrySet().stream()
+                  .map(e -> e.getKey() + "=" + e.getValue())
+                  .collect(java.util.stream.Collectors.joining("&"))));
+      payments.handleIPN(ipn);
+      var charge = charges.findAll().getFirst();
+      sagas.recordPaymentDecision(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.payment-decision.v1",
+              1,
+              orderId,
+              "1",
+              Instant.now(),
+              orderId,
+              null,
+              null,
+              new PaymentDecision(
+                  orderId,
+                  charge.getId(),
+                  Instant.now(),
+                  PaymentDecisionOutcome.ACCEPTED,
+                  charge.getId())));
+      if (withTicketCheckpoint) {
+        var result =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "ticket.issuance-result.v1",
+                1,
                 orderId,
-                charge.getId(),
+                "1",
                 Instant.now(),
-                PaymentDecisionOutcome.ACCEPTED,
-                charge.getId())));
-    var result =
-        new Envelope<>(
-            UUID.randomUUID(),
-            "ticket.issuance-result.v1",
-            1,
-            orderId,
-            "1",
-            Instant.now(),
-            orderId,
-            null,
-            null,
-            new IssuanceResult(
-                orderId, charge.getId(), issuanceId, IssuanceState.COMPLETED, 1, null));
-    sagas.recordIssuanceResult(result);
-    assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
-        .isEqualTo(PaymentSagaState.WAITING_TICKETS);
-    var notification =
-        outbox
-            .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                orderId, "booking.issuance-result.v1")
-            .orElseThrow();
-    assertThat(
-            codec
-                .readEnvelope(notification.getPayload().toString(), BookingIssuanceResult.class)
-                .data()
-                .issuanceId())
-        .isEqualTo(issuanceId);
-    sagas.recordIssuanceResult(result);
-    tx.executeWithoutResult(
-        status -> {
-          var stored = outbox.findById(notification.getMessageId()).orElseThrow();
-          stored.setPublishedAt(Instant.now());
-          outbox.save(stored);
-        });
-    jdbc.update(
-        "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
-        java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
-        orderId);
-    sagas.recoverSaga(orderId);
-    assertThat(
-            outbox.findAll().stream()
-                .filter(message -> message.getMessageType().equals("ticket.issue.v1"))
-                .count())
-        .isEqualTo(1);
-    assertThat(
-            outbox.findAll().stream()
-                .filter(message -> message.getMessageType().equals("booking.issuance-result.v1"))
-                .count())
-        .isEqualTo(2);
-    var completed =
-        new Envelope<>(
-            UUID.randomUUID(),
-            "booking.order-completed.v1",
-            1,
-            orderId,
-            "1",
-            Instant.now(),
-            orderId,
-            null,
-            null,
-            new OrderCompleted(orderId, charge.getId(), issuanceId, 1));
-    sagas.recordOrderCompleted(completed);
-    sagas.recordOrderCompleted(completed);
-    assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
-        .isEqualTo(PaymentSagaState.COMPLETED);
-    assertThat(outbox.count()).isEqualTo(4);
+                orderId,
+                null,
+                null,
+                new IssuanceResult(
+                    orderId, charge.getId(), issuanceId, IssuanceState.COMPLETED, 1, null));
+        sagas.recordIssuanceResult(result);
+        assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+            .isEqualTo(PaymentSagaState.WAITING_TICKETS);
+        var notification =
+            outbox
+                .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                    orderId, "booking.issuance-result.v1")
+                .orElseThrow();
+        assertThat(
+                codec
+                    .readEnvelope(notification.getPayload().toString(), BookingIssuanceResult.class)
+                    .data()
+                    .issuanceId())
+            .isEqualTo(issuanceId);
+        sagas.recordIssuanceResult(result);
+        tx.executeWithoutResult(
+            status -> {
+              var stored = outbox.findById(notification.getMessageId()).orElseThrow();
+              stored.setPublishedAt(Instant.now());
+              outbox.save(stored);
+            });
+        jdbc.update(
+            "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
+            java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+            orderId);
+        sagas.recoverSaga(orderId);
+        assertThat(
+                outbox.findAll().stream()
+                    .filter(message -> message.getMessageType().equals("ticket.issue.v1"))
+                    .count())
+            .isEqualTo(1);
+        assertThat(
+                outbox.findAll().stream()
+                    .filter(
+                        message -> message.getMessageType().equals("booking.issuance-result.v1"))
+                    .count())
+            .isEqualTo(2);
+      }
+      var completed =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.order-completed.v1",
+              1,
+              orderId,
+              "1",
+              Instant.now(),
+              orderId,
+              null,
+              null,
+              new OrderCompleted(orderId, charge.getId(), issuanceId, 1));
+      sagas.recordOrderCompleted(completed);
+      sagas.recordOrderCompleted(completed);
+      assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+          .isEqualTo(PaymentSagaState.COMPLETED);
+      assertThat(outbox.count()).isEqualTo(withTicketCheckpoint ? 4 : 2);
+
+      assertThatThrownBy(
+              () ->
+                  sagas.recordOrderCompleted(
+                      new Envelope<>(
+                          UUID.randomUUID(),
+                          "booking.order-completed.v1",
+                          1,
+                          orderId,
+                          "1",
+                          Instant.now(),
+                          orderId,
+                          null,
+                          null,
+                          new OrderCompleted(orderId, charge.getId(), UUID.randomUUID(), 1))))
+          .isInstanceOf(ContractValidationException.class);
+    }
   }
 
   @Test
@@ -768,6 +790,25 @@ class PaymentFlowIntegrationTest {
             })
         .when(channel)
         .basicAck(17, false);
+    jdbc.execute(
+        "ALTER TABLE payment_schema.tbl_payment_confirmations ADD CONSTRAINT happy_case_reject_confirmation CHECK (false)");
+    try {
+      assertThatThrownBy(
+              () ->
+                  listener.onPaymentDecision(
+                      new Message(
+                          codec.write(envelope).getBytes(StandardCharsets.UTF_8), properties),
+                      channel))
+          .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+      verify(channel).basicNack(17, false, true);
+      verify(channel, never()).basicAck(anyLong(), anyBoolean());
+      assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+          .isEqualTo(PaymentSagaState.WAITING_BOOKING);
+    } finally {
+      jdbc.execute(
+          "ALTER TABLE payment_schema.tbl_payment_confirmations DROP CONSTRAINT happy_case_reject_confirmation");
+    }
+    clearInvocations(channel);
     listener.onPaymentDecision(
         new Message(codec.write(envelope).getBytes(StandardCharsets.UTF_8), properties), channel);
     verify(channel).basicAck(17, false);
@@ -783,13 +824,13 @@ class PaymentFlowIntegrationTest {
             orderId,
             null,
             null,
-            new OrderCompleted(orderId, charge.getId(), issuanceId, 1));
+            new OrderCompleted(orderId, UUID.randomUUID(), issuanceId, 1));
     assertThatThrownBy(
             () ->
                 listener.onOrderCompleted(
                     new Message(codec.write(invalid).getBytes(StandardCharsets.UTF_8), properties),
                     channel))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(org.springframework.amqp.support.converter.MessageConversionException.class);
     verifyNoInteractions(channel);
   }
 }

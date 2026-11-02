@@ -29,6 +29,10 @@ class PaymentConfigurationTest {
             new FileSystemResource(
                 "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
       env.getPropertySources().addLast(ps);
+    for (var ps :
+        loader.load(
+            "paymentDefaults", new FileSystemResource("src/main/resources/application.yaml")))
+      env.getPropertySources().addLast(ps);
     if (local)
       for (var ps :
           loader.load("local", new ClassPathResource("application-local-foundation.yaml")))
@@ -47,6 +51,23 @@ class PaymentConfigurationTest {
         .isEqualTo("payment_schema");
     assertThat(env.getProperty("spring.sql.init.mode")).isEqualTo("never");
     assertThat(env.getProperty("server.port", Integer.class)).isEqualTo(8083);
+    assertThat(env.getProperty("spring.rabbitmq.dynamic", Boolean.class)).isFalse();
+    var topology =
+        tools.jackson.databind.json.JsonMapper.builder()
+            .build()
+            .readTree(new java.io.File("../../deploy/rabbitmq/definitions.json"));
+    var queues = new java.util.HashSet<String>();
+    for (var queue : topology.get("queues")) queues.add(queue.get("name").asText());
+    assertThat(queues)
+        .contains(
+            env.getProperty("payment.queues.decision"),
+            env.getProperty("payment.queues.issuance"),
+            env.getProperty("payment.queues.completed"));
+    var exchanges = new java.util.HashSet<String>();
+    for (var exchange : topology.get("exchanges")) exchanges.add(exchange.get("name").asText());
+    assertThat(exchanges).contains(env.getProperty("payment.exchange"));
+    assertThat(env.getProperty("payment.exchange"))
+        .isEqualTo(env.getProperty("spring.rabbitmq.template.exchange"));
   }
 
   @Test

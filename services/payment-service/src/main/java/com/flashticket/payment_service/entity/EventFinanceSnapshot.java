@@ -22,10 +22,7 @@ public class EventFinanceSnapshot {
   @Column(name = "event_id", nullable = false)
   private UUID eventId;
 
-  @Column(
-      name = "organizer_subject",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "organizer_subject", nullable = true, columnDefinition = "nonempty_text")
   private String organizerSubject;
 
   @Column(name = "event_ends_at", nullable = true)

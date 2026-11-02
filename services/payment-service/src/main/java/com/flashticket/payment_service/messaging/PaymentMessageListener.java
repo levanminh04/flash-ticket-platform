@@ -21,9 +21,7 @@ public class PaymentMessageListener {
   private final MessageInvariantValidator validator;
   private final PaymentSagaService sagaService;
 
-  @RabbitListener(
-      queues = "${payment.queues.decision:payment.booking-decision.v1}",
-      ackMode = "MANUAL")
+  @RabbitListener(queues = "${payment.queues.decision:payment.decision.q}", ackMode = "MANUAL")
   public void onPaymentDecision(Message message, Channel channel) throws IOException {
     try {
       var envelope =
@@ -33,13 +31,17 @@ public class PaymentMessageListener {
       sagaService.recordPaymentDecision(envelope);
     } catch (ContractValidationException ex) {
       throw new MessageConversionException("Invalid payment decision", ex);
+    } catch (RuntimeException ex) {
+      // MANUAL ACK: trả message về queue khi TX thất bại, không giữ Unacked vô hạn.
+      channel.basicNack(message.getMessageProperties().getDeliveryTag(), false, true);
+      throw ex;
     }
     // Service proxy chỉ trả về sau khi commit thành công.
     channel.basicAck(message.getMessageProperties().getDeliveryTag(), false);
   }
 
   @RabbitListener(
-      queues = "${payment.queues.issuance:payment.ticket-result.v1}",
+      queues = "${payment.queues.issuance:payment.ticket-issuance-failed.q}",
       ackMode = "MANUAL")
   public void onIssuanceResult(Message message, Channel channel) throws IOException {
     try {
@@ -50,12 +52,16 @@ public class PaymentMessageListener {
       sagaService.recordIssuanceResult(envelope);
     } catch (ContractValidationException ex) {
       throw new MessageConversionException("Invalid issuance result", ex);
+    } catch (RuntimeException ex) {
+      // MANUAL ACK: trả message về queue khi TX thất bại, không giữ Unacked vô hạn.
+      channel.basicNack(message.getMessageProperties().getDeliveryTag(), false, true);
+      throw ex;
     }
     channel.basicAck(message.getMessageProperties().getDeliveryTag(), false);
   }
 
   @RabbitListener(
-      queues = "${payment.queues.completed:payment.booking-completed.v1}",
+      queues = "${payment.queues.completed:payment.order-completed.q}",
       ackMode = "MANUAL")
   public void onOrderCompleted(Message message, Channel channel) throws IOException {
     try {
@@ -66,6 +72,10 @@ public class PaymentMessageListener {
       sagaService.recordOrderCompleted(envelope);
     } catch (ContractValidationException ex) {
       throw new MessageConversionException("Invalid order completion", ex);
+    } catch (RuntimeException ex) {
+      // MANUAL ACK: trả message về queue khi TX thất bại, không giữ Unacked vô hạn.
+      channel.basicNack(message.getMessageProperties().getDeliveryTag(), false, true);
+      throw ex;
     }
     channel.basicAck(message.getMessageProperties().getDeliveryTag(), false);
   }

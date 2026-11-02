@@ -31,7 +31,7 @@ public class PaymentWorker {
   private final PaymentSagaService sagaService;
   private final RabbitTemplate rabbitTemplate;
 
-  @Value("${payment.exchange:flash-ticket.v1}")
+  @Value("${payment.exchange:business.ex}")
   private String exchange;
 
   @Value("${payment.outbox.batch-size:20}")

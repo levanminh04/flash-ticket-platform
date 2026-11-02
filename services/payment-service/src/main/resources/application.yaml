@@ -3,6 +3,10 @@ spring:
     name: payment-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  datasource:
+    hikari:
+      # Để JDBC trả tên domain nhất quán với columnDefinition trong entity.
+      schema: payment_schema
   security:
     oauth2:
       client:
@@ -23,8 +27,12 @@ spring:
 
 payment:
   booking:
-    base-url: ${BOOKING_SERVICE_URL:http://localhost:8083}
+    base-url: ${BOOKING_SERVICE_URL:http://localhost:8082}
     snapshot-path: /internal/v1/orders/{orderId}/purchase-snapshot
     connect-timeout: PT3S
     read-timeout: PT5S
-  exchange: flash-ticket.v1
+  exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+  queues:
+    decision: payment.decision.q
+    issuance: payment.ticket-issuance-failed.q
+    completed: payment.order-completed.q

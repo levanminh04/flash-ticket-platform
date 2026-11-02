@@ -52,22 +52,13 @@ public class Charge {
   @Column(name = "order_id", nullable = false)
   private UUID orderId;
 
-  @Column(
-      name = "provider",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "provider", nullable = false, columnDefinition = "nonempty_text")
   private String provider;
 
-  @Column(
-      name = "merchant_account",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "merchant_account", nullable = false, columnDefinition = "nonempty_text")
   private String merchantAccount;
 
-  @Column(
-      name = "provider_charge_id",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "provider_charge_id", nullable = false, columnDefinition = "nonempty_text")
   private String providerChargeId;
 
   @Column(
@@ -75,13 +66,10 @@ public class Charge {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal amount;
 
-  @Column(
-      name = "currency",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"currency_code\"")
+  @Column(name = "currency", nullable = false, columnDefinition = "currency_code")
   private String currency;
 
   @Column(name = "charged_at", nullable = false)

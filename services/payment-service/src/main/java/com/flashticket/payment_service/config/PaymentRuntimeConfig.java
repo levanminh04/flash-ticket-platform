@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 public class PaymentRuntimeConfig {
-  @Value("${payment.booking.base-url:http://localhost:8083}")
+  @Value("${payment.booking.base-url:http://localhost:8082}")
   private String bookingBaseUrl;
 
   @Value("${payment.booking.connect-timeout:PT3S}")

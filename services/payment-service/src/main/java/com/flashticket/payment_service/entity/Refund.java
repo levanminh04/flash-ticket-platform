@@ -58,13 +58,10 @@ public class Refund {
       nullable = false,
       precision = 19,
       scale = 0,
-      columnDefinition = "\"payment_schema\".\"money_amount\"")
+      columnDefinition = "money_amount")
   private BigDecimal amount;
 
-  @Column(
-      name = "currency",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"currency_code\"")
+  @Column(name = "currency", nullable = false, columnDefinition = "currency_code")
   private String currency;
 
   @Enumerated(EnumType.STRING)

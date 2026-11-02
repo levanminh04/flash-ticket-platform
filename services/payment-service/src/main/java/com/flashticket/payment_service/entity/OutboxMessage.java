@@ -48,10 +48,7 @@ public class OutboxMessage {
   @Column(name = "aggregate_version", nullable = false)
   private Long aggregateVersion;
 
-  @Column(
-      name = "message_type",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "message_type", nullable = false, columnDefinition = "nonempty_text")
   private String messageType;
 
   @Column(name = "schema_version", nullable = false)

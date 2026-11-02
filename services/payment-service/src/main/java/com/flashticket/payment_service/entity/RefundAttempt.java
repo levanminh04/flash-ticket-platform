@@ -27,16 +27,10 @@ public class RefundAttempt {
   @Column(name = "refund_id", nullable = false)
   private UUID refundId;
 
-  @Column(
-      name = "request_key",
-      nullable = false,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "request_key", nullable = false, columnDefinition = "nonempty_text")
   private String requestKey;
 
-  @Column(
-      name = "provider_refund_id",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "provider_refund_id", nullable = true, columnDefinition = "nonempty_text")
   private String providerRefundId;
 
   @Column(name = "started_at", nullable = false)
@@ -45,10 +39,7 @@ public class RefundAttempt {
   @Column(name = "finished_at", nullable = true)
   private Instant finishedAt;
 
-  @Column(
-      name = "outcome",
-      nullable = true,
-      columnDefinition = "\"payment_schema\".\"nonempty_text\"")
+  @Column(name = "outcome", nullable = true, columnDefinition = "nonempty_text")
   private String outcome;
 
   @Setter(AccessLevel.NONE)
