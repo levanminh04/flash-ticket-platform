@@ -91,8 +91,8 @@ jobs:
           SSH_HOST: ${{ vars.FT84_SSH_HOST }}
           SSH_USER: ${{ vars.FT84_SSH_USER }}
           SSH_PORT: ${{ vars.FT84_SSH_PORT }}
-          DEPLOY_DIRECTORY: ${{ vars.USER_DEPLOY_DIRECTORY }}
-          ENV_FILE: ${{ vars.USER_DEPLOY_ENV_FILE }}
+          DEPLOY_DIRECTORY: /home/ubuntu/flash-ticket-user/deploy
+          ENV_FILE: /home/ubuntu/flash-ticket-user/runtime/.env
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE_DIGEST: ${{ needs.build_publish.outputs.digest }}
@@ -104,7 +104,7 @@ jobs:
           [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
           [[ "$DEPLOY_DIRECTORY" =~ ^/[A-Za-z0-9_./-]+$ && "$DEPLOY_DIRECTORY" != *'/../'* ]]
           [[ "$ENV_FILE" =~ ^/[A-Za-z0-9_./-]+$ && "$ENV_FILE" != *'/../'* ]]
-          # Source lives directly in deploy/. Keep existing server Variables compatible.
+          # Deploy paths match the provisioned User runtime on AWS2.
           [[ "$DEPLOY_DIRECTORY" == "/home/$SSH_USER/"* ]]
           [[ "$DEPLOY_DIRECTORY" == */deploy || "$DEPLOY_DIRECTORY" == */deploy/user-service ]]
           [[ "$ENV_FILE" == "/home/$SSH_USER/"* && "$ENV_FILE" == */.env ]]
