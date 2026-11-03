@@ -3,6 +3,7 @@ package com.flashticket.payment_service.repository;
 import com.flashticket.payment_service.entity.Refund;
 import com.flashticket.payment_service.entity.enums.RefundState;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -37,4 +38,21 @@ public interface RefundRepository extends JpaRepository<Refund, UUID> {
       order by r.createdAt, r.id
       """)
   List<UUID> findIdsToPoll(@Param("startedBefore") Instant startedBefore, Pageable pageable);
+
+  @Query(
+      """
+      select coalesce(sum(r.amount), 0)
+      from Refund r, PaymentConfirmation c, OrderPaymentSnapshot s
+      where r.chargeId = c.chargeId and c.orderId = s.orderId and s.eventId = :eventId
+        and r.state = com.flashticket.payment_service.entity.enums.RefundState.SUCCEEDED
+      """)
+  BigDecimal sumSucceededConfirmedAmountByEventId(@Param("eventId") UUID eventId);
+
+  @Query(
+      """
+      select count(r) from Refund r, OrderPaymentSnapshot s
+      where r.orderId = s.orderId and s.eventId = :eventId
+        and r.state <> com.flashticket.payment_service.entity.enums.RefundState.SUCCEEDED
+      """)
+  long countUnfinishedByEventId(@Param("eventId") UUID eventId);
 }

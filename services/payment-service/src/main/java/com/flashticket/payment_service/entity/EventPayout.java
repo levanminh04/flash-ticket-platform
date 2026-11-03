@@ -19,6 +19,17 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventPayout {
+  public static EventPayout forEvent(EventFinanceSnapshot finance) {
+    var payout = new EventPayout();
+    payout.eventId = finance.getEventId();
+    payout.organizerSubject = finance.getOrganizerSubject();
+    payout.currency = "VND";
+    payout.feeRate = finance.getFeeRate();
+    payout.sourceFeeVersion = finance.getSourceFeeVersion();
+    payout.eventEndsAt = finance.getEventEndsAt();
+    return payout;
+  }
+
   @Id
   @Column(name = "event_id", nullable = false)
   private UUID eventId;

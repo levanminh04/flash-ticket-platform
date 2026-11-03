@@ -9,6 +9,7 @@ import com.flashticket.payment_service.config.PaymentReadRepositoryTestConfigura
 import com.flashticket.payment_service.dto.message.StartPaymentResultState;
 import com.flashticket.payment_service.entity.PaymentReadFixtures;
 import com.flashticket.payment_service.repository.*;
+import com.flashticket.payment_service.service.FinanceService;
 import com.flashticket.payment_service.service.RefundService;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -48,6 +49,8 @@ class PaymentJwtSecurityTest {
   @MockitoBean com.flashticket.payment_service.client.BookingPurchaseClient bookingClient;
 
   @MockitoBean RefundService refundService;
+
+  @MockitoBean FinanceService financeService;
 
   @Autowired com.flashticket.payment_service.dto.common.ContractCodec codec;
   @Autowired com.flashticket.payment_service.hashing.ContractHashService hashes;
@@ -134,6 +137,43 @@ class PaymentJwtSecurityTest {
 
   String path() {
     return "/api/v1/orders/" + order + "/payment";
+  }
+
+  @Test
+  void restrictsFinanceEndpointsByRole() throws Exception {
+    var eventId = UUID.randomUUID();
+    var future = Instant.now().plusSeconds(600);
+    mvc.perform(
+            get("/internal/v1/events/" + eventId + "/financial-summary")
+                .header(
+                    "Authorization",
+                    "Bearer "
+                        + token(
+                            "event-service",
+                            ISSUER,
+                            "payment",
+                            List.of("INTERNAL_SERVICE"),
+                            future,
+                            KEY)))
+        .andExpect(status().isOk());
+    verify(financeService).getFinancialSummary(eventId);
+
+    mvc.perform(
+            post("/api/v1/admin/events/" + eventId + "/payout")
+                .header(
+                    "Authorization",
+                    "Bearer "
+                        + token("organizer", ISSUER, "payment", List.of("ORGANIZER"), future, KEY)))
+        .andExpect(status().isForbidden());
+    verify(financeService, never()).markEventPaid(any(), any());
+
+    mvc.perform(
+            get("/api/v1/events/" + eventId + "/reconciliation")
+                .header(
+                    "Authorization",
+                    "Bearer " + token("admin", ISSUER, "payment", List.of("ADMIN"), future, KEY)))
+        .andExpect(status().isOk());
+    verify(financeService).getReconciliation(eventId, "admin", true);
   }
 
   @Test

@@ -1,6 +1,7 @@
 package com.flashticket.payment_service.repository;
 
 import com.flashticket.payment_service.entity.PaymentConfirmation;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,4 +23,11 @@ public interface PaymentConfirmationRepository extends JpaRepository<PaymentConf
       """)
   List<UUID> findOrderIdsByEventIdAfter(
       @Param("eventId") UUID eventId, @Param("cursor") UUID cursor, Pageable pageable);
+
+  @Query(
+      """
+      select coalesce(sum(c.amount), 0) from PaymentConfirmation c, OrderPaymentSnapshot s
+      where s.orderId = c.orderId and s.eventId = :eventId
+      """)
+  BigDecimal sumAmountByEventId(@Param("eventId") UUID eventId);
 }

@@ -33,6 +33,7 @@ payment:
     read-timeout: PT5S
   exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
   queues:
+    finance-configured: payment.finance-configured.q
     event-cancelled: payment.event-cancelled.q
     decision: payment.decision.q
     issuance: payment.ticket-issuance-failed.q

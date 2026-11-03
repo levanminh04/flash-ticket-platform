@@ -28,6 +28,23 @@ public class EventFinanceSnapshot {
     return snapshot;
   }
 
+  public static EventFinanceSnapshot configured(
+      UUID eventId,
+      String organizerSubject,
+      Instant eventEndsAt,
+      BigDecimal feeRate,
+      Long sourceFeeVersion,
+      Instant receivedAt) {
+    var snapshot = new EventFinanceSnapshot();
+    snapshot.eventId = eventId;
+    snapshot.organizerSubject = organizerSubject;
+    snapshot.eventEndsAt = eventEndsAt;
+    snapshot.feeRate = feeRate;
+    snapshot.sourceFeeVersion = sourceFeeVersion;
+    snapshot.receivedAt = receivedAt;
+    return snapshot;
+  }
+
   @Id
   @Column(name = "event_id", nullable = false)
   private UUID eventId;

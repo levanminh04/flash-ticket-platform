@@ -22,6 +22,14 @@ public enum PaymentErrorCode {
   REFUND_NOT_FAILED(HttpStatus.CONFLICT, "Only a failed refund can be settled manually."),
   REFUND_ATTEMPT_IN_FLIGHT(
       HttpStatus.CONFLICT, "A refund attempt is still waiting for the gateway."),
+  FINANCE_NOT_CONFIGURED(HttpStatus.CONFLICT, "Finance configuration is missing."),
+  EVENT_CANCELLED(HttpStatus.CONFLICT, "The event is cancelled."),
+  EVENT_NOT_ENDED(HttpStatus.CONFLICT, "The event has not ended."),
+  PAYMENT_PENDING(HttpStatus.CONFLICT, "A payment attempt is still pending."),
+  REFUND_PENDING(HttpStatus.CONFLICT, "A refund is still pending."),
+  RECONCILIATION_REQUIRED(HttpStatus.CONFLICT, "Reconciliation is required."),
+  RECONCILIATION_STALE(HttpStatus.CONFLICT, "Ledger changed since reconciliation."),
+  PAYOUT_ALREADY_PAID(HttpStatus.CONFLICT, "The event payout is already marked paid."),
   INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "The request could not be processed.");
 
   private final HttpStatus status;

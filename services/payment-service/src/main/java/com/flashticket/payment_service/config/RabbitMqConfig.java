@@ -28,6 +28,9 @@ public class RabbitMqConfig {
   @Value("${payment.queues.event-cancelled:payment.event-cancelled.q}")
   private String eventCancelledQueue;
 
+  @Value("${payment.queues.finance-configured:payment.finance-configured.q}")
+  private String financeConfiguredQueue;
+
   @Bean
   public org.springframework.amqp.core.Declarables paymentSagaTopology() {
     var exchange = new org.springframework.amqp.core.TopicExchange(exchangeName, true, false);
@@ -40,12 +43,15 @@ public class RabbitMqConfig {
         org.springframework.amqp.core.QueueBuilder.durable(completedQueue).quorum().build();
     var eventCancelled =
         org.springframework.amqp.core.QueueBuilder.durable(eventCancelledQueue).quorum().build();
+    var financeConfigured =
+        org.springframework.amqp.core.QueueBuilder.durable(financeConfiguredQueue).quorum().build();
     return new org.springframework.amqp.core.Declarables(
         exchange,
         decision,
         issuance,
         completed,
         eventCancelled,
+        financeConfigured,
         org.springframework.amqp.core.BindingBuilder.bind(decision)
             .to(exchange)
             .with("booking.payment-decision.v1"),
@@ -57,7 +63,10 @@ public class RabbitMqConfig {
             .with("booking.order-completed.v1"),
         org.springframework.amqp.core.BindingBuilder.bind(eventCancelled)
             .to(exchange)
-            .with("event.cancelled.v1"));
+            .with("event.cancelled.v1"),
+        org.springframework.amqp.core.BindingBuilder.bind(financeConfigured)
+            .to(exchange)
+            .with("event.finance-configured.v1"));
   }
 
   @Bean

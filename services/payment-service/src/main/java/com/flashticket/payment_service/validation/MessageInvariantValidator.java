@@ -4,11 +4,13 @@ import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.EventCancellation;
 import com.flashticket.payment_service.dto.message.EventState;
+import com.flashticket.payment_service.dto.message.FinanceConfiguration;
 import com.flashticket.payment_service.dto.message.IssuanceResult;
 import com.flashticket.payment_service.dto.message.OrderCompleted;
 import com.flashticket.payment_service.dto.message.PaymentDecision;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.hashing.ContractHashService;
+import java.math.BigDecimal;
 import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -73,6 +75,15 @@ public final class MessageInvariantValidator {
         || !Objects.equals(envelope.aggregateId(), envelope.data().orderId())
         || !Objects.equals(envelope.correlationId(), envelope.data().orderId()))
       fail("$", "ORDER_COMPLETED_MISMATCH");
+  }
+
+  public void validateFinanceConfiguration(Envelope<FinanceConfiguration> envelope) {
+    var configuration = envelope.data();
+    if (!"event.finance-configured.v1".equals(envelope.messageType())
+        || !Objects.equals(envelope.aggregateId(), configuration.eventId())
+        || new BigDecimal(configuration.feeRate()).compareTo(BigDecimal.ZERO) < 0
+        || new BigDecimal(configuration.feeRate()).compareTo(BigDecimal.ONE) > 0)
+      fail("$", "FINANCE_CONFIGURATION_MISMATCH");
   }
 
   public void validateEventCancellation(Envelope<EventCancellation> envelope) {

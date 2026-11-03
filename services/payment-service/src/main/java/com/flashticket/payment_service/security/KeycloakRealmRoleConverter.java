@@ -7,7 +7,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 public final class KeycloakRealmRoleConverter
     implements Converter<Jwt, Collection<GrantedAuthority>> {
-  private static final Set<String> ROLES = Set.of("BUYER", "ORGANIZER", "ADMIN");
+  private static final Set<String> ROLES =
+      Set.of("BUYER", "ORGANIZER", "ADMIN", "INTERNAL_SERVICE");
 
   public Collection<GrantedAuthority> convert(Jwt jwt) {
     Object realm = jwt.getClaim("realm_access");

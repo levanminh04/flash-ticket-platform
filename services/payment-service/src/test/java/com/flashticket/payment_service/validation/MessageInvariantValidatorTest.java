@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.EventCancellation;
+import com.flashticket.payment_service.dto.message.FinanceConfiguration;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.hashing.*;
 import java.time.Instant;
@@ -128,5 +129,45 @@ class MessageInvariantValidatorTest {
     assertThat(ex).isInstanceOf(ContractValidationException.class);
     assertThat(((ContractValidationException) ex).field()).isEqualTo("$");
     assertThat(((ContractValidationException) ex).code()).isEqualTo("EVENT_CANCELLATION_MISMATCH");
+  }
+
+  @Test
+  void rejectsFinanceConfigurationForDifferentAggregate() {
+    var configuration =
+        new FinanceConfiguration(UUID.randomUUID(), "organizer", Instant.now(), "0.1", "3", "VND");
+    var messageId = UUID.randomUUID();
+    var correlationId = UUID.randomUUID();
+    var occurredAt = Instant.now();
+    var envelope =
+        new Envelope<>(
+            messageId,
+            "event.finance-configured.v1",
+            1,
+            configuration.eventId(),
+            "1",
+            occurredAt,
+            correlationId,
+            null,
+            null,
+            configuration);
+    assertThatCode(() -> validator.validateFinanceConfiguration(envelope))
+        .doesNotThrowAnyException();
+    var mismatched =
+        new Envelope<>(
+            messageId,
+            "event.finance-configured.v1",
+            1,
+            UUID.randomUUID(),
+            "1",
+            occurredAt,
+            correlationId,
+            null,
+            null,
+            configuration);
+    var ex = catchThrowable(() -> validator.validateFinanceConfiguration(mismatched));
+    assertThat(ex).isInstanceOf(ContractValidationException.class);
+    assertThat(((ContractValidationException) ex).field()).isEqualTo("$");
+    assertThat(((ContractValidationException) ex).code())
+        .isEqualTo("FINANCE_CONFIGURATION_MISMATCH");
   }
 }

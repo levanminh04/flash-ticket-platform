@@ -63,7 +63,8 @@ class PaymentConfigurationTest {
             env.getProperty("payment.queues.decision"),
             env.getProperty("payment.queues.issuance"),
             env.getProperty("payment.queues.completed"),
-            env.getProperty("payment.queues.event-cancelled"));
+            env.getProperty("payment.queues.event-cancelled"),
+            env.getProperty("payment.queues.finance-configured"));
     var exchanges = new java.util.HashSet<String>();
     for (var exchange : topology.get("exchanges")) exchanges.add(exchange.get("name").asText());
     assertThat(exchanges).contains(env.getProperty("payment.exchange"));

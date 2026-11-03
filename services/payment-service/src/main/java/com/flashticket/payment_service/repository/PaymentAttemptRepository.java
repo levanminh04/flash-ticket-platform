@@ -21,4 +21,11 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
   Optional<PaymentAttempt> findFirstByOrderIdOrderByStartedAtDescIdDesc(UUID orderId);
 
   Optional<PaymentAttempt> findByIdAndOrderId(UUID id, UUID orderId);
+
+  @Query(
+      """
+      select count(a) from PaymentAttempt a, OrderPaymentSnapshot s
+      where s.orderId = a.orderId and s.eventId = :eventId and a.finishedAt is null
+      """)
+  long countUnfinishedByEventId(@Param("eventId") UUID eventId);
 }
