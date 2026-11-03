@@ -66,9 +66,11 @@ CREATE TABLE refunds (
   reason text NOT NULL CHECK (reason IN ('LATE_PAYMENT','DUPLICATE_PAYMENT','TICKET_ISSUANCE_FAILED','EVENT_CANCELLED')),
   state text NOT NULL CHECK (state IN ('PENDING','PROCESSING','SUCCEEDED','FAILED')),
   created_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz,
+  settled_by nonempty_text, external_reference nonempty_text,
   row_version bigint NOT NULL DEFAULT 0 CHECK (row_version >= 0),
   FOREIGN KEY (charge_id, order_id, amount, currency) REFERENCES charges(id, order_id, amount, currency),
   CHECK ((state = 'SUCCEEDED' AND completed_at IS NOT NULL) OR (state <> 'SUCCEEDED' AND completed_at IS NULL)),
+  CHECK ((settled_by IS NULL AND external_reference IS NULL) OR (settled_by IS NOT NULL AND external_reference IS NOT NULL AND state = 'SUCCEEDED')),
   UNIQUE (id, charge_id, order_id)
 );
 CREATE TABLE refund_attempts (

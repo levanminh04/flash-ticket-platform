@@ -1,7 +1,7 @@
 # B4 — Bản đồ sự kiện miền
 
-- Phiên bản: `B4-v0.15`
-- Trạng thái: `APPROVED`
+- Phiên bản: `B4-v0.16`
+- Trạng thái: `REVIEW_READY` — `B4-v0.15` là bản `APPROVED` gần nhất; `v0.16` chỉ lan truyền `BIZ-159` vào `C03`/`C04`
 - Người duyệt: Lê Văn Minh
 - Ngày duyệt: 2026-08-27, sau `B3-v0.11` (`GOV-033`) · `B4-v0.14` và `B4-v0.13` đã được duyệt ngày 2026-08-22
 - Baseline phê duyệt: `B4-v0.11` đã được duyệt trước `B5-v0.9`; `B4-v0.13` lan truyền các quyết định nghiệp vụ được Lê Văn Minh xác nhận ngày 2026-08-22 và đã được duyệt cùng ngày.
@@ -142,8 +142,8 @@ Các trường hợp sau phải trả kết quả rõ cho buyer, nhưng B4 khôn
 |---|---|---|---|---|---|
 | `C01` | Chính sách sau `B10`, `B11`, `B12` hoặc lựa chọn từng khoản thu tại `C05` | Ghi nhận một khoản thu cần hoàn và nguyên nhân cụ thể | **Yêu cầu hoàn tiền đã được tạo hoặc tiếp tục** | Mỗi khoản thu chỉ có một yêu cầu hoàn logic: đã hoàn thành thì không tạo lại; đang xử lý hoặc thất bại còn có thể thử lại thì tiếp tục; chỉ tạo mới khi chưa tồn tại | BIZ-011–BIZ-014, BIZ-033, BIZ-101; B3 §4.3 |
 | `C02` | Hệ thống | Gửi lệnh hoàn toàn bộ khoản cần hoàn | **Lệnh hoàn tiền đã được gửi tới cổng thanh toán** | Theo dõi trạng thái từng khoản thu độc lập | B3 §4.3 |
-| `C03` | Cổng thanh toán | Xác nhận hoàn thành | **Hoàn tiền đã thành công** | Cập nhật khoản thu/yêu cầu hoàn, liên kết kết quả với đơn và cập nhật sổ đối soát; không tự suy ra việc trả tài nguyên hay vô hiệu vé nếu nguyên nhân gốc không yêu cầu | BIZ-011–BIZ-014, BIZ-059, BIZ-062–BIZ-065, BIZ-103–BIZ-105 |
-| `C04` | Cổng thanh toán hoặc lỗi xử lý | Một lần xử lý hoàn chưa thành công | **Lần hoàn tiền đã thất bại** | Giữ yêu cầu hoàn ở trạng thái chưa hoàn tất để thử lại/điều tra; không đảo các khoản đã hoàn thành | B3 §4.4–§4.6 |
+| `C03` | Cổng thanh toán; hoặc admin ghi nhận đã hoàn ngoài hệ thống cho yêu cầu đã thất bại | Cổng xác nhận hoàn thành, hoặc admin ghi nhận kèm người thao tác, thời điểm và mã tham chiếu | **Hoàn tiền đã thành công** | Đây là kết quả hoàn thành công duy nhất của khoản thu; kết quả thành công từ cổng đến sau ghi nhận ngoài hệ thống không ghi nhận hoàn lần hai mà để lại dấu vết đối soát. Cập nhật khoản thu/yêu cầu hoàn, liên kết kết quả với đơn và cập nhật sổ đối soát; không tự suy ra việc trả tài nguyên hay vô hiệu vé nếu nguyên nhân gốc không yêu cầu | BIZ-011–BIZ-014, BIZ-059, BIZ-062–BIZ-065, BIZ-103–BIZ-105, BIZ-159 |
+| `C04` | Cổng thanh toán hoặc lỗi xử lý | Một lần xử lý hoàn chưa thành công | **Lần hoàn tiền đã thất bại** | Giữ yêu cầu hoàn ở trạng thái chưa hoàn tất để thử lại/điều tra; không đảo các khoản đã hoàn thành. Admin thử lại (`C02` trên cùng yêu cầu) hoặc ghi nhận đã hoàn ngoài hệ thống (`C03`); yêu cầu đã thất bại vẫn chặn `C08` | B3 §4.4–§4.6; BIZ-159 |
 | `C05` | Chính sách sau `A11` | Khởi tạo xử lý hoàn cho một sự kiện bị hủy | **Xử lý hoàn của sự kiện đã được khởi tạo** | Chọn N đơn thuộc sự kiện có khoản thu hợp lệ được giữ lại vẫn còn số tiền phải hoàn; với từng khoản thu, tạo mới hoặc tiếp tục `C01`. Giao dịch thu thừa đi theo nhánh thanh toán trùng độc lập và không thuộc lô này; đây không phải thao tác hủy nhiều sự kiện | BIZ-014, BIZ-100–BIZ-102; B3 §4.4 |
 | `C06` | Kết quả xử lý từng đơn trong `C05` | Cập nhật tiến độ lô | **Tiến độ hoàn của sự kiện đã được cập nhật** | Thể hiện số đơn chờ, thành công, thất bại; lỗi một đơn không làm mất dấu các đơn còn lại | B3 §4.4 |
 | `C07` | Hệ thống | Tổng hợp các khoản bán hợp lệ và khoản đã hoàn; loại khoản thu trùng phải hoàn khỏi doanh thu hợp lệ | **Sổ cái đối soát chỉ đọc đã được cập nhật** | Tính doanh thu thực thu, phí nền tảng và số tiền dự kiến chi trả; admin không sửa trực tiếp số tiền | BIZ-013, BIZ-034–BIZ-036, BIZ-059; B3 §4.5 |
@@ -341,6 +341,7 @@ Nguồn trình bày là `PRJ-006`. Mục này chứng minh độ bao phủ chứ
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B4-v0.16` | 2026-11-03 | Lan truyền `BIZ-159`: `C03` thêm tác nhân admin ghi nhận đã hoàn ngoài hệ thống cho yêu cầu đã thất bại; `C04` ghi hai thao tác xử lý của admin và việc yêu cầu thất bại vẫn chặn `C08`. Không thêm mã sự kiện; dòng A/B/D không đổi; chờ duyệt | Lan truyền quyết định |
 | `B4-v0.15` | 2026-08-27 | **Sửa ô "Gate xử lý tiếp" của `HOT-02`** — bổ sung `B9` cho khớp `B4-OPEN-05` (*"B7/B9/B10"*) và `B7` §6 (*"còn `OPEN` cho B9–B11"*). Ba chỗ trong cùng tài liệu và tài liệu hạ nguồn từng nói khác nhau; đây là sửa cho nhất quán, không phải quyết định mới về phạm vi. **Gỡ trọn §8.3 "Trợ lý chẩn đoán sự cố"** — bảng sự kiện ứng viên `T01`–`T04` và câu khai đường ống `structured logging → Drain → context → LLM API` — theo `RES-034`. Viết lại một dòng ở §9 để dấu vết vận hành là đầu ra quan sát trung tính thay vì đầu vào của trợ lý; bỏ cột dòng `T`. Chuyển giao `B4-OPEN-02` sang bộ RCA. **Bốn dòng sự kiện chính A/B/C/D, §8.1, §8.2 chatbot, §8.4, §8.5, §9 phần còn lại và §10 không đổi một chữ** | Gỡ thiết kế trợ lý cũ |
 | `B4-v0.14` | 2026-08-22 | Không đổi nội dung. Chỉ đồng bộ khai đầu vào sang `B2-v0.10`/`B3-v0.10` sau khi B2 bổ sung mục từ **Yêu cầu hủy sự kiện**; tài liệu trở lại `REVIEW_READY` theo quy tắc chuỗi phụ thuộc | Lan truyền trạng thái |
 | `B4-v0.9` | 2026-08-21 | Baseline được Lê Văn Minh duyệt `APPROVED` tại commit `8270613` | Phê duyệt |

@@ -1,6 +1,6 @@
 # B13 — Hợp đồng API và thông điệp cho luồng chính
 
-- Phiên bản: `B13-v0.3`, ngày 2026-10-29.
+- Phiên bản: `B13-v0.4`, ngày 2026-11-03.
 - Trạng thái: `REVIEW_READY`; người duyệt/ngày duyệt phiên bản này: chưa có. `B13-v0.1` được Lê Văn Minh duyệt ngày 2026-09-14 (GOV-144), sau B12-v0.2; không chuyển phê duyệt đó sang hợp đồng sửa. Chưa nghiệm thu API chạy thật.
 - Phân lớp: `FORMATION`; riêng §8 là `COMPARISON` về adapter, không sinh ranh giới service.
 - Đầu vào: B11-C-v0.3; B6-v0.15/B7-v0.13/B8-v0.13; B12-v0.2 — APPROVED. GOV-156 và ảnh ClickUp 61 bước cho hướng phối hợp hiện hành; Review-v0.6, GOV-122–144, GOV-149/150, PRJ-024 chỉ theo phần còn hiệu lực.
@@ -116,6 +116,29 @@ POST thanh toán vào Payment, có Idempotency-Key và subject từ JWT. Cùng a
 Payment kiểm chủ đơn bằng buyerSubject trong snapshot nguồn Booking. Khi chưa có snapshot, GET trả lỗi chưa sẵn sàng chung, không trả thông tin của orderId đoán được; frontend tiếp tục đọc trạng thái đơn từ Booking và poll có backoff. Đơn hết hạn/hủy không được UI coi là chưa thu tiền ở cổng: callback vẫn xử lý độc lập theo rule hoàn muộn.
 
 **QR thanh toán khác QR vé.** Ảnh ClickUp bước 24–26 là Payment trả dữ liệu thanh toán để FE hiển thị; bước 55–61 là đọc vé từ Ticket. B13-OPEN-01 giữ câu hỏi adapter cung cấp URL, chuỗi QR hay ảnh QR và có cần lưu QR riêng. Không tự thêm cột QR hoặc coi QR vé là QR thanh toán.
+
+### 3.1 API admin xử lý yêu cầu hoàn — `BIZ-159`
+
+Owner là Payment, actor là ADMIN; áp cho mọi `reason` của refund. Hai lệnh POST bắt buộc `Idempotency-Key` theo §2.
+
+| Method / path | Input → output | Guard và tác dụng |
+|---|---|---|
+| GET `/admin/refunds?state=FAILED&cursor=` | → `{items:RefundAdminView[],nextCursor:string\|null}` | Chỉ đọc; lọc theo `state`, mặc định `FAILED`; phân trang theo cursor |
+| POST `/admin/refunds/{refundId}/retry` | `{}` → `RefundAdminView` | Chỉ khi `FAILED`: chuyển `PENDING`, tạo `refund_attempts` mới với `request_key` mới, worker gửi lại lệnh hoàn trên cùng refund (FR-37a). `PENDING`/`PROCESSING` trả trạng thái hiện có, không gọi cổng thêm; `SUCCEEDED` → `409 REFUND_ALREADY_SUCCEEDED` |
+| POST `/admin/refunds/{refundId}/manual-settlement` | `{externalReference:string}` → `RefundAdminView` | Chỉ khi `FAILED` và không có attempt chưa kết thúc: chuyển `SUCCEEDED`, ghi `settled_by`=subject JWT, `external_reference`, `completed_at`=now (FR-39a). Còn attempt chưa kết thúc → `409 REFUND_ATTEMPT_IN_FLIGHT`; `PENDING`/`PROCESSING` → `409 REFUND_NOT_FAILED`; `SUCCEEDED` qua cổng → `409 REFUND_ALREADY_SUCCEEDED`; cùng reference trên refund đã ghi nhận trả kết quả cũ, reference khác → `409 REFUND_ALREADY_SUCCEEDED` |
+
+```typescript
+type RefundAdminView = {
+  refundId:UUID; orderId:UUID; chargeId:UUID; amount:Money; currency:'VND';
+  reason:'LATE_PAYMENT'|'DUPLICATE_PAYMENT'|'TICKET_ISSUANCE_FAILED'|'EVENT_CANCELLED';
+  state:'PENDING'|'PROCESSING'|'SUCCEEDED'|'FAILED';
+  createdAt:Instant; completedAt:Instant|null;
+  settlement:{settledBy:Subject;externalReference:string}|null; // null = qua cổng hoặc chưa xong
+  lastAttempt:{startedAt:Instant;finishedAt:Instant|null;outcome:string|null}|null;
+};
+```
+
+Cả hai lệnh khóa refund theo `row_version` và ghi audit actor/time. Kết quả thành công từ cổng đến sau ghi nhận ngoài hệ thống chỉ ghi `outcome` của attempt, không đổi refund và không cộng thêm `valid_refunds`; log mã lỗi đã lọc để đối soát ở `UC-18`. Refund `FAILED` vẫn tính vào `refund_pending_count`, nên chi trả mở lại chỉ khi mọi refund của sự kiện đã `SUCCEEDED`. Không lệnh nào đổi trạng thái order, vé hay tài nguyên (`BIZ-150`).
 
 ## 4. Purchase snapshot cố định và freeze tiền
 
@@ -351,6 +374,7 @@ Sau khi nhận payload v1, validate toàn bộ DTO và tính nhất quán rồi 
 |---|---|---|
 | B13-v0.1 | 2026-09-14 | Đặc tả hợp đồng luồng chính và adapter; chưa phê duyệt gate hoặc hiện thực API |
 | B13-v0.2 | 2026-10-03 | Đồng bộ GOV-149/150 theo ảnh: start qua Booking + poll Payment; success Ticket → Booking → Payment. Route/DTO sửa là CANDIDATE, REVIEW_READY; QR thanh toán độc lập còn OPEN; không đổi DDL hoặc nghiệm thu runtime |
+| B13-v0.4 | 2026-11-03 | Thêm §3.1 API admin xử lý yêu cầu hoàn theo `BIZ-159`: danh sách refund thất bại, thử lại, ghi nhận đã hoàn ngoài hệ thống và `RefundAdminView`; REVIEW_READY |
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 
