@@ -1,6 +1,6 @@
 # B13 — Hợp đồng API và thông điệp cho luồng chính
 
-- Phiên bản: `B13-v0.4`, ngày 2026-11-03.
+- Phiên bản: `B13-v0.5`, ngày 2026-11-03.
 - Trạng thái: `REVIEW_READY`; người duyệt/ngày duyệt phiên bản này: chưa có. `B13-v0.1` được Lê Văn Minh duyệt ngày 2026-09-14 (GOV-144), sau B12-v0.2; không chuyển phê duyệt đó sang hợp đồng sửa. Chưa nghiệm thu API chạy thật.
 - Phân lớp: `FORMATION`; riêng §8 là `COMPARISON` về adapter, không sinh ranh giới service.
 - Đầu vào: B11-C-v0.3; B6-v0.15/B7-v0.13/B8-v0.13; B12-v0.2 — APPROVED. GOV-156 và ảnh ClickUp 61 bước cho hướng phối hợp hiện hành; Review-v0.6, GOV-122–144, GOV-149/150, PRJ-024 chỉ theo phần còn hiệu lực.
@@ -119,13 +119,14 @@ Payment kiểm chủ đơn bằng buyerSubject trong snapshot nguồn Booking. K
 
 ### 3.1 API admin xử lý yêu cầu hoàn — `BIZ-159`
 
-Owner là Payment, actor là ADMIN; áp cho mọi `reason` của refund. Hai lệnh POST bắt buộc `Idempotency-Key` theo §2.
+Owner là Payment, actor là ADMIN; áp cho mọi `reason` của refund. Hai lệnh POST **không** dùng `Idempotency-Key`: chúng idempotent theo trạng thái refund và `externalReference` (gọi lặp trả kết quả hiện có), nên không cần bảng idempotency riêng.
 
 | Method / path | Input → output | Guard và tác dụng |
 |---|---|---|
-| GET `/admin/refunds?state=FAILED&cursor=` | → `{items:RefundAdminView[],nextCursor:string\|null}` | Chỉ đọc; lọc theo `state`, mặc định `FAILED`; phân trang theo cursor |
+| GET `/admin/refunds?state=FAILED&page=0&size=20` | → `PageResponse<RefundAdminView>` | Chỉ đọc; lọc theo `state`, mặc định `FAILED`; trang bắt đầu từ 0, sắp theo `createdAt` |
 | POST `/admin/refunds/{refundId}/retry` | `{}` → `RefundAdminView` | Chỉ khi `FAILED`: chuyển `PENDING`, tạo `refund_attempts` mới với `request_key` mới, worker gửi lại lệnh hoàn trên cùng refund (FR-37a). `PENDING`/`PROCESSING` trả trạng thái hiện có, không gọi cổng thêm; `SUCCEEDED` → `409 REFUND_ALREADY_SUCCEEDED` |
 | POST `/admin/refunds/{refundId}/manual-settlement` | `{externalReference:string}` → `RefundAdminView` | Chỉ khi `FAILED` và không có attempt chưa kết thúc: chuyển `SUCCEEDED`, ghi `settled_by`=subject JWT, `external_reference`, `completed_at`=now (FR-39a). Còn attempt chưa kết thúc → `409 REFUND_ATTEMPT_IN_FLIGHT`; `PENDING`/`PROCESSING` → `409 REFUND_NOT_FAILED`; `SUCCEEDED` qua cổng → `409 REFUND_ALREADY_SUCCEEDED`; cùng reference trên refund đã ghi nhận trả kết quả cũ, reference khác → `409 REFUND_ALREADY_SUCCEEDED` |
+| GET `/admin/events/{eventId}/refund-progress` | → `EventRefundProgressView` | Chỉ đọc; tiến độ lô hoàn của sự kiện bị hủy (FR-39); không có run → 404 `RESOURCE_NOT_FOUND`
 
 ```typescript
 type RefundAdminView = {
@@ -133,8 +134,14 @@ type RefundAdminView = {
   reason:'LATE_PAYMENT'|'DUPLICATE_PAYMENT'|'TICKET_ISSUANCE_FAILED'|'EVENT_CANCELLED';
   state:'PENDING'|'PROCESSING'|'SUCCEEDED'|'FAILED';
   createdAt:Instant; completedAt:Instant|null;
-  settlement:{settledBy:Subject;externalReference:string}|null; // null = qua cổng hoặc chưa xong
-  lastAttempt:{startedAt:Instant;finishedAt:Instant|null;outcome:string|null}|null;
+  settledBy:Subject|null; externalReference:string|null; // null = qua cổng hoặc chưa xong
+  lastAttemptStartedAt:Instant|null; lastAttemptFinishedAt:Instant|null; lastAttemptOutcome:string|null;
+};
+type PageResponse<T> = {items:T[]; page:number; size:number; totalElements:number; totalPages:number};
+type EventRefundProgressView = {
+  eventId:UUID; cancellationId:UUID; selectionComplete:boolean; selectedOrderCount:number;
+  pendingCount:number; refundedCount:number; needsAttentionCount:number;
+  completedAt:Instant|null; asOf:Instant;
 };
 ```
 
@@ -375,6 +382,7 @@ Sau khi nhận payload v1, validate toàn bộ DTO và tính nhất quán rồi 
 | B13-v0.1 | 2026-09-14 | Đặc tả hợp đồng luồng chính và adapter; chưa phê duyệt gate hoặc hiện thực API |
 | B13-v0.2 | 2026-10-03 | Đồng bộ GOV-149/150 theo ảnh: start qua Booking + poll Payment; success Ticket → Booking → Payment. Route/DTO sửa là CANDIDATE, REVIEW_READY; QR thanh toán độc lập còn OPEN; không đổi DDL hoặc nghiệm thu runtime |
 | B13-v0.4 | 2026-11-03 | Thêm §3.1 API admin xử lý yêu cầu hoàn theo `BIZ-159`: danh sách refund thất bại, thử lại, ghi nhận đã hoàn ngoài hệ thống và `RefundAdminView`; REVIEW_READY |
+| B13-v0.5 | 2026-11-03 | Theo thiết kế payment refund saga (D1–D3): bỏ `Idempotency-Key` ở hai lệnh admin, danh sách refund dùng `page/size` + `PageResponse`, `RefundAdminView` phẳng, thêm `GET /admin/events/{eventId}/refund-progress`; REVIEW_READY |
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 
