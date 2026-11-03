@@ -40,8 +40,4 @@ logging:
       rename:
         level: severity
         stack_trace: stackTrace
-      add:
-        serviceName: user-service
-        serviceVersion: ${USER_SERVICE_VERSION:local-dev}
-        instanceId: ${USER_INSTANCE_ID:${random.uuid}}
-        environment: ${USER_ENVIRONMENT:local}
+
