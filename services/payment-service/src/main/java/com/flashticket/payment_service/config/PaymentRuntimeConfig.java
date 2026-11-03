@@ -31,6 +31,24 @@ public class PaymentRuntimeConfig {
   @Value("${payment.booking.read-timeout:PT5S}")
   private Duration readTimeout;
 
+  @Value("${vnpay.api-url}")
+  private String vnpayApiUrl;
+
+  @Value("${payment.vnpay.connect-timeout:PT3S}")
+  private Duration vnpayConnectTimeout;
+
+  @Value("${payment.vnpay.read-timeout:PT10S}")
+  private Duration vnpayReadTimeout;
+
+  @Bean
+  public RestClient vnpayRestClient(RestClient.Builder builder) {
+    var factory =
+        new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().connectTimeout(vnpayConnectTimeout).build());
+    factory.setReadTimeout(vnpayReadTimeout);
+    return builder.clone().baseUrl(vnpayApiUrl).requestFactory(factory).build();
+  }
+
   @Bean
   public TransactionTemplate paymentTransactionTemplate(
       PlatformTransactionManager transactionManager) {

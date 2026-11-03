@@ -25,6 +25,17 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventRefundItem {
+  public static EventRefundItem selected(
+      UUID runId, UUID eventId, UUID orderId, UUID confirmedChargeId, Instant updatedAt) {
+    var item = new EventRefundItem();
+    item.id = new EventRefundItemId(runId, orderId);
+    item.eventId = eventId;
+    item.confirmedChargeId = confirmedChargeId;
+    item.state = EventRefundItemState.SELECTED;
+    item.updatedAt = updatedAt;
+    return item;
+  }
+
   @EmbeddedId @Setter private EventRefundItemId id;
 
   @Column(name = "event_id", nullable = false)

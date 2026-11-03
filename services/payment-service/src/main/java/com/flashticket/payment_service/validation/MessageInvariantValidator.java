@@ -2,6 +2,8 @@ package com.flashticket.payment_service.validation;
 
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
+import com.flashticket.payment_service.dto.message.EventCancellation;
+import com.flashticket.payment_service.dto.message.EventState;
 import com.flashticket.payment_service.dto.message.IssuanceResult;
 import com.flashticket.payment_service.dto.message.OrderCompleted;
 import com.flashticket.payment_service.dto.message.PaymentDecision;
@@ -57,7 +59,10 @@ public final class MessageInvariantValidator {
 
   public void validateIssuanceResult(Envelope<IssuanceResult> envelope) {
     var result = envelope.data();
-    if (!"ticket.issuance-result.v1".equals(envelope.messageType())
+    // Ticket hiện đặt type cũ; topology đã deploy định tuyến thất bại bằng
+    // ticket.issuance-failed.v1.
+    if ((!"ticket.issuance-result.v1".equals(envelope.messageType())
+            && !"ticket.issuance-failed.v1".equals(envelope.messageType()))
         || !Objects.equals(envelope.aggregateId(), result.orderId())
         || !Objects.equals(envelope.correlationId(), result.orderId())
         || !result.isResultConsistent()) fail("$", "ISSUANCE_RESULT_MISMATCH");
@@ -68,5 +73,16 @@ public final class MessageInvariantValidator {
         || !Objects.equals(envelope.aggregateId(), envelope.data().orderId())
         || !Objects.equals(envelope.correlationId(), envelope.data().orderId()))
       fail("$", "ORDER_COMPLETED_MISMATCH");
+  }
+
+  public void validateEventCancellation(Envelope<EventCancellation> envelope) {
+    var cancellation = envelope.data();
+    if (!"event.cancelled.v1".equals(envelope.messageType())
+        || !Objects.equals(envelope.aggregateId(), cancellation.eventId())
+        || !Objects.equals(cancellation.sales().eventId(), cancellation.eventId())
+        || !Objects.equals(cancellation.access().eventId(), cancellation.eventId())
+        || cancellation.access().eventStatus() != EventState.CANCELLED
+        || cancellation.sales().eventStatus() != EventState.CANCELLED)
+      fail("$", "EVENT_CANCELLATION_MISMATCH");
   }
 }

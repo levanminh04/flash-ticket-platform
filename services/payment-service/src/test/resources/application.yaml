@@ -47,6 +47,7 @@ flashticket:
       audience: payment
 
 vnpay:
+  api-url: https://example.test/merchant_webapi/api/transaction
   tmn-code: test
   hash-secret: fixture-secret
   payment-url: https://sandbox.example.test/pay

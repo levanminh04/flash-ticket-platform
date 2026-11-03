@@ -25,26 +25,39 @@ public class RabbitMqConfig {
   @Value("${payment.queues.completed:payment.order-completed.q}")
   private String completedQueue;
 
+  @Value("${payment.queues.event-cancelled:payment.event-cancelled.q}")
+  private String eventCancelledQueue;
+
   @Bean
   public org.springframework.amqp.core.Declarables paymentSagaTopology() {
     var exchange = new org.springframework.amqp.core.TopicExchange(exchangeName, true, false);
-    var decision = new org.springframework.amqp.core.Queue(decisionQueue, true);
-    var issuance = new org.springframework.amqp.core.Queue(issuanceQueue, true);
-    var completed = new org.springframework.amqp.core.Queue(completedQueue, true);
+    // Production tắt khai báo bằng spring.rabbitmq.dynamic=false; topology dùng cho test.
+    var decision =
+        org.springframework.amqp.core.QueueBuilder.durable(decisionQueue).quorum().build();
+    var issuance =
+        org.springframework.amqp.core.QueueBuilder.durable(issuanceQueue).quorum().build();
+    var completed =
+        org.springframework.amqp.core.QueueBuilder.durable(completedQueue).quorum().build();
+    var eventCancelled =
+        org.springframework.amqp.core.QueueBuilder.durable(eventCancelledQueue).quorum().build();
     return new org.springframework.amqp.core.Declarables(
         exchange,
         decision,
         issuance,
         completed,
+        eventCancelled,
         org.springframework.amqp.core.BindingBuilder.bind(decision)
             .to(exchange)
             .with("booking.payment-decision.v1"),
         org.springframework.amqp.core.BindingBuilder.bind(issuance)
             .to(exchange)
-            .with("ticket.issuance-result.v1"),
+            .with("ticket.issuance-failed.v1"),
         org.springframework.amqp.core.BindingBuilder.bind(completed)
             .to(exchange)
-            .with("booking.order-completed.v1"));
+            .with("booking.order-completed.v1"),
+        org.springframework.amqp.core.BindingBuilder.bind(eventCancelled)
+            .to(exchange)
+            .with("event.cancelled.v1"));
   }
 
   @Bean

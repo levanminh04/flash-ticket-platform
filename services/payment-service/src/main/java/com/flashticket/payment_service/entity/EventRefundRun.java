@@ -22,6 +22,17 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventRefundRun {
+  public static EventRefundRun started(UUID eventId, UUID cancellationId, Instant startedAt) {
+    var run = new EventRefundRun();
+    run.id = UUID.randomUUID();
+    run.eventId = eventId;
+    run.sourceCancellationId = cancellationId;
+    run.selectionComplete = false;
+    run.selectedOrderCount = 0L;
+    run.startedAt = startedAt;
+    return run;
+  }
+
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;

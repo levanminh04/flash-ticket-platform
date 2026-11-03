@@ -9,6 +9,7 @@ import com.flashticket.payment_service.config.PaymentReadRepositoryTestConfigura
 import com.flashticket.payment_service.dto.message.StartPaymentResultState;
 import com.flashticket.payment_service.entity.PaymentReadFixtures;
 import com.flashticket.payment_service.repository.*;
+import com.flashticket.payment_service.service.RefundService;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.*;
@@ -45,6 +46,8 @@ class PaymentJwtSecurityTest {
   @Autowired InboxMessageRepository inbox;
 
   @MockitoBean com.flashticket.payment_service.client.BookingPurchaseClient bookingClient;
+
+  @MockitoBean RefundService refundService;
 
   @Autowired com.flashticket.payment_service.dto.common.ContractCodec codec;
   @Autowired com.flashticket.payment_service.hashing.ContractHashService hashes;
@@ -320,5 +323,27 @@ class PaymentJwtSecurityTest {
         .andExpect(status().isForbidden());
     mvc.perform(get("/actuator/health").header("Authorization", "Bearer " + valid()))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void requiresAdminRoleForRefundAdministration() throws Exception {
+    mvc.perform(get("/api/v1/admin/refunds").header("Authorization", "Bearer " + valid()))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/api/v1/admin/refunds")).andExpect(status().isUnauthorized());
+    mvc.perform(
+            get("/api/v1/admin/refunds")
+                .header(
+                    "Authorization",
+                    "Bearer "
+                        + token(
+                            "admin",
+                            ISSUER,
+                            "payment",
+                            List.of("ADMIN"),
+                            Instant.now().plusSeconds(600),
+                            KEY)))
+        .andExpect(status().isOk());
+    verify(refundService)
+        .getRefunds(com.flashticket.payment_service.entity.enums.RefundState.FAILED, 0, 20);
   }
 }

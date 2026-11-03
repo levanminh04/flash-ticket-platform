@@ -2,6 +2,7 @@ package com.flashticket.payment_service.worker;
 
 import com.flashticket.payment_service.service.MessagingService;
 import com.flashticket.payment_service.service.PaymentSagaService;
+import com.flashticket.payment_service.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,6 +30,7 @@ public class PaymentWorker {
       org.slf4j.LoggerFactory.getLogger(PaymentWorker.class);
   private final MessagingService messaging;
   private final PaymentSagaService sagaService;
+  private final RefundService refundService;
   private final RabbitTemplate rabbitTemplate;
 
   @Value("${payment.exchange:business.ex}")
@@ -36,6 +38,9 @@ public class PaymentWorker {
 
   @Value("${payment.outbox.batch-size:20}")
   private int batchSize;
+
+  @Value("${payment.refund.query-after:PT1M}")
+  private Duration refundQueryAfter;
 
   @Value("${payment.outbox.lease:PT2M}")
   private Duration lease;
@@ -96,6 +101,58 @@ public class PaymentWorker {
         log.warn(
             "Payment Saga recovery failed orderId={} exceptionType={}",
             orderId,
+            ex.getClass().getSimpleName());
+      }
+    }
+  }
+
+  @Scheduled(
+      fixedDelayString = "${payment.refund.poll-delay:5000}",
+      initialDelayString = "${payment.worker.initial-delay:0}")
+  public void sendRefunds() {
+    for (var refundId : refundService.findRefundsToSend(batchSize)) {
+      try {
+        refundService.sendRefund(refundId);
+      } catch (RuntimeException ex) {
+        // Lỗi một refund không chặn cái khác; TX đã rollback nên lần quét sau làm lại.
+        log.warn(
+            "Refund send failed refundId={} exceptionType={}",
+            refundId,
+            ex.getClass().getSimpleName());
+      }
+    }
+  }
+
+  @Scheduled(
+      fixedDelayString = "${payment.refund.poll-delay:5000}",
+      initialDelayString = "${payment.worker.initial-delay:0}")
+  public void pollRefunds() {
+    for (var refundId :
+        refundService.findRefundsToPoll(Instant.now().minus(refundQueryAfter), batchSize)) {
+      try {
+        refundService.pollRefund(refundId);
+      } catch (RuntimeException ex) {
+        // Lỗi một refund không chặn cái khác; TX đã rollback nên lần quét sau làm lại.
+        log.warn(
+            "Refund poll failed refundId={} exceptionType={}",
+            refundId,
+            ex.getClass().getSimpleName());
+      }
+    }
+  }
+
+  @Scheduled(
+      fixedDelayString = "${payment.refund.poll-delay:5000}",
+      initialDelayString = "${payment.worker.initial-delay:0}")
+  public void selectEventRefundOrders() {
+    for (var runId : refundService.findEventRefundRunsToSelect(batchSize)) {
+      try {
+        refundService.selectEventRefundOrders(runId, batchSize);
+      } catch (RuntimeException ex) {
+        // Lỗi một run không chặn cái khác; TX đã rollback nên lần quét sau làm lại.
+        log.warn(
+            "Event refund selection failed runId={} exceptionType={}",
+            runId,
             ex.getClass().getSimpleName());
       }
     }

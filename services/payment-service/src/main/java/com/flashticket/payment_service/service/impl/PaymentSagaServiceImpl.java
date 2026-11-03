@@ -150,8 +150,13 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
         "payment.issuance-result.v1", incomingEnvelope, codec.toTree(result))) return;
     if (saga.getState() != PaymentSagaState.WAITING_TICKETS) return;
     var previousNotification =
-        outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-            result.orderId(), "booking.issuance-result.v1");
+        outbox
+            .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                result.orderId(), "ticket.issued.v1")
+            .or(
+                () ->
+                    outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                        result.orderId(), "booking.issuance-failed.v1"));
     if (previousNotification.isPresent()) {
       var previousResult =
           codec
@@ -185,7 +190,9 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       messaging.enqueue(
           new Envelope<>(
               commandId,
-              "booking.issuance-result.v1",
+              result.state() == IssuanceState.COMPLETED
+                  ? "ticket.issued.v1"
+                  : "booking.issuance-failed.v1",
               1,
               saga.getOrderId(),
               Long.toString(saga.getRowVersion() + 2),
@@ -250,7 +257,7 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
     } else {
       var notification =
           outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-              result.orderId(), "booking.issuance-result.v1");
+              result.orderId(), "ticket.issued.v1");
       var purchase = codec.fromTree(snapshot.getPurchaseSnapshot(), PurchaseSnapshot.class);
       if (result.ticketCount() != purchases.expectedTicketCount(purchase))
         throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
@@ -325,8 +332,8 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       if (saga.getState() == PaymentSagaState.WAITING_TICKETS
           && outbox
               .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                  orderId, "booking.issuance-result.v1")
-              .isPresent()) messageType = "booking.issuance-result.v1";
+                  orderId, "ticket.issued.v1")
+              .isPresent()) messageType = "ticket.issued.v1";
       var previousCommand =
           outbox
               .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(

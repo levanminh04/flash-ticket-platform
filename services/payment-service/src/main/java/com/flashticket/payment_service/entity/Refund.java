@@ -78,6 +78,12 @@ public class Refund {
   @Column(name = "completed_at", nullable = true)
   private Instant completedAt;
 
+  @Column(name = "settled_by", nullable = true, columnDefinition = "nonempty_text")
+  private String settledBy;
+
+  @Column(name = "external_reference", nullable = true, columnDefinition = "nonempty_text")
+  private String externalReference;
+
   @Version
   @Column(name = "row_version", nullable = false)
   private Long rowVersion;

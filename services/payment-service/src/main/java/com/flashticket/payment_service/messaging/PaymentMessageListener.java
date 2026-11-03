@@ -4,6 +4,7 @@ import com.flashticket.payment_service.dto.common.ContractCodec;
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.message.*;
 import com.flashticket.payment_service.service.PaymentSagaService;
+import com.flashticket.payment_service.service.RefundService;
 import com.flashticket.payment_service.validation.MessageInvariantValidator;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
@@ -20,6 +21,7 @@ public class PaymentMessageListener {
   private final ContractCodec codec;
   private final MessageInvariantValidator validator;
   private final PaymentSagaService sagaService;
+  private final RefundService refundService;
 
   @RabbitListener(queues = "${payment.queues.decision:payment.decision.q}", ackMode = "MANUAL")
   public void onPaymentDecision(Message message, Channel channel) throws IOException {
@@ -77,6 +79,27 @@ public class PaymentMessageListener {
       channel.basicNack(message.getMessageProperties().getDeliveryTag(), false, true);
       throw ex;
     }
+    channel.basicAck(message.getMessageProperties().getDeliveryTag(), false);
+  }
+
+  @RabbitListener(
+      queues = "${payment.queues.event-cancelled:payment.event-cancelled.q}",
+      ackMode = "MANUAL")
+  public void onEventCancelled(Message message, Channel channel) throws IOException {
+    try {
+      var envelope =
+          codec.readEnvelope(
+              new String(message.getBody(), StandardCharsets.UTF_8), EventCancellation.class);
+      validator.validateEventCancellation(envelope);
+      refundService.recordEventCancellation(envelope);
+    } catch (ContractValidationException ex) {
+      throw new MessageConversionException("Invalid event cancellation", ex);
+    } catch (RuntimeException ex) {
+      // MANUAL ACK: trả message về queue khi TX thất bại, không giữ Unacked vô hạn.
+      channel.basicNack(message.getMessageProperties().getDeliveryTag(), false, true);
+      throw ex;
+    }
+    // Service proxy chỉ trả về sau khi commit thành công.
     channel.basicAck(message.getMessageProperties().getDeliveryTag(), false);
   }
 }

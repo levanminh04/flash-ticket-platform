@@ -51,6 +51,16 @@ public class PaymentSecurityConfiguration {
                     .hasRole("BUYER")
                     .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**")
                     .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/admin/refunds",
+                        "/api/v1/admin/events/*/refund-progress")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/admin/refunds/*/retry",
+                        "/api/v1/admin/refunds/*/manual-settlement")
+                    .hasRole("ADMIN")
                     .anyRequest()
                     .denyAll())
         .exceptionHandling(c -> c.authenticationEntryPoint(problems).accessDeniedHandler(problems))

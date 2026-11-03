@@ -20,6 +20,15 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RefundAttempt {
+  public static RefundAttempt started(UUID refundId, String requestKey, Instant startedAt) {
+    var attempt = new RefundAttempt();
+    attempt.id = UUID.randomUUID();
+    attempt.refundId = refundId;
+    attempt.requestKey = requestKey;
+    attempt.startedAt = startedAt;
+    return attempt;
+  }
+
   @Id
   @Column(name = "id", nullable = false)
   private UUID id;

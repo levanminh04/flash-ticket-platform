@@ -18,6 +18,10 @@ public enum PaymentErrorCode {
   PAYMENT_INVALID_SIGNATURE(HttpStatus.BAD_REQUEST, "The payment signature is invalid."),
   PAYMENT_STATE_UNAVAILABLE(
       HttpStatus.SERVICE_UNAVAILABLE, "Payment state is temporarily unavailable."),
+  REFUND_ALREADY_SUCCEEDED(HttpStatus.CONFLICT, "The refund has already succeeded."),
+  REFUND_NOT_FAILED(HttpStatus.CONFLICT, "Only a failed refund can be settled manually."),
+  REFUND_ATTEMPT_IN_FLIGHT(
+      HttpStatus.CONFLICT, "A refund attempt is still waiting for the gateway."),
   INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "The request could not be processed.");
 
   private final HttpStatus status;

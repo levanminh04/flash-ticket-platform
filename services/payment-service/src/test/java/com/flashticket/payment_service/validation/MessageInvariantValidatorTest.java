@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.dto.common.Envelope;
+import com.flashticket.payment_service.dto.message.EventCancellation;
 import com.flashticket.payment_service.dto.message.StartPayment;
 import com.flashticket.payment_service.hashing.*;
+import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import tools.jackson.core.type.TypeReference;
@@ -86,5 +89,44 @@ class MessageInvariantValidatorTest {
     assertThat(ex).isInstanceOf(ContractValidationException.class);
     assertThat(((ContractValidationException) ex).field()).isEqualTo(field);
     assertThat(((ContractValidationException) ex).code()).isEqualTo(code);
+  }
+
+  @Test
+  void rejectsEventCancellationForDifferentAggregate() throws Exception {
+    var cancellation =
+        F.codec.read(
+            PaymentContractFixtures.resource("EventCancellation.json"), EventCancellation.class);
+    var messageId = UUID.randomUUID();
+    var correlationId = UUID.randomUUID();
+    var occurredAt = Instant.now();
+    var envelope =
+        new Envelope<>(
+            messageId,
+            "event.cancelled.v1",
+            1,
+            cancellation.eventId(),
+            "1",
+            occurredAt,
+            correlationId,
+            null,
+            null,
+            cancellation);
+    assertThatCode(() -> validator.validateEventCancellation(envelope)).doesNotThrowAnyException();
+    var mismatched =
+        new Envelope<>(
+            messageId,
+            "event.cancelled.v1",
+            1,
+            UUID.randomUUID(),
+            "1",
+            occurredAt,
+            correlationId,
+            null,
+            null,
+            cancellation);
+    var ex = catchThrowable(() -> validator.validateEventCancellation(mismatched));
+    assertThat(ex).isInstanceOf(ContractValidationException.class);
+    assertThat(((ContractValidationException) ex).field()).isEqualTo("$");
+    assertThat(((ContractValidationException) ex).code()).isEqualTo("EVENT_CANCELLATION_MISMATCH");
   }
 }

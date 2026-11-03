@@ -114,7 +114,7 @@ async function rabbit(method, path, body) {
 async function publish(order, type, data, messageId = randomUUID()) {
   const envelope = { messageId, messageType: type, schemaVersion: 1, aggregateId: order.orderId,
     aggregateVersion: '1', occurredAt: new Date().toISOString(), correlationId: order.orderId, causationId: null, traceparent: null, data };
-  const brokerResult = await rabbit('POST', `/exchanges/%2F/${exchange}/publish`, { properties: { content_type: 'application/json', delivery_mode: 2 }, routing_key: type, payload: JSON.stringify(envelope), payload_encoding: 'string' });
+  const brokerResult = await rabbit('POST', `/exchanges/%2F/${exchange}/publish`, { properties: { content_type: 'application/json', delivery_mode: 2 }, routing_key: type === 'ticket.issuance-result.v1' ? 'ticket.issuance-failed.v1' : type, payload: JSON.stringify(envelope), payload_encoding: 'string' });
   assert.equal(brokerResult.routed, true); return { envelope, brokerResult };
 }
 async function outgoing(order, type) {
@@ -146,7 +146,7 @@ async function accept(order) {
 }
 async function tickets(order, { failed = false, count = 2 } = {}) {
   order.issuanceId ??= randomUUID();
-  return publish(order, 'ticket.issuance-result.v1', { orderId: order.orderId, chargeId: order.chargeId, issuanceId: order.issuanceId,
+  return publish(order, failed ? 'ticket.issuance-failed.v1' : 'ticket.issuance-result.v1', { orderId: order.orderId, chargeId: order.chargeId, issuanceId: order.issuanceId,
     state: failed ? 'FAILED' : 'COMPLETED', ticketCount: failed ? 0 : count, failureCode: failed ? 'TERMINAL_ISSUANCE_FAILURE' : null });
 }
 async function complete(order, issuanceId = order.issuanceId) {
@@ -194,7 +194,7 @@ try {
   await new Promise(resolveListening => fixture.listen(18086,'127.0.0.1',resolveListening));
   await waitFor(async()=> { try { return await rabbit('GET','/overview'); } catch { return false; } },60000);
   await rabbit('PUT',`/exchanges/%2F/${exchange}`,{ type:'topic',durable:true,auto_delete:false,internal:false,arguments:{} });
-  for (const [queue,keys] of [['payment.evidence.booking-commands',['booking.accept-payment.v1','booking.issuance-result.v1']],['payment.evidence.ticket-commands',['ticket.issue.v1']]]) {
+  for (const [queue,keys] of [['payment.evidence.booking-commands',['booking.accept-payment.v1','ticket.issued.v1','booking.issuance-failed.v1']],['payment.evidence.ticket-commands',['ticket.issue.v1']]]) {
     await rabbit('PUT',`/queues/%2F/${queue}`,{ durable:true,auto_delete:false,arguments:{} });
     await rabbit('DELETE',`/queues/%2F/${queue}/contents`);
     for (const routing_key of keys) await rabbit('POST',`/bindings/%2F/e/${exchange}/q/${queue}`,{ routing_key,arguments:{} });
@@ -284,7 +284,7 @@ try {
     assert.equal(state(happy.orderId).confirmationCount,1);return {received,publicPaymentQuery:await get(happy),emitted,database:state(happy.orderId)};
   });
   await scenario('Ticket success: Payment gửi Booking, vẫn WAITING_TICKETS',async()=>{
-    const received=await tickets(happy);const emitted=await outgoing(happy,'booking.issuance-result.v1');assert.equal(state(happy.orderId).saga.state,'WAITING_TICKETS');
+    const received=await tickets(happy);const emitted=await outgoing(happy,'ticket.issued.v1');assert.equal(state(happy.orderId).saga.state,'WAITING_TICKETS');
     assert.equal(emitted.data.ticketCount,2);return {received,publicPaymentQuery:await get(happy),emitted,database:state(happy.orderId)};
   });
   await scenario('Booking OrderCompleted: lúc này Saga mới COMPLETED',async()=>{
@@ -316,7 +316,7 @@ try {
   });
   await scenario('Ticket terminal FAILED: refund TICKET_ISSUANCE_FAILED/PENDING',async()=>{
     const {order}=await start();await pay(order);await accept(order);const received=await tickets(order,{failed:true});
-    await waitFor(()=>state(order.orderId).saga.state==='COMPENSATING');const emitted=await outgoing(order,'booking.issuance-result.v1');
+    await waitFor(()=>state(order.orderId).saga.state==='COMPENSATING');const emitted=await outgoing(order,'booking.issuance-failed.v1');
     assert.equal(state(order.orderId).refunds[0].reason,'TICKET_ISSUANCE_FAILED');return {received,emitted,http:await get(order),database:state(order.orderId)};
   });
   await scenario('Event cancellation marker chặn success và completion đến trễ',async()=>{

@@ -18,6 +18,15 @@ public class VNPayConfig {
   @Value("${vnpay.payment-url}")
   private String paymentUrl;
 
+  @Value("${vnpay.api-url}")
+  private String apiUrl;
+
+  @Value("${vnpay.server-ip:127.0.0.1}")
+  private String serverIp;
+
+  @Value("${vnpay.refund-create-by:flash-ticket}")
+  private String refundCreateBy;
+
   @Value("${vnpay.return-url}")
   private String returnUrl;
 

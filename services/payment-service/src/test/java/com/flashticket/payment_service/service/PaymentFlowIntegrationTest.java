@@ -374,7 +374,7 @@ class PaymentFlowIntegrationTest {
         var notification =
             outbox
                 .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                    orderId, "booking.issuance-result.v1")
+                    orderId, "ticket.issued.v1")
                 .orElseThrow();
         assertThat(
                 codec
@@ -401,8 +401,7 @@ class PaymentFlowIntegrationTest {
             .isEqualTo(1);
         assertThat(
                 outbox.findAll().stream()
-                    .filter(
-                        message -> message.getMessageType().equals("booking.issuance-result.v1"))
+                    .filter(message -> message.getMessageType().equals("ticket.issued.v1"))
                     .count())
             .isEqualTo(2);
       }

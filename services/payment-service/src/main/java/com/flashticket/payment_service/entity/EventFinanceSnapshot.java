@@ -18,6 +18,16 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventFinanceSnapshot {
+  public static EventFinanceSnapshot cancelledMarker(
+      UUID eventId, UUID cancellationId, Instant cancelledAt, Instant receivedAt) {
+    var snapshot = new EventFinanceSnapshot();
+    snapshot.eventId = eventId;
+    snapshot.cancellationId = cancellationId;
+    snapshot.cancelledAt = cancelledAt;
+    snapshot.receivedAt = receivedAt;
+    return snapshot;
+  }
+
   @Id
   @Column(name = "event_id", nullable = false)
   private UUID eventId;
