@@ -1,6 +1,6 @@
 # B13 — Hợp đồng API và thông điệp cho luồng chính
 
-- Phiên bản: `B13-v0.5`, ngày 2026-11-03.
+- Phiên bản: `B13-v0.6`, ngày 2026-11-03.
 - Trạng thái: `REVIEW_READY`; người duyệt/ngày duyệt phiên bản này: chưa có. `B13-v0.1` được Lê Văn Minh duyệt ngày 2026-09-14 (GOV-144), sau B12-v0.2; không chuyển phê duyệt đó sang hợp đồng sửa. Chưa nghiệm thu API chạy thật.
 - Phân lớp: `FORMATION`; riêng §8 là `COMPARISON` về adapter, không sinh ranh giới service.
 - Đầu vào: B11-C-v0.3; B6-v0.15/B7-v0.13/B8-v0.13; B12-v0.2 — APPROVED. GOV-156 và ảnh ClickUp 61 bước cho hướng phối hợp hiện hành; Review-v0.6, GOV-122–144, GOV-149/150, PRJ-024 chỉ theo phần còn hiệu lực.
@@ -146,6 +146,29 @@ type EventRefundProgressView = {
 ```
 
 Cả hai lệnh khóa refund theo `row_version` và ghi audit actor/time. Kết quả thành công từ cổng đến sau ghi nhận ngoài hệ thống chỉ ghi `outcome` của attempt, không đổi refund và không cộng thêm `valid_refunds`; log mã lỗi đã lọc để đối soát ở `UC-18`. Refund `FAILED` vẫn tính vào `refund_pending_count`, nên chi trả mở lại chỉ khi mọi refund của sự kiện đã `SUCCEEDED`. Không lệnh nào đổi trạng thái order, vé hay tài nguyên (`BIZ-150`).
+
+### 3.2 API đối soát và chi trả — `UC-17`–`UC-19`
+
+Owner là Payment. Sổ cái tính khi đọc từ dữ liệu Payment của các đơn thuộc sự kiện: `validGross` = tổng `payment_confirmations.amount`; `validRefunds` = tổng refund `SUCCEEDED` trên charge đã confirmation; `feeAmount` = `(validGross − validRefunds) × feeRate`, HALF_UP về nguyên đồng, một lần trên toàn sự kiện (GOV-140); `netAmount` = `validGross − validRefunds − feeAmount`. `paymentPendingCount` = attempt chưa kết thúc; `refundPendingCount` = refund khác `SUCCEEDED` (gồm `FAILED`).
+
+| Method / path | Actor | Input → output | Guard và tác dụng |
+|---|---|---|---|
+| GET `/events/{eventId}/reconciliation` | ADMIN, ORGANIZER | → `EventReconciliationView` | Organizer chỉ xem sự kiện có `organizerSubject` trùng subject; khác hoặc chưa có cấu hình phí → `404 RESOURCE_NOT_FOUND` |
+| POST `/admin/events/{eventId}/reconciliation` | ADMIN | `{evidence:string}` → `EventReconciliationView` | Theo thứ tự: chưa có phí `409 FINANCE_NOT_CONFIGURED`; đã `PAID` `409 PAYOUT_ALREADY_PAID`; sự kiện hủy `409 EVENT_CANCELLED`; chưa kết thúc `409 EVENT_NOT_ENDED`; còn attempt `409 PAYMENT_PENDING`; còn refund `409 REFUND_PENDING`. Hợp lệ → chốt số tiền vào `event_payouts` kèm `reconciledBy/At/Evidence`; gọi lại trước `PAID` thì ghi đè |
+| POST `/admin/events/{eventId}/payout` | ADMIN | `{}` → `EventReconciliationView` | Chưa đối soát `409 RECONCILIATION_REQUIRED`; đã `PAID` `409 PAYOUT_ALREADY_PAID`; cùng guard ở trên; số tiền tính lại khác số đã chốt `409 RECONCILIATION_STALE`. Hợp lệ → `paidBy/At`, đúng một lần (`INV-10`) |
+
+```typescript
+type EventReconciliationView = {
+  eventId:UUID; organizerSubject:Subject; currency:'VND';
+  validGross:Money; validRefunds:Money; feeAmount:Money; netAmount:Money;
+  feeRate:string; sourceFeeVersion:number; eventEndsAt:Instant; cancelled:boolean;
+  paymentPendingCount:number; refundPendingCount:number; eligibleForReconciliation:boolean;
+  reconciledBy:Subject|null; reconciledAt:Instant|null; reconciliationEvidence:string|null;
+  paidBy:Subject|null; paidAt:Instant|null; asOf:Instant;
+};
+```
+
+Nội bộ `GET /internal/v1/events/{eventId}/financial-summary` (role `INTERNAL_SERVICE`) trả JSON phẳng, không bọc `ApiResponse`: `{schemaVersion:1, eventId, organizerSubject, asOf, hasCollectedOrders, currency:'VND', validGross, validRefunds, feeAmount, netAmount}`; `hasCollectedOrders` = có ít nhất một charge của đơn thuộc sự kiện. Chưa có cấu hình phí (sự kiện chưa công bố) → `404`.
 
 ## 4. Purchase snapshot cố định và freeze tiền
 
@@ -383,6 +406,7 @@ Sau khi nhận payload v1, validate toàn bộ DTO và tính nhất quán rồi 
 | B13-v0.2 | 2026-10-03 | Đồng bộ GOV-149/150 theo ảnh: start qua Booking + poll Payment; success Ticket → Booking → Payment. Route/DTO sửa là CANDIDATE, REVIEW_READY; QR thanh toán độc lập còn OPEN; không đổi DDL hoặc nghiệm thu runtime |
 | B13-v0.4 | 2026-11-03 | Thêm §3.1 API admin xử lý yêu cầu hoàn theo `BIZ-159`: danh sách refund thất bại, thử lại, ghi nhận đã hoàn ngoài hệ thống và `RefundAdminView`; REVIEW_READY |
 | B13-v0.5 | 2026-11-03 | Theo thiết kế payment refund saga (D1–D3): bỏ `Idempotency-Key` ở hai lệnh admin, danh sách refund dùng `page/size` + `PageResponse`, `RefundAdminView` phẳng, thêm `GET /admin/events/{eventId}/refund-progress`; REVIEW_READY |
+| B13-v0.6 | 2026-11-03 | Thêm §3.2 API đối soát/chi trả UC-17–19 và hợp đồng `financial-summary` nội bộ theo thiết kế payment reconciliation (D1–D8); REVIEW_READY |
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 
