@@ -55,7 +55,7 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
             "booking.accept-payment.v1",
             1,
             charge.getOrderId(),
-            "1",
+            snapshot.getSourceOrderVersion().toString(),
             now,
             charge.getOrderId(),
             null,
@@ -306,7 +306,7 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
   public void recoverSaga(UUID orderId) {
     var observedSnapshot = snapshots.findById(orderId).orElseThrow();
     var eventMarker = finance.findForUpdateByEventId(observedSnapshot.getEventId());
-    snapshots.findForUpdateByOrderId(orderId).orElseThrow();
+    var snapshot = snapshots.findForUpdateByOrderId(orderId).orElseThrow();
     var saga = paymentSagaRepository.findForUpdateByOrderId(orderId).orElseThrow();
     if ((saga.getState() != PaymentSagaState.WAITING_BOOKING
             && saga.getState() != PaymentSagaState.WAITING_TICKETS)
@@ -342,7 +342,10 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
                 messageType,
                 1,
                 orderId,
-                Long.toString(saga.getRowVersion() + 2),
+                // Recovery AcceptPayment vẫn tham chiếu snapshot thanh toán đã cố định.
+                "booking.accept-payment.v1".equals(messageType)
+                    ? snapshot.getSourceOrderVersion().toString()
+                    : Long.toString(saga.getRowVersion() + 2),
                 Instant.now(),
                 orderId,
                 previousCommand.getMessageId(),
