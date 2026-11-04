@@ -74,11 +74,21 @@ class SqlBuilder:
                     f"VALUES ('{t.id}','{e.id}',{t.configured_quantity},1) ON CONFLICT (ticket_type_id) DO NOTHING;"
                 )
         for o in orders:
-            charge_clause = f"'{o.accepted_charge_id}'" if o.accepted_charge_id else "NULL"
-            accepted_clause = f"'{o.accepted_at.isoformat()}'" if o.accepted_at else "NULL"
+            if o.lifecycle_state == "COMPLETED" and o.accepted_charge_id:
+                frozen_at_clause = f"'{o.created_at.isoformat()}'"
+                frozen_ver_clause = "1"
+                frozen_snap_clause = "'{\"schemaVersion\": 1}'::jsonb"
+                charge_clause = f"'{o.accepted_charge_id}'"
+                accepted_clause = f"'{o.accepted_at.isoformat()}'"
+            else:
+                frozen_at_clause = "NULL"
+                frozen_ver_clause = "NULL"
+                frozen_snap_clause = "NULL"
+                charge_clause = "NULL"
+                accepted_clause = "NULL"
             lines.append(
-                f"INSERT INTO tbl_orders(id,event_id,buyer_subject,sales_mode,lifecycle_state,customer_email,subtotal,discount,total,currency,expires_at,accepted_charge_id,accepted_at,source_config_version) "
-                f"VALUES ('{o.id}','{o.event_id}','{o.buyer_subject}','QUANTITY','{o.lifecycle_state}',{self.escape_str(o.customer_email)},{o.subtotal},{o.discount},{o.total},'{o.currency}','{o.expires_at.isoformat()}',{charge_clause},{accepted_clause},1) ON CONFLICT (id) DO NOTHING;"
+                f"INSERT INTO tbl_orders(id,event_id,buyer_subject,sales_mode,lifecycle_state,customer_email,payment_frozen_at,payment_snapshot_version,frozen_purchase_snapshot,accepted_charge_id,accepted_at,subtotal,discount,total,currency,created_at,expires_at,source_config_version) "
+                f"VALUES ('{o.id}','{o.event_id}','{o.buyer_subject}','QUANTITY','{o.lifecycle_state}',{self.escape_str(o.customer_email)},{frozen_at_clause},{frozen_ver_clause},{frozen_snap_clause},{charge_clause},{accepted_clause},{o.subtotal},{o.discount},{o.total},'{o.currency}','{o.created_at.isoformat()}','{o.expires_at.isoformat()}',1) ON CONFLICT (id) DO NOTHING;"
             )
             for itm in o.items:
                 sel_json = json.dumps({"schemaVersion": 1, "quantity": itm.quantity, "ticketTypeId": str(itm.ticket_type_id)})
@@ -109,11 +119,6 @@ class SqlBuilder:
             lines.append(
                 f"INSERT INTO tbl_event_access_snapshots(event_id,organizer_subject,event_status,event_starts_at,event_ends_at,source_config_version,received_at) "
                 f"VALUES ('{e.id}','{e.organizer_subject}','{e.status}','{e.starts_at.isoformat()}','{e.ends_at.isoformat()}',1,now()) ON CONFLICT (event_id) DO NOTHING;"
-            )
-        for tk in tickets:
-            lines.append(
-                f"INSERT INTO tbl_tickets(id,event_id,ticket_type_id,order_id,buyer_subject,serial_number,checkin_code,status) "
-                f"VALUES ('{tk.id}','{tk.event_id}','{tk.ticket_type_id}','{tk.order_id}','{tk.buyer_subject}','{tk.serial_number}','{tk.checkin_code}','{tk.status}') ON CONFLICT (id) DO NOTHING;"
             )
         lines.append("COMMIT;\n")
 
