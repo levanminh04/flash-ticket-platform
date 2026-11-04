@@ -7,6 +7,10 @@ from tools.ticket_data_pipeline.crawlers.eventbrite import EventbriteScraper
 from tools.ticket_data_pipeline.crawlers.klook import KlookScraper
 from tools.ticket_data_pipeline.crawlers.ticketmaster import TicketmasterScraper
 from tools.ticket_data_pipeline.crawlers.moveek import MoveekScraper
+from tools.ticket_data_pipeline.crawlers.irace import IRaceScraper
+from tools.ticket_data_pipeline.crawlers.ticketmelon import TicketmelonScraper
+from tools.ticket_data_pipeline.crawlers.feverup import FeverUpScraper
+from tools.ticket_data_pipeline.crawlers.peatix import PeatixScraper
 
 def test_ticketbox_parse_event_payload():
     scraper = TicketboxScraper()
@@ -86,4 +90,34 @@ def test_moveek_fetch_events():
     assert len(events) == 2
     assert events[0].source == "moveek"
     assert len(events[0].ticket_types) > 0
+
+def test_irace_fetch_events():
+    scraper = IRaceScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "irace"
+    assert len(events[0].ticket_types) > 0
+    assert "Marathon" in events[0].category_name or "Trail" in events[0].category_name
+
+def test_ticketmelon_fetch_events():
+    scraper = TicketmelonScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "ticketmelon"
+    assert len(events[0].ticket_types) > 0
+
+def test_feverup_fetch_events():
+    scraper = FeverUpScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "feverup"
+    assert len(events[0].ticket_types) > 0
+
+def test_peatix_fetch_events():
+    scraper = PeatixScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "peatix"
+    assert len(events[0].ticket_types) > 0
+
 

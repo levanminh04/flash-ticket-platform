@@ -19,6 +19,10 @@ from tools.ticket_data_pipeline.crawlers.eventbrite import EventbriteScraper
 from tools.ticket_data_pipeline.crawlers.klook import KlookScraper
 from tools.ticket_data_pipeline.crawlers.ticketmaster import TicketmasterScraper
 from tools.ticket_data_pipeline.crawlers.moveek import MoveekScraper
+from tools.ticket_data_pipeline.crawlers.irace import IRaceScraper
+from tools.ticket_data_pipeline.crawlers.ticketmelon import TicketmelonScraper
+from tools.ticket_data_pipeline.crawlers.feverup import FeverUpScraper
+from tools.ticket_data_pipeline.crawlers.peatix import PeatixScraper
 from tools.ticket_data_pipeline.transformers.normalizer import DataNormalizer
 from tools.ticket_data_pipeline.generators.order_generator import OrderGenerator
 from tools.ticket_data_pipeline.exporters.sql_builder import SqlBuilder
@@ -31,7 +35,7 @@ def cli():
     pass
 
 @cli.command("crawl")
-@click.option("--source", default="all", type=click.Choice(["ticketbox", "ticketgo", "megatix", "actiup", "eventbrite", "klook", "ticketmaster", "moveek", "all"]), help="Nguồn crawl")
+@click.option("--source", default="all", type=click.Choice(["ticketbox", "ticketgo", "megatix", "actiup", "eventbrite", "klook", "ticketmaster", "moveek", "irace", "ticketmelon", "feverup", "peatix", "all"]), help="Nguồn crawl")
 @click.option("--limit", default=5, type=int, help="Số lượng sự kiện cần crawl mỗi nguồn")
 def crawl_cmd(source: str, limit: int):
     """Crawl dữ liệu thô từ các website vé và lưu vào storage/raw/."""
@@ -70,6 +74,23 @@ def crawl_cmd(source: str, limit: int):
     if source in ("moveek", "all"):
         click.echo(f"[*] Crawling từ Moveek Cinema (limit={limit})...")
         results.extend(MoveekScraper().fetch_events(limit=limit))
+
+    if source in ("irace", "all"):
+        click.echo(f"[*] Crawling từ iRace (limit={limit})...")
+        results.extend(IRaceScraper().fetch_events(limit=limit))
+
+    if source in ("ticketmelon", "all"):
+        click.echo(f"[*] Crawling từ Ticketmelon (limit={limit})...")
+        results.extend(TicketmelonScraper().fetch_events(limit=limit))
+
+    if source in ("feverup", "all"):
+        click.echo(f"[*] Crawling từ FeverUp (limit={limit})...")
+        results.extend(FeverUpScraper().fetch_events(limit=limit))
+
+    if source in ("peatix", "all"):
+        click.echo(f"[*] Crawling từ Peatix (limit={limit})...")
+        results.extend(PeatixScraper().fetch_events(limit=limit))
+
         
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_file = config.raw_storage_dir / f"raw_events_{source}_{timestamp}.json"
@@ -159,6 +180,14 @@ def run_all(sources: str, limit: int, orders_per_event: int, apply: bool):
         raw_events.extend(TicketmasterScraper().fetch_events(limit=limit))
     if "moveek" in src_lower or src_lower == "all":
         raw_events.extend(MoveekScraper().fetch_events(limit=limit))
+    if "irace" in src_lower or src_lower == "all":
+        raw_events.extend(IRaceScraper().fetch_events(limit=limit))
+    if "ticketmelon" in src_lower or src_lower == "all":
+        raw_events.extend(TicketmelonScraper().fetch_events(limit=limit))
+    if "feverup" in src_lower or src_lower == "all":
+        raw_events.extend(FeverUpScraper().fetch_events(limit=limit))
+    if "peatix" in src_lower or src_lower == "all":
+        raw_events.extend(PeatixScraper().fetch_events(limit=limit))
 
     if not raw_events:
         raw_events = TicketboxScraper().fetch_events(limit=limit)
