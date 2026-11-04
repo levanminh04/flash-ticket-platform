@@ -10,6 +10,14 @@ spring:
       connection-init-sql: SET ROLE ticket_owner
       maximum-pool-size: 5
       minimum-idle: 1
+      connection-timeout: 5000
+  sql:
+    init:
+      mode: never
+  task:
+    scheduling:
+      pool:
+        size: 3
   jpa:
     open-in-view: false
     hibernate:
@@ -17,59 +25,80 @@ spring:
     properties:
       hibernate:
         default_schema: ticket_schema
-        type:
-          json_format_mapper: jackson3
         jdbc:
           time_zone: UTC
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI}
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:flash_ticket_app}
-    password: ${RABBITMQ_PASSWORD}
-    virtual-host: ${RABBITMQ_VHOST:/}
+    host: ${TICKET_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${TICKET_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${TICKET_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
+    password: ${TICKET_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    virtual-host: ${TICKET_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 5s
     dynamic: false
     publisher-confirm-type: correlated
     publisher-returns: true
     template:
-      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      exchange: ${TICKET_RABBITMQ_BUSINESS_EXCHANGE:${RABBITMQ_BUSINESS_EXCHANGE:business.ex}}
       mandatory: true
     listener:
       simple:
         acknowledge-mode: manual
         prefetch: 20
+        default-requeue-rejected: true
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+    properties:
+      "[mail.smtp.auth]": ${MAIL_SMTP_AUTH:true}
+      "[mail.smtp.starttls.enable]": ${MAIL_SMTP_STARTTLS_ENABLE:true}
+      "[mail.smtp.starttls.required]": ${MAIL_SMTP_STARTTLS_REQUIRED:true}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${TICKET_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${TICKET_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${TICKET_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+ticket:
+  features:
+    business-enabled: ${TICKET_BUSINESS_ENABLED:false}
+    listeners-enabled: ${TICKET_LISTENERS_ENABLED:false}
+    workers-enabled: ${TICKET_WORKERS_ENABLED:false}
+  messaging:
+    access-configured-queue: ${TICKET_ACCESS_CONFIGURED_QUEUE:ticket.access-configured.q}
+    event-cancelled-queue: ${TICKET_EVENT_CANCELLED_QUEUE:ticket.event-cancelled.q}
+    issuance-queue: ${TICKET_ISSUANCE_QUEUE:ticket.issuance.q}
+    completed-result-message-type: ${TICKET_COMPLETED_RESULT_MESSAGE_TYPE:ticket.issued.v1}
+    completed-result-routing-key: ${TICKET_COMPLETED_RESULT_ROUTING_KEY:ticket.issued.v1}
+    failed-result-routing-key: ${TICKET_FAILED_RESULT_ROUTING_KEY:ticket.issuance-failed.v1}
+  outbox:
+    confirm-timeout: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:5s}
+    claim-lease: ${TICKET_OUTBOX_CLAIM_LEASE:30s}
+  delivery:
+    display-zone: ${TICKET_DELIVERY_DISPLAY_ZONE:Asia/Ho_Chi_Minh}
+    # Optional: QR email still sends when this is blank; only the frontend link is omitted.
+    buyer-base-url: ${TICKET_BUYER_BASE_URL:}
+    from: ${TICKET_MAIL_FROM:}
+    claim-lease: ${TICKET_DELIVERY_CLAIM_LEASE:60s}
+  workers:
+    batch-size: ${TICKET_WORKER_BATCH_SIZE:20}
+    poll-delay: ${TICKET_WORKER_POLL_DELAY:1s}
+  qr:
+    active-key-version: ${TICKET_QR_ACTIVE_KEY_VERSION:}
+    key-ring-location: ${TICKET_QR_KEY_RING_LOCATION:}
 
 management:
-  health:
-    mail:
-      enabled: ${TICKET_MAIL_HEALTH_ENABLED:true}
-
-logging:
-  charset:
-    console: UTF-8
-  structured:
-    format:
-      console: logstash
-    json:
-      # Chỉ giữ các trường log được cho phép, tránh ghi dữ liệu MDC tùy ý.
-      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
-      rename:
-        level: severity
-        stack_trace: stackTrace
-      add:
-        serviceName: ticket-service
-        serviceVersion: ${TICKET_SERVICE_VERSION:local-dev}
-        instanceId: ${TICKET_INSTANCE_ID:${random.uuid}}
-        environment: ${TICKET_ENVIRONMENT:local}
-      customizer: com.flashticket.ticket_service.config.TicketLogFields
-      stacktrace:
-        printer: com.flashticket.ticket_service.config.SafeStackTracePrinter
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
