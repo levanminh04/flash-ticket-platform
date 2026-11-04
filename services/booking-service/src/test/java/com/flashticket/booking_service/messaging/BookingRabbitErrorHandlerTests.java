@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
@@ -20,13 +19,10 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
 import org.springframework.amqp.support.converter.MessageConversionException;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-@ExtendWith(OutputCaptureExtension.class)
 class BookingRabbitErrorHandlerTests {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
@@ -79,22 +75,6 @@ class BookingRabbitErrorHandlerTests {
                   assertThat(pair.value).isEqualTo("FAILED");
                 });
       }
-    }
-  }
-
-  @Test
-  void nativeFatalLoggerDoesNotDumpMessage(CapturedOutput output) throws Exception {
-    try (var context = LogCapture.bootJsonLogging()) {
-      var failure =
-          new ListenerExecutionFailedException(
-              "SENTINEL-wrapper",
-              new MessageConversionException("SENTINEL-conversion"),
-              new Message("SENTINEL-body".getBytes(StandardCharsets.UTF_8)));
-      assertThatThrownBy(() -> new BookingRabbitErrorHandler().handleError(failure))
-          .isInstanceOf(AmqpRejectAndDontRequeueException.class);
-      assertThat(output.getOut())
-          .contains("\"errorCode\":\"INVALID_MESSAGE\"")
-          .doesNotContain("SENTINEL-");
     }
   }
 

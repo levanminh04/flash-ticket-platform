@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.availability.service.impl;
 
+import com.flashticket.booking_service.availability.event.AvailabilityChangedEvent;
 import com.flashticket.booking_service.availability.repository.EventSalesSnapshotRepository;
 import com.flashticket.booking_service.availability.repository.PurchaseLimitRepository;
 import com.flashticket.booking_service.availability.repository.SeatInventoryRepository;
@@ -8,6 +9,7 @@ import com.flashticket.booking_service.availability.repository.TicketTypeInvento
 import com.flashticket.booking_service.availability.service.AvailabilityService;
 import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.dto.message.EventCancellation;
+import com.flashticket.booking_service.dto.response.Availability;
 import com.flashticket.booking_service.dto.snapshot.PromotionConfigurationSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.entity.EventSalesSnapshot;
@@ -39,7 +41,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -55,6 +59,109 @@ public class AvailabilityServiceImpl implements AvailabilityService {
   private final InboxMessageRepository inboxMessageRepository;
   private final JsonMapper jsonMapper;
   private final Validator validator;
+  private final ApplicationEventPublisher applicationEventPublisher;
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public Availability getAvailability(UUID eventId) {
+    // Các SELECT nhìn cùng snapshot đã commit, không khóa hàng để chặn luồng đặt vé.
+    var asOf = Instant.now();
+    var storedSnapshot =
+        eventSalesSnapshotRepository
+            .findById(eventId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.CONFIG_NOT_READY));
+    if (storedSnapshot.getEventStatus() != EventState.PUBLISHED)
+      throw new BusinessException(ErrorCode.EVENT_NOT_ON_SALE);
+    var configuration = storedSnapshot.getConfigurationSnapshot();
+    var ticketTypes = new ArrayList<Availability.TicketTypeAvailability>();
+    var sectors = new ArrayList<Availability.SectorAvailability>();
+    var seats = new ArrayList<Availability.SeatAvailability>();
+    if (configuration.mode() == SalesMode.QUANTITY) {
+      var inventoryByTicketTypeId = new HashMap<UUID, TicketTypeInventory>();
+      var typeIds =
+          configuration.ticketTypes().stream()
+              .map(SalesConfiguration.TicketTypeConfig::ticketTypeId)
+              .toList();
+      if (!typeIds.isEmpty())
+        ticketTypeInventoryRepository
+            .findAllById(typeIds)
+            .forEach(
+                inventory -> inventoryByTicketTypeId.put(inventory.getTicketTypeId(), inventory));
+      for (var type : configuration.ticketTypes()) {
+        var inventory = inventoryByTicketTypeId.get(type.ticketTypeId());
+        ticketTypes.add(
+            new Availability.TicketTypeAvailability(
+                type.ticketTypeId(),
+                Long.toString(
+                    inventory.getConfiguredCapacity()
+                        - inventory.getHeld()
+                        - inventory.getPurchased())));
+      }
+    } else {
+      var availableBySectorId = new HashMap<UUID, Long>();
+      var availableByTicketTypeId = new HashMap<UUID, Long>();
+      var kindBySectorId = new HashMap<UUID, SectorType>();
+      for (var sector : configuration.sectors()) {
+        availableBySectorId.put(sector.sectorId(), 0L);
+        kindBySectorId.put(sector.sectorId(), sector.kind());
+      }
+      configuration
+          .ticketTypes()
+          .forEach(type -> availableByTicketTypeId.put(type.ticketTypeId(), 0L));
+      var standingIds =
+          configuration.sectors().stream()
+              .filter(sector -> sector.kind() == SectorType.STANDING)
+              .map(SalesConfiguration.SectorConfig::sectorId)
+              .toList();
+      // Các loại vé trong STANDING cùng dùng số còn của một pool sector.
+      if (!standingIds.isEmpty())
+        sectorInventoryRepository
+            .findAllById(standingIds)
+            .forEach(
+                inventory ->
+                    availableBySectorId.put(
+                        inventory.getSectorId(),
+                        inventory.getConfiguredCapacity()
+                            - inventory.getHeld()
+                            - inventory.getPurchased()));
+      var inventoryBySeatId = new HashMap<UUID, SeatInventory>();
+      var seatIds =
+          configuration.seats().stream().map(SalesConfiguration.SeatConfig::seatId).toList();
+      if (!seatIds.isEmpty())
+        seatInventoryRepository
+            .findAllById(seatIds)
+            .forEach(inventory -> inventoryBySeatId.put(inventory.getSeatId(), inventory));
+      for (var seat : configuration.seats()) {
+        var state = inventoryBySeatId.get(seat.seatId()).getState();
+        seats.add(new Availability.SeatAvailability(seat.seatId(), state));
+        if (state == SeatState.AVAILABLE) {
+          availableBySectorId.merge(seat.sectorId(), 1L, Long::sum);
+          availableByTicketTypeId.merge(seat.ticketTypeId(), 1L, Long::sum);
+        }
+      }
+      for (var type : configuration.ticketTypes())
+        ticketTypes.add(
+            new Availability.TicketTypeAvailability(
+                type.ticketTypeId(),
+                Long.toString(
+                    kindBySectorId.get(type.sectorId()) == SectorType.STANDING
+                        ? availableBySectorId.get(type.sectorId())
+                        : availableByTicketTypeId.get(type.ticketTypeId()))));
+      for (var sector : configuration.sectors())
+        sectors.add(
+            new Availability.SectorAvailability(
+                sector.sectorId(),
+                sector.kind(),
+                Long.toString(availableBySectorId.get(sector.sectorId()))));
+    }
+    return new Availability(
+        eventId,
+        storedSnapshot.getSourceConfigVersion().toString(),
+        asOf,
+        ticketTypes,
+        sectors,
+        seats);
+  }
 
   @Override
   @Transactional
@@ -115,10 +222,14 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       snapshot.setSourceConfigVersion(Long.valueOf(sales.sourceConfigVersion()));
       snapshot.setReceivedAt(processedAt);
       eventSalesSnapshotRepository.save(snapshot);
+      // Chờ gate CANCELLED commit rồi mới vô hiệu hóa availability.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(cancellation.eventId()));
     } else if (snapshot.getEventStatus() != EventState.CANCELLED) {
       // Chỉ đóng gate; giữ JSON/version thương mại và counter cho worker trả từng đơn.
       snapshot.setEventStatus(EventState.CANCELLED);
       eventSalesSnapshotRepository.save(snapshot);
+      // Chờ gate CANCELLED commit rồi mới vô hiệu hóa availability.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(cancellation.eventId()));
     }
     var incomingReceipt = new InboxMessage();
     incomingReceipt.setId(receiptId);
@@ -203,6 +314,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       synchronizeSectorInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizeSeatInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizePromotionInventory(previousConfiguration, configuration, sourceConfigVersion);
+      // Cấu hình và inventory cùng commit; version cũ/replay không phát lại event này.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(configuration.eventId()));
     }
 
     // Version cũ hoặc cùng version/cùng data: chỉ ghi inbox để đánh dấu message đã xử lý.

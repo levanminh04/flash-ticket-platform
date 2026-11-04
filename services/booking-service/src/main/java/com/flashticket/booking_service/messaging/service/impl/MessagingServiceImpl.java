@@ -9,6 +9,7 @@ import com.flashticket.booking_service.messaging.repository.OutboxMessageReposit
 import com.flashticket.booking_service.messaging.service.MessagingService;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +67,12 @@ public class MessagingServiceImpl implements MessagingService {
       properties.setMessageId(envelope.messageId().toString());
       properties.setCorrelationId(envelope.correlationId().toString());
       var message = rabbitTemplate.getMessageConverter().toMessage(envelope, properties);
+      // Bỏ tên class Java nội bộ để service nhận đọc JSON theo DTO của chính nó.
+      message
+          .getMessageProperties()
+          .getHeaders()
+          .keySet()
+          .removeAll(Set.of("__TypeId__", "__ContentTypeId__", "__KeyTypeId__"));
       // Correlation ID riêng cho attempt; messageId nghiệp vụ không đổi khi gửi lại.
       var correlation = new CorrelationData(UUID.randomUUID().toString());
       rabbitTemplate.send(exchange, envelope.messageType(), message, correlation);

@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.order.service.impl;
 
+import com.flashticket.booking_service.availability.event.AvailabilityChangedEvent;
 import com.flashticket.booking_service.availability.repository.*;
 import com.flashticket.booking_service.dto.message.AcceptPayment;
 import com.flashticket.booking_service.dto.message.BookingIssuanceResult;
@@ -44,6 +45,7 @@ import java.time.Instant;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.resilience.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -69,6 +71,7 @@ public class OrderServiceImpl implements OrderService {
   private final OutboxMessageRepository outboxMessageRepository;
   private final OutboxMessageMapper outboxMessageMapper;
   private final PromotionInventoryRepository promotionInventoryRepository;
+  private final ApplicationEventPublisher applicationEventPublisher;
 
   @Value("${booking.reservation.hold-duration}")
   private Duration reservationHoldDuration;
@@ -617,6 +620,8 @@ public class OrderServiceImpl implements OrderService {
       lockedInventory.setPurchased(lockedInventory.getPurchased() - quantity);
     }
     ticketTypeInventoryRepository.saveAll(lockedInventories);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void releasePurchasedStandingInventory(
@@ -639,6 +644,8 @@ public class OrderServiceImpl implements OrderService {
       throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
     lockedSector.setPurchased(lockedSector.getPurchased() - quantity);
     sectorInventoryRepository.save(lockedSector);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void releasePurchasedSeatInventory(
@@ -672,6 +679,8 @@ public class OrderServiceImpl implements OrderService {
       lockedSeat.setCurrentReservationId(null);
     }
     seatInventoryRepository.saveAll(lockedSeats);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void releasePurchasedLimit(
@@ -1047,6 +1056,8 @@ public class OrderServiceImpl implements OrderService {
         lockedInventory.setPurchased(Math.addExact(lockedInventory.getPurchased(), quantity));
     }
     ticketTypeInventoryRepository.saveAll(lockedInventories);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void updateStandingInventoryForPaymentDecision(
@@ -1072,6 +1083,8 @@ public class OrderServiceImpl implements OrderService {
     if (targetState == ReservationState.COMMITTED)
       lockedSector.setPurchased(Math.addExact(lockedSector.getPurchased(), quantity));
     sectorInventoryRepository.save(lockedSector);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void updateSeatedInventoryForPaymentDecision(
@@ -1112,6 +1125,8 @@ public class OrderServiceImpl implements OrderService {
       }
     }
     seatInventoryRepository.saveAll(lockedSeats);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(lockedOrder.getEventId()));
   }
 
   private void updatePurchaseLimitForPaymentDecision(
@@ -1635,6 +1650,8 @@ public class OrderServiceImpl implements OrderService {
           reservation, item, ResourceKind.TICKET_TYPE, item.getTicketTypeId(), item.getQuantity());
     }
     ticketTypeInventoryRepository.saveAll(lockedInventories);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(order.getEventId()));
   }
 
   private void reserveStandingTickets(
@@ -1661,6 +1678,8 @@ public class OrderServiceImpl implements OrderService {
           lockedSector.getSectorId(),
           item.getQuantity());
     sectorInventoryRepository.save(lockedSector);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(order.getEventId()));
   }
 
   private void reserveSeatedTickets(
@@ -1705,6 +1724,8 @@ public class OrderServiceImpl implements OrderService {
       addReservationAllocation(reservation, item, ResourceKind.SEAT, seat.getSeatId(), 1);
     }
     seatInventoryRepository.saveAll(lockedSeats);
+    // Listener chỉ vô hiệu hóa cache sau khi transaction bao ngoài commit thành công.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(order.getEventId()));
   }
 
   private void addReservationAllocation(

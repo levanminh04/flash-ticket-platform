@@ -1,5 +1,355 @@
 # Booking Service tests
 
+## Availability Redis cache — 2026-11-04
+
+Implemented the approved spec v0.4 / plan v0.1 on branch
+`codex/booking-availability-redis-cache`, worktree
+`D:/DATN/flash-ticket-platform-redis-cache`, based on dev/son
+`ff72b286df051458a7e4635412e816b1402ce6a2`. The original dev/tuyen checkout was
+not used for application changes. EXECUTING-PLANS approval covers C1–C10/M1–M49;
+no declaration/signature delta was needed.
+
+GET availability now uses `AvailabilityCacheService`, the existing transactional
+DB service and a concrete `RedisService` with five string operations. Default JSON
+TTL is 15 minutes; reads do not extend it. Inventory/configuration/cancellation
+writers publish an event inside their existing transaction; the AFTER_COMMIT
+listener changes the affected event's generation. A reader holding the previous
+generation can only populate the previous data key. JSON schema, no-store header,
+authorization, inventory locks and idempotency guards are preserved.
+
+Configuration names added to root `.env.example` and Config Server YAML:
+`BOOKING_AVAILABILITY_CACHE_TTL=PT15M` and
+`BOOKING_AVAILABILITY_CACHE_KEY_PREFIX=flash-ticket:dev:booking:availability:v2:`.
+Use an environment-specific prefix when sharing Redis. No connection settings or
+secrets were added to the template. Zero/negative TTL bypasses Redis.
+
+Verification used JDK 23.0.1 with Maven Enforcer enabled. The focused cache/MVC
+selection passed **16 tests**. Full verification passed **395 unit/MVC tests plus
+140 PostgreSQL integration tests: 535 total, zero failures/errors/skips**.
+Whole-module Spotless passed, SpotBugs reported **0 findings**, JaCoCo generated
+its report and Maven reported **BUILD SUCCESS**. The three new integration methods
+exercise real commits/rollbacks and production writers; Redis is mocked there.
+Writer coverage includes QUANTITY/STANDING/SEATED reserve, buyer cancellation,
+expiry, AcceptPayment, issuance FAILED and event cancellation of HELD/COMMITTED
+reservations; configuration replay/old versions do not invalidate again.
+
+Commands, from this service directory:
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Dtest=AvailabilityCacheServiceTests,AvailabilityControllerTests" test
+rtk proxy dotenv -f target/cache-verify/maven.env run -- cmd /d /c mvnw.cmd -B -ntp -Pintegration "-Dit.test=BookingPersistenceIT" verify
+```
+
+The full run loaded a saved fixture env-file containing RABBITMQ_HOST,
+RABBITMQ_PORT, RABBITMQ_USERNAME and RABBITMQ_PASSWORD for a disposable local
+broker. Docker loaded its corresponding rabbit.env with --env-file. These secret
+files were removed after verification; recreate them for the next disposable
+fixture before using the command. No temporary environment/JVM override supplied
+runtime configuration. Historical Enforcer-skip instructions below do not apply
+to this verification.
+
+The production JAR also passed **27/27 runtime cases** against disposable real
+PostgreSQL, RabbitMQ, Redis and Keycloak. The unchanged existing availability curl
+harness supplied its 20 cases; seven additional inline assertions checked Redis
+cache behavior without adding a new helper/suite to source control:
+
+| Cases | Runtime evidence |
+| --- | --- |
+| A01–A20 | Public contract/errors, QUANTITY/STANDING/SEATED, reservation/payment/cancel, event gates, read-only GET and the production expiry worker |
+| A21 | PING=PONG; cached JSON matches HTTP; repeated GET retains asOf; data PTTL is positive and at most 900000ms and does not increase on GET; generation PTTL=-1 |
+| A22–A23 | Reserve/cancel changes only the affected generation; GET returns 8 then 10 available without waiting for TTL, while the previous JSON still exists |
+| A24 | Rejected reservation returns 409 INSUFFICIENT_QUANTITY and leaves generation unchanged |
+| A25–A26 | Real AcceptPayment/config/cancellation consumers invalidate warm cache; new source version is visible and CANCELLED returns 409 |
+| A27 | A separate short-lived Redis test key expires; production TTL remains 15 minutes |
+
+The cache-hit unit test verifies no DB-service call; runtime assertions use the
+response/Redis values and do not measure SQL query counts or performance. The
+isolated Redis fixture has no password; this is not a verification of Redis119
+authentication. No shared119 service was touched. Owned containers/networks and
+runtime secret env-files were removed after the run.
+
+Evidence: `target/cache-verify/full-verify.log`,
+`target/cache-verify/runtime-verify.log`, Surefire/Failsafe XML,
+`target/spotbugsXml.xml`, and `target/availability-curl/results.json`.
+Runtime report: 27 passed, 0 failed; JAR SHA256
+`a65dd9746f071ff7742bbe031708ef901c88fbf4a99274c49a05562499579515`.
+
+Redis read/clear/write and JSON failures have focused fallback tests. Invalidation
+is an in-process callback, without durable outbox/retry: a crash after DB commit
+or Redis failure during invalidation can leave stale cache until its TTL. This
+run does not establish deployment, load capacity or Payment/Ticket Saga E2E.
+
+## Booking message compatibility — 2026-11-02
+
+Current production code still uses the configured Jackson message converter and
+removes Java type headers before send. Direct JsonMapper serialization was discussed
+but is not part of this change. Envelope body, messageId/correlationId, persistent
+delivery, publisher confirms and outbox retry behavior are preserved.
+
+Focused real RabbitMQ/PostgreSQL run passed both existing methods:
+publishesPaymentDecisionWithConfirmAndPersistentEnvelope and
+relaysOrderCompletedThroughRabbitMq: **2 tests, zero failures/errors/skips; exit 0**.
+The latter also exercises rollback/redelivery and unroutable-message retry.
+Command selection used -P integration with test-compile, failsafe:integration-test
+and failsafe:verify; this was not the full integration suite.
+
+Fetched dev/tuan at 32db391c086258268f57213b9d27132097b26d46. The Booking relay's
+generated messages passed that Payment revision's actual ContractCodec and
+MessageInvariantValidator for ACCEPTED/LATE/DUPLICATE/CANCELLED and OrderCompleted:
+**5/5 passed**. Wire checks used mocked broker/repositories, so they establish
+payload/header compatibility, not Payment Saga/DB or sandbox E2E completion.
+The independent live-broker tests above establish Booking relay delivery.
+
+Two reverse-direction mismatches remain in Payment source: issuance results use
+booking.issuance-result.v1 instead of the two Booking queue types in B13; Saga
+recovery uses Saga aggregateVersion while the AcceptPayment payload preserves
+sourceOrderVersion. Reproduced rejection of both issuance states and recovery
+aggregateVersion=3/sourceOrderVersion=1 using Booking's current handlers.
+No Payment code or deployed environment was changed during this comparison.
+Evidence: target/direct-envelope-baseline.log and
+target/payment-compatibility-32db391/{source.json,wire-check.log,results.json}.
+
+## Plain console logging — 2026-11-02
+
+User requested minimal YAML and default text logs, then explicitly chose to remove
+the JSON-only logging tests/helpers rather than rename and rewrite them.
+Main, Config Server and test YAML now keep only logging.charset.console=UTF-8.
+Removed BookingLogFields, SafeStackTracePrinter, RcaLoggingTests (three tests),
+the JSON console test in BookingRabbitErrorHandlerTests and LogCapture's JSON
+bootstrap method/nested probe. The event-capture helper and existing error handling,
+error code and ACK/DLQ behavior tests remain. No new Java declaration or dependency.
+
+Clean verify loaded the root .env through python-dotenv, using Maven 3.9.9 and
+Java 23.0.1: **384 unit tests passed, zero failures/errors/skips; exit 0**.
+Spotless and SpotBugs checks passed. Boot test contexts emitted default text logs.
+This replaces the two JSON logging failures in the earlier header-fix run below.
+No integration-profile execution or deployment is claimed.
+Latest evidence: target/plain-logging-verify.log, target/surefire-reports and
+target/spotbugsXml.xml. Clean verify replaces earlier ignored target artifacts.
+
+## Outbound JSON type headers — 2026-11-02
+
+User confirmed removing Java type headers after conversion and before sending.
+Updated only the existing publishBookingMessage body and two existing relay tests;
+no Java class/method, dependency, transaction or acknowledgement change.
+Both booking.payment-decision.v1 and booking.order-completed.v1 now omit
+__TypeId__, __ContentTypeId__ and __KeyTypeId__.
+
+Direct relay checks with the real Jackson converter and a mocked broker observed
+both messages fail the header check before the fix and pass afterwards. JSON body,
+content type, messageId, correlationId and persistent delivery mode were preserved.
+The broker mock intentionally times out confirmation; this check does not establish
+broker delivery or Payment consumption. test-compile and spotless:check passed.
+
+Full unit run loaded the project .env using python-dotenv: 388 tests, 386 passed,
+one failure (BookingRabbitErrorHandlerTests.nativeFatalLoggerDoesNotDumpMessage)
+and one error (RcaLoggingTests.actualJsonLogsHaveRcaContextAndExcludeSensitiveValues).
+Full regression is not green. The two relay integration tests could not start
+because Docker Engine was unavailable. No deployment or Payment E2E is claimed.
+Historical evidence was generated under target/message-type-header-*.log and
+target/check-message-type-headers.jsh before the later clean verify above.
+
+## Event availability GET — 2026-11-01
+
+Execution approval: user answered **"triển khai cho tôi"** immediately after the
+EXECUTING-PLANS confirmation for C1–C9 / M1–M17 in the
+[availability plan](../../docs/java-workflow/plans/2026-11-01-booking-event-availability-plan.md).
+Added only three production declarations, one MVC test class (five tests and
+its implicit constructor), and eight methods in BookingPersistenceIT.
+
+Implemented public GET `/api/v1/events/{eventId}/availability` using the existing
+security rule and Availability DTO. The service reads one PostgreSQL snapshot
+with readOnly/REPEATABLE_READ, requires the entity gate PUBLISHED, reads current
+resource IDs in batches, and returns QUANTITY counters, a shared STANDING pool,
+and SEATED states/counts. Success responses use Cache-Control: no-store.
+The existing configuration/cancellation writer method bodies are unchanged.
+
+MVC selection: **5/5 passed**, exit0. Focused integration verify:
+**388 unit +8 availability IT passed**, zero failures/errors/skips, exit0;
+SpotBugs **0**. Cases cover shared/mixed inventory, zero/hidden/retired resources,
+cross-event isolation, order-preserving output, unchanged persistent state,
+expired HELD reservations, missing/unpublished/cancelled snapshots and sale
+windows. The concurrent test blocks the inventory SELECT in the isolated DB:
+the writer commits version2/capacity20 while the GET still returns version1/10;
+the next GET returns version2/20. No production test hook or row lock was added.
+
+**Full regression is NOT green.** Latest full verify ran unchanged code/tests
+inside Maven3.9.9 / Temurin23.0.2+7 Linux: exit1, **388 unit passed;
+137 IT, zero failures +1 error, zero skips**, SpotBugs **0**. All eight new
+availability tests passed; both previously failing relay tests passed.
+The lone error was releasesExpiredReservationWhenPaymentArrivesLate at line4235,
+inside the existing preparePurchaseSnapshot flow: orders_check5 rejected
+created_at=2026-11-01T15:05:14.201712Z with
+payment_frozen_at=2026-11-01T15:05:13.736130Z (0.465582 seconds earlier).
+Both fields originate from OrderRepository.currentDatabaseTime(), whose query
+is select clock_timestamp(). The actor/cause of the time reversal is not established.
+Linux execution did not eliminate it, so it cannot be attributed only to Windows.
+
+Four earlier full Windows runs also failed existing tests. The last had
+388 passing unit tests and137 IT with2 relay failures, zero errors/skips.
+An earlier run had one relay failure plus two orders_check5 errors in
+protectsNewSeatReservationFromStaleIssuanceFailure and
+arbitratesExpiryAgainstAcceptPaymentAfterLockWait; frozen times preceded creation
+by0.582/0.611 seconds. Another run timed out a four-second DB-expiry wait.
+Relay and deadline tests passed alone, while the paired recheck reproduced the
+deadline timeout. Independent PostgreSQL clock probes of600 and4,800 samples
+observed no backwards step during their sampling windows; they do not invalidate
+the failed-row evidence. No Java change, timeout increase or constraint relaxation
+was used to make these checks pass. All13 new tests passed; P5/full acceptance
+remains open pending resolution of the existing timing failures.
+
+Linux unit totals include only22 reports from JVM23.0.2+7:388 tests. A stale
+Surefire BookingPersistenceIT report with2 tests belongs to an earlier JVM run
+and is excluded. Failsafe's137-test report is the integration result above.
+The earlier runners supplied process variables for the disposable broker;
+future runs must use a test env file loaded via env-file, as required by the
+current convention. P5 instructions have been corrected accordingly.
+
+The first focused attempt failed because the disposable Rabbit broker could not
+start after Docker Desktop recovery; it was recreated with tmpfs and ping checked.
+Restarting the Docker WSL distribution later reproduced the stale runtime socket
+startup error. Runtime folders were retained as backups while restoring the engine;
+no factory reset, existing data/volume deletion or constraint bypass was used.
+Only local disposable fixtures were used; no shared119 DB/queue was changed.
+Owned disposable containers were removed after verification; Docker remains running.
+Logs and XML evidence are under ignored target/availability-* plus Maven reports;
+availability-linux-full-verify.log is the latest full run, and
+availability-windows-last-* preserves the preceding Windows result.
+No deployment119 or Payment/Ticket service E2E acceptance is claimed here.
+
+### Real HTTP curl acceptance — 2026-11-01
+
+User requested real curl testing after implementation. Command from repository root:
+
+```powershell
+rtk proxy python -X utf8 services/booking-service/scripts/test-event-availability-curl.py
+```
+
+**20/20 cases passed, exit0**, from22:18:58 to22:21:19 +07. The final run made
+**36 business HTTP requests using curl, including22 availability GETs**.
+Status counts:200 x19,201 x8,400 x1,401 x1,409 x6,503 x1. Readiness checks,
+Keycloak token requests and broker management requests are excluded from36.
+Success responses assert no-store and the exact Availability fields; errors
+assert the existing application/json Problem contract and matching correlation
+header/body. JWTs travel through curl stdin config and are not recorded.
+
+Ran the current production JAR with real PostgreSQL17, RabbitMQ4.3.6, Redis7.4.11
+and Keycloak26.8.0, on an owned Docker network with only loopback HTTP ports.
+JAR SHA256: `7426c690ae2e91bb27e26992a724fd280bf79df5b49bc6bab7fff982296e6b82`.
+The three compiled availability classes were compared byte-for-byte with their
+JAR entries before startup. Actual JWT validation, Spring HTTP handlers, service
+transactions, repositories and message listeners were used; no Java declaration,
+service mock or runtime test hook was added.
+
+| Cases | Real requests and assertions |
+|---|---|
+| A01–A03 | Malformed UUID400; unknown snapshot503; supplied invalid JWT401 on public route |
+| A04–A07 | Public quantity10; HTTP hold2 gives8; HTTP freeze + AcceptPayment consumer moves held2 to purchased2, leaving8; reserve remaining8 gives0 |
+| A08 | Two standing types share a pool: capacity8-held3 gives5 for each type and the sector |
+| A09–A10 | Mixed standing/seated; HELD/PURCHASED/AVAILABLE/hidden UNAVAILABLE; counts exclude held/purchased/hidden; real buyer cancellation increases seated availability1 to2 |
+| A11–A14 | Cancellation consumer sets entity CANCELLED while JSON stays PUBLISHED; GET409; DRAFT/PENDING_APPROVAL/APPROVED also409 |
+| A15–A16 | PUBLISHED before opening/after closing remains GET200; actual order POST remains409 |
+| A17 | Version2 returns only current IDs in config order; retired DB row retained; other event IDs absent |
+| A18 | Three GETs leave fingerprints of every Booking table unchanged, including versions/inbox/outbox/promotion usage |
+| A19 | Actual30-second deadline passes with expiry disabled: GET keeps held inventory/voucher and leaves every table unchanged |
+| A20 | Restart with expiry enabled; production worker changes order EXPIRED/reservation RELEASED; GET returns10 and voucher held0 |
+
+Snapshots/inventory were created through event.sales-configured.v1 messages.
+Orders, freeze, promotion and buyer cancellation used HTTP with real JWTs;
+AcceptPayment/event cancellation used real listeners and committed inbox receipts.
+SQL supplied canonical schema/roles/indexes and independent assertions, without
+manually changing business inventory/order states. Payment/Ticket producer
+services were not started.
+
+Configuration is documented in [scripts/.env.example](scripts/.env.example).
+The harness generates isolated PostgreSQL/Rabbit credentials and an internal-client
+secret, persists pg.env/rabbit.env/keycloak.env/booking.env under ignored
+target/availability-curl, and passes those files via Docker --env-file.
+Runtime names include BOOKING_DB_*, RABBITMQ_*, REDIS_*, KEYCLOAK_*,
+INTERNAL_SERVICE_CLIENT_SECRET, BOOKING_SERVICE_PORT/ENVIRONMENT and the Spring,
+Eureka, hold-duration and expiry settings listed in the template. Root .env and
+its unrelated .env.example edits are untouched. Production booking-service.yaml
+is loaded directly; Config Server/Eureka are disabled, canonical DDL is used
+with Hibernate DDL disabled. Other workers retain their production config.
+Expiry alone is disabled while staging A01–A19, then enabled for A20; test hold
+is30s instead of15m. These settings do not replace production handlers.
+
+Evidence: ignored target/availability-curl/results.json contains20 cases and
+all36 business responses/headers/statuses/timings, with no JWTs. App/dependency
+logs are alongside it. Five owned containers, anonymous volumes, the network,
+env files and realm import were removed; Docker remains running. Two harness
+setup/assertion issues (empty204 parsing and an incorrect problem+json expectation)
+were corrected before the final complete run, without production Java changes.
+
+Curl acceptance is green; the full Maven regression limitation above remains open.
+Successful curl freeze/payment cases do not establish that earlier intermittent
+clock failures have been fixed.
+
+### Local Windows clock remediation and focused retest — 2026-11-01
+
+User authorized fixing the local Windows environment and rerunning the failing
+releasesExpiredReservationWhenPaymentArrivesLate case. No production Java or test
+body was changed. Before retesting, the failing full-run XML/summary was copied
+to ignored target/windows-time-fix/before-fix-*; the full-regression limitation
+above remains open because a full137-IT verify was not rerun.
+
+Persisted two environment changes:
+
+- Windows W32Time: Stopped/Manual to Running/Automatic (Delayed Start).
+  Existing time.windows.com,0x9 peer and triggers preserved. Original registry,
+  start mode and triggers saved under target/windows-time-fix. Initial immediate
+  resync ran before usable peer data; a follow-up confirmed Leap Indicator0,
+  Last Sync Error0 and Active NTP peer. External offset measurements changed
+  from about1.29s before repair to a few milliseconds after repair.
+- Ubuntu24.04.4: systemd-timesyncd active/enabled to inactive/disabled,
+  following Canonical's advice when retaining implicit Hyper-V time sync.
+  Normal Ubuntu CLI calls failed/timed out; verified the Ubuntu root filesystem
+  and used its existing mount/PID namespace from the WSL system distribution
+  to invoke systemctl. No distro reset/restart, Docker update/backend change,
+  root .wslconfig change or shared119 operation was performed.
+
+**Focused result:6/6 process runs passed**, zero failures/errors/skips:
+three Windows JDK23.0.1 runs plus one Linux Temurin23.0.2 run after the Windows
+change; one additional Windows and one Linux run after the Ubuntu change.
+Each executes the original test's QUANTITY/STANDING/SEATED paths against real
+PostgreSQL17/Rabbit Testcontainers. Ran compiled tests with Maven3.9.9:
+
+```text
+mvn -q -P integration -Dit.test=BookingPersistenceIT#releasesExpiredReservationWhenPaymentArrivesLate failsafe:integration-test failsafe:verify
+```
+
+Linux Maven used a persisted test.env via Docker --env-file, containing only
+TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal; matching .env.example is in
+target/windows-time-fix. Native runs used the test's existing disposable
+dependency configuration. No shared runtime env/secret was loaded or overridden.
+
+**Clock stepping is NOT fully resolved.** A300s probe after the Windows change
+recorded55,982 Windows samples with0 backwards values, but58,170 Linux samples
+with4 backwards values (minimum delta about-7.674ms). A detailed120s Linux
+probe, with no PostgreSQL running, reproduced4 steps at roughly30s intervals.
+An isolated95s kernel ftrace instance recorded successful sys_settimeofday calls
+from comm=init at29.983s/30.001s intervals, plus chronyd and systemd-timesyncd
+clock_adjtime calls. The exact executable responsible for init was not identified;
+do not conflate it with a proven attribution to Docker's initd from other reports.
+
+After disabling Ubuntu timesyncd, a180s/161,933-sample Linux probe still observed
+6 backwards values (minimum about-17.738ms). Per-step realtime-minus-monotonic
+corrections decreased from about-18.85ms to-1.79ms during this window, but remained
+present. Focused tests passing does not prove clock steps are eliminated, identify
+the actor behind the original0.465582s inversion, or fix the earlier full suite.
+The independent clock reproduction locates an actual problem below PostgreSQL.
+
+Evidence: target/windows-time-fix/summary.json, late-payment-*.xml/log,
+after-ubuntu/*, windows-confirm.log, clock-syscalls.log and *clock*.json (ignored).
+All owned test/probe containers were removed automatically; the temporary trace
+instance was removed and the task-mounted tracefs unmounted. No clock sampler,
+background admin helper or kernel tracing was left running. Configuration backups
+remain for rollback; normal Docker engine remains running.
+
+References: [Microsoft W32Time](https://learn.microsoft.com/en-us/windows-server/networking/windows-time-service/windows-time-service-tools-and-settings),
+[delayed-start option](https://learn.microsoft.com/en-us/troubleshoot/windows-client/active-directory/w32time-not-start-on-workgroup),
+[Ubuntu WSL time sync](https://ubuntu.com/wsl/docs/stable/explanation/time-sync/).
+
 ## Event cancellation — 2026-10-31
 
 Execution approval: user answered **"đồng ý"** immediately after the execution
