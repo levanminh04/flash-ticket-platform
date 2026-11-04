@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.flashticket.booking_service.availability.service.AvailabilityService;
+import com.flashticket.booking_service.availability.service.AvailabilityCacheService;
 import com.flashticket.booking_service.config.BookingJsonConfig;
 import com.flashticket.booking_service.config.SecurityConfig;
 import com.flashticket.booking_service.dto.response.Availability;
@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({SecurityConfig.class, BookingJsonConfig.class, GlobalExceptionHandler.class})
 class AvailabilityControllerTests {
   @Autowired MockMvc mvc;
-  @MockitoBean AvailabilityService availabilityService;
+  @MockitoBean AvailabilityCacheService availabilityCacheService;
   @MockitoBean JwtDecoder jwtDecoder;
 
   @Test
@@ -42,7 +42,7 @@ class AvailabilityControllerTests {
     var seatId = UUID.randomUUID();
     var asOf = Instant.parse("2026-11-01T07:00:00Z");
     for (boolean seated : List.of(false, true)) {
-      when(availabilityService.getAvailability(eventId))
+      when(availabilityCacheService.getAvailability(eventId))
           .thenReturn(
               new Availability(
                   eventId,
@@ -79,7 +79,7 @@ class AvailabilityControllerTests {
       else
         result.andExpect(jsonPath("$.sectors").isEmpty()).andExpect(jsonPath("$.seats").isEmpty());
     }
-    verify(availabilityService, org.mockito.Mockito.times(2)).getAvailability(eventId);
+    verify(availabilityCacheService, org.mockito.Mockito.times(2)).getAvailability(eventId);
   }
 
   @Test
@@ -87,13 +87,13 @@ class AvailabilityControllerTests {
     mvc.perform(get("/api/v1/events/not-a-uuid/availability"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-    verifyNoInteractions(availabilityService);
+    verifyNoInteractions(availabilityCacheService);
   }
 
   @Test
   void returnsConfigNotReadyProblem() throws Exception {
     var eventId = UUID.randomUUID();
-    when(availabilityService.getAvailability(eventId))
+    when(availabilityCacheService.getAvailability(eventId))
         .thenThrow(new BusinessException(ErrorCode.CONFIG_NOT_READY));
     mvc.perform(get("/api/v1/events/" + eventId + "/availability"))
         .andExpect(status().isServiceUnavailable())
@@ -103,7 +103,7 @@ class AvailabilityControllerTests {
   @Test
   void returnsEventNotOnSaleProblem() throws Exception {
     var eventId = UUID.randomUUID();
-    when(availabilityService.getAvailability(eventId))
+    when(availabilityCacheService.getAvailability(eventId))
         .thenThrow(new BusinessException(ErrorCode.EVENT_NOT_ON_SALE));
     mvc.perform(get("/api/v1/events/" + eventId + "/availability"))
         .andExpect(status().isConflict())
@@ -117,6 +117,6 @@ class AvailabilityControllerTests {
             get("/api/v1/events/" + UUID.randomUUID() + "/availability")
                 .header("Authorization", "Bearer invalid-token"))
         .andExpect(status().isUnauthorized());
-    verifyNoInteractions(availabilityService);
+    verifyNoInteractions(availabilityCacheService);
   }
 }

@@ -1,6 +1,6 @@
 package com.flashticket.booking_service.availability.controller;
 
-import com.flashticket.booking_service.availability.service.AvailabilityService;
+import com.flashticket.booking_service.availability.service.AvailabilityCacheService;
 import com.flashticket.booking_service.dto.response.Availability;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/events/{eventId}/availability")
 @RequiredArgsConstructor
 public class AvailabilityController {
-  private final AvailabilityService availabilityService;
+  private final AvailabilityCacheService availabilityCacheService;
 
   @GetMapping
   public ResponseEntity<Availability> getAvailability(@PathVariable UUID eventId) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(availabilityService.getAvailability(eventId));
+        .body(availabilityCacheService.getAvailability(eventId));
   }
 }

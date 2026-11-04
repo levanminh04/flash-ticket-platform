@@ -1,5 +1,84 @@
 # Booking Service tests
 
+## Availability Redis cache — 2026-11-04
+
+Implemented the approved spec v0.4 / plan v0.1 on branch
+`codex/booking-availability-redis-cache`, worktree
+`D:/DATN/flash-ticket-platform-redis-cache`, based on dev/son
+`ff72b286df051458a7e4635412e816b1402ce6a2`. The original dev/tuyen checkout was
+not used for application changes. EXECUTING-PLANS approval covers C1–C10/M1–M49;
+no declaration/signature delta was needed.
+
+GET availability now uses `AvailabilityCacheService`, the existing transactional
+DB service and a concrete `RedisService` with five string operations. Default JSON
+TTL is 15 minutes; reads do not extend it. Inventory/configuration/cancellation
+writers publish an event inside their existing transaction; the AFTER_COMMIT
+listener changes the affected event's generation. A reader holding the previous
+generation can only populate the previous data key. JSON schema, no-store header,
+authorization, inventory locks and idempotency guards are preserved.
+
+Configuration names added to root `.env.example` and Config Server YAML:
+`BOOKING_AVAILABILITY_CACHE_TTL=PT15M` and
+`BOOKING_AVAILABILITY_CACHE_KEY_PREFIX=flash-ticket:dev:booking:availability:v2:`.
+Use an environment-specific prefix when sharing Redis. No connection settings or
+secrets were added to the template. Zero/negative TTL bypasses Redis.
+
+Verification used JDK 23.0.1 with Maven Enforcer enabled. The focused cache/MVC
+selection passed **16 tests**. Full verification passed **395 unit/MVC tests plus
+140 PostgreSQL integration tests: 535 total, zero failures/errors/skips**.
+Whole-module Spotless passed, SpotBugs reported **0 findings**, JaCoCo generated
+its report and Maven reported **BUILD SUCCESS**. The three new integration methods
+exercise real commits/rollbacks and production writers; Redis is mocked there.
+Writer coverage includes QUANTITY/STANDING/SEATED reserve, buyer cancellation,
+expiry, AcceptPayment, issuance FAILED and event cancellation of HELD/COMMITTED
+reservations; configuration replay/old versions do not invalidate again.
+
+Commands, from this service directory:
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Dtest=AvailabilityCacheServiceTests,AvailabilityControllerTests" test
+rtk proxy dotenv -f target/cache-verify/maven.env run -- cmd /d /c mvnw.cmd -B -ntp -Pintegration "-Dit.test=BookingPersistenceIT" verify
+```
+
+The full run loaded a saved fixture env-file containing RABBITMQ_HOST,
+RABBITMQ_PORT, RABBITMQ_USERNAME and RABBITMQ_PASSWORD for a disposable local
+broker. Docker loaded its corresponding rabbit.env with --env-file. These secret
+files were removed after verification; recreate them for the next disposable
+fixture before using the command. No temporary environment/JVM override supplied
+runtime configuration. Historical Enforcer-skip instructions below do not apply
+to this verification.
+
+The production JAR also passed **27/27 runtime cases** against disposable real
+PostgreSQL, RabbitMQ, Redis and Keycloak. The unchanged existing availability curl
+harness supplied its 20 cases; seven additional inline assertions checked Redis
+cache behavior without adding a new helper/suite to source control:
+
+| Cases | Runtime evidence |
+| --- | --- |
+| A01–A20 | Public contract/errors, QUANTITY/STANDING/SEATED, reservation/payment/cancel, event gates, read-only GET and the production expiry worker |
+| A21 | PING=PONG; cached JSON matches HTTP; repeated GET retains asOf; data PTTL is positive and at most 900000ms and does not increase on GET; generation PTTL=-1 |
+| A22–A23 | Reserve/cancel changes only the affected generation; GET returns 8 then 10 available without waiting for TTL, while the previous JSON still exists |
+| A24 | Rejected reservation returns 409 INSUFFICIENT_QUANTITY and leaves generation unchanged |
+| A25–A26 | Real AcceptPayment/config/cancellation consumers invalidate warm cache; new source version is visible and CANCELLED returns 409 |
+| A27 | A separate short-lived Redis test key expires; production TTL remains 15 minutes |
+
+The cache-hit unit test verifies no DB-service call; runtime assertions use the
+response/Redis values and do not measure SQL query counts or performance. The
+isolated Redis fixture has no password; this is not a verification of Redis119
+authentication. No shared119 service was touched. Owned containers/networks and
+runtime secret env-files were removed after the run.
+
+Evidence: `target/cache-verify/full-verify.log`,
+`target/cache-verify/runtime-verify.log`, Surefire/Failsafe XML,
+`target/spotbugsXml.xml`, and `target/availability-curl/results.json`.
+Runtime report: 27 passed, 0 failed; JAR SHA256
+`a65dd9746f071ff7742bbe031708ef901c88fbf4a99274c49a05562499579515`.
+
+Redis read/clear/write and JSON failures have focused fallback tests. Invalidation
+is an in-process callback, without durable outbox/retry: a crash after DB commit
+or Redis failure during invalidation can leave stale cache until its TTL. This
+run does not establish deployment, load capacity or Payment/Ticket Saga E2E.
+
 ## Booking message compatibility — 2026-11-02
 
 Current production code still uses the configured Jackson message converter and

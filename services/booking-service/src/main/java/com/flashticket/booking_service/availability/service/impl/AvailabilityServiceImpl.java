@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.availability.service.impl;
 
+import com.flashticket.booking_service.availability.event.AvailabilityChangedEvent;
 import com.flashticket.booking_service.availability.repository.EventSalesSnapshotRepository;
 import com.flashticket.booking_service.availability.repository.PurchaseLimitRepository;
 import com.flashticket.booking_service.availability.repository.SeatInventoryRepository;
@@ -40,6 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +59,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
   private final InboxMessageRepository inboxMessageRepository;
   private final JsonMapper jsonMapper;
   private final Validator validator;
+  private final ApplicationEventPublisher applicationEventPublisher;
 
   @Override
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -219,10 +222,14 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       snapshot.setSourceConfigVersion(Long.valueOf(sales.sourceConfigVersion()));
       snapshot.setReceivedAt(processedAt);
       eventSalesSnapshotRepository.save(snapshot);
+      // Chờ gate CANCELLED commit rồi mới vô hiệu hóa availability.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(cancellation.eventId()));
     } else if (snapshot.getEventStatus() != EventState.CANCELLED) {
       // Chỉ đóng gate; giữ JSON/version thương mại và counter cho worker trả từng đơn.
       snapshot.setEventStatus(EventState.CANCELLED);
       eventSalesSnapshotRepository.save(snapshot);
+      // Chờ gate CANCELLED commit rồi mới vô hiệu hóa availability.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(cancellation.eventId()));
     }
     var incomingReceipt = new InboxMessage();
     incomingReceipt.setId(receiptId);
@@ -307,6 +314,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
       synchronizeSectorInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizeSeatInventory(previousConfiguration, configuration, sourceConfigVersion);
       synchronizePromotionInventory(previousConfiguration, configuration, sourceConfigVersion);
+      // Cấu hình và inventory cùng commit; version cũ/replay không phát lại event này.
+      applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(configuration.eventId()));
     }
 
     // Version cũ hoặc cùng version/cùng data: chỉ ghi inbox để đánh dấu message đã xử lý.

@@ -3,7 +3,9 @@ package com.flashticket.booking_service.persistence;
 import static com.flashticket.booking_service.support.BookingFixtures.*;
 import static org.assertj.core.api.Assertions.*;
 
+import com.flashticket.booking_service.availability.event.AvailabilityChangedEvent;
 import com.flashticket.booking_service.availability.repository.EventSalesSnapshotRepository;
+import com.flashticket.booking_service.availability.service.AvailabilityCacheService;
 import com.flashticket.booking_service.availability.service.AvailabilityService;
 import com.flashticket.booking_service.availability.service.impl.AvailabilityServiceImpl;
 import com.flashticket.booking_service.config.BookingJsonConfig;
@@ -31,6 +33,7 @@ import com.flashticket.booking_service.order.OrderExpiryWorker;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
 import com.flashticket.booking_service.order.service.impl.OrderServiceImpl;
+import com.flashticket.booking_service.redis.service.RedisService;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.nio.file.*;
@@ -60,18 +63,21 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.resilience.annotation.EnableResilientMethods;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,6 +99,8 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(initializers = BookingPersistenceIT.BookingConfigInitializer.class)
 @Import({
+  AvailabilityCacheService.class,
+  RedisService.class,
   AvailabilityServiceImpl.class,
   com.flashticket.booking_service.promotion.service.impl.PromotionServiceImpl.class,
   OrderServiceImpl.class,
@@ -245,6 +253,11 @@ class BookingPersistenceIT {
   @Autowired AvailabilityService salesService;
   @Autowired EventSalesSnapshotRepository snapshots;
   @Autowired PlatformTransactionManager transactionManager;
+  @Autowired ApplicationEventPublisher applicationEventPublisher;
+  @Autowired AvailabilityCacheService availabilityCacheService;
+
+  @MockitoBean(answers = org.mockito.Answers.RETURNS_DEEP_STUBS)
+  StringRedisTemplate availabilityRedisTemplate;
 
   @Test
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -10845,6 +10858,358 @@ class BookingPersistenceIT {
       }
     } finally {
       finishWriter.countDown();
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void availabilityCacheInvalidationRunsAfterCommitAndNotAfterRollback() {
+    var values = availabilityRedisTemplate.opsForValue();
+    UUID committedEvent = UUID.randomUUID();
+    UUID rolledBackEvent = UUID.randomUUID();
+    String prefix = "flash-ticket:dev:booking:availability:v2:";
+    org.mockito.Mockito.clearInvocations(values);
+
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status -> {
+              applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(committedEvent));
+              org.mockito.Mockito.verifyNoInteractions(values);
+            });
+    org.mockito.Mockito.verify(values)
+        .set(
+            org.mockito.ArgumentMatchers.eq(prefix + committedEvent + ":generation"),
+            org.mockito.ArgumentMatchers.anyString());
+    org.mockito.Mockito.clearInvocations(values);
+
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status -> {
+              applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(rolledBackEvent));
+              status.setRollbackOnly();
+              org.mockito.Mockito.verifyNoInteractions(values);
+            });
+    org.mockito.Mockito.verifyNoInteractions(values);
+    // fallbackExecution=false: event ngoài transaction không được vô hiệu hóa cache.
+    applicationEventPublisher.publishEvent(new AvailabilityChangedEvent(rolledBackEvent));
+    org.mockito.Mockito.verifyNoInteractions(values);
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void inventoryWritersInvalidateAvailabilityForAllSalesModes() {
+    var values = availabilityRedisTemplate.opsForValue();
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previousDuration =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    String prefix = "flash-ticket:dev:booking:availability:v2:";
+    try {
+      for (int mode = 0; mode < 3; mode++) {
+        for (String outcome :
+            List.of("cancel", "expiry", "failed", "event-held", "event-committed")) {
+          var config =
+              seedOrderCreationConfiguration(
+                  mode == 0 ? SalesMode.QUANTITY : SalesMode.SEAT_MAP,
+                  mode == 0 ? null : mode == 1 ? SectorType.STANDING : SectorType.SEATED,
+                  20,
+                  10);
+          String generationKey = prefix + config.eventId() + ":generation";
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target,
+              "reservationHoldDuration",
+              outcome.equals("expiry") ? Duration.ofSeconds(1) : previousDuration);
+          org.mockito.Mockito.clearInvocations(values);
+          var order =
+              orderService.createOrder(
+                  "cache-buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+          org.mockito.Mockito.verify(values)
+              .set(
+                  org.mockito.ArgumentMatchers.eq(generationKey),
+                  org.mockito.ArgumentMatchers.anyString());
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_reservations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("HELD");
+
+          UUID chargeId = UUID.randomUUID();
+          String orderVersion = null;
+          if (outcome.equals("failed") || outcome.equals("event-committed")) {
+            org.mockito.Mockito.clearInvocations(values);
+            var purchase = orderService.preparePurchaseSnapshot("cache-buyer", order.getOrderId());
+            org.mockito.Mockito.verifyNoInteractions(values);
+            orderVersion = purchase.sourceOrderVersion();
+            var decision =
+                orderService.acceptPayment(
+                    new Envelope<>(
+                        UUID.randomUUID(),
+                        "booking.accept-payment.v1",
+                        1,
+                        order.getOrderId(),
+                        orderVersion,
+                        Instant.now(),
+                        order.getOrderId(),
+                        null,
+                        null,
+                        new AcceptPayment(
+                            order.getOrderId(),
+                            chargeId,
+                            UUID.randomUUID(),
+                            purchase.total(),
+                            purchase.currency(),
+                            orderVersion)));
+            assertThat(decision.outcome())
+                .isEqualTo(
+                    com.flashticket.booking_service.dto.message.PaymentDecision.Outcome.ACCEPTED);
+            org.mockito.Mockito.verify(values)
+                .set(
+                    org.mockito.ArgumentMatchers.eq(generationKey),
+                    org.mockito.ArgumentMatchers.anyString());
+            assertThat(
+                    jdbc.queryForObject(
+                        "select state from booking_schema.tbl_reservations where order_id=?",
+                        String.class,
+                        order.getOrderId()))
+                .isEqualTo("COMMITTED");
+          }
+          org.mockito.Mockito.clearInvocations(values);
+          if (outcome.equals("cancel")) {
+            orderService.cancelOrder("cache-buyer", order.getOrderId());
+          } else if (outcome.equals("expiry")) {
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(8))
+                .until(
+                    () ->
+                        Boolean.TRUE.equals(
+                            jdbc.queryForObject(
+                                "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                                Boolean.class,
+                                order.getOrderId())));
+            orderService.expireOrder(order.getOrderId());
+          } else if (outcome.equals("failed")) {
+            var message =
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "booking.issuance-failed.v1",
+                    1,
+                    order.getOrderId(),
+                    orderVersion,
+                    Instant.now(),
+                    order.getOrderId(),
+                    null,
+                    null,
+                    new BookingIssuanceResult(
+                        order.getOrderId(),
+                        chargeId,
+                        UUID.randomUUID(),
+                        BookingIssuanceResult.State.FAILED,
+                        0,
+                        "TEST_FAILURE"));
+            orderService.processBookingIssuanceResult(message);
+            org.mockito.Mockito.verify(values)
+                .set(
+                    org.mockito.ArgumentMatchers.eq(generationKey),
+                    org.mockito.ArgumentMatchers.anyString());
+            org.mockito.Mockito.clearInvocations(values);
+            orderService.processBookingIssuanceResult(message);
+            org.mockito.Mockito.verifyNoInteractions(values);
+          } else {
+            var cancelled =
+                with(
+                    with(config, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+                    "sourceConfigVersion",
+                    "2");
+            var cancellation =
+                new EventCancellation(
+                    config.eventId(),
+                    UUID.randomUUID(),
+                    "2",
+                    Instant.now(),
+                    "admin",
+                    cancelled,
+                    new EventCancellation.AccessConfiguration(
+                        config.eventId(),
+                        config.organizerSubject(),
+                        SalesConfiguration.EventStatus.CANCELLED,
+                        config.eventStartsAt(),
+                        config.eventEndsAt(),
+                        "2"));
+            salesService.processEventCancellation(
+                new Envelope<>(
+                    UUID.randomUUID(),
+                    "event.cancelled.v1",
+                    1,
+                    config.eventId(),
+                    "2",
+                    Instant.now(),
+                    config.eventId(),
+                    null,
+                    null,
+                    cancellation));
+            org.mockito.Mockito.verify(values)
+                .set(
+                    org.mockito.ArgumentMatchers.eq(generationKey),
+                    org.mockito.ArgumentMatchers.anyString());
+            org.mockito.Mockito.clearInvocations(values);
+            orderService.cancelOrderForEventCancellation(order.getOrderId());
+          }
+          if (!outcome.equals("failed")) {
+            org.mockito.Mockito.verify(values)
+                .set(
+                    org.mockito.ArgumentMatchers.eq(generationKey),
+                    org.mockito.ArgumentMatchers.anyString());
+          }
+          assertThat(
+                  jdbc.queryForObject(
+                      "select state from booking_schema.tbl_reservations where order_id=?",
+                      String.class,
+                      order.getOrderId()))
+              .isEqualTo("RELEASED");
+          if (!outcome.startsWith("event-")) {
+            var available = salesService.getAvailability(config.eventId());
+            assertThat(
+                    mode == 0
+                        ? available.getTicketTypes().getFirst().getAvailable()
+                        : available.getSectors().getFirst().getAvailable())
+                .isEqualTo("20");
+          }
+        }
+      }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previousDuration);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void salesConfigurationAndCancellationInvalidateAvailabilityCache() {
+    var values = availabilityRedisTemplate.opsForValue();
+    String prefix = "flash-ticket:dev:booking:availability:v2:";
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
+      String generationKey = prefix + config.eventId() + ":generation";
+      org.mockito.Mockito.clearInvocations(values);
+      var newer = with(config, "sourceConfigVersion", "2");
+      var message =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              newer);
+      salesService.synchronizeSalesConfiguration(message);
+      org.mockito.Mockito.verify(values)
+          .set(
+              org.mockito.ArgumentMatchers.eq(generationKey),
+              org.mockito.ArgumentMatchers.anyString());
+      org.mockito.Mockito.clearInvocations(values);
+      salesService.synchronizeSalesConfiguration(message);
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "1",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              config));
+      org.mockito.Mockito.verifyNoInteractions(values);
+      var cancelled =
+          with(
+              with(newer, "eventStatus", SalesConfiguration.EventStatus.CANCELLED),
+              "sourceConfigVersion",
+              "3");
+      var cancellation =
+          new EventCancellation(
+              config.eventId(),
+              UUID.randomUUID(),
+              "3",
+              Instant.now(),
+              "admin",
+              cancelled,
+              new EventCancellation.AccessConfiguration(
+                  config.eventId(),
+                  config.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  config.eventStartsAt(),
+                  config.eventEndsAt(),
+                  "3"));
+      var cancellationMessage =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              config.eventId(),
+              "3",
+              Instant.now(),
+              config.eventId(),
+              null,
+              null,
+              cancellation);
+      salesService.processEventCancellation(cancellationMessage);
+      org.mockito.Mockito.verify(values)
+          .set(
+              org.mockito.ArgumentMatchers.eq(generationKey),
+              org.mockito.ArgumentMatchers.anyString());
+      assertThatThrownBy(() -> salesService.getAvailability(config.eventId()))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              failure -> assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_ON_SALE));
+      org.mockito.Mockito.clearInvocations(values);
+      salesService.processEventCancellation(cancellationMessage);
+      org.mockito.Mockito.verifyNoInteractions(values);
+
+      var unknown = with(config, "eventId", UUID.randomUUID());
+      var cancelledBeforeConfig =
+          with(unknown, "eventStatus", SalesConfiguration.EventStatus.CANCELLED);
+      var gate =
+          new EventCancellation(
+              unknown.eventId(),
+              UUID.randomUUID(),
+              "1",
+              Instant.now(),
+              "admin",
+              cancelledBeforeConfig,
+              new EventCancellation.AccessConfiguration(
+                  unknown.eventId(),
+                  unknown.organizerSubject(),
+                  SalesConfiguration.EventStatus.CANCELLED,
+                  unknown.eventStartsAt(),
+                  unknown.eventEndsAt(),
+                  "1"));
+      salesService.processEventCancellation(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.cancelled.v1",
+              1,
+              unknown.eventId(),
+              "1",
+              Instant.now(),
+              unknown.eventId(),
+              null,
+              null,
+              gate));
+      org.mockito.Mockito.verify(values)
+          .set(
+              org.mockito.ArgumentMatchers.eq(prefix + unknown.eventId() + ":generation"),
+              org.mockito.ArgumentMatchers.anyString());
+    } finally {
       jdbc.execute(
           "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
     }
