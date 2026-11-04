@@ -34,7 +34,6 @@ class UserObservabilityTests {
     try (var context =
         application.run(
             "--spring.config.location=optional:file:target/logging-probe.yaml",
-            "--spring.cloud.config.enabled=false",
             "--spring.main.banner-mode=off")) {
       MDC.put("correlationId", "00000000-0000-4000-8000-000000000001");
       MDC.put("Authorization", "SENTINEL-credential");

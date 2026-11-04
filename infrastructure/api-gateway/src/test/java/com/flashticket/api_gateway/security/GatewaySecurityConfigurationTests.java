@@ -1,5 +1,6 @@
 package com.flashticket.api_gateway.security;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,33 @@ import reactor.core.publisher.Mono;
 
 @SpringBootTest
 class GatewaySecurityConfigurationTests {
+  @Test
+  void permitsAuthenticatedImagePatchPreflightFromConfiguredOrigin() {
+    var source =
+        new GatewaySecurityConfiguration()
+            .corsConfigurationSource(new GatewayCorsProperties(List.of("https://frontend.test")));
+    var exchange =
+        org.springframework.mock.web.server.MockServerWebExchange.from(
+            org.springframework.mock.http.server.reactive.MockServerHttpRequest.options(
+                    "https://api.test/api/v1/organizer/events/event/images/image")
+                .header("Origin", "https://frontend.test")
+                .header("Access-Control-Request-Method", "PATCH")
+                .header("Access-Control-Request-Headers", "authorization,content-type")
+                .build());
+    var filter = new org.springframework.web.cors.reactive.CorsWebFilter(source);
+    filter.filter(exchange, ignored -> reactor.core.publisher.Mono.empty()).block();
+    assertEquals(
+        org.springframework.http.HttpStatus.OK,
+        exchange.getResponse().getStatusCode() == null
+            ? org.springframework.http.HttpStatus.OK
+            : exchange.getResponse().getStatusCode());
+    assertTrue(
+        exchange
+            .getResponse()
+            .getHeaders()
+            .getAccessControlAllowMethods()
+            .contains(HttpMethod.PATCH));
+  }
 
   @Autowired private SecurityWebFilterChain springSecurityFilterChain;
 

@@ -77,11 +77,15 @@ ticket:
     access-configured-queue: ${TICKET_ACCESS_CONFIGURED_QUEUE:ticket.access-configured.q}
     event-cancelled-queue: ${TICKET_EVENT_CANCELLED_QUEUE:ticket.event-cancelled.q}
     issuance-queue: ${TICKET_ISSUANCE_QUEUE:ticket.issuance.q}
-    result-routing-key: ${TICKET_RESULT_ROUTING_KEY:ticket.issuance-result.v1}
+    completed-result-message-type: ${TICKET_COMPLETED_RESULT_MESSAGE_TYPE:ticket.issued.v1}
+    completed-result-routing-key: ${TICKET_COMPLETED_RESULT_ROUTING_KEY:ticket.issued.v1}
+    failed-result-routing-key: ${TICKET_FAILED_RESULT_ROUTING_KEY:ticket.issuance-failed.v1}
   outbox:
     confirm-timeout: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:5s}
     claim-lease: ${TICKET_OUTBOX_CLAIM_LEASE:30s}
   delivery:
+    display-zone: ${TICKET_DELIVERY_DISPLAY_ZONE:Asia/Ho_Chi_Minh}
+    # Optional: QR email still sends when this is blank; only the frontend link is omitted.
     buyer-base-url: ${TICKET_BUYER_BASE_URL:}
     from: ${TICKET_MAIL_FROM:}
     claim-lease: ${TICKET_DELIVERY_CLAIM_LEASE:60s}

@@ -285,3 +285,9 @@ chưa truy cập được; có thể truy cập nội bộ qua SSH/tunnel hiện
 không cần nút chạy thủ công; PR #3 cho main được đóng, không cần merge hoặc đổi
 ruleset. Chi tiết run/digest/bộ nhớ và trạng thái run thủ công nằm trong
 [plan triển khai](../docs/java-workflow/plans/2026-10-29-booking-github-actions-deployment-plan.md#9-nhật-ký-thực-thi).
+## Ticket Service — cấu hình deploy/CI
+
+Target AWS #1: [hướng dẫn Ticket](README-ticket.md), [Compose](docker-compose.ticket.yml),
+[deploy CLI](deploy-ticket.sh). JAR Java21 phải qua verify, rollout bằng digest, health JWT
+và rollback; QR key ring mount read-only ngoài image. Đây là cấu hình, chưa phải bằng chứng
+đã provision/deploy Ticket trên AWS; không dùng root env laptop cho server.

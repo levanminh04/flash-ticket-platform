@@ -2,6 +2,7 @@ package com.flashticket.ticket_service.application;
 
 import com.flashticket.ticket_service.contract.TicketContracts;
 import com.flashticket.ticket_service.contract.TicketContracts.*;
+import com.flashticket.ticket_service.contract.TicketSagaMessages;
 import com.flashticket.ticket_service.qr.QrTokens;
 import com.flashticket.ticket_service.web.*;
 import com.flashticket.ticket_service.web.TicketViews.*;
@@ -22,21 +23,26 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 @ConditionalOnProperty(prefix = "ticket.features", name = "business-enabled", havingValue = "true")
 public class TicketService implements TicketOperations {
-  public static final String RESULT = "ticket.issuance-result.v1";
   private final JdbcTemplate jdbc;
   private final JsonMapper json;
   private final TransactionTemplate transactions;
   private final QrTokens qr;
+  private final TicketSagaMessages saga;
 
   @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       justification = "Shares Spring-managed infrastructure; no dependency accessor is exposed.")
   public TicketService(
-      JdbcTemplate jdbc, JsonMapper json, PlatformTransactionManager manager, QrTokens qr) {
+      JdbcTemplate jdbc,
+      JsonMapper json,
+      PlatformTransactionManager manager,
+      QrTokens qr,
+      TicketSagaMessages saga) {
     this.jdbc = jdbc;
     this.json = json;
     this.transactions = new TransactionTemplate(manager);
     this.qr = qr;
+    this.saga = saga;
   }
 
   private <T> T tx(Supplier<T> work) {
@@ -330,7 +336,7 @@ public class TicketService implements TicketOperations {
         UUID.randomUUID(),
         input.data().orderId(),
         TicketContracts.version(input.data().purchase().sourceOrderVersion()),
-        RESULT,
+        saga.messageType(result.state()),
         json.writeValueAsString(result),
         input.data().orderId(),
         input.messageId(),

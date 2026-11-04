@@ -1,18 +1,13 @@
 spring:
   application:
     name: event-service
-  config:
-    import: "optional:configserver:"
-  cloud:
-    config:
-      enabled: false
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: http://127.0.0.1:1/isolated-test-realm
           jwk-set-uri: http://127.0.0.1:1/isolated-test-realm/certs
-# Test-only isolation: production configuration comes from Config Server and
+# Test-only isolation: bundled production configuration
 # requires the real PostgreSQL and RabbitMQ endpoints.
   autoconfigure:
     exclude:

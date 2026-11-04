@@ -179,6 +179,33 @@ public class EventRepository {
     if (count != 1) throw EventProblem.conflict("STALE_EVENT_VERSION");
   }
 
+  public void replaceImages(EventData existing, List<EventData.Image> images) {
+    int changed =
+        jdbc.update(
+            "UPDATE event_schema.tbl_events SET row_version=row_version+1,source_config_version=source_config_version+1,updated_at=clock_timestamp() WHERE id=:id AND row_version=:version AND status='DRAFT'",
+            new MapSqlParameterSource("id", existing.id())
+                .addValue("version", existing.rowVersion()));
+    if (changed != 1) throw EventProblem.conflict("STALE_EVENT_VERSION");
+    jdbc.update(
+        "DELETE FROM event_schema.tbl_event_images WHERE event_id=:id",
+        Map.of("id", existing.id()));
+    for (var image : images)
+      jdbc.update(
+          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order) VALUES(:id,:event,:reference,:position)",
+          new MapSqlParameterSource("id", image.id())
+              .addValue("event", existing.id())
+              .addValue("reference", image.objectReference())
+              .addValue("position", image.displayOrder()));
+  }
+
+  public boolean imageReferenced(String reference) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM event_schema.tbl_event_images WHERE object_reference=:reference) OR EXISTS(SELECT 1 FROM event_schema.tbl_event_layouts WHERE background_image_reference=:reference)",
+            Map.of("reference", reference),
+            Boolean.class));
+  }
+
   public List<EventViews.Lookup> categories() {
     return jdbc.query(
         "SELECT id,name FROM event_schema.tbl_categories ORDER BY name,id",

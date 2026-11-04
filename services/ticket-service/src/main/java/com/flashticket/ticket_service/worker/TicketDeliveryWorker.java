@@ -1,12 +1,13 @@
 package com.flashticket.ticket_service.worker;
 
+import com.flashticket.ticket_service.qr.QrUnavailableException;
+import jakarta.mail.MessagingException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -20,6 +21,7 @@ public final class TicketDeliveryWorker {
   private final JdbcTemplate jdbc;
   private final TransactionTemplate transactions;
   private final JavaMailSender mail;
+  private final TicketEmailComposer composer;
   private final String buyerBaseUrl, from;
   private final Duration lease;
 
@@ -34,7 +36,8 @@ public final class TicketDeliveryWorker {
       JavaMailSender mail,
       @Value("${ticket.delivery.buyer-base-url:}") String buyerBaseUrl,
       @Value("${ticket.delivery.from:}") String from,
-      @Value("${ticket.delivery.claim-lease:60s}") Duration lease) {
+      @Value("${ticket.delivery.claim-lease:60s}") Duration lease,
+      TicketEmailComposer composer) {
     if (lease.isNegative() || lease.isZero())
       throw new IllegalArgumentException("Invalid delivery configuration");
     this.jdbc = jdbc;
@@ -43,6 +46,7 @@ public final class TicketDeliveryWorker {
     this.buyerBaseUrl = buyerBaseUrl;
     this.from = from;
     this.lease = lease;
+    this.composer = composer;
   }
 
   public int deliverBatch(int batch) {
@@ -60,21 +64,44 @@ public final class TicketDeliveryWorker {
         continue;
       }
       try {
-        var message = new SimpleMailMessage();
-        message.setFrom(from);
-        message.setTo(job.email());
-        message.setSubject("Thông tin vé của bạn");
-        message.setText(
-            "Vé của đơn "
-                + job.order()
-                + " đã được phát hành.\nĐăng nhập để xem và tải vé: "
-                + link);
+        var tickets =
+            jdbc.query(
+                "SELECT t.id,t.display_snapshot,t.state,t.qr_token_ciphertext,t.qr_key_version FROM ticket_schema.tbl_tickets t JOIN ticket_schema.tbl_ticket_deliveries d ON d.issuance_id=t.issuance_id WHERE d.id=? ORDER BY t.order_item_id,t.ordinal",
+                (r, n) ->
+                    new TicketEmailComposer.StoredTicket(
+                        r.getObject("id", UUID.class),
+                        r.getString("display_snapshot"),
+                        r.getString("state"),
+                        r.getBytes("qr_token_ciphertext"),
+                        r.getString("qr_key_version")),
+                job.id());
+        Integer expected =
+            jdbc.queryForObject(
+                "SELECT i.expected_ticket_count FROM ticket_schema.tbl_issuances i JOIN ticket_schema.tbl_ticket_deliveries d ON d.issuance_id=i.id WHERE d.id=?",
+                Integer.class,
+                job.id());
+        if (expected == null || tickets.size() != expected) {
+          retry(job, "DELIVERY_DATA_UNAVAILABLE");
+          continue;
+        }
+        var message = mail.createMimeMessage();
+        composer.compose(message, from, job.email(), job.order(), link, tickets);
+        // Rendering/decryption can take time; recheck cancellation and lease immediately before
+        // SMTP.
+        if (!eligible(job)) {
+          finished += complete(job, "NOT_SENT", "EVENT_OR_ISSUANCE_UNAVAILABLE");
+          continue;
+        }
         mail.send(message);
         // DELIVERED means SMTP accepted the notice, not that a buyer read it. An in-flight cancel
         // cannot unsend it.
         finished += complete(job, "DELIVERED", null);
       } catch (org.springframework.mail.MailException unavailable) {
         retry(job, "SMTP_UNAVAILABLE");
+      } catch (QrUnavailableException unavailable) {
+        retry(job, "QR_UNAVAILABLE");
+      } catch (MessagingException | RuntimeException unavailable) {
+        retry(job, "DELIVERY_CONTENT_UNAVAILABLE");
       }
     }
     return finished;
@@ -132,9 +159,10 @@ public final class TicketDeliveryWorker {
   }
 
   private String link(UUID order) {
+    if (buyerBaseUrl.isEmpty()) return "";
     try {
       URI base = URI.create(buyerBaseUrl);
-      if (!java.util.Set.of("http", "https").contains(base.getScheme())
+      if (!("http".equals(base.getScheme()) || "https".equals(base.getScheme()))
           || base.getHost() == null
           || base.getRawUserInfo() != null
           || base.getRawQuery() != null

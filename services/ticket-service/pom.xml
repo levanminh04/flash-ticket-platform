@@ -32,6 +32,11 @@
 	</properties>
 	<dependencies>
 		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>core</artifactId>
+			<version>3.5.4</version>
+		</dependency>
+		<dependency>
 			<groupId>com.github.spotbugs</groupId>
 			<artifactId>spotbugs-annotations</artifactId>
 			<version>4.10.4</version>
@@ -68,10 +73,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-config</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
@@ -146,12 +147,12 @@
 	<build>
 		<testResources>
 			<testResource>
-				<directory>src/test/resources</directory>
+				<directory>src/main/resources</directory>
+				<includes><include>application.yaml</include></includes>
+				<targetPath>service-config</targetPath>
 			</testResource>
 			<testResource>
-				<directory>../../infrastructure/config-server/src/main/resources/config</directory>
-				<includes><include>ticket-service.yaml</include></includes>
-				<targetPath>platform-config</targetPath>
+				<directory>src/test/resources</directory>
 			</testResource>
 		</testResources>
 		<plugins>

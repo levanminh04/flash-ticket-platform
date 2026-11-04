@@ -62,15 +62,39 @@ class TicketInfrastructureTests {
                 try {
                   for (var source :
                       new YamlPropertySourceLoader()
-                          .load(
-                              "ticket",
-                              new ClassPathResource("platform-config/ticket-service.yaml")))
+                          .load("ticket", new ClassPathResource("service-config/application.yaml")))
                     sources.addLast(source);
                 } catch (java.io.IOException exception) {
                   throw new IllegalStateException(exception);
                 }
                 ConfigurationPropertySources.attach(context.getEnvironment());
               });
+
+  @Test
+  void sagaWireContractCanBeSelectedThroughTicketEnvironment() {
+    runner
+        .withPropertyValues(
+            "ticket.features.business-enabled=true",
+            "TICKET_COMPLETED_RESULT_MESSAGE_TYPE=ticket.issuance-result.v1",
+            "TICKET_COMPLETED_RESULT_ROUTING_KEY=acceptance.completed",
+            "TICKET_FAILED_RESULT_ROUTING_KEY=acceptance.failed")
+        .withUserConfiguration(com.flashticket.ticket_service.contract.TicketSagaMessages.class)
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var saga =
+                  context.getBean(com.flashticket.ticket_service.contract.TicketSagaMessages.class);
+              assertThat(saga.messageType("COMPLETED")).isEqualTo("ticket.issuance-result.v1");
+              assertThat(saga.routingKey("ticket.issuance-result.v1", "COMPLETED"))
+                  .isEqualTo("acceptance.completed");
+              assertThat(saga.routingKey("ticket.issuance-result.v1", "FAILED"))
+                  .isEqualTo("acceptance.failed");
+              assertThatThrownBy(() -> saga.routingKey("ticket.issued.v1", "COMPLETED"))
+                  .isInstanceOf(IllegalArgumentException.class);
+              assertThatThrownBy(() -> saga.messageType("PENDING"))
+                  .isInstanceOf(IllegalArgumentException.class);
+            });
+  }
 
   @Test
   void databasePoolUsesExistingOwnerWithoutOpeningAConnection() {

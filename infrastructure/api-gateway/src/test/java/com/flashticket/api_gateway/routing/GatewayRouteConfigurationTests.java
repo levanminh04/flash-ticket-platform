@@ -35,6 +35,9 @@ class GatewayRouteConfigurationTests {
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-organizer-seat-map").getUri().toString());
+    assertEquals(
+        45000L, routes.get("event-organizer-images").getMetadata().get("response-timeout"));
+    assertEquals(45000L, routes.get("event-organizer-image").getMetadata().get("response-timeout"));
     assertEquals("lb://booking-service", routes.get("booking-create-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-promote-order").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-cancel-order").getUri().toString());
@@ -147,6 +150,11 @@ class GatewayRouteConfigurationTests {
       {"POST", "/api/v1/organizer/events/event-1/cancellation-requests"},
       {"GET", "/api/v1/organizer/events/event-1/cancellation-requests"},
       {"GET", "/api/v1/organizer/events/event-1/statistics"},
+      {"GET", "/api/v1/organizer/events/event-1/images"},
+      {"POST", "/api/v1/organizer/events/event-1/images"},
+      {"PUT", "/api/v1/organizer/events/event-1/images/image-1"},
+      {"PATCH", "/api/v1/organizer/events/event-1/images/image-1"},
+      {"DELETE", "/api/v1/organizer/events/event-1/images/image-1"},
       {"GET", "/api/v1/admin/events"},
       {"GET", "/api/v1/admin/events/event-1"},
       {"POST", "/api/v1/admin/events/event-1/approve"},

@@ -1,0 +1,130 @@
+name: Deploy Event Service
+
+on:
+  push:
+    branches: [dev/tuyen]
+    paths:
+      - services/event-service/**
+      - deploy/deploy-event.sh
+      - deploy/docker-compose.event.yml
+      - .github/workflows/deploy-event.yml
+      - '!**/*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: event-service-aws2
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  EVENT_REPOSITORY: ghcr.io/levanminh04/flash-ticket-platform/event-service
+
+jobs:
+  build_publish:
+    if: github.ref == 'refs/heads/dev/tuyen'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/event-service/pom.xml
+      - name: Verify Event
+        env:
+          JAVA_TOOL_OPTIONS: -Duser.timezone=UTC
+        working-directory: services/event-service
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp verify
+      - name: Check deploy scripts
+        run: |
+          bash -n deploy/deploy-event.sh
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified runtime
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: services/event-service
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.EVENT_REPOSITORY }}:sha-${{ github.sha }}
+          build-args: REVISION=${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  deploy:
+    needs: build_publish
+    if: github.ref == 'refs/heads/dev/tuyen'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Deploy only Event on AWS2
+        env:
+          SSH_KEY: ${{ secrets.FT84_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.FT84_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.FT84_SSH_HOST }}
+          SSH_USER: ${{ vars.FT84_SSH_USER }}
+          SSH_PORT: ${{ vars.FT84_SSH_PORT }}
+          DEPLOY_DIRECTORY: /home/ubuntu/flash-ticket-event/deploy
+          ENV_FILE: /home/ubuntu/flash-ticket-event/runtime/.env
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_DIGEST: ${{ needs.build_publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$SSH_USER" =~ ^[A-Za-z0-9_-]+$ ]]
+          [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
+          [[ "$DEPLOY_DIRECTORY" =~ ^/[A-Za-z0-9_./-]+$ && "$DEPLOY_DIRECTORY" != *'/../'* ]]
+          [[ "$ENV_FILE" =~ ^/[A-Za-z0-9_./-]+$ && "$ENV_FILE" != *'/../'* ]]
+          # Use deploy/ directly; do not add a nested event-service directory.
+          [[ "$DEPLOY_DIRECTORY" == "/home/$SSH_USER/"* ]]
+          [[ "$DEPLOY_DIRECTORY" == */deploy ]]
+          [[ "$ENV_FILE" == "/home/$SSH_USER/"* && "$ENV_FILE" == */.env ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/event-ssh.XXXXXXXX")
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 600 "$ssh_dir/"*
+          options=(-i "$ssh_dir/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o "UserKnownHostsFile=$ssh_dir/known_hosts")
+          destination="$SSH_USER@$SSH_HOST"
+          release_directory="$DEPLOY_DIRECTORY/releases/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ssh "${options[@]}" -p "$SSH_PORT" "$destination" "install -d -m 700 '$release_directory'"
+          scp "${options[@]}" -P "$SSH_PORT" deploy/docker-compose.event.yml deploy/deploy-event.sh "$destination:$release_directory/"
+          image="$EVENT_REPOSITORY@$IMAGE_DIGEST"
+          printf '%s\n' "$REGISTRY_TOKEN" |
+            ssh "${options[@]}" -p "$SSH_PORT" "$destination" \
+              "bash '$release_directory/deploy-event.sh' --registry-user '$REGISTRY_USER' '$image' --revision '$GITHUB_SHA' --env-file '$ENV_FILE' --compose-file '$release_directory/docker-compose.event.yml'"
+          printf 'Event image: %s\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Event revision: %s\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

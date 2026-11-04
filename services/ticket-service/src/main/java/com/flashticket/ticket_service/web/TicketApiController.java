@@ -44,6 +44,20 @@ public class TicketApiController {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("qrToken", token));
   }
 
+  @GetMapping(value = "/api/v1/tickets/{ticketId}/qr", produces = MediaType.IMAGE_PNG_VALUE)
+  public ResponseEntity<byte[]> qrPng(
+      @PathVariable String ticketId,
+      Principal principal,
+      HttpServletRequest request,
+      HttpServletResponse response) {
+    TicketRequestContext.correlation(request, response);
+    String token = operations.qr(TicketRequestContext.uuid(ticketId), actor(principal));
+    return ResponseEntity.ok()
+        .contentType(MediaType.IMAGE_PNG)
+        .cacheControl(CacheControl.noStore())
+        .body(com.flashticket.ticket_service.qr.QrImages.png(token));
+  }
+
   @PostMapping(
       value = "/api/v1/orders/{orderId}/ticket-deliveries",
       consumes = MediaType.APPLICATION_JSON_VALUE,
