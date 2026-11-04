@@ -3,3 +3,38 @@ spring:
     name: payment-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  datasource:
+    hikari:
+      # Để JDBC trả tên domain nhất quán với columnDefinition trong entity.
+      schema: payment_schema
+  security:
+    oauth2:
+      client:
+        registration:
+          booking:
+            provider: booking
+            client-id: ${PAYMENT_SERVICE_CLIENT_ID:payment-service}
+            client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET}
+            authorization-grant-type: client_credentials
+        provider:
+          booking:
+            token-uri: ${PAYMENT_SERVICE_TOKEN_URI}
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
+payment:
+  booking:
+    base-url: ${BOOKING_SERVICE_URL:http://localhost:8082}
+    snapshot-path: /internal/v1/orders/{orderId}/purchase-snapshot
+    connect-timeout: PT3S
+    read-timeout: PT5S
+  exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+  queues:
+    finance-configured: payment.finance-configured.q
+    event-cancelled: payment.event-cancelled.q
+    decision: payment.decision.q
+    issuance: payment.ticket-issuance-failed.q
+    completed: payment.order-completed.q

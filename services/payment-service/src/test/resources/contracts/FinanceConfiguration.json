@@ -1,0 +1,8 @@
+{
+  "eventId": "10000000-0000-0000-0000-000000000002",
+  "organizerSubject": "org-1",
+  "eventEndsAt": "2030-01-01T01:00:00Z",
+  "feeRate": "0.10000000",
+  "sourceFeeVersion": "1",
+  "currency": "VND"
+}

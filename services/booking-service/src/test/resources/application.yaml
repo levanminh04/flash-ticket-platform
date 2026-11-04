@@ -6,6 +6,22 @@ spring:
   cloud:
     config:
       enabled: false
+  security:
+    oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: test-only
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://127.0.0.1:1/token
+      resourceserver:
+        jwt:
+          issuer-uri: https://issuer.example.test/realms/booking
 # Test-only isolation: production configuration comes from Config Server and
 # requires the real PostgreSQL and RabbitMQ endpoints.
   autoconfigure:
@@ -14,6 +30,36 @@ spring:
       - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
 
+booking:
+  event-cancellation:
+    enabled: false
+  expiry:
+    enabled: false
+  reservation:
+    hold-duration: PT15M
+    lock-timeout: 5s
+
 eureka:
   client:
     enabled: false
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Native Boot filtering/renaming; never include arbitrary MDC fields.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+      add:
+        serviceName: booking-service
+        serviceVersion: ${BOOKING_SERVICE_VERSION:local-dev}
+        instanceId: ${BOOKING_INSTANCE_ID:${random.uuid}}
+        environment: ${BOOKING_ENVIRONMENT:local}
+      customizer: com.flashticket.booking_service.config.BookingLogFields
+      stacktrace:
+        printer: com.flashticket.booking_service.config.SafeStackTracePrinter

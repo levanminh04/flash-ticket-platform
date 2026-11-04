@@ -27,7 +27,7 @@ actor "Cổng thanh toán" as Gateway
 
 rectangle "Hệ thống bán vé FlashTicket" {
   usecase "Xử lý hoàn tiền cho một khoản thu" as UC15
-  usecase "Theo dõi tiến độ hoàn của sự kiện bị hủy" as UC16
+  usecase "Theo dõi và xử lý yêu cầu hoàn" as UC16
   usecase "Xem báo cáo đối soát" as UC17
   usecase "Xác nhận đối soát" as UC18
   usecase "Đánh dấu đã chi trả" as UC19

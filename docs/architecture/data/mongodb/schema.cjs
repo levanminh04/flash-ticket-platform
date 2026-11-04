@@ -13,6 +13,7 @@ const index = (key, name, unique = false) => ({ key, name, unique });
 const metadata = { _id: uuid, createdAt: date, updatedAt: date, version };
 const roleGrant = closed(['operationId', 'status', 'attemptedAt'], {
   operationId: uuid,
+  requestedBySubject: text,
   status: { enum: ['REQUESTED', 'CONFIRMED', 'FAILED', 'UNKNOWN'] },
   attemptedAt: date,
   confirmedAt: date

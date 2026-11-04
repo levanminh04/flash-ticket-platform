@@ -1,0 +1,41 @@
+spring:
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${PAYMENT_TEST_DB_URL:jdbc:postgresql://127.0.0.1:25432/payment_db}
+    username: ${PAYMENT_TEST_DB_USERNAME:postgres}
+    password: ${PAYMENT_TEST_DB_PASSWORD:payment-flow-test}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
+        jdbc:
+          time_zone: UTC
+  rabbitmq:
+    host: ${PAYMENT_TEST_RABBIT_HOST:127.0.0.1}
+    port: ${PAYMENT_TEST_RABBIT_PORT:25672}
+    username: ${PAYMENT_TEST_RABBIT_USERNAME:payment_test}
+    password: ${PAYMENT_TEST_RABBIT_PASSWORD:payment-flow-test}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        auto-startup: false
+payment:
+  worker:
+    enabled: true
+    initial-delay: 86400000
+  exchange: payment.gov156.test.v1
+  queues:
+    finance-configured: payment.gov156.test.finance-configured
+    event-cancelled: payment.gov156.test.event-cancelled
+    decision: payment.gov156.test.decision
+    issuance: payment.gov156.test.issuance
+    completed: payment.gov156.test.completed

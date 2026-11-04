@@ -1,0 +1,762 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "business.ex",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "identity.ex",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dlx.ex",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "booking.sales-configured.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.sales-configured.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.event-cancelled.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.event-cancelled.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.accept-payment.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.accept-payment.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.tickets-issued.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.tickets-issued.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.issuance-failed.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "booking.issuance-failed.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.finance-configured.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.finance-configured.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.event-cancelled.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.event-cancelled.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.start.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.start.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.decision.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.decision.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.ticket-issuance-failed.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.ticket-issuance-failed.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.order-completed.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "payment.order-completed.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.access-configured.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.access-configured.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.event-cancelled.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.event-cancelled.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.issuance.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "ticket.issuance.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "user.identity.q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "user.identity.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "booking.sales-configured.q",
+      "destination_type": "queue",
+      "routing_key": "event.sales-configured.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "booking.sales-configured.dlq",
+      "destination_type": "queue",
+      "routing_key": "booking.sales-configured.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "booking.event-cancelled.q",
+      "destination_type": "queue",
+      "routing_key": "event.cancelled.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "booking.event-cancelled.dlq",
+      "destination_type": "queue",
+      "routing_key": "booking.event-cancelled.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "booking.accept-payment.q",
+      "destination_type": "queue",
+      "routing_key": "booking.accept-payment.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "booking.accept-payment.dlq",
+      "destination_type": "queue",
+      "routing_key": "booking.accept-payment.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "booking.tickets-issued.q",
+      "destination_type": "queue",
+      "routing_key": "ticket.issued.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "booking.tickets-issued.dlq",
+      "destination_type": "queue",
+      "routing_key": "booking.tickets-issued.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "booking.issuance-failed.q",
+      "destination_type": "queue",
+      "routing_key": "booking.issuance-failed.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "booking.issuance-failed.dlq",
+      "destination_type": "queue",
+      "routing_key": "booking.issuance-failed.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.finance-configured.q",
+      "destination_type": "queue",
+      "routing_key": "event.finance-configured.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.finance-configured.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.finance-configured.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.event-cancelled.q",
+      "destination_type": "queue",
+      "routing_key": "event.cancelled.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.event-cancelled.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.event-cancelled.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.start.q",
+      "destination_type": "queue",
+      "routing_key": "payment.start-requested.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.start.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.start.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.decision.q",
+      "destination_type": "queue",
+      "routing_key": "booking.payment-decision.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.decision.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.decision.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.ticket-issuance-failed.q",
+      "destination_type": "queue",
+      "routing_key": "ticket.issuance-failed.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.ticket-issuance-failed.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.ticket-issuance-failed.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "payment.order-completed.q",
+      "destination_type": "queue",
+      "routing_key": "booking.order-completed.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "payment.order-completed.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment.order-completed.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "ticket.access-configured.q",
+      "destination_type": "queue",
+      "routing_key": "event.access-configured.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "ticket.access-configured.dlq",
+      "destination_type": "queue",
+      "routing_key": "ticket.access-configured.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "ticket.event-cancelled.q",
+      "destination_type": "queue",
+      "routing_key": "event.cancelled.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "ticket.event-cancelled.dlq",
+      "destination_type": "queue",
+      "routing_key": "ticket.event-cancelled.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "business.ex",
+      "vhost": "/",
+      "destination": "ticket.issuance.q",
+      "destination_type": "queue",
+      "routing_key": "ticket.issue.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "ticket.issuance.dlq",
+      "destination_type": "queue",
+      "routing_key": "ticket.issuance.dlq",
+      "arguments": {}
+    },
+    {
+      "source": "identity.ex",
+      "vhost": "/",
+      "destination": "user.identity.q",
+      "destination_type": "queue",
+      "routing_key": "identity.user-created.v1",
+      "arguments": {}
+    },
+    {
+      "source": "dlx.ex",
+      "vhost": "/",
+      "destination": "user.identity.dlq",
+      "destination_type": "queue",
+      "routing_key": "user.identity.dlq",
+      "arguments": {}
+    }
+  ],
+  "policies": [
+    {
+      "name": "booking.sales-configured.dlx",
+      "vhost": "/",
+      "pattern": "^booking\\.sales-configured\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "booking.sales-configured.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "booking.event-cancelled.dlx",
+      "vhost": "/",
+      "pattern": "^booking\\.event-cancelled\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "booking.event-cancelled.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "booking.accept-payment.dlx",
+      "vhost": "/",
+      "pattern": "^booking\\.accept-payment\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "booking.accept-payment.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "booking.tickets-issued.dlx",
+      "vhost": "/",
+      "pattern": "^booking\\.tickets-issued\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "booking.tickets-issued.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "booking.issuance-failed.dlx",
+      "vhost": "/",
+      "pattern": "^booking\\.issuance-failed\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "booking.issuance-failed.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.finance-configured.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.finance-configured\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.finance-configured.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.event-cancelled.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.event-cancelled\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.event-cancelled.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.start.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.start\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.start.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.decision.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.decision\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.decision.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.ticket-issuance-failed.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.ticket-issuance-failed\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.ticket-issuance-failed.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "payment.order-completed.dlx",
+      "vhost": "/",
+      "pattern": "^payment\\.order-completed\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "payment.order-completed.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "ticket.access-configured.dlx",
+      "vhost": "/",
+      "pattern": "^ticket\\.access-configured\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "ticket.access-configured.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "ticket.event-cancelled.dlx",
+      "vhost": "/",
+      "pattern": "^ticket\\.event-cancelled\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "ticket.event-cancelled.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "ticket.issuance.dlx",
+      "vhost": "/",
+      "pattern": "^ticket\\.issuance\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "ticket.issuance.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    },
+    {
+      "name": "user.identity.dlx",
+      "vhost": "/",
+      "pattern": "^user\\.identity\\.q$",
+      "apply-to": "queues",
+      "definition": {
+        "dead-letter-exchange": "dlx.ex",
+        "dead-letter-routing-key": "user.identity.dlq",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20
+      },
+      "priority": 10
+    }
+  ]
+}

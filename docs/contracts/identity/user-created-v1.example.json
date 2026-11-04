@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "eventId": "9fe8679b-759a-4529-bc49-e522c59da03b",
+  "eventType": "identity.user-created.v1",
+  "occurredAt": "2026-10-26T12:00:00Z",
+  "realmId": "realm-id-from-keycloak",
+  "identitySubject": "user-id-from-keycloak",
+  "displayName": "Nguyễn Văn An"
+}

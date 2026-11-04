@@ -1,0 +1,80 @@
+name: flash-ticket-payment
+
+services:
+  payment-service:
+    image: ${PAYMENT_IMAGE:-flash-ticket/payment-service:local}
+    build:
+      context: ../services/payment-service
+      dockerfile: Dockerfile
+    environment:
+      PAYMENT_SERVICE_PORT: "8083"
+      CONFIG_SERVER_URL: ${PAYMENT_DOCKER_CONFIG_SERVER_URL:-http://host.docker.internal:8888}
+      EUREKA_CLIENT_ENABLED: "false"
+      SPRING_DATASOURCE_URL: ${PAYMENT_DOCKER_DB_URL:-jdbc:postgresql://host.docker.internal:5432/payment_db}
+      PAYMENT_DB_URL: ${PAYMENT_DOCKER_DB_URL:-jdbc:postgresql://host.docker.internal:5432/payment_db}
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:-payment_admin}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD in the root .env}
+      BOOKING_SERVICE_URL: ${PAYMENT_DOCKER_BOOKING_URL:-http://host.docker.internal:8082}
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?Set KEYCLOAK_ISSUER_URI in the root .env}
+      KEYCLOAK_JWK_SET_URI: ${KEYCLOAK_JWK_SET_URI:?Set KEYCLOAK_JWK_SET_URI in the root .env}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-flash-ticket-api}
+      PAYMENT_SERVICE_CLIENT_ID: ${PAYMENT_SERVICE_CLIENT_ID:-internal-service}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:?Set PAYMENT_SERVICE_CLIENT_SECRET in the root .env}
+      PAYMENT_SERVICE_TOKEN_URI: ${PAYMENT_SERVICE_TOKEN_URI:?Set PAYMENT_SERVICE_TOKEN_URI in the root .env}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:?Set RABBITMQ_HOST in the root .env}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-flash_ticket_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the root .env}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_BUSINESS_EXCHANGE: ${RABBITMQ_BUSINESS_EXCHANGE:-business.ex}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:?Set VNPAY_TMN_CODE in the root .env}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:?Set VNPAY_HASH_SECRET in the root .env}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      VNPAY_RETURN_URL: https://${NGROK_DOMAIN:?Set NGROK_DOMAIN to your assigned hostname without https://}/api/v1/payments/vnpay/return
+      VNPAY_IPN_URL: https://${NGROK_DOMAIN:?Set NGROK_DOMAIN to your assigned hostname without https://}/api/v1/payments/vnpay/ipn
+      VNPAY_APP_RETURN_URL: ${VNPAY_APP_RETURN_URL:-flash-ticket://payment-return}
+      JAVA_TOOL_OPTIONS: -Duser.timezone=UTC
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:${PAYMENT_DOCKER_PORT:-8083}:8083"
+    healthcheck:
+      # An unsigned IPN checks HTTP readiness without changing payment data.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8083/api/v1/payments/vnpay/ipn | grep -q '\"RspCode\":\"97\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ngrok:
+    # Verified agent 3.39.13; pin its image to keep CLI/config behavior reproducible.
+    image: ngrok/ngrok:latest@sha256:ff3b5c3674432d14a786349908b7bdf28ee56c25662637afcbe7180d471993ef
+    command:
+      - http
+      - http://payment-service:8083
+      - --url=https://${NGROK_DOMAIN:?Set NGROK_DOMAIN in the root .env}
+      - --config=/etc/ngrok.yml
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in the root .env}
+    volumes:
+      - ./ngrok/payment.yml:/etc/ngrok.yml:ro
+    ports:
+      - "127.0.0.1:${NGROK_INSPECTOR_PORT:-4040}:4040"
+    depends_on:
+      payment-service:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

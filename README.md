@@ -32,6 +32,23 @@ Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead 
 
 Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệu lực; không dùng tên/nhóm/phân công cũ thay nguồn 18/09.
 
+## Cấu hình môi trường local
+
+Chỉ dùng một file env local là `.env` ở thư mục gốc. Tạo từ `.env.example` rồi
+điền cấu hình ứng dụng, Keycloak và PostgreSQL/MongoDB Compose vào cùng file.
+File `.env` bị Git bỏ qua; chỉ commit `.env.example`.
+
+Spring không tự đọc `.env`; cấu hình IDE/runtime nạp file này khi chạy ứng dụng.
+Khi chạy Compose từ thư mục gốc, truyền rõ `--env-file .env`, ví dụ:
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
+```
+
+Mật khẩu kết nối ứng dụng (`<SERVICE>_DB_PASSWORD`) phải khớp mật khẩu quản trị
+được khởi tạo (`<SERVICE>_DB_ADMIN_PASSWORD`) trong cùng file. Thay đổi các biến
+khởi tạo không cập nhật tài khoản hoặc database đã tồn tại trong volume.
+
 ## Build và CI
 
 Mỗi pull request vào `main` chạy Maven verification cho cả tám ứng dụng, Dependency Review và CodeQL. Chỉ check tổng hợp **`CI / Required`** báo thành công khi các gate bắt buộc của sự kiện đó đều đạt.

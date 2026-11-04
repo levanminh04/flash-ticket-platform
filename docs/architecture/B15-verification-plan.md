@@ -1,7 +1,7 @@
 # B15 — Kế hoạch kiểm chứng theo lát dọc
 
-- Phiên bản B15-v0.1; ngày 2026-09-14; APPROVED về kế hoạch; FORMATION; người duyệt Lê Văn Minh, ngày 2026-09-14 (GOV-144).
-- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B13-v0.1/B14-v0.1 và B16-v0.1 APPROVED; không sinh bất biến/ASR/ngưỡng mới.
+- Phiên bản: B15-v0.3; ngày 2026-10-29; trạng thái: REVIEW_READY; FORMATION; người duyệt/ngày duyệt bản này chưa có. B15-v0.1 được Lê Văn Minh duyệt 2026-09-14 (GOV-144).
+- Nguồn B11-C-v0.3 APPROVED, B6-v0.15/B7-v0.13/B8-v0.13 APPROVED, B12-v0.2/B16-v0.1 APPROVED; B13-v0.3/B14-v0.3 REVIEW_READY theo GOV-156 và ảnh ClickUp 61 bước; không sinh bất biến/ASR/ngưỡng mới. Duyệt v0.3 sau các đầu vào sửa.
 - Ưu tiên PRJ-016–021: luồng chính đúng → dữ liệu quan sát → thử tải/chèn lỗi/RCA. Không yêu cầu hoàn thiện công cụ tải trước code.
 
 ## 1. Kết quả thật nằm ở đâu?
@@ -17,7 +17,7 @@
 | V03 | Mất response create order, retry cùng key; cùng key khác payload | Cùng order/reservation; khác input 409; không giữ chỗ hai lần | Booking |
 | V04 | Áp promotion đồng thời, hết lượt, đã dùng, hết hạn, total <=0 | Sáu lý do FR-22 phân biệt; usage và counter nguyên tử, không giữ mã hai lần | Booking |
 | V05 | Giá/giảm 1.5; subtotal100005 giảm10%; 2 đơn100050 phí1% | Reject đầu vào lẻ; discount10001,total90004; phí toàn event2001 chứ không2002 | Unit tiền trước cổng |
-| V06 | Freeze, attempt thất bại, sửa mã, retry; mất response freeze | Tiền/email/items snapshot không đổi; không gia hạn; retry giữ mốc/version | Booking/Payment |
+| V06 | POST chuẩn bị snapshot đồng thời áp voucher; hai POST đồng thời; attempt lỗi/retry; mất response | Cùng khóa order: voucher commit trước thì snapshot chứa giảm giá, freeze commit trước thì voucher bị PRICE_FROZEN; cùng snapshot/mốc/version khi retry, không gia hạn, không có API freeze riêng; đơn terminal không mở attempt mới | Booking/Payment |
 | V07 | IPN lặp C1; C1/C2 thực thu khác; IPN invalid signature/amount/attempt | Một confirmation; C2 hoàn riêng; invalid không tạo vé. Không thử/nhận là đã có workflow Q-07 | Payment |
 | V08 | Chờ khóa qua expires_at, confirm/expire/cancel cạnh tranh | Dùng decision time sau khóa; đúng hạn là hết hạn; ACCEPTED replay vẫn ACCEPTED; không hồi sinh | B14 race |
 | V09 | Crash giữa ghi charge–outbox, broker confirm–published_at, effect–ACK | Retry hội tụ, không mất lệnh và không lặp hiệu ứng; inbox/hash đúng | Sau broker tích hợp |
@@ -32,6 +32,11 @@
 | V18 | Follow lặp, unfollow lặp, count | Một quan hệ, count từ source, không dual-write lệch counter | User |
 | V19 | Payout còn tiền pending, feeconfig thiếu, paid lặp | Từ chối; đúng fee đã duyệt; một lần đánh paid + actor/time/evidence | Payment đọc/đối soát |
 | V20 | Một giao dịch xuyên callback/retry/message, secret/QR mẫu trong input | Correlation nối đủ; log/trace có node/time/outcome; không lộ dữ liệu cấm | Theo B16 từ lát đầu |
+| V21 | FE POST Payment; Payment gọi Booking lấy snapshot; crash trước/sau commit attempt, mất response; replay key cũ/mới | Snapshot + attempt cùng commit; cùng key cùng attempt; không hai unfinished attempt; không có Booking start/outbox; UNKNOWN không giả thành QR thành công | Booking/Payment/Frontend |
+| V22 | Ticket → Payment → Booking; mất result/yêu cầu completion/xác nhận; crash trước/sau commit | Booking commit COMPLETED trước Payment Saga COMPLETED; retry không phát thêm vé hoặc cập nhật hai lần; Ticket ACK chưa phải Saga hoàn tất | Ticket/Booking/Payment |
+| V23 | Buyer cancel PENDING_PAYMENT đã freeze, cancel đồng thời acceptance; ISSUING/COMPLETED; hủy lặp | Còn đủ điều kiện thì trả reservation/limit/promotion một lần; sau acceptance từ chối, rollback không trả một phần; charge tới sau hủy hoàn muộn | Booking/Payment |
+| V24 | Đọc danh sách/chi tiết đơn rồi vé; orderId buyer khác; vé PENDING; QR thanh toán so với QR vé | Backend lọc chủ; GET không tạo/freeze/phát vé; chưa đủ vé trả mảng rỗng; không nhầm QR payment với token Ticket | Booking/Ticket/Frontend |
+| V25 | Payment lấy snapshot sau hủy/hết hạn; Booking timeout; buyer khác; hủy sau snapshot | Từ chối khi không payable/không có quyền; timeout không tạo attempt dựa dữ liệu thiếu; snapshot không rò quyền; race sau snapshot phân xử tại acceptance/hoàn muộn | Booking/Payment/Frontend |
 
 ## 3. Fake gateway có khó không?
 
@@ -51,7 +56,7 @@ Chèn lỗi một thành phần trong môi trường được phép: service sto
 
 Mỗi kết quả: test ID, ngày/commit, môi trường, dữ liệu/seed, lệnh, expected/actual, exit code, log đã lọc, hash bộ dữ liệu và giới hạn. Test concurrency phải có connection độc lập và barrier tạo tranh chấp; không gọi tuần tự rồi gọi đó là race. Restore chạy vào môi trường tách biệt, không đè kho nhóm đang dùng. Thất bại giữ nguyên làm bằng chứng và sửa trong phạm vi được duyệt, không loại ca khó khỏi mẫu.
 
-Phần đưa báo cáo: INV→thiết kế lớp bảo vệ→test thật→kết quả/giới hạn; không đưa toàn bộ trạng thái quản trị hoặc secret vào báo cáo. Chưa có service thì các V01–V20 chưa đạt, dù kiểm tĩnh/SQL bên dưới đã PASS.
+Phần đưa báo cáo: INV→thiết kế lớp bảo vệ→test thật→kết quả/giới hạn; không đưa toàn bộ trạng thái quản trị hoặc secret vào báo cáo. V01–V25 vẫn NOT RUN trong lượt sửa tài liệu 03/10; không đổi kiểm tĩnh thành PASS service.
 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 

@@ -6,6 +6,14 @@ spring:
   cloud:
     config:
       enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://127.0.0.1:1/isolated-ticket-realm
+          jwk-set-uri: http://127.0.0.1:1/isolated-ticket-realm/certs
+          audiences:
+            - flash-ticket-api
 # Test-only isolation: production configuration comes from Config Server and
 # requires the real PostgreSQL, RabbitMQ, and mail endpoints.
   autoconfigure:

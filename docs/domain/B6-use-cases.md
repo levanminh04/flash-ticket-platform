@@ -1,7 +1,7 @@
 # B6 — Use case và đặc tả
 
-- Phiên bản: `B6-v0.15`
-- Trạng thái: `APPROVED`
+- Phiên bản: `B6-v0.16`
+- Trạng thái: `REVIEW_READY` — `B6-v0.15` là bản `APPROVED` gần nhất (GOV-144); `v0.16` lan truyền `BIZ-159` và chờ Lê Văn Minh duyệt toàn văn
 - Người duyệt: Lê Văn Minh
 - Ngày duyệt: 2026-09-14 (GOV-144); các mốc trước ở nhật ký phiên bản.
 - Đầu vào và phiên bản: `docs/domain/B3-business-processes.md` — `B3-v0.11`, `APPROVED` 2026-08-27; `docs/domain/B4-domain-event-map.md` — `B4-v0.15`, `APPROVED` 2026-08-27; `docs/domain/B5-bounded-context-map.md` — `B5-v0.14`, `APPROVED` 2026-08-27; `docs/glossary.md` — `B2-v0.12`, `APPROVED` 2026-08-27, dùng làm ràng buộc thuật ngữ; `docs/project/decision-register.md` — đọc riêng trạng thái của từng ID được dẫn
@@ -87,10 +87,12 @@ Cột cuối là phép thử bắt buộc của B6: mọi use case phải truy �
 | Mã | Use case | Tác nhân chính | Sự kiện miền B4 | Mức đặc tả đề xuất |
 |---|---|---|---|---|
 | `UC-15` | Xử lý hoàn tiền cho một khoản thu | Không có tác nhân chính; được gọi bởi `UC-08`, `UC-12`, `UC-14` | `C01`–`C04` | **Đầy đủ** |
-| `UC-16` | Theo dõi tiến độ hoàn của một sự kiện bị hủy | Admin | `C05`, `C06` | Liệt kê |
+| `UC-16` | Theo dõi và xử lý yêu cầu hoàn | Admin | `C02`, `C03`, `C05`, `C06` | Liệt kê |
 | `UC-17` | Xem báo cáo đối soát của sự kiện | Organizer, admin | `C07` | Liệt kê |
 | `UC-18` | Xác nhận đối soát | Admin | `C09` | Liệt kê |
 | `UC-19` | Đánh dấu sự kiện đã chi trả | Admin | `C10` | **Đầy đủ** |
+
+`UC-16` trước đây tên là "Theo dõi tiến độ hoàn của một sự kiện bị hủy". Tên mới phản ánh nhánh đã chốt tại `BIZ-159`: admin thử lại hoặc ghi nhận đã hoàn ngoài hệ thống cho mọi yêu cầu hoàn đã thất bại; xem §4.7. Danh mục vẫn là 30 use case.
 
 ### 3.4 Quy trình 4 — Check-in
 
@@ -172,6 +174,28 @@ Mục này đóng lại. B2 không cần sửa gì.
 ### 4.6 Ghi chú về hai cụm từ mô tả
 
 “Khoản thu” và “nguồn cung” xuất hiện trong phần diễn giải của B2-v0.9 và được B3-v0.9 dùng xuyên suốt, nhưng không phải mục từ riêng. B2 dùng **Hạn mức bán** và **Tồn kho vé còn lại** làm mục từ cho khái niệm nguồn cung. B6 giữ nguyên cách dùng của B3 để không tạo cách gọi thứ ba, và không đề xuất đổi vì đây là từ mô tả chứ không phải khái niệm nghiệp vụ mới.
+
+### 4.7 `B6-OPEN-06` — đã đóng bằng `BIZ-159`: admin xử lý yêu cầu hoàn bị kẹt
+
+**Phát hiện.** `UC-15` nói lần hoàn thất bại thì "giữ yêu cầu ở trạng thái chưa hoàn tất để thử lại hoặc điều tra", nhưng không ca nào nói **ai** thử lại hoặc điều tra, và yêu cầu kết thúc thế nào khi cổng thanh toán liên tục từ chối. Trong khi đó `BIZ-052` và tiền điều kiện của `UC-19` cấm chi trả khi còn yêu cầu hoàn đang xử lý. Chỉ một yêu cầu hoàn không bao giờ kết thúc cũng đủ chặn chi trả của cả sự kiện mãi mãi.
+
+`B5-OPEN-03` chỉ chuyển cơ chế theo dõi và thử lại lô hoàn sang B7/B9/B10/B11; nó không trả lời câu hỏi nghiệp vụ "khi tự động không hoàn được thì con người làm gì".
+
+**Quyết định.** Lê Văn Minh chốt ngày 2026-11-03 (`BIZ-159`): **nhận cả hai thao tác** và **áp cho mọi yêu cầu hoàn**. Không tạo use case mới; `UC-16` được mở rộng và đổi tên thành **"Theo dõi và xử lý yêu cầu hoàn"**, giữ mức liệt kê. Admin có hai thao tác trên một yêu cầu hoàn đã thất bại:
+
+1. **Thử lại.** Admin yêu cầu hệ thống gửi lại lệnh hoàn. Hệ thống tiếp tục trên **cùng** yêu cầu hoàn logic theo `BIZ-101`, không tạo bản sao.
+2. **Ghi nhận đã hoàn ngoài hệ thống.** Khi tiền đã được trả cho buyer qua kênh khác, admin ghi nhận yêu cầu hoàn là đã hoàn thành, bắt buộc kèm người thao tác, thời điểm và mã tham chiếu giao dịch. Kết quả này được tính là **kết quả hoàn thành công duy nhất** của khoản thu theo `INV-08`, và đi vào số liệu đối soát ở `UC-17`/`UC-18` như một khoản đã hoàn.
+
+Ràng buộc:
+
+- Không thao tác nào được chạm vào yêu cầu hoàn đã hoàn thành; yêu cầu đang chờ kết quả từ cổng thì không được ghi nhận thủ công.
+- Nếu cổng trả kết quả thành công **sau khi** admin đã ghi nhận thủ công, hệ thống không ghi nhận hoàn lần hai và phải để lại dấu vết cho đối soát.
+- Không hỗ trợ hoàn một phần (`BIZ-011`) và không đổi trạng thái vé hay đơn (`BIZ-150`); hai thao tác chỉ đổi trạng thái yêu cầu hoàn.
+- Yêu cầu hoàn đã thất bại vẫn tính là **đang xử lý** đối với điều kiện chi trả; điều kiện "không còn yêu cầu hoàn đang xử lý" của `UC-19` chỉ thỏa khi mọi yêu cầu hoàn của sự kiện đã hoàn thành, qua cổng hoặc qua ghi nhận ngoài hệ thống.
+
+**Phạm vi "mọi yêu cầu hoàn"** gồm cả bốn nguyên nhân của `UC-15`: hủy sự kiện (`UC-08`), thanh toán đến muộn và thanh toán trùng (`UC-12`), phát hành vé thất bại sau thu tiền (`UC-14`). Lý do: yêu cầu hoàn thuộc nguyên nhân nào cũng chặn chi trả như nhau theo `BIZ-052`. Phần theo dõi tiến độ lô vẫn chỉ áp cho sự kiện bị hủy (`C05`, `C06`).
+
+**Truy vết.** Thao tác thử lại gửi lại lệnh hoàn (`C02`) trên cùng yêu cầu. Thao tác ghi nhận ngoài hệ thống là `C03` với tác nhân admin — `B4-v0.16` đã bổ sung tác nhân này. Lan truyền: B7 `INV-08`, B8 `FR-37a`/`FR-39a`, B12 bảng `refunds`, B13 §3.1; tên trạng thái kỹ thuật do B12/B13 đặt.
 
 ## 5. Phạm vi đặc tả đầy đủ
 
@@ -537,7 +561,7 @@ Organizer và admin không có chức năng liệt kê hoặc tải QR thô củ
 
 **Ngoại lệ**
 
-- **Lần hoàn thất bại.** Giữ yêu cầu ở trạng thái chưa hoàn tất để thử lại hoặc điều tra; không đảo ngược các khoản đã hoàn thành.
+- **Lần hoàn thất bại.** Giữ yêu cầu ở trạng thái chưa hoàn tất để thử lại hoặc điều tra; không đảo ngược các khoản đã hoàn thành. Admin xử lý yêu cầu không tự hoàn tất được qua `UC-16` theo `BIZ-159` (§4.7).
 - **Kết quả hoàn lặp.** Không ghi nhận hoàn tiền hai lần.
 
 **Hậu điều kiện**
@@ -705,6 +729,8 @@ Không mô tả cơ chế đồng bộ với nguồn danh tính, thứ tự ghi,
 - [x] `UC-07` và `UC-08` nay dùng đúng mục từ **Yêu cầu hủy sự kiện** của `B2-v0.10`; B6 không phải thêm hay sửa use case nào vì hành vi đã được mô tả từ trước.
 - [x] Lê Văn Minh đã duyệt toàn bộ `B6-v0.12` thành `APPROVED` ngày 2026-08-22, sau chuỗi `B2 → B5`; AI không tự đánh dấu thay.
 - [x] Lê Văn Minh đã duyệt `B6-v0.14` ngày 2026-08-27 (`GOV-033`), sau `B5-v0.14` đúng quy tắc chuỗi. Bản này chỉ khai lại đầu vào sau vòng `RES-034`, không đổi use case nào.
+- [x] Lê Văn Minh xác nhận `BIZ-159` ngày 2026-11-03, đóng `B6-OPEN-06` (§4.7).
+- [ ] Lê Văn Minh duyệt toàn văn `B6-v0.16`; tới lúc đó tài liệu ở `REVIEW_READY`.
 
 ## 8. Sơ đồ nguồn
 
@@ -733,6 +759,8 @@ Bốn hình tuân theo Tầng C §3.2.1 và `GOV-020`:
 
 Việc chuyển tiền cho nhà tổ chức diễn ra ngoài hệ thống, giữa `UC-18` và `UC-19`.
 
+Nhánh admin xử lý yêu cầu hoàn bị kẹt (`BIZ-159`) nằm **trong** `UC-16`; hình `B6-03` chỉ đổi nhãn `UC-16`, không thêm use case hay tác nhân.
+
 Đơn hết hạn theo mốc thời gian là **nhánh thay thế** của `UC-13`, không phải use case riêng và không có tác nhân. Cửa sổ check-in là **tiền điều kiện** của `UC-20`, cũng không phải tác nhân.
 
 `UC-26` nằm trong nhóm tra cứu nhưng làm đổi trạng thái, nên nó có mã sự kiện riêng là `E05`.
@@ -759,6 +787,7 @@ Không đưa nguyên trạng mã `UC-*`, sổ `OPEN` hoặc trạng thái govern
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B6-v0.16` | 2026-11-03 | Thêm và đóng `B6-OPEN-06` (§4.7): chưa có người xử lý yêu cầu hoàn thất bại không tự hoàn tất được, trong khi `BIZ-052` chặn chi trả; theo `BIZ-159` (Lê Văn Minh xác nhận) mở rộng `UC-16` với thao tác thử lại và ghi nhận đã hoàn ngoài hệ thống, áp cho mọi yêu cầu hoàn; truy vết `UC-16` thêm `C02`, `C03`; đổi tên `UC-16` thành "Theo dõi và xử lý yêu cầu hoàn". Thêm tham chiếu ở §3.3, ngoại lệ `UC-15`, §7, §8.2; đổi nhãn trong `B6-03`. Không đổi 30 use case hay tác nhân; chuyển `REVIEW_READY` chờ duyệt | Phát hiện `OPEN` |
 | `B6-v0.15` | 2026-09-14 | Đồng bộ quyền gửi lại yêu cầu hủy, follow/unfollow, tiền nguyên/làm tròn/đóng băng, email theo đơn, ghế ẩn và giới hạn Q-07 theo quyết định đã xác nhận; trình REVIEW_READY, không đổi 30 use case | GOV-143 |
 | `B6-v0.14` | 2026-08-27 | Chỉ khai lại phiên bản đầu vào theo `B2-v0.12`/`B3-v0.11`/`B4-v0.15`/`B5-v0.14` sau vòng `RES-034`. *(Dòng này trước 2026-08-29 ghi `B2-v0.11`, lệch với dòng khai đầu vào ở đầu tệp vốn ghi đúng `B2-v0.12` — `B2` lên `v0.12` khi bổ sung mục từ `Hồ sơ chi trả sự kiện` theo `RES-040`.)* **Không đổi use case, tác nhân, luồng, đặc tả hay sơ đồ nào**; bốn ghi chú kênh chatbot giữ nguyên | Lan truyền trạng thái |
 | `B6-v0.13` | 2026-08-26 | Sửa lỗi khai phiên bản: §3 và ô tự kiểm nói thân bài dùng `B4-v0.13` trong khi dòng khai đầu vào là `B4-v0.14`. Đồng bộ khai `B5-v0.13` sau tái baseline `A2`/`A4`. **Không đổi use case, tác nhân, luồng hay đặc tả nào** | Sửa lời khai và lan truyền |

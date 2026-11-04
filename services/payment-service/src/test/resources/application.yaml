@@ -1,6 +1,21 @@
 spring:
   application:
     name: payment-service
+  datasource:
+    hikari:
+      schema: payment_schema
+  security:
+    oauth2:
+      client:
+        registration:
+          booking:
+            provider: booking
+            client-id: payment-test
+            client-secret: test-only
+            authorization-grant-type: client_credentials
+        provider:
+          booking:
+            token-uri: http://127.0.0.1:1/not-used
   config:
     import: "optional:configserver:"
   cloud:
@@ -17,3 +32,25 @@ spring:
 eureka:
   client:
     enabled: false
+
+payment:
+  worker:
+    enabled: false
+  booking:
+    base-url: https://booking.example.test
+
+flashticket:
+  payment:
+    jwt:
+      issuer-uri: https://issuer.example.test
+      jwk-set-uri: http://127.0.0.1:1/not-used-by-smoke-tests
+      audience: payment
+
+vnpay:
+  api-url: https://example.test/merchant_webapi/api/transaction
+  tmn-code: test
+  hash-secret: fixture-secret
+  payment-url: https://sandbox.example.test/pay
+  return-url: https://example.test/api/v1/payments/vnpay/return
+  ipn-url: https://example.test/api/v1/payments/vnpay/ipn
+  app-return-url: flash-ticket://payment-return

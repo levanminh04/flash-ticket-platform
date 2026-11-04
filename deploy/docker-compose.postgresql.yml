@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16.15
+    restart: unless-stopped
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-4g}
+    shm_size: 256m
+    stop_grace_period: 60s
+    command:
+      - postgres
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-4MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+      - -c
+      - password_encryption=scram-sha-256
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root .env}
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak_db}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      EVENT_DB_ADMIN_PASSWORD: ${EVENT_DB_ADMIN_PASSWORD:?Set EVENT_DB_ADMIN_PASSWORD in the repository-root .env}
+      EVENT_DB_VIEWER_PASSWORD: ${EVENT_DB_VIEWER_PASSWORD:?Set EVENT_DB_VIEWER_PASSWORD in the repository-root .env}
+      BOOKING_DB_ADMIN_PASSWORD: ${BOOKING_DB_ADMIN_PASSWORD:?Set BOOKING_DB_ADMIN_PASSWORD in the repository-root .env}
+      BOOKING_DB_VIEWER_PASSWORD: ${BOOKING_DB_VIEWER_PASSWORD:?Set BOOKING_DB_VIEWER_PASSWORD in the repository-root .env}
+      PAYMENT_DB_ADMIN_PASSWORD: ${PAYMENT_DB_ADMIN_PASSWORD:?Set PAYMENT_DB_ADMIN_PASSWORD in the repository-root .env}
+      PAYMENT_DB_VIEWER_PASSWORD: ${PAYMENT_DB_VIEWER_PASSWORD:?Set PAYMENT_DB_VIEWER_PASSWORD in the repository-root .env}
+      TICKET_DB_ADMIN_PASSWORD: ${TICKET_DB_ADMIN_PASSWORD:?Set TICKET_DB_ADMIN_PASSWORD in the repository-root .env}
+      TICKET_DB_VIEWER_PASSWORD: ${TICKET_DB_VIEWER_PASSWORD:?Set TICKET_DB_VIEWER_PASSWORD in the repository-root .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/00-business-databases.sh:/docker-entrypoint-initdb.d/00-business-databases.sh:ro
+      - ../docs/architecture/data/postgres:/opt/flash-ticket/postgres:ro
+      - ../services/99-table-prefix.sql:/opt/flash-ticket/99-table-prefix.sql:ro
+      - ../services/event-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/event.sql:ro
+      - ../services/booking-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/booking.sql:ro
+      - ../services/payment-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/payment.sql:ro
+      - ../services/ticket-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/ticket.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ticket
+
+volumes:
+  postgres-data:
+
+networks:
+  ticket:
+    name: flash-ticket-infra

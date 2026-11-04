@@ -3,9 +3,41 @@ server:
 
 spring:
   mongodb:
-    uri: ${MONGO_URI}
+    uri: ${USER_MONGO_URI:${MONGO_URI}}
+  data:
+    mongodb:
+      auto-index-creation: false
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
+    host: ${USER_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${USER_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${USER_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
+    password: ${USER_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    virtual-host: ${USER_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 2s
+    dynamic: false
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${USER_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${USER_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${USER_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Native Boot filtering/renaming; never include arbitrary MDC fields.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+
