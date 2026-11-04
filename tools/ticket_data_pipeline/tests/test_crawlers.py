@@ -4,6 +4,9 @@ from tools.ticket_data_pipeline.crawlers.ticketgo import TicketgoScraper
 from tools.ticket_data_pipeline.crawlers.megatix import MegatixScraper
 from tools.ticket_data_pipeline.crawlers.actiup import ActiupScraper
 from tools.ticket_data_pipeline.crawlers.eventbrite import EventbriteScraper
+from tools.ticket_data_pipeline.crawlers.klook import KlookScraper
+from tools.ticket_data_pipeline.crawlers.ticketmaster import TicketmasterScraper
+from tools.ticket_data_pipeline.crawlers.moveek import MoveekScraper
 
 def test_ticketbox_parse_event_payload():
     scraper = TicketboxScraper()
@@ -62,3 +65,25 @@ def test_eventbrite_fetch_events():
     assert len(events) == 2
     assert events[0].source == "eventbrite"
     assert len(events[0].ticket_types) > 0
+
+def test_klook_fetch_events():
+    scraper = KlookScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "klook"
+    assert len(events[0].ticket_types) > 0
+
+def test_ticketmaster_fetch_events():
+    scraper = TicketmasterScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "ticketmaster"
+    assert len(events[0].ticket_types) > 0
+
+def test_moveek_fetch_events():
+    scraper = MoveekScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "moveek"
+    assert len(events[0].ticket_types) > 0
+
