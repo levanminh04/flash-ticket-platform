@@ -28,3 +28,4 @@ def test_sql_builder_escapes_special_characters_and_roles():
     assert "SET LOCAL ROLE payment_owner;" in sql
     assert "\\connect ticket_db" in sql
     assert "SET LOCAL ROLE ticket_owner;" in sql
+

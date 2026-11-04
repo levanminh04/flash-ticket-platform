@@ -48,3 +48,4 @@ class PaymentAttemptSim(BaseModel):
     status: str = "SUCCESS"
     provider: str = "VNPAY"
     created_at: datetime
+

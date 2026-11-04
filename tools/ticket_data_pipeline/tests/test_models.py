@@ -39,3 +39,4 @@ def test_raw_models():
         ticket_types=[raw_t]
     )
     assert len(raw_ev.ticket_types) == 1
+

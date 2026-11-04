@@ -17,3 +17,4 @@ def test_cli_run_all_dry_run():
     assert "Chuẩn hóa dữ liệu" in result.output
     assert "File SQL đã sẵn sàng" in result.output
     assert "dry-run hoàn tất" in result.output
+

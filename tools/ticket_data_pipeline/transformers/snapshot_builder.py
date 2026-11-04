@@ -51,3 +51,4 @@ class SnapshotBuilder:
             "eventEndsAt": event.ends_at.isoformat(),
             "sourceConfigVersion": 1
         }
+

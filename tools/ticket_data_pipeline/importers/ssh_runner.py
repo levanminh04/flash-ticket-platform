@@ -16,8 +16,13 @@ class SshRunner:
         if scp_res.returncode != 0:
             return scp_res.returncode, f"SCP_ERROR: {scp_res.stderr or scp_res.stdout}"
 
-        # 2. SSH chạy psql
-        psql_cmd = ["ssh", self.ssh_host, f"psql -U postgres -v ON_ERROR_STOP=1 -f {remote_tmp} && rm -f {remote_tmp}"]
+        # 2. SSH chạy psql qua container Docker postgres
+        psql_cmd = [
+            "ssh",
+            self.ssh_host,
+            f"cat {remote_tmp} | docker exec -i ft119-infra-postgres-1 psql -U postgres -v ON_ERROR_STOP=1 && rm -f {remote_tmp}"
+        ]
         res = subprocess.run(psql_cmd, capture_output=True, text=True)
         combined_output = f"{res.stdout}\n{res.stderr}".strip()
         return res.returncode, combined_output
+

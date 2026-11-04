@@ -48,3 +48,4 @@ class FlashTicketBundle(BaseModel):
     categories: List[Category]
     venues: List[Venue]
     events: List[Event]
+

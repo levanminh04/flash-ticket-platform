@@ -24,3 +24,4 @@ def test_order_generator_does_not_exceed_capacity():
     assert len(payments) == len(orders)
     assert orders[0].lifecycle_state == "COMPLETED"
     assert orders[0].accepted_charge_id is not None
+

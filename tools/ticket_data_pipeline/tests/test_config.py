@@ -7,3 +7,4 @@ def test_default_config_values():
     assert config.ssh_host == "ft119"
     assert config.organizer_subject is not None
     assert config.admin_subject is not None
+

@@ -15,9 +15,14 @@ class DataVerifier:
             f"SELECT 'payment_db' as db, count(*) FROM payment_schema.tbl_event_finance_snapshots WHERE event_id IN ({ids_str}); "
             f"SELECT 'ticket_db' as db, count(*) FROM ticket_schema.tbl_event_access_snapshots WHERE event_id IN ({ids_str});"
         )
-        res = subprocess.run(["ssh", self.ssh_host, f"psql -U postgres -c \"{query}\""], capture_output=True, text=True)
+        res = subprocess.run(
+            ["ssh", self.ssh_host, f"docker exec -i ft119-infra-postgres-1 psql -U postgres -c \"{query}\""],
+            capture_output=True,
+            text=True
+        )
         return {
             "status": "PASSED" if res.returncode == 0 else "FAILED",
             "output": res.stdout,
             "error": res.stderr
         }
+

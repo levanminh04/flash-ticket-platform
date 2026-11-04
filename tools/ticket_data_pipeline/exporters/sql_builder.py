@@ -118,3 +118,4 @@ class SqlBuilder:
         lines.append("COMMIT;\n")
 
         return "\n".join(lines)
+

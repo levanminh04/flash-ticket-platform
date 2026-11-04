@@ -95,3 +95,4 @@ class TicketboxScraper(BaseScraper):
             for s in samples[:limit]:
                 events.append(self.parse_detail(s))
         return events
+

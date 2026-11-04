@@ -38,3 +38,4 @@ def test_ticketgo_parse_event_payload():
     assert event.title == "Hội thảo AI 2026"
     assert len(event.ticket_types) == 1
     assert event.ticket_types[0].price_number == 300000
+

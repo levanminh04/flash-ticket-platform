@@ -19,3 +19,4 @@ class RawEventDetail(BaseModel):
     start_time_text: Optional[str] = None
     end_time_text: Optional[str] = None
     ticket_types: List[RawTicketType] = []
+

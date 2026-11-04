@@ -6,3 +6,4 @@ class BaseScraper(ABC):
     @abstractmethod
     def fetch_events(self, limit: int = 10) -> List[RawEventDetail]:
         pass
+

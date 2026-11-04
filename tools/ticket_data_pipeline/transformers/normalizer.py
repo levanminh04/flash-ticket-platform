@@ -114,3 +114,4 @@ class DataNormalizer:
             venues=list(venues_map.values()),
             events=events
         )
+

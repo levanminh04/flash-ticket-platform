@@ -20,3 +20,4 @@ class PipelineConfig(BaseModel):
         self.processed_storage_dir.mkdir(parents=True, exist_ok=True)
         self.sql_storage_dir.mkdir(parents=True, exist_ok=True)
         self.reports_storage_dir.mkdir(parents=True, exist_ok=True)
+

@@ -37,3 +37,4 @@ def test_snapshot_builder_schema_version():
     assert sales_snap["mode"] == "QUANTITY"
     assert len(sales_snap["ticketTypes"]) == 1
     assert sales_snap["ticketTypes"][0]["currency"] == "VND"
+

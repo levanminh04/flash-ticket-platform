@@ -25,3 +25,4 @@ def test_data_verifier_constructs_query(monkeypatch):
     report = verifier.verify_import(["event-uuid-1", "event-uuid-2"])
     assert report["status"] == "PASSED"
     assert "count" in report["output"]
+
