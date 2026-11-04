@@ -11,6 +11,10 @@ from tools.ticket_data_pipeline.crawlers.irace import IRaceScraper
 from tools.ticket_data_pipeline.crawlers.ticketmelon import TicketmelonScraper
 from tools.ticket_data_pipeline.crawlers.feverup import FeverUpScraper
 from tools.ticket_data_pipeline.crawlers.peatix import PeatixScraper
+from tools.ticket_data_pipeline.crawlers.interpark import InterparkScraper
+from tools.ticket_data_pipeline.crawlers.todaytix import TodayTixScraper
+from tools.ticket_data_pipeline.crawlers.ra import ResidentAdvisorScraper
+from tools.ticket_data_pipeline.crawlers.axs import AxsScraper
 
 def test_ticketbox_parse_event_payload():
     scraper = TicketboxScraper()
@@ -119,5 +123,34 @@ def test_peatix_fetch_events():
     assert len(events) == 2
     assert events[0].source == "peatix"
     assert len(events[0].ticket_types) > 0
+
+def test_interpark_fetch_events():
+    scraper = InterparkScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "interpark"
+    assert len(events[0].ticket_types) > 0
+
+def test_todaytix_fetch_events():
+    scraper = TodayTixScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "todaytix"
+    assert len(events[0].ticket_types) > 0
+
+def test_ra_fetch_events():
+    scraper = ResidentAdvisorScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "ra"
+    assert len(events[0].ticket_types) > 0
+
+def test_axs_fetch_events():
+    scraper = AxsScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "axs"
+    assert len(events[0].ticket_types) > 0
+
 
 
