@@ -174,7 +174,7 @@ khác vẫn hoạt động. Có thể cấu hình `EVENT_IMAGES_FOLDER`, `EVENT_
 `EVENT_IMAGES_TIMEOUT`. Không tự dùng key User hoặc demo cloud cũ. Mặc định multipart
 request6MiB; khi tăng file limit phải tăng request limit và đánh giá RAM tương ứng.
 
-Deploy cần đồng bộ YAML Event trong Config Server dùng chung (bảo toàn Booking/User),
+YAML Event được đóng gói trong JAR tại `src/main/resources/application.yaml`;
 cấp env Event private rồi build/deploy Event. Gateway thêm đúng route ảnh/CORS PATCH,
 response timeout riêng45s và image circuit time limit50s; cần đồng bộ YAML Gateway
 và rebuild/recreate Gateway nếu gọi qua đó. Không tự thay lb:// bằng public IP.
@@ -310,7 +310,7 @@ thu đầy đủ B16 collector/dashboards trên EC2 #2.
 
 ## Chạy và kiểm chứng
 
-Xem [HANDOFF](HANDOFF.md) cho Stage 1: Gateway/Discovery/Config local, PostgreSQL,
+Xem [HANDOFF](HANDOFF.md) cho Stage 1: Gateway/Discovery local, PostgreSQL,
 RabbitMQ/Keycloak trên EC2. Chạy JDK 21 với `-Duser.timezone=UTC`, nạp biến vào
 process; Spring không tự đọc `.env`. Không cài PostgreSQL local để chạy nghiệp vụ.
 
@@ -339,8 +339,12 @@ qua Gateway thật và correlation header, có đợi cache Eureka cập nhật.
 Hai file chạy chính nằm trực tiếp trong `deploy/`: [deploy-event.sh](../../deploy/deploy-event.sh)
 và [docker-compose.event.yml](../../deploy/docker-compose.event.yml), đồng bộ bố cục Booking/User.
 [deploy-event.yml](../../.github/workflows/deploy-event.yml) chạy Java 21/UTC Maven verify,
-publish image theo digest và deploy riêng Event trên AWS #2. Giữ JWT health, Config contract,
-snapshot/rollback và đường runtime env hiện có; không tự rollout Config Server.
+publish image theo digest và deploy riêng Event trên AWS #2. Giữ JWT health,
+snapshot/rollback và đường runtime env hiện có. Event không cần Config Server hoặc
+`CONFIG_SERVER_URL`; candidate image phải có label `org.flashticket.configuration=service-local-v1`.
+Các default nghiệp vụ, role/schema DB, broker confirm/return, JWT và OAuth client
+nằm trong YAML của Event; endpoint/credential tiếp tục lấy từ env. Thay YAML cần
+build/publish/deploy image mới; thay env cần recreate Event qua bộ deploy.
 Tài liệu thao tác và test/tunnel/mẫu env giữ local tại `deploy/README-event.md`, cùng convention User.
 Workflow dùng SSH secrets/variables `FT84_*` cùng User. Đường dẫn có sẵn trong workflow:
 `DEPLOY_DIRECTORY=/home/ubuntu/flash-ticket-event/deploy`, `ENV_FILE=/home/ubuntu/flash-ticket-event/runtime/.env`;

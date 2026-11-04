@@ -62,9 +62,7 @@ class TicketInfrastructureTests {
                 try {
                   for (var source :
                       new YamlPropertySourceLoader()
-                          .load(
-                              "ticket",
-                              new ClassPathResource("platform-config/ticket-service.yaml")))
+                          .load("ticket", new ClassPathResource("service-config/application.yaml")))
                     sources.addLast(source);
                 } catch (java.io.IOException exception) {
                   throw new IllegalStateException(exception);

@@ -1,13 +1,7 @@
 spring:
   application:
     name: user-service
-  config:
-    import: "optional:configserver:"
-  cloud:
-    config:
-      enabled: false
-# Test-only isolation: production configuration comes from Config Server and
-# requires the real MongoDB and RabbitMQ endpoints.
+# Test-only isolation: bundled production YAML requires real MongoDB and RabbitMQ.
   autoconfigure:
     exclude:
       - org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration

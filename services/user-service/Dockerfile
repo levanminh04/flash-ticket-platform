@@ -5,6 +5,7 @@ RUN addgroup -S -g 10001 app && adduser -S -D -u 10001 -G app app
 WORKDIR /app
 ARG REVISION=local-dev
 LABEL org.opencontainers.image.revision=$REVISION
+LABEL org.flashticket.configuration="service-local-v1"
 COPY --chown=10001:10001 target/user-service-*.jar /app/app.jar
 USER 10001:10001
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

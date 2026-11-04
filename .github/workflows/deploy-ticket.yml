@@ -6,7 +6,6 @@ on:
     paths:
       - services/ticket-service/**
       - deploy/deploy-ticket.sh
-      - infrastructure/config-server/src/main/resources/config/ticket-service.yaml
       - deploy/docker-compose.ticket.yml
       - .github/workflows/deploy-ticket.yml
       - '!**/*.md'

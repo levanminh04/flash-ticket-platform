@@ -22,7 +22,6 @@ services:
       JAVA_TOOL_OPTIONS: ${TICKET_JAVA_OPTIONS:--XX:MaxRAMPercentage=50.0 -Duser.timezone=UTC -Djava.awt.headless=true}
       SERVER_ADDRESS: ${TICKET_SERVER_ADDRESS:-127.0.0.1}
       TICKET_SERVICE_PORT: ${TICKET_SERVICE_PORT:-8084}
-      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL:?Set the reachable Ticket Config Server endpoint}
       EUREKA_CLIENT_ENABLED: "${EUREKA_CLIENT_ENABLED:-false}"
       TICKET_DB_URL: ${TICKET_DB_URL:?Set ticket_db JDBC URL for this server}
       TICKET_DB_USERNAME: ${TICKET_DB_USERNAME:-ticket_admin}

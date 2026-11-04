@@ -15,7 +15,6 @@ services:
       JAVA_TOOL_OPTIONS: ${USER_JAVA_OPTIONS:--XX:MaxRAMPercentage=60.0 -Duser.timezone=UTC}
       SERVER_ADDRESS: ${USER_SERVER_ADDRESS:-127.0.0.1}
       USER_SERVICE_PORT: ${USER_SERVICE_PORT:-8085}
-      CONFIG_SERVER_URL: ${CONFIG_SERVER_URL:?Set the reachable Config Server endpoint}
       EUREKA_CLIENT_ENABLED: "${EUREKA_CLIENT_ENABLED:-false}"
       EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://127.0.0.1:8761/eureka/}
       USER_MONGO_URI: ${USER_MONGO_URI:?Set the User runtime MongoDB URI}

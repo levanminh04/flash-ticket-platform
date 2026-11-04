@@ -1,5 +1,25 @@
 # Handoff — Event Service
 
+## Cấu hình riêng service — 04/11/2026
+
+Runtime YAML nằm trong [application.yaml](src/main/resources/application.yaml),
+đóng gói cùng JAR/image; Event không còn Config Client/import hoặc yêu cầu
+`CONFIG_SERVER_URL`. Giữ nguyên env/default nghiệp vụ từ central Event YAML và
+default Eureka/Actuator, cùng multipart/Tomcat giới hạn đã có trong module.
+Deploy kiểm candidate label `org.flashticket.configuration=service-local-v1`
+trước thay container; giữ digest/revision, JWT health, lock, snapshot và rollback.
+Không đổi env AWS/root, schema, worker flags, contract, Config Server hay service khác.
+Thay YAML cần image mới. Bản central cũ chỉ còn phục vụ image cũ/rollback.
+Java 21/UTC `mvnw verify` PASS: 144 test, 0 failure/error/skip; Spotless và
+SpotBugs PASS (0 bug/error). Test mới nạp production YAML bằng Spring ConfigData,
+không cần Config Server; kiểm role/schema DB, JWT/OAuth, broker và worker flags.
+JAR chứa đúng YAML của module, không còn Config Client JAR. Bash syntax,
+ShellCheck và actionlint PASS. 27 ca deploy/tunnel CLI đều đã PASS: lượt đầy đủ
+có 1 ca health-failure vượt 120s dưới tải song song; chạy lại riêng ca đó PASS
+72.7s, không đổi timeout/loop/assertion. Bằng chứng AWS phía dưới là lịch sử; chưa deploy.
+Lượt Maven đầu thiếu `-Duser.timezone=UTC` bị PostgreSQL từ chối `Asia/Saigon`;
+lượt đầy đủ sau dùng đúng UTC như CI đã PASS, không sửa DB/timezone hệ thống.
+
 ## Ảnh Event — 02/11/2026
 
 Bổ sung API Cloudinary upload/thay/list/gỡ/sắp xếp ảnh, owner + DRAFT + rowVersion;
@@ -89,7 +109,7 @@ nghiệp vụ từ consumer thật; Gateway Docker đã áp image mới ngày 30
 
 ## Cấu hình đã áp dụng
 
-Cấu hình runtime nằm trong [event-service.yaml](../../infrastructure/config-server/src/main/resources/config/event-service.yaml).
+Cấu hình runtime hiện nằm trong [application.yaml](src/main/resources/application.yaml).
 Đã tích hợp PostgreSQL/schema/role, Hibernate không tạo DDL, RabbitMQ publisher
 confirm/return, JWT issuer/JWKS/audience và OAuth client `internal-service`.
 POM có OAuth2 client starter để nạp registration `internal` dùng client credentials.
@@ -177,7 +197,6 @@ spring:
 Điền trong `.env` gốc, rồi cấu hình IDE/runtime nạp biến vào process Event:
 
 ```dotenv
-CONFIG_SERVER_URL=http://localhost:8888
 EUREKA_SERVER_URL=http://localhost:8761/eureka/
 EVENT_SERVICE_PORT=8086
 EVENT_DB_URL=jdbc:postgresql://127.0.0.1:15432/event_db?currentSchema=event_schema
@@ -192,9 +211,8 @@ EVENT_INTERNAL_SERVICE_CLIENT_SECRET=DIEN_SECRET_INTERNAL_SERVICE
 ```
 
 - Lấy mật khẩu từ quản trị/`.env` server; không commit secret. Spring không tự đọc `.env`.
-- Chạy Eureka và Config Server trước Event. Stack Docker local hiện mount trực tiếp
-  thư mục YAML vào `/config`: sửa riêng Event không cần restart stack. Nếu chạy
-  Config Server từ JAR chứa YAML classpath, build/chạy lại để tránh đọc bản cũ.
+- Khi bật Eureka, chạy Discovery trước Event. Event dùng YAML trong JAR;
+  sửa YAML phải build lại Event. Không cần chạy/restart Config Server cho Event.
 - Giữ `SET ROLE event_owner` vì tài khoản là `NOINHERIT`; bảng dùng tiền tố `tbl_`.
 - Chạy JVM Event với VM option `-Duser.timezone=UTC`. Đã tái hiện PostgreSQL từ chối
   timezone `Asia/Saigon` do JDBC gửi từ JVM Windows. Hibernate JDBC cũng dùng UTC;
@@ -214,7 +232,7 @@ EVENT_INTERNAL_SERVICE_CLIENT_SECRET=DIEN_SECRET_INTERNAL_SERVICE
 khác tự cấp endpoint/credential theo bảng trên hoặc dùng cấu hình IDE tương đương.
 
 ```powershell
-# Chạy tại root repo; Config Server và Discovery local phải hoạt động trước.
+# Chạy tại root repo; Discovery cần hoạt động nếu đăng ký Eureka được bật.
 .\.env.event-service.runtime.ps1 -Smoke
 
 # Chạy Event và tunnel; giữ PowerShell mở, Ctrl+C để dừng hai process này.

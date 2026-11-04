@@ -122,7 +122,6 @@ port=$((10#$port))
 printf '\nTICKET_SERVICE_PORT=%s\n' "$port" >> "$work/runtime.env"
 address=$(setting SERVER_ADDRESS) || fail independent_rollout_requires_loopback
 [[ "$address" == 127.0.0.1 && "$(jq -r '.services["ticket-service"].network_mode' "$work/model.json")" == host ]] || fail independent_rollout_requires_loopback
-config_url=$(setting CONFIG_SERVER_URL) || fail missing_config_server
 # Bootstrap may keep business disabled and the private QR directory empty.
 # Never generate/rotate keys during deployment; an existing keyring must survive rollback.
 business=$(setting TICKET_BUSINESS_ENABLED) || fail invalid_feature_flags
@@ -204,31 +203,6 @@ if [[ -n "$(ss -H -ltn "sport = :$port" 2>/dev/null)" ]]; then
   [[ -n "$current" ]] && jq -e --arg value "TICKET_SERVICE_PORT=$port" \
     '.[0] | .State.Running and (.Config.Env | index($value) != null)' "$work/current.json" >/dev/null || fail port_owned_by_another_process
 fi
-curl --silent --fail --max-time 10 "${config_url%/}/ticket-service/default" > "$work/config.json" 2>/dev/null || fail config_server_unavailable
-jq -e '[.propertySources | reverse[] | .source] | add |
-  .["spring.datasource.hikari.connection-init-sql"] == "SET ROLE ticket_owner" and
-  .["spring.jpa.hibernate.ddl-auto"] == "none" and
-  .["spring.jpa.properties.hibernate.default_schema"] == "ticket_schema" and
-  .["spring.sql.init.mode"] == "never" and
-  .["spring.rabbitmq.dynamic"] == false and
-  .["spring.rabbitmq.listener.simple.acknowledge-mode"] == "manual" and
-  .["spring.rabbitmq.publisher-confirm-type"] == "correlated" and
-  .["spring.rabbitmq.publisher-returns"] == true and
-  .["spring.rabbitmq.template.mandatory"] == true and
-  (.["spring.rabbitmq.template.exchange"] == "business.ex" or
-   .["spring.rabbitmq.template.exchange"] == "${TICKET_RABBITMQ_BUSINESS_EXCHANGE:business.ex}" or
-   .["spring.rabbitmq.template.exchange"] == "${TICKET_RABBITMQ_BUSINESS_EXCHANGE:${RABBITMQ_BUSINESS_EXCHANGE:business.ex}}") and
-  has("ticket.features.business-enabled") and has("ticket.features.listeners-enabled") and
-  has("ticket.features.workers-enabled") and has("ticket.qr.key-ring-location") and has("ticket.qr.active-key-version") and
-  ([.["ticket.messaging.completed-result-message-type"],
-    .["ticket.messaging.completed-result-routing-key"],
-    .["ticket.messaging.failed-result-routing-key"]] | all(.[]; type == "string" and length > 0)) and
-  (.["spring.security.oauth2.resourceserver.jwt.issuer-uri"] | type == "string" and length > 0) and
-  (.["spring.security.oauth2.resourceserver.jwt.audiences[0]"] | type == "string" and length > 0) and
-  (.["spring.security.oauth2.resourceserver.jwt.jwk-set-uri"] | type == "string" and length > 0) and
-  (has("logging.structured.json.add.serviceName") | not)' \
-  "$work/config.json" >/dev/null 2>&1 || fail config_server_event_contract_incomplete
-
 if [[ -n "$registry_user" ]]; then
   [[ "$registry_user" =~ ^[A-Za-z0-9_-]+$ ]] || fail invalid_registry_user
   registry_directory=$(mktemp -d "${TMPDIR:-/tmp}/ft-ticket-registry.XXXXXXXX")
@@ -240,6 +214,8 @@ if [[ "$official" == true ]]; then
 fi
 docker image inspect "$image" > "$work/image.json" 2>/dev/null || fail image_inspect_failed
 expected=$(jq -er '.[0].Id' "$work/image.json")
+jq -e '.[0].Config.Labels["org.flashticket.configuration"] == "service-local-v1"' \
+  "$work/image.json" >/dev/null 2>&1 || fail image_requires_service_local_configuration
 image_revision=$(jq -er '.[0].Config.Labels["org.opencontainers.image.revision"] // empty' "$work/image.json") || fail invalid_image_revision
 [[ "$image_revision" =~ ^[a-f0-9]{40}$ ]] || fail invalid_image_revision
 [[ -z "$revision" || "$image_revision" == "$revision" ]] || fail image_revision_mismatch

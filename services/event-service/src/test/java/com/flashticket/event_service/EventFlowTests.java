@@ -43,7 +43,6 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "spring.cloud.config.enabled=false",
       "spring.autoconfigure.exclude=org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration",
       "event.outbox.enabled=false",
       "event.read-model.cancellation-max-age=1s",
@@ -94,8 +93,8 @@ class EventFlowTests {
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) {
-    // Test application.yaml intentionally disables Config Server. Load only the
-    // actual production multipart/Tomcat settings, without importing live config.
+    // Test application.yaml isolates infrastructure. Load the bundled production
+    // multipart/Tomcat settings for real servlet upload limit verification.
     try {
       var source =
           new org.springframework.boot.env.YamlPropertySourceLoader()

@@ -118,7 +118,6 @@ port=$((10#$port))
 printf '\nUSER_SERVICE_PORT=%s\n' "$port" >> "$work/runtime.env"
 address=$(setting SERVER_ADDRESS) || fail independent_rollout_requires_loopback
 [[ "$address" == 127.0.0.1 && "$(jq -r '.services["user-service"].network_mode' "$work/model.json")" == host ]] || fail independent_rollout_requires_loopback
-config_url=$(setting CONFIG_SERVER_URL) || fail missing_config_server
 state_root="${USER_DEPLOY_STATE_ROOT:-$HOME/.flash-ticket-user-deploy}"
 take_lock "port-$port"
 private_directory "$state_root"
@@ -150,13 +149,6 @@ if [[ -n "$(ss -H -ltn "sport = :$port" 2>/dev/null)" ]]; then
   [[ -n "$current" ]] && jq -e --arg value "USER_SERVICE_PORT=$port" \
     '.[0] | .State.Running and (.Config.Env | index($value) != null)' "$work/current.json" >/dev/null || fail port_owned_by_another_process
 fi
-curl --silent --fail --max-time 10 "${config_url%/}/user-service/default" > "$work/config.json" 2>/dev/null || fail config_server_unavailable
-jq -e '[.propertySources | reverse[] | .source] | add |
-  .["spring.security.oauth2.resourceserver.jwt.audiences[0]"] | type == "string" and length > 0' \
-  "$work/config.json" >/dev/null 2>&1 || fail config_server_missing_user_audience
-jq -e '[.propertySources | reverse[] | .source] | add |
-  has("logging.structured.json.add.serviceName") | not' "$work/config.json" >/dev/null 2>&1 || fail config_server_conflicting_logging_fields
-
 if [[ -n "$registry_user" ]]; then
   [[ "$registry_user" =~ ^[A-Za-z0-9_-]+$ ]] || fail invalid_registry_user
   registry_directory=$(mktemp -d "${TMPDIR:-/tmp}/ft-user-registry.XXXXXXXX")
@@ -167,6 +159,8 @@ if [[ "$official" == true ]]; then
   compose "$release" "$image" pull user-service >/dev/null 2>&1 || fail image_pull_failed
 fi
 docker image inspect "$image" > "$work/image.json" 2>/dev/null || fail image_inspect_failed
+jq -e '.[0].Config.Labels["org.flashticket.configuration"] == "service-local-v1"' \
+  "$work/image.json" >/dev/null 2>&1 || fail image_requires_service_local_configuration
 expected=$(jq -er '.[0].Id' "$work/image.json")
 image_revision=$(jq -er '.[0].Config.Labels["org.opencontainers.image.revision"] // empty' "$work/image.json") || fail invalid_image_revision
 [[ "$image_revision" =~ ^[a-f0-9]{40}$ ]] || fail invalid_image_revision
