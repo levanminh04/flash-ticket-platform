@@ -121,3 +121,10 @@ docker compose --env-file .env -f deploy/docker-compose.redis.yml up -d --wait r
 
 Redis publish trên mọi interface IPv4 của host, password bắt buộc và có healthcheck. Hướng dẫn
 Spring Boot, env, lệnh kiểm tra và kết quả: [redis/handoff.md](redis/handoff.md).
+
+## Ticket Service — cấu hình deploy/CI
+
+Target AWS #1: [hướng dẫn Ticket](README-ticket.md), [Compose](docker-compose.ticket.yml),
+[deploy CLI](deploy-ticket.sh). JAR Java21 phải qua verify, rollout bằng digest, health JWT
+và rollback; QR key ring mount read-only ngoài image. Đây là cấu hình, chưa phải bằng chứng
+đã provision/deploy Ticket trên AWS; không dùng root env laptop cho server.

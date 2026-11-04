@@ -43,6 +43,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ticket_ci -d ticket_test_c1"
           --health-interval 5s --health-timeout 5s --health-retries 12
+      ticket-rabbitmq:
+        image: rabbitmq:4.3.6-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: ticket_ci
+          RABBITMQ_DEFAULT_PASS: ticket_ci_disposable
+          RABBITMQ_DEFAULT_VHOST: ticket_test_c1
+        ports:
+          - 15672:5672
+        options: >-
+          --health-cmd "su-exec rabbitmq rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -56,16 +67,20 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/ticket-service/pom.xml
-      - name: Check deploy syntax and isolated PostgreSQL behavior
+      - name: Check deploy syntax and isolated PostgreSQL/RabbitMQ Saga behavior
         env:
           TICKET_TEST_DB_URL: jdbc:postgresql://127.0.0.1:15432/ticket_test_c1
           TICKET_TEST_DB_USER: ticket_ci
           TICKET_TEST_DB_PASSWORD: ticket_ci_disposable
+          TICKET_TEST_RABBIT_PORT: '15672'
+          TICKET_TEST_RABBIT_USER: ticket_ci
+          TICKET_TEST_RABBIT_PASSWORD: ticket_ci_disposable
+          TICKET_TEST_RABBIT_VHOST: ticket_test_c1
         run: |
           bash -n deploy/deploy-ticket.sh
           cd services/ticket-service
           chmod +x mvnw
-          ./mvnw -B -ntp -Dtest=TicketPostgresIT test
+          ./mvnw -B -ntp -Dtest=TicketPostgresIT,TicketSagaBrokerIT test
       - name: Verify Ticket
         env:
           JAVA_TOOL_OPTIONS: -Duser.timezone=UTC

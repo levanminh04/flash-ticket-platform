@@ -159,9 +159,10 @@ public final class TicketDeliveryWorker {
   }
 
   private String link(UUID order) {
+    if (buyerBaseUrl.isEmpty()) return "";
     try {
       URI base = URI.create(buyerBaseUrl);
-      if (!java.util.Set.of("http", "https").contains(base.getScheme())
+      if (!("http".equals(base.getScheme()) || "https".equals(base.getScheme()))
           || base.getHost() == null
           || base.getRawUserInfo() != null
           || base.getRawQuery() != null

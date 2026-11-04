@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.FileSystemResource;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -94,8 +96,9 @@ class TicketEmailComposerTests {
         .isInstanceOf(QrUnavailableException.class);
   }
 
-  @Test
-  void smtpTransportDeliversTheInlineImageWithoutExternalImageFetches() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"", "https://buyer.example.test"})
+  void smtpTransportDeliversTheInlineImageWithAnOptionalBuyerLink(String link) throws Exception {
     var ring = temp.resolve("smtp-ring.json");
     Files.writeString(
         ring, "{\"keys\":{\"v1\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}}");
@@ -160,7 +163,7 @@ class TicketEmailComposerTests {
           "tickets@example.test",
           "buyer@example.test",
           UUID.randomUUID(),
-          "https://buyer.example.test",
+          link,
           List.of(
               new TicketEmailComposer.StoredTicket(
                   id,
@@ -174,6 +177,31 @@ class TicketEmailComposerTests {
       var received =
           new MimeMessage(
               Session.getInstance(new Properties()), new ByteArrayInputStream(receivedBytes));
+      var parts = leaves(received);
+      String html =
+          (String)
+              parts.stream()
+                  .filter(p -> type(p, "text/html"))
+                  .findFirst()
+                  .orElseThrow()
+                  .getContent();
+      String plain =
+          (String)
+              parts.stream()
+                  .filter(p -> type(p, "text/plain"))
+                  .findFirst()
+                  .orElseThrow()
+                  .getContent();
+      assertThat(html).contains("Concert", "cid:qr-" + id, id.toString());
+      assertThat(plain).contains("Concert", id.toString());
+      if (link.isEmpty()) {
+        assertThat(html).doesNotContain("href=", "Xem vé của tôi", "null");
+        assertThat(plain).doesNotContain("Đăng nhập để xem", "null");
+        Files.write(Path.of("target/qr-email-preview-no-link.eml"), receivedBytes);
+      } else {
+        assertThat(html).contains("href=\"" + link + "\"", "Xem vé của tôi");
+        assertThat(plain).contains("Đăng nhập để xem và tải vé: " + link);
+      }
       var image =
           leaves(received).stream().filter(p -> type(p, "image/png")).findFirst().orElseThrow();
       try (var input = image.getInputStream()) {

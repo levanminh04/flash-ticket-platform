@@ -23,6 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 class TicketPostgresIT {
   static JdbcTemplate jdbc;
   static com.zaxxer.hikari.HikariDataSource pool;
+  private static boolean schemaInitialized;
   static final JsonMapper JSON = JsonMapper.builder().build();
   @TempDir Path temp;
   TicketService service;
@@ -47,6 +48,9 @@ class TicketPostgresIT {
     ds.addDataSourceProperty("connectTimeout", "10");
     ds.addDataSourceProperty("socketTimeout", "20");
     jdbc = new JdbcTemplate(ds);
+    // Both opt-in suites share this dedicated database in one Surefire JVM. The canonical
+    // script creates domains as well as tables, so execute it once; each test truncates its data.
+    if (schemaInitialized) return;
     jdbc.execute("CREATE SCHEMA IF NOT EXISTS ticket_schema");
     String ddl = Files.readString(Path.of("../../docs/architecture/data/postgres/40-ticket.sql"));
     ddl =
@@ -72,6 +76,7 @@ class TicketPostgresIT {
           new org.springframework.core.io.ByteArrayResource(
               ddl.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
+    schemaInitialized = true;
   }
 
   @AfterAll
@@ -88,11 +93,17 @@ class TicketPostgresIT {
         ring, "{\"keys\":{\"v1\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}}");
     tokens = new QrTokens(new FileSystemResource(ring), "v1");
     service =
-        new TicketService(jdbc, JSON, new JdbcTransactionManager(jdbc.getDataSource()), tokens);
+        new TicketService(
+            jdbc, JSON, new JdbcTransactionManager(jdbc.getDataSource()), tokens, saga());
     event = UUID.randomUUID();
     order = UUID.randomUUID();
     charge = UUID.randomUUID();
     service.access(access("PUBLISHED", "1"));
+  }
+
+  static com.flashticket.ticket_service.contract.TicketSagaMessages saga() {
+    return new com.flashticket.ticket_service.contract.TicketSagaMessages(
+        "ticket.issued.v1", "ticket.issued.v1", "ticket.issuance-failed.v1");
   }
 
   Envelope<AccessConfiguration> access(String state, String version) {
@@ -355,7 +366,8 @@ class TicketPostgresIT {
         .when(tokens)
         .issue(org.mockito.ArgumentMatchers.any(UUID.class));
     var failing =
-        new TicketService(jdbc, JSON, new JdbcTransactionManager(jdbc.getDataSource()), tokens);
+        new TicketService(
+            jdbc, JSON, new JdbcTransactionManager(jdbc.getDataSource()), tokens, saga());
     assertThatThrownBy(() -> failing.issue(issue()))
         .isInstanceOf(com.flashticket.ticket_service.qr.QrUnavailableException.class);
     for (String table :
@@ -581,6 +593,95 @@ class TicketPostgresIT {
   }
 
   @Test
+  void sagaSuccessGoesDirectlyToBookingAndRecoveryKeepsTheIssuedRights() {
+    var command = issue();
+    service.issue(command);
+    var original = service.listTickets(order, buyer).tickets();
+    String token = service.qr(original.getFirst().ticketId(), buyer);
+    // Payment recovery has a new command ID/version but the same immutable purchase and charge.
+    var retry =
+        new Envelope<>(
+            UUID.randomUUID(),
+            "ticket.issue.v1",
+            1,
+            order,
+            "99",
+            Instant.now(),
+            order,
+            command.messageId(),
+            null,
+            command.data());
+    service.issue(retry);
+    assertThat(service.listTickets(order, buyer).tickets()).isEqualTo(original);
+    assertThat(service.qr(original.getFirst().ticketId(), buyer)).isEqualTo(token);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_ticket_deliveries", Integer.class))
+        .isEqualTo(1);
+    var rabbit = new RecordingRabbit();
+    var publisher =
+        new com.flashticket.ticket_service.worker.TicketOutboxPublisher(
+            jdbc,
+            JSON,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            rabbit,
+            java.time.Duration.ofSeconds(1),
+            java.time.Duration.ofSeconds(30),
+            saga());
+    assertThat(publisher.publishBatch(10)).isEqualTo(2);
+    assertThat(rabbit.routes).containsOnly("business.ex|ticket.issued.v1");
+    var causations = new HashSet<String>();
+    for (var sent : rabbit.sent) {
+      var envelope = JSON.readTree(sent.getBody());
+      // dev/son rejects any other success type before calling its transaction service.
+      assertThat(envelope.path("messageType").asText()).isEqualTo("ticket.issued.v1");
+      assertThat(sent.getMessageProperties().getType()).isEqualTo("ticket.issued.v1");
+      assertThat(envelope.path("aggregateVersion").asText()).isEqualTo("2");
+      assertThat(envelope.path("data").path("state").asText()).isEqualTo("COMPLETED");
+      assertThat(envelope.path("data").path("ticketCount").intValue()).isEqualTo(2);
+      assertThat(envelope.path("data").path("failureCode").isNull()).isTrue();
+      causations.add(envelope.path("causationId").asText());
+    }
+    assertThat(causations)
+        .containsExactlyInAnyOrder(command.messageId().toString(), retry.messageId().toString());
+  }
+
+  @Test
+  void sagaFailureIsFencedAndGoesToPaymentWithItsCanonicalType() {
+    service.cancel(cancellation());
+    var command = issue();
+    service.issue(command);
+    service.issue(command);
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM ticket_schema.tbl_tickets", Integer.class))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_ticket_deliveries", Integer.class))
+        .isZero();
+    var result = (TicketService.IssuanceResult) service.probe(order);
+    assertThat(result.state()).isEqualTo("FAILED");
+    assertThat(result.failureCode()).isEqualTo("EVENT_CANCELLED");
+    var rabbit = new RecordingRabbit();
+    var publisher =
+        new com.flashticket.ticket_service.worker.TicketOutboxPublisher(
+            jdbc,
+            JSON,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            rabbit,
+            java.time.Duration.ofSeconds(1),
+            java.time.Duration.ofSeconds(30),
+            saga());
+    assertThat(publisher.publishBatch(10)).isEqualTo(1);
+    assertThat(rabbit.routes).containsExactly("business.ex|ticket.issuance-failed.v1");
+    var envelope = JSON.readTree(rabbit.sent.getFirst().getBody());
+    assertThat(envelope.path("messageType").asText()).isEqualTo("ticket.issuance-result.v1");
+    assertThat(envelope.path("data").path("ticketCount").intValue()).isZero();
+    assertThat(envelope.path("data").path("issuanceId").asText())
+        .isEqualTo(result.issuanceId().toString());
+    assertThat(envelope.path("causationId").asText()).isEqualTo(command.messageId().toString());
+  }
+
+  @Test
   void outboxConfirmsAndReturnsControlPublicationAndRetryKeepsMessageId() {
     service.issue(issue());
     var rabbit = new RecordingRabbit();
@@ -592,7 +693,7 @@ class TicketPostgresIT {
             rabbit,
             java.time.Duration.ofSeconds(1),
             java.time.Duration.ofSeconds(30),
-            "ticket.issuance-result.v1");
+            saga());
     rabbit.ack = false;
     assertThat(publisher.publishBatch(1)).isZero();
     assertThat(
@@ -709,6 +810,113 @@ class TicketPostgresIT {
   }
 
   @Test
+  void invalidBuyerUrlDefersOnlyEmailAndDoesNotThrow() {
+    service.issue(issue());
+    var mail = new RecordingMail();
+    var worker =
+        new com.flashticket.ticket_service.worker.TicketDeliveryWorker(
+            jdbc,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            mail,
+            "buyer.example.test",
+            "tickets@example.test",
+            java.time.Duration.ofSeconds(30),
+            new com.flashticket.ticket_service.worker.TicketEmailComposer(tokens, JSON, "UTC"));
+    assertThatCode(() -> worker.deliverBatch(1)).doesNotThrowAnyException();
+    assertThat(mail.sent).isEmpty();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT failure_code FROM ticket_schema.tbl_ticket_deliveries", String.class))
+        .isEqualTo("DELIVERY_CONFIGURATION_UNAVAILABLE");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_ticket_deliveries WHERE finished_at IS NULL",
+                Integer.class))
+        .isEqualTo(1);
+    assertThat(service.listTickets(order, buyer).issuanceState()).isEqualTo("COMPLETED");
+    assertThat(service.listTickets(order, buyer).tickets()).hasSize(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_outbox_messages", Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void emailWithoutBuyerUrlRetriesSmtpAndKeepsQrAndSagaResult() throws Exception {
+    service.issue(issue());
+    var tickets = service.listTickets(order, buyer).tickets();
+    var originalTokens = new HashSet<String>();
+    for (var ticket : tickets) originalTokens.add(service.qr(ticket.ticketId(), buyer));
+    var mail = new RecordingMail();
+    mail.fail = true;
+    var worker =
+        new com.flashticket.ticket_service.worker.TicketDeliveryWorker(
+            jdbc,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            mail,
+            "",
+            "tickets@example.test",
+            java.time.Duration.ofSeconds(30),
+            new com.flashticket.ticket_service.worker.TicketEmailComposer(tokens, JSON, "UTC"));
+    assertThat(worker.deliverBatch(1)).isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT failure_code FROM ticket_schema.tbl_ticket_deliveries", String.class))
+        .isEqualTo("SMTP_UNAVAILABLE");
+    assertThat(mail.sent).isEmpty();
+    assertThat(service.listTickets(order, buyer).issuanceState()).isEqualTo("COMPLETED");
+    var rabbit = new RecordingRabbit();
+    var publisher =
+        new com.flashticket.ticket_service.worker.TicketOutboxPublisher(
+            jdbc,
+            JSON,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            rabbit,
+            java.time.Duration.ofSeconds(1),
+            java.time.Duration.ofSeconds(30),
+            saga());
+    assertThat(publisher.publishBatch(1)).isEqualTo(1);
+    assertThat(rabbit.routes).containsExactly("business.ex|ticket.issued.v1");
+    jdbc.update("UPDATE ticket_schema.tbl_ticket_deliveries SET next_attempt_at=clock_timestamp()");
+    mail.fail = false;
+    assertThat(worker.deliverBatch(1)).isEqualTo(1);
+    assertThat(mail.sent).hasSize(1);
+    mail.sent.getFirst().saveChanges();
+    var parts = mailParts(mail.sent.getFirst());
+    var images = parts.stream().filter(p -> mime(p, "image/png")).toList();
+    assertThat(images).hasSize(2);
+    var decoded = new HashSet<String>();
+    for (var image : images) {
+      try (var input = image.getInputStream()) {
+        decoded.add(
+            com.flashticket.ticket_service.qr.QrImageAssertions.decode(input.readAllBytes()));
+      }
+    }
+    assertThat(decoded).containsExactlyInAnyOrderElementsOf(originalTokens);
+    String html =
+        (String)
+            parts.stream().filter(p -> mime(p, "text/html")).findFirst().orElseThrow().getContent();
+    String plain =
+        (String)
+            parts.stream()
+                .filter(p -> mime(p, "text/plain"))
+                .findFirst()
+                .orElseThrow()
+                .getContent();
+    assertThat(html).doesNotContain("href=", "Xem vé của tôi");
+    assertThat(plain).doesNotContain("Đăng nhập để xem");
+    assertThat(service.listTickets(order, buyer).tickets()).isEqualTo(tickets);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT outcome FROM ticket_schema.tbl_ticket_deliveries", String.class))
+        .isEqualTo("DELIVERED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_ticket_deliveries", Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
   void missingQrKeyDefersEmailAndRecoverySendsTheOriginalTickets() throws Exception {
     service.issue(issue());
     String original =
@@ -744,6 +952,7 @@ class TicketPostgresIT {
   static final class RecordingRabbit extends org.springframework.amqp.rabbit.core.RabbitTemplate {
     boolean ack = true, returned = false;
     final List<org.springframework.amqp.core.Message> sent = new ArrayList<>();
+    final List<String> routes = new ArrayList<>();
 
     RecordingRabbit() {
       setExchange("business.ex");
@@ -756,6 +965,7 @@ class TicketPostgresIT {
         org.springframework.amqp.core.Message message,
         org.springframework.amqp.rabbit.connection.CorrelationData correlation) {
       sent.add(message);
+      routes.add(exchange + "|" + routing);
       if (returned)
         correlation.setReturned(
             new org.springframework.amqp.core.ReturnedMessage(

@@ -116,10 +116,12 @@ public final class TicketEmailComposer {
           .append("\n");
     }
     html.append(
-            "<p>Giữ kín email và ảnh QR. Mỗi vé chỉ check-in thành công một lần; ảnh QR không thay thế việc kiểm tra trạng thái vé tại cổng.</p><p><a href=\"")
-        .append(escape(link))
-        .append("\">Xem vé của tôi</a></p></body></html>");
-    plain.append("Đăng nhập để xem và tải vé: ").append(link);
+        "<p>Giữ kín email và ảnh QR. Mỗi vé chỉ check-in thành công một lần; ảnh QR không thay thế việc kiểm tra trạng thái vé tại cổng.</p>");
+    if (!link.isEmpty()) {
+      html.append("<p><a href=\"").append(escape(link)).append("\">Xem vé của tôi</a></p>");
+      plain.append("Đăng nhập để xem và tải vé: ").append(link);
+    }
+    html.append("</body></html>");
     var helper = new MimeMessageHelper(message, MimeMessageHelper.MULTIPART_MODE_RELATED, "UTF-8");
     helper.setFrom(from);
     helper.setTo(to);

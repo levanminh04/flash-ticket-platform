@@ -2,6 +2,7 @@ package com.flashticket.ticket_service.worker;
 
 import com.flashticket.ticket_service.application.TicketService;
 import com.flashticket.ticket_service.contract.TicketContracts.Envelope;
+import com.flashticket.ticket_service.contract.TicketSagaMessages;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,7 +29,7 @@ public final class TicketOutboxPublisher {
   private final TransactionTemplate transactions;
   private final RabbitTemplate rabbit;
   private final Duration confirmTimeout, lease;
-  private final String routingKey;
+  private final TicketSagaMessages saga;
 
   private record Pending(
       UUID id,
@@ -53,19 +54,18 @@ public final class TicketOutboxPublisher {
       RabbitTemplate rabbit,
       @Value("${ticket.outbox.confirm-timeout:5s}") Duration confirmTimeout,
       @Value("${ticket.outbox.claim-lease:30s}") Duration lease,
-      @Value("${ticket.messaging.result-routing-key:ticket.issuance-result.v1}")
-          String routingKey) {
+      TicketSagaMessages saga) {
     if (confirmTimeout.isNegative()
         || confirmTimeout.isZero()
-        || lease.compareTo(confirmTimeout) <= 0
-        || routingKey.isBlank()) throw new IllegalArgumentException("Invalid outbox configuration");
+        || lease.compareTo(confirmTimeout) <= 0)
+      throw new IllegalArgumentException("Invalid outbox configuration");
     this.jdbc = jdbc;
     this.json = json;
     this.transactions = new TransactionTemplate(manager);
     this.rabbit = rabbit;
     this.confirmTimeout = confirmTimeout;
     this.lease = lease;
-    this.routingKey = routingKey;
+    this.saga = saga;
   }
 
   public int publishBatch(int batch) {
@@ -75,10 +75,11 @@ public final class TicketOutboxPublisher {
       if (message == null) break;
       String failure = null;
       try {
-        if (!TicketService.RESULT.equals(message.type()) || message.schema() != 1)
-          throw new IllegalArgumentException("Invalid stored message");
+        if (message.schema() != 1) throw new IllegalArgumentException("Invalid stored message");
         var data = json.readTree(message.data());
         if (!data.isObject()) throw new IllegalArgumentException("Invalid stored message");
+        var result = json.treeToValue(data, TicketService.IssuanceResult.class);
+        String routingKey = saga.routingKey(message.type(), result.state());
         var envelope =
             new Envelope<>(
                 message.id(),

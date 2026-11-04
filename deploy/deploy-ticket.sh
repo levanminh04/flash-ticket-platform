@@ -168,9 +168,9 @@ if [[ "$business" == true ]]; then
 fi
 if [[ "$workers" == true ]]; then
   sender=$(setting TICKET_MAIL_FROM) || fail missing_mail_sender
-  buyer_url=$(setting TICKET_BUYER_BASE_URL) || fail missing_buyer_url
+  buyer_url=$(setting TICKET_BUYER_BASE_URL) || buyer_url=''
   [[ "$sender" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail invalid_mail_sender
-  [[ "$buyer_url" =~ ^https?://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$ ]] || fail invalid_buyer_url
+  [[ -z "$buyer_url" || "$buyer_url" =~ ^https?://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$ ]] || fail invalid_buyer_url
 fi
 state_root="${TICKET_DEPLOY_STATE_ROOT:-$HOME/.flash-ticket-ticket-deploy}"
 take_lock "port-$port"
@@ -220,6 +220,9 @@ jq -e '[.propertySources | reverse[] | .source] | add |
    .["spring.rabbitmq.template.exchange"] == "${TICKET_RABBITMQ_BUSINESS_EXCHANGE:${RABBITMQ_BUSINESS_EXCHANGE:business.ex}}") and
   has("ticket.features.business-enabled") and has("ticket.features.listeners-enabled") and
   has("ticket.features.workers-enabled") and has("ticket.qr.key-ring-location") and has("ticket.qr.active-key-version") and
+  ([.["ticket.messaging.completed-result-message-type"],
+    .["ticket.messaging.completed-result-routing-key"],
+    .["ticket.messaging.failed-result-routing-key"]] | all(.[]; type == "string" and length > 0)) and
   (.["spring.security.oauth2.resourceserver.jwt.issuer-uri"] | type == "string" and length > 0) and
   (.["spring.security.oauth2.resourceserver.jwt.audiences[0]"] | type == "string" and length > 0) and
   (.["spring.security.oauth2.resourceserver.jwt.jwk-set-uri"] | type == "string" and length > 0) and
