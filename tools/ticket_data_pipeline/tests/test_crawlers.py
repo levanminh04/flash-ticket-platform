@@ -1,6 +1,9 @@
 import pytest
 from tools.ticket_data_pipeline.crawlers.ticketbox import TicketboxScraper
 from tools.ticket_data_pipeline.crawlers.ticketgo import TicketgoScraper
+from tools.ticket_data_pipeline.crawlers.megatix import MegatixScraper
+from tools.ticket_data_pipeline.crawlers.actiup import ActiupScraper
+from tools.ticket_data_pipeline.crawlers.eventbrite import EventbriteScraper
 
 def test_ticketbox_parse_event_payload():
     scraper = TicketboxScraper()
@@ -39,3 +42,23 @@ def test_ticketgo_parse_event_payload():
     assert len(event.ticket_types) == 1
     assert event.ticket_types[0].price_number == 300000
 
+def test_megatix_fetch_events():
+    scraper = MegatixScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "megatix"
+    assert len(events[0].ticket_types) > 0
+
+def test_actiup_fetch_events():
+    scraper = ActiupScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "actiup"
+    assert "Trail" in events[0].title or "Marathon" in events[0].title
+
+def test_eventbrite_fetch_events():
+    scraper = EventbriteScraper()
+    events = scraper.fetch_events(limit=2)
+    assert len(events) == 2
+    assert events[0].source == "eventbrite"
+    assert len(events[0].ticket_types) > 0
