@@ -269,6 +269,27 @@ class PaymentJwtSecurityTest {
 
   @Test
   void opensOnlyVnpayCallbacksAndRequiresBuyerForPaymentCreation() throws Exception {
+    mvc.perform(get("/swagger-ui.html"))
+        .andExpect(status().isFound())
+        .andExpect(header().string("Location", "/swagger-ui/index.html"));
+    mvc.perform(get("/swagger-ui/index.html"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith("text/html"))
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("Swagger UI")));
+    for (var resource : List.of("swagger-ui.css", "swagger-ui-bundle.js", "swagger-initializer.js"))
+      mvc.perform(get("/swagger-ui/" + resource)).andExpect(status().isOk());
+    mvc.perform(get("/v3/api-docs/swagger-config"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.url").value("/v3/api-docs"));
+    mvc.perform(get("/v3/api-docs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paths['/api/v1/payments'].post").exists())
+        .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
+    mvc.perform(get("/v3/api-docs.yaml"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("openapi:")));
+    mvc.perform(post("/v3/api-docs")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/v1/admin/refunds")).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/v1/payments/vnpay/ipn"))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/json"))

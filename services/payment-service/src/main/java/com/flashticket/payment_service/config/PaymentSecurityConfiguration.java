@@ -49,8 +49,15 @@ public class PaymentSecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/payments")
                     .hasRole("BUYER")
-                    .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**")
-                    .hasRole("ADMIN")
+                    // Swagger tải giao diện và schema trước khi người dùng nhập JWT.
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml")
+                    .permitAll()
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/admin/refunds",

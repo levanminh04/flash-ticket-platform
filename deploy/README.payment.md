@@ -47,8 +47,36 @@ Lần sau chạy lại cùng lệnh; Docker tái sử dụng cache build và dom
 hoặc dừng thủ công, cần chạy `up` để bật lại.
 
 - API Postman: `http://localhost:8083/api/v1/payments`.
+- Swagger UI: `http://localhost:8083/swagger-ui/index.html`; chọn **Authorize**
+  và nhập JWT để gọi API có bảo vệ. GET tài liệu/schema được public; API nghiệp vụ
+  vẫn kiểm tra JWT, role và chủ đơn.
 - Theo dõi IPN/Return: `http://localhost:4040`.
 - Dừng cả hai: `docker compose --env-file .env -f deploy/docker-compose.payment.yml down`.
+
+### Schema cho bản Payment có Finance và Refund
+
+Image cần được build từ toàn bộ source để Swagger có đủ ba nhóm Payment,
+Finance và Refund (12 operation). Image `swagger-local` tạm trước đây chỉ có
+bốn operation của Payment; không dùng image đó để chạy bản mới.
+
+Với database cũ thiếu `settled_by` và `external_reference` trong
+`payment_schema.tbl_refunds`, áp dụng một lần script
+[`postgres/migrations/2026-11-04-payment-refund-settlement-columns.sql`](postgres/migrations/2026-11-04-payment-refund-settlement-columns.sql)
+trên `payment_db` bằng tài khoản có quyền `SET ROLE payment_owner`.
+Script chạy trong transaction, thêm hai cột nullable và ràng buộc metadata
+hoàn ngoài hệ thống, giữ nguyên dữ liệu cũ. Database mới đã tạo bằng DDL B12
+hiện tại có sẵn hai cột, không chạy lại migration này.
+
+Sau khi schema tương thích, chỉ build và chạy lại Payment nếu ngrok đã có
+endpoint ở nơi khác:
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.payment.yml build payment-service
+docker compose --env-file .env -f deploy/docker-compose.payment.yml up -d --no-build --no-deps --wait payment-service
+```
+
+Giữ `PAYMENT_IMAGE` ở mặc định `flash-ticket/payment-service:local` khi dùng
+image build local. Chỉ chạy ngrok khi domain không được một endpoint khác sử dụng.
 
 ## Dịch vụ ngoài Docker
 

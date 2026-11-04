@@ -3,6 +3,20 @@
 Chạy Payment cùng ngrok bằng một lệnh Docker Compose: xem
 [hướng dẫn Payment Docker + ngrok](../../deploy/README.payment.md).
 
+## Swagger UI
+
+Sau khi Payment chạy, mở <http://localhost:8083/swagger-ui/index.html>
+(hoặc `/swagger-ui.html`). OpenAPI JSON tại `/v3/api-docs`, YAML tại
+`/v3/api-docs.yaml`. Các đường dẫn tài liệu chỉ cho phép GET công khai để
+Swagger tải giao diện và schema trước khi nhập token.
+
+Trong Swagger, chọn **Authorize**, dán access token JWT vào `bearerAuth`, rồi
+thực hiện API theo role của token. Quyền BUYER/ADMIN/ORGANIZER/INTERNAL_SERVICE
+và kiểm tra chủ đơn trên API nghiệp vụ vẫn được giữ nguyên.
+
+Dependency dùng `springdoc-openapi-starter-webmvc-ui` cùng phiên bản 3.1.1 đang
+có trong dự án, theo [hướng dẫn springdoc](https://springdoc.org/#getting-started).
+
 Payment có 13 JPA entity, DTO/MapStruct, contract boundary và API đọc trạng thái với JWT, ownership. Phần VNPay được chuyển từ Cinema: `VNPayConfig`, `VNPayUtil` và các phương thức tạo URL/IPN/return trong `PaymentService`. DTO/message và schema hiện có được giữ nguyên; chưa có runtime consumer, outbox relay hoặc Saga.
 
 `GET /api/v1/orders/{orderId}/payment` trả `ApiResponse<PaymentView>`. `POST /api/v1/payments` tạo URL VNPay, hai GET `/api/v1/payments/vnpay/ipn` và `/api/v1/payments/vnpay/return` nhận callback. PaymentController gọi PaymentService; dữ liệu được đọc/ghi qua repository cục bộ.
