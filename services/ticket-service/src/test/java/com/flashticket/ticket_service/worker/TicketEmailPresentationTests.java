@@ -19,6 +19,8 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.FileSystemResource;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -31,6 +33,21 @@ class TicketEmailPresentationTests {
        "eventEndsAt":"2026-11-14T15:00:00Z", "venueName":"Nhà hát Thành phố Hồ Chí Minh",
        "ticketTypeName":"Hạng VIP", "seatLabel":"A12"}
       """;
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "tickets@example.test",
+        "Tickets <tickets@example.test>",
+        "\"Vé, Flash Ticket\" <tickets@example.test>"
+      })
+  void configuredSenderKeepsItsMailboxWithoutNestingDisplayNames(String sender) throws Exception {
+    var result = composeFrom(sender, "UTC", "", DISPLAY, "VALID");
+    assertThat(result.mail().getFrom()).hasSize(1);
+    var from = (InternetAddress) result.mail().getFrom()[0];
+    assertThat(from.getAddress()).isEqualTo("tickets@example.test");
+    assertThat(from.getPersonal()).isEqualTo("Flash Ticket");
+  }
 
   @Test
   void vietnameseAndReadableEventScheduleSurviveTheMimeWire() throws Exception {
@@ -148,6 +165,11 @@ class TicketEmailPresentationTests {
 
   private Composed compose(String zone, String link, String display, String... states)
       throws Exception {
+    return composeFrom("tickets@example.test", zone, link, display, states);
+  }
+
+  private Composed composeFrom(
+      String sender, String zone, String link, String display, String... states) throws Exception {
     var ring = temp.resolve("ring.json");
     Files.writeString(
         ring, "{\"keys\":{\"v1\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}}");
@@ -165,13 +187,7 @@ class TicketEmailPresentationTests {
     }
     var message = new MimeMessage(Session.getInstance(new Properties()));
     new TicketEmailComposer(qr, JsonMapper.builder().build(), zone)
-        .compose(
-            message,
-            "tickets@example.test",
-            "buyer@example.test",
-            UUID.randomUUID(),
-            link,
-            tickets);
+        .compose(message, sender, "buyer@example.test", UUID.randomUUID(), link, tickets);
     var wire = new ByteArrayOutputStream();
     message.writeTo(wire);
     var received =

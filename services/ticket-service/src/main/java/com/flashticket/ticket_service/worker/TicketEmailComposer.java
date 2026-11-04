@@ -3,6 +3,7 @@ package com.flashticket.ticket_service.worker;
 import com.flashticket.ticket_service.qr.QrImages;
 import com.flashticket.ticket_service.qr.QrTokens;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -112,7 +113,7 @@ public final class TicketEmailComposer {
     }
     footer(html, plain, order);
     var helper = new MimeMessageHelper(message, MimeMessageHelper.MULTIPART_MODE_RELATED, "UTF-8");
-    helper.setFrom("Flash Ticket <" + from + ">");
+    helper.setFrom("Flash Ticket <" + new InternetAddress(from).getAddress() + ">");
     helper.setTo(to);
     helper.setSubject("Vé điện tử của bạn | Flash Ticket");
     helper.setText(plain.toString(), html.toString());
