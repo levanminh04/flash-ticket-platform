@@ -140,6 +140,36 @@ class GatewayHttpTests {
   void routesListAndPaymentStartToBookingWithoutDroppingHeadersOrQuery() {
     String jwt = token("BUYER", "another-api");
     client
+        .post()
+        .uri("/api/v1/payments")
+        .headers(headers -> headers.setBearerAuth(jwt))
+        .header("Idempotency-Key", ORDER_ID)
+        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+        .bodyValue("{\"orderId\":\"" + ORDER_ID + "\"}")
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody()
+        .jsonPath("$.service")
+        .isEqualTo("other")
+        .jsonPath("$.idempotency")
+        .isEqualTo(ORDER_ID)
+        .jsonPath("$.body")
+        .isEqualTo("{\"orderId\":\"" + ORDER_ID + "\"}");
+    for (String callback : List.of("return", "ipn")) {
+      client
+          .get()
+          .uri("/api/v1/payments/vnpay/" + callback + "?vnp_SecureHash=fixture-signature")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody()
+          .jsonPath("$.service")
+          .isEqualTo("other")
+          .jsonPath("$.query")
+          .isEqualTo("vnp_SecureHash=fixture-signature");
+    }
+    client
         .get()
         .uri("/api/v1/orders?cursor=next")
         .headers(headers -> headers.setBearerAuth(jwt))

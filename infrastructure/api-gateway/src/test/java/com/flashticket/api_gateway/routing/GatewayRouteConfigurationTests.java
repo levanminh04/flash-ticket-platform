@@ -30,7 +30,10 @@ class GatewayRouteConfigurationTests {
   void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
     Map<String, Route> routes = routesById();
 
-    assertEquals(15, routes.size());
+    assertEquals(18, routes.size());
+    assertEquals("lb://payment-service", routes.get("payment-create").getUri().toString());
+    assertEquals("lb://payment-service", routes.get("payment-vnpay-return").getUri().toString());
+    assertEquals("lb://payment-service", routes.get("payment-vnpay-ipn").getUri().toString());
     assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
     assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
     assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());

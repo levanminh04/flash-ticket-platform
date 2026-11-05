@@ -54,6 +54,14 @@ public class GatewaySecurityConfiguration {
                     .permitAll()
                     .pathMatchers(HttpMethod.GET, "/api/v1/events/*")
                     .permitAll()
+                    // VNPay không gửi JWT; Payment vẫn phải xác minh chữ ký callback.
+                    .pathMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/payments/vnpay/return",
+                        "/api/v1/payments/vnpay/ipn")
+                    .permitAll()
+                    .pathMatchers(HttpMethod.POST, "/api/v1/payments")
+                    .hasRole("BUYER")
                     .pathMatchers("/api/v1/orders", "/api/v1/orders/**", "/api/v1/tickets/**")
                     .hasRole("BUYER")
                     .pathMatchers(HttpMethod.GET, "/api/v1/organizer/events/*/seat-map")

@@ -238,6 +238,57 @@ public class GatewayRouteConfiguration {
                                 "payment"))
                     .uri("lb://payment-service"))
         .route(
+            "payment-create",
+            route ->
+                route
+                    .order(91)
+                    .path("/api/v1/payments")
+                    .and()
+                    .method(HttpMethod.POST)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "paymentServiceBreaker",
+                                "payment"))
+                    .uri("lb://payment-service"))
+        .route(
+            "payment-vnpay-return",
+            route ->
+                route
+                    .order(92)
+                    .path("/api/v1/payments/vnpay/return")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "paymentServiceBreaker",
+                                "payment"))
+                    .uri("lb://payment-service"))
+        .route(
+            "payment-vnpay-ipn",
+            route ->
+                route
+                    .order(93)
+                    .path("/api/v1/payments/vnpay/ipn")
+                    .and()
+                    .method(HttpMethod.GET)
+                    .filters(
+                        filters ->
+                            standardFilters(
+                                filters,
+                                redisRateLimiter,
+                                remoteAddressKeyResolver,
+                                "paymentServiceBreaker",
+                                "payment"))
+                    .uri("lb://payment-service"))
+        .route(
             "ticket-order-tickets",
             route ->
                 route
