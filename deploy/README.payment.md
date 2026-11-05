@@ -78,6 +78,16 @@ docker compose --env-file .env -f deploy/docker-compose.payment.yml up -d --no-b
 Giữ `PAYMENT_IMAGE` ở mặc định `flash-ticket/payment-service:local` khi dùng
 image build local. Chỉ chạy ngrok khi domain không được một endpoint khác sử dụng.
 
+### Luồng phát vé qua Payment
+
+Ticket gửi cả hai kết quả qua `ticket.issuance-result.v1` vào queue
+`payment.ticket-issuance-failed.q`. Payment gửi Booking `ticket.issued.v1` khi
+thành công hoặc `booking.issuance-failed.v1` khi thất bại. Khi phát vé thành công,
+Payment đợi `booking.order-completed.v1` trước khi đóng Saga.
+
+Payment dùng `spring.rabbitmq.dynamic=false`. Trước khi bật consumer trên server
+119, kiểm tra binding thực tế và outbox Ticket còn chờ theo cấu hình cũ.
+
 ## Dịch vụ ngoài Docker
 
 `localhost` bên trong container là container đó. Các đường dẫn mặc định của Compose:

@@ -77,9 +77,9 @@ ticket:
     access-configured-queue: ${TICKET_ACCESS_CONFIGURED_QUEUE:ticket.access-configured.q}
     event-cancelled-queue: ${TICKET_EVENT_CANCELLED_QUEUE:ticket.event-cancelled.q}
     issuance-queue: ${TICKET_ISSUANCE_QUEUE:ticket.issuance.q}
-    completed-result-message-type: ${TICKET_COMPLETED_RESULT_MESSAGE_TYPE:ticket.issued.v1}
-    completed-result-routing-key: ${TICKET_COMPLETED_RESULT_ROUTING_KEY:ticket.issued.v1}
-    failed-result-routing-key: ${TICKET_FAILED_RESULT_ROUTING_KEY:ticket.issuance-failed.v1}
+    completed-result-message-type: ${TICKET_COMPLETED_RESULT_MESSAGE_TYPE:ticket.issuance-result.v1}
+    completed-result-routing-key: ${TICKET_COMPLETED_RESULT_ROUTING_KEY:ticket.issuance-result.v1}
+    failed-result-routing-key: ${TICKET_FAILED_RESULT_ROUTING_KEY:ticket.issuance-result.v1}
   outbox:
     confirm-timeout: ${TICKET_OUTBOX_CONFIRM_TIMEOUT:5s}
     claim-lease: ${TICKET_OUTBOX_CLAIM_LEASE:30s}

@@ -13,7 +13,7 @@ spring:
         registration:
           booking:
             provider: booking
-            client-id: ${PAYMENT_SERVICE_CLIENT_ID:payment-service}
+            client-id: ${PAYMENT_SERVICE_CLIENT_ID:internal-service}
             client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET}
             authorization-grant-type: client_credentials
         provider:

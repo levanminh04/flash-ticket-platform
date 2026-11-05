@@ -95,6 +95,51 @@ class ContractCodecTest {
     assertThat(tree.has("venueName")).isTrue();
     assertThat(tree.get("venueName").isNull()).isTrue();
     assertThat(CODEC.read(CODEC.write(purchase), PurchaseSnapshot.class)).isEqualTo(purchase);
+    var rules =
+        new com.flashticket.payment_service.validation.PurchaseSnapshotValidator(
+            FACTORY.getValidator());
+    var invariants =
+        new com.flashticket.payment_service.validation.MessageInvariantValidator(
+            rules,
+            new com.flashticket.payment_service.hashing.ContractHashService(
+                new com.flashticket.payment_service.hashing.CanonicalContractSerializer(
+                    FACTORY.getValidator()),
+                rules));
+    for (var mode : java.util.List.of("quantity", "standing", "seated")) {
+      for (boolean promotion : new boolean[] {false, true}) {
+        try (var in =
+            getClass()
+                .getResourceAsStream(
+                    "/contracts/compatibility/snapshot-"
+                        + mode
+                        + (promotion ? "-promotion" : "")
+                        + ".json")) {
+          assertThat(in).isNotNull();
+          var captured =
+              CODEC.read(
+                  new String(in.readAllBytes(), StandardCharsets.UTF_8), PurchaseSnapshot.class);
+          rules.validate(captured);
+          assertThat(captured.sourceOrderVersion()).isEqualTo("1");
+          assertThat(CODEC.toTree(captured).get("total").isString()).isTrue();
+          assertThat(CODEC.read(CODEC.write(captured), PurchaseSnapshot.class)).isEqualTo(captured);
+        }
+      }
+    }
+    for (var state : java.util.List.of("completed", "failed")) {
+      try (var in =
+          getClass()
+              .getResourceAsStream("/contracts/compatibility/ticket-result-" + state + ".json")) {
+        assertThat(in).isNotNull();
+        var result =
+            CODEC.readEnvelope(
+                new String(in.readAllBytes(), StandardCharsets.UTF_8),
+                com.flashticket.payment_service.dto.message.IssuanceResult.class);
+        invariants.validateIssuanceResult(result);
+        assertThat(result.aggregateVersion()).isEqualTo("1");
+        assertThat(result.data().state().name())
+            .isEqualTo(state.toUpperCase(java.util.Locale.ROOT));
+      }
+    }
   }
 
   @Test

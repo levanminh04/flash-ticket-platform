@@ -57,7 +57,7 @@ public class RabbitMqConfig {
             .with("booking.payment-decision.v1"),
         org.springframework.amqp.core.BindingBuilder.bind(issuance)
             .to(exchange)
-            .with("ticket.issuance-failed.v1"),
+            .with("ticket.issuance-result.v1"),
         org.springframework.amqp.core.BindingBuilder.bind(completed)
             .to(exchange)
             .with("booking.order-completed.v1"),

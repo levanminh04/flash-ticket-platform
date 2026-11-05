@@ -311,6 +311,30 @@ class PaymentFlowIntegrationTest {
     assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
         .isEqualTo(PaymentSagaState.WAITING_TICKETS);
     assertThat(outbox.count()).isEqualTo(2);
+    var ticketCommand =
+        outbox
+            .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                orderId, "ticket.issue.v1")
+            .orElseThrow();
+    tx.executeWithoutResult(
+        status -> {
+          var stored = outbox.findById(ticketCommand.getMessageId()).orElseThrow();
+          stored.setPublishedAt(Instant.now());
+          outbox.save(stored);
+        });
+    jdbc.update(
+        "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
+        java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+        orderId);
+    sagas.recoverSaga(orderId);
+    var retried =
+        outbox
+            .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                orderId, "ticket.issue.v1")
+            .orElseThrow();
+    assertThat(retried.getAggregateVersion()).isEqualTo(ticketCommand.getAggregateVersion());
+    assertThat(retried.getCausationId()).isEqualTo(ticketCommand.getMessageId());
+
     assertThat(
             jdbc.queryForObject(
                 "select count(*) from payment_schema.tbl_payment_confirmations", Integer.class))
@@ -319,7 +343,7 @@ class PaymentFlowIntegrationTest {
 
   @Test
   void forwardsTicketSuccessAndWaitsForBookingCompletion() {
-    for (boolean withTicketCheckpoint : new boolean[] {false, true}) {
+    for (boolean legacyCheckpoint : new boolean[] {false, true}) {
       setUp();
       var started =
           payments.createPayment(
@@ -354,57 +378,80 @@ class PaymentFlowIntegrationTest {
                   Instant.now(),
                   PaymentDecisionOutcome.ACCEPTED,
                   charge.getId())));
-      if (withTicketCheckpoint) {
-        var result =
-            new Envelope<>(
-                UUID.randomUUID(),
-                "ticket.issuance-result.v1",
-                1,
-                orderId,
-                "1",
-                Instant.now(),
-                orderId,
-                null,
-                null,
-                new IssuanceResult(
-                    orderId, charge.getId(), issuanceId, IssuanceState.COMPLETED, 1, null));
-        sagas.recordIssuanceResult(result);
-        assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
-            .isEqualTo(PaymentSagaState.WAITING_TICKETS);
-        var notification =
-            outbox
-                .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                    orderId, "ticket.issued.v1")
-                .orElseThrow();
-        assertThat(
-                codec
-                    .readEnvelope(notification.getPayload().toString(), BookingIssuanceResult.class)
-                    .data()
-                    .issuanceId())
-            .isEqualTo(issuanceId);
-        sagas.recordIssuanceResult(result);
-        tx.executeWithoutResult(
-            status -> {
-              var stored = outbox.findById(notification.getMessageId()).orElseThrow();
-              stored.setPublishedAt(Instant.now());
-              outbox.save(stored);
-            });
-        jdbc.update(
-            "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
-            java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
-            orderId);
-        sagas.recoverSaga(orderId);
-        assertThat(
-                outbox.findAll().stream()
-                    .filter(message -> message.getMessageType().equals("ticket.issue.v1"))
-                    .count())
-            .isEqualTo(1);
-        assertThat(
-                outbox.findAll().stream()
-                    .filter(message -> message.getMessageType().equals("ticket.issued.v1"))
-                    .count())
-            .isEqualTo(2);
-      }
+      var result =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "ticket.issuance-result.v1",
+              1,
+              orderId,
+              "1",
+              Instant.now(),
+              orderId,
+              null,
+              null,
+              new IssuanceResult(
+                  orderId, charge.getId(), issuanceId, IssuanceState.COMPLETED, 1, null));
+      sagas.recordIssuanceResult(result);
+      assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+          .isEqualTo(PaymentSagaState.WAITING_TICKETS);
+      var notification =
+          outbox
+              .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                  orderId, "ticket.issued.v1")
+              .orElseThrow();
+      assertThat(
+              codec
+                  .readEnvelope(notification.getPayload().toString(), BookingIssuanceResult.class)
+                  .data()
+                  .issuanceId())
+          .isEqualTo(issuanceId);
+      assertThat(notification.getAggregateVersion().toString())
+          .isEqualTo(purchase.sourceOrderVersion());
+      sagas.recordIssuanceResult(result);
+      jdbc.update(
+          "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
+          java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+          orderId);
+      sagas.recoverSaga(orderId);
+      assertThat(outbox.count()).isEqualTo(3);
+      tx.executeWithoutResult(
+          status -> {
+            var stored = outbox.findById(notification.getMessageId()).orElseThrow();
+            stored.setPublishedAt(Instant.now());
+            if (legacyCheckpoint) {
+              stored.setMessageType("booking.issuance-result.v1");
+              stored.setAggregateVersion(3L);
+              var legacyPayload = (ObjectNode) stored.getPayload().deepCopy();
+              legacyPayload
+                  .put("messageType", "booking.issuance-result.v1")
+                  .put("aggregateVersion", "3");
+              stored.setPayload(legacyPayload);
+            }
+            outbox.save(stored);
+          });
+      jdbc.update(
+          "update payment_schema.tbl_payment_sagas set next_attempt_at=? where order_id=?",
+          java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+          orderId);
+      sagas.recoverSaga(orderId);
+      assertThat(
+              outbox.findAll().stream()
+                  .filter(message -> message.getMessageType().equals("ticket.issue.v1"))
+                  .count())
+          .isEqualTo(1);
+      assertThat(
+              outbox.findAll().stream()
+                  .filter(message -> message.getMessageType().equals("ticket.issued.v1"))
+                  .count())
+          .isEqualTo(legacyCheckpoint ? 1 : 2);
+      var recovered =
+          outbox
+              .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                  orderId, "ticket.issued.v1")
+              .orElseThrow();
+      assertThat(recovered.getAggregateVersion().toString())
+          .isEqualTo(purchase.sourceOrderVersion());
+      assertThat(recovered.getCausationId()).isEqualTo(notification.getMessageId());
       var completed =
           new Envelope<>(
               UUID.randomUUID(),
@@ -421,7 +468,7 @@ class PaymentFlowIntegrationTest {
       sagas.recordOrderCompleted(completed);
       assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
           .isEqualTo(PaymentSagaState.COMPLETED);
-      assertThat(outbox.count()).isEqualTo(withTicketCheckpoint ? 4 : 2);
+      assertThat(outbox.count()).isEqualTo(4);
 
       assertThatThrownBy(
               () ->
@@ -726,6 +773,20 @@ class PaymentFlowIntegrationTest {
       assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
           .isEqualTo(PaymentSagaState.COMPENSATING);
       assertThat(refunds.findAll()).hasSize(1);
+      if (!cancelled) {
+        var failure =
+            outbox
+                .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                    orderId, "booking.issuance-failed.v1")
+                .orElseThrow();
+        assertThat(failure.getAggregateVersion().toString())
+            .isEqualTo(purchase.sourceOrderVersion());
+        var decoded =
+            codec.readEnvelope(failure.getPayload().toString(), BookingIssuanceResult.class);
+        assertThat(decoded.data().ticketCount()).isZero();
+        assertThat(decoded.data().failureCode()).isEqualTo("TERMINAL_FAILURE");
+      }
+
       assertThat(refunds.findAll().getFirst().getReason())
           .isEqualTo(
               cancelled ? RefundReason.EVENT_CANCELLED : RefundReason.TICKET_ISSUANCE_FAILED);
@@ -836,5 +897,215 @@ class PaymentFlowIntegrationTest {
                     channel))
         .isInstanceOf(org.springframework.amqp.support.converter.MessageConversionException.class);
     verifyNoInteractions(channel);
+  }
+
+  @Test
+  void rejectsOrderCompletionWithoutForwardedTicketResult() {
+
+    var started =
+        payments.createPayment(
+            new CreatePaymentRequest(orderId, null),
+            new MockHttpServletRequest(),
+            "buyer-1",
+            requestKey);
+    var charge =
+        tx.execute(
+            status -> {
+              var received =
+                  charges.save(
+                      com.flashticket.payment_service.entity.Charge.received(
+                          attempts.findById(started.attemptId()).orElseThrow(),
+                          "checkpoint",
+                          Instant.now(),
+                          Instant.now()));
+              sagas.recordSuccessfulCharge(received);
+              return received;
+            });
+    sagas.recordPaymentDecision(
+        new Envelope<>(
+            UUID.randomUUID(),
+            "booking.payment-decision.v1",
+            1,
+            orderId,
+            "1",
+            Instant.now(),
+            orderId,
+            null,
+            null,
+            new PaymentDecision(
+                orderId,
+                charge.getId(),
+                Instant.now(),
+                PaymentDecisionOutcome.ACCEPTED,
+                charge.getId())));
+
+    var beforeInbox =
+        jdbc.queryForObject("select count(*) from payment_schema.tbl_inbox_messages", Long.class);
+    var completed =
+        new Envelope<>(
+            UUID.randomUUID(),
+            "booking.order-completed.v1",
+            1,
+            orderId,
+            "1",
+            Instant.now(),
+            orderId,
+            null,
+            null,
+            new OrderCompleted(orderId, charge.getId(), issuanceId, 1));
+    assertThatThrownBy(() -> sagas.recordOrderCompleted(completed))
+        .isInstanceOfSatisfying(
+            ContractValidationException.class,
+            ex -> assertThat(ex.code()).isEqualTo("ORDER_COMPLETION_MISMATCH"));
+    assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+        .isEqualTo(PaymentSagaState.WAITING_TICKETS);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from payment_schema.tbl_inbox_messages", Long.class))
+        .isEqualTo(beforeInbox);
+    assertThat(outbox.count()).isEqualTo(2);
+  }
+
+  @Test
+  void rejectsConflictingTicketResultsAcrossOutcomes() {
+    for (var firstState : List.of(IssuanceState.COMPLETED, IssuanceState.FAILED)) {
+      setUp();
+
+      var started =
+          payments.createPayment(
+              new CreatePaymentRequest(orderId, null),
+              new MockHttpServletRequest(),
+              "buyer-1",
+              requestKey);
+      var charge =
+          tx.execute(
+              status -> {
+                var received =
+                    charges.save(
+                        com.flashticket.payment_service.entity.Charge.received(
+                            attempts.findById(started.attemptId()).orElseThrow(),
+                            "checkpoint",
+                            Instant.now(),
+                            Instant.now()));
+                sagas.recordSuccessfulCharge(received);
+                return received;
+              });
+      sagas.recordPaymentDecision(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "booking.payment-decision.v1",
+              1,
+              orderId,
+              "1",
+              Instant.now(),
+              orderId,
+              null,
+              null,
+              new PaymentDecision(
+                  orderId,
+                  charge.getId(),
+                  Instant.now(),
+                  PaymentDecisionOutcome.ACCEPTED,
+                  charge.getId())));
+
+      var first =
+          new Envelope<>(
+              UUID.randomUUID(),
+              "ticket.issuance-result.v1",
+              1,
+              orderId,
+              "1",
+              Instant.now(),
+              orderId,
+              null,
+              null,
+              new IssuanceResult(
+                  orderId,
+                  charge.getId(),
+                  issuanceId,
+                  firstState,
+                  firstState == IssuanceState.COMPLETED ? 1 : 0,
+                  firstState == IssuanceState.COMPLETED ? null : "TERMINAL_FAILURE"));
+      sagas.recordIssuanceResult(first);
+      sagas.recordIssuanceResult(first);
+      if (firstState == IssuanceState.COMPLETED) {
+        sagas.recordOrderCompleted(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.order-completed.v1",
+                1,
+                orderId,
+                "1",
+                Instant.now(),
+                orderId,
+                null,
+                null,
+                new OrderCompleted(orderId, charge.getId(), issuanceId, 1)));
+      }
+      var expectedState = sagaRepository.findById(orderId).orElseThrow().getState();
+      long refundCount = refunds.count();
+      long inboxCount =
+          jdbc.queryForObject("select count(*) from payment_schema.tbl_inbox_messages", Long.class);
+      for (var conflicting :
+          List.of(
+              new IssuanceResult(
+                  orderId,
+                  charge.getId(),
+                  issuanceId,
+                  firstState == IssuanceState.COMPLETED
+                      ? IssuanceState.FAILED
+                      : IssuanceState.COMPLETED,
+                  firstState == IssuanceState.COMPLETED ? 0 : 1,
+                  firstState == IssuanceState.COMPLETED ? "TERMINAL_FAILURE" : null),
+              new IssuanceResult(
+                  orderId,
+                  charge.getId(),
+                  UUID.randomUUID(),
+                  firstState,
+                  first.data().ticketCount(),
+                  first.data().failureCode()),
+              new IssuanceResult(
+                  orderId, charge.getId(), issuanceId, IssuanceState.COMPLETED, 2, null))) {
+        var incoming =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "ticket.issuance-result.v1",
+                1,
+                orderId,
+                "1",
+                Instant.now(),
+                orderId,
+                null,
+                null,
+                conflicting);
+        assertThatThrownBy(() -> sagas.recordIssuanceResult(incoming))
+            .isInstanceOf(ContractValidationException.class);
+      }
+      if (firstState == IssuanceState.FAILED) {
+        var changedCode =
+            new Envelope<>(
+                UUID.randomUUID(),
+                "ticket.issuance-result.v1",
+                1,
+                orderId,
+                "1",
+                Instant.now(),
+                orderId,
+                null,
+                null,
+                new IssuanceResult(
+                    orderId, charge.getId(), issuanceId, firstState, 0, "ANOTHER_FAILURE"));
+        assertThatThrownBy(() -> sagas.recordIssuanceResult(changedCode))
+            .isInstanceOf(ContractValidationException.class);
+      }
+      assertThat(sagaRepository.findById(orderId).orElseThrow().getState())
+          .isEqualTo(expectedState);
+      assertThat(refunds.count()).isEqualTo(refundCount);
+      assertThat(outbox.count()).isEqualTo(3);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from payment_schema.tbl_inbox_messages", Long.class))
+          .isEqualTo(inboxCount);
+    }
   }
 }

@@ -6,7 +6,7 @@
 
 ## 1. Sơ đồ tổng thể
 
-Các mũi tên message biểu diễn logic gửi/nhận trong code. Hai đoạn có ghi “chưa khớp” đang khác hợp đồng hoặc routing giữa các thành phần; xem mục 5.
+Các mũi tên mô tả luồng trên `dev/integration`. Khi chạy với server 119, kiểm tra binding và outbox hiện có trước khi bật consumer.
 
 ```mermaid
 sequenceDiagram
@@ -44,9 +44,9 @@ sequenceDiagram
         P->>P: PaymentConfirmation, Saga WAITING_TICKETS
         P->>T: ticket.issue.v1
         T->>T: Tạo vé/QR, issuance COMPLETED, lịch gửi email
-        T-->>P: ticket.issuance-result.v1 — routing hiện chưa khớp
-        P->>B: booking.issuance-result.v1 — Booking chưa nhận đúng type
-        Note over B,P: Đoạn hoàn tất bên dưới cần hợp đồng/routing được nối đúng
+        T-->>P: ticket.issuance-result.v1
+        P->>B: ticket.issued.v1, version snapshot
+        Note over B,P: Checkpoint COMPLETED phải tồn tại trước khi đóng Saga
         B->>B: Xử lý kết quả vé, Order COMPLETED
         B-->>P: booking.order-completed.v1
         P->>P: Kiểm kết quả, Saga COMPLETED
@@ -61,11 +61,11 @@ sequenceDiagram
 
 | Bước | Xử lý thực tế | Source |
 | --- | --- | --- |
-| Tạo đơn | Kiểm người mua, key chống lặp, sự kiện đang bán, hạn mức và tài nguyên. Tạo `PENDING_PAYMENT`, reservation `HELD`, đặt `expiresAt`; hỗ trợ số lượng, khu đứng và ghế chỉ định. | [createOrder](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:1358>) |
-| Xin thanh toán | API yêu cầu role BUYER, JWT và header UUID `Idempotency-Key`. Request truyền `orderId`; tiền lấy từ Booking. | [PaymentController](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/controller/PaymentController.java:37>) |
-| Chốt số tiền | Booking khóa dữ liệu, yêu cầu đơn `PENDING_PAYMENT`, reservation `HELD`, chưa hết hạn và sự kiện chưa hủy. Lưu `frozenPurchaseSnapshot`; lần sau trả lại snapshot đã chốt nếu dữ liệu còn nhất quán. | [preparePurchaseSnapshot](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:1200>) |
-| Tạo attempt | Payment gọi HTTP Booking trước, rồi mới mở transaction Payment. Kiểm owner, hạn, VND, hash snapshot và các attempt cũ. Lưu `OrderPaymentSnapshot` + attempt `PENDING`. | [createPayment / savePaymentAttempt](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java:68>) |
-| Tạo URL | `vnp_TxnRef = attemptId`; `vnp_Amount = expectedAmount × 100`; hạn URL là mốc sớm hơn giữa hạn đơn và 15 phút. Sắp xếp tham số và ký HMAC-SHA512. | [buildVNPayUrl](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java:277>) |
+| Tạo đơn | Kiểm người mua, key chống lặp, sự kiện đang bán, hạn mức và tài nguyên. Tạo `PENDING_PAYMENT`, reservation `HELD`, đặt `expiresAt`; hỗ trợ số lượng, khu đứng và ghế chỉ định. | [createOrder](../../../services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java) |
+| Xin thanh toán | API yêu cầu role BUYER, JWT và header UUID `Idempotency-Key`. Request truyền `orderId`; tiền lấy từ Booking. | [PaymentController](../../../services/payment-service/src/main/java/com/flashticket/payment_service/controller/PaymentController.java) |
+| Chốt số tiền | Booking khóa dữ liệu, yêu cầu đơn `PENDING_PAYMENT`, reservation `HELD`, chưa hết hạn và sự kiện chưa hủy. Lưu `frozenPurchaseSnapshot`; lần sau trả lại snapshot đã chốt nếu dữ liệu còn nhất quán. | [preparePurchaseSnapshot](../../../services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java) |
+| Tạo attempt | Payment gọi HTTP Booking trước, rồi mới mở transaction Payment. Kiểm owner, hạn, VND, hash snapshot và các attempt cũ. Lưu `OrderPaymentSnapshot` + attempt `PENDING`. | [createPayment / savePaymentAttempt](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java) |
+| Tạo URL | `vnp_TxnRef = attemptId`; `vnp_Amount = expectedAmount × 100`; hạn URL là mốc sớm hơn giữa hạn đơn và 15 phút. Sắp xếp tham số và ký HMAC-SHA512. | [buildVNPayUrl](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java) |
 
 Ví dụ request (thay UUID/token bằng dữ liệu thật):
 
@@ -96,7 +96,7 @@ Cùng key trả attempt cũ nếu vượt qua các kiểm tra trước đó; kh�
 
 ## 3. VNPay trả kết quả: IPN và Return có vai trò riêng
 
-[handleIPN](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java:146>) kiểm lần lượt chữ ký → attempt → merchant → số tiền → mã kết quả; thành công còn yêu cầu transaction number và ngày trả tiền hợp lệ.
+[handleIPN](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java) kiểm lần lượt chữ ký → attempt → merchant → số tiền → mã kết quả; thành công còn yêu cầu transaction number và ngày trả tiền hợp lệ.
 
 ```java
 boolean success = "00".equals(responseCode) && "00".equals(transactionStatus);
@@ -111,32 +111,35 @@ boolean failed =
 - Chữ ký/merchant sai trả 97; không tìm thấy attempt trả 01; tiền sai trả 04; dữ liệu kết quả/giao dịch/ngày không hợp lệ trả 99.
 - `RspCode=00` là xác nhận đã xử lý IPN, có thể đi kèm attempt FAILED/UNKNOWN; không có nghĩa đơn đã hoàn tất.
 
-[handleReturn / buildAppReturnUri](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java:229>) chỉ xác minh và đọc DB, rồi controller trả HTTP 302 về app. Return không cập nhật thanh toán. Nếu Return đến trước IPN, app có thể thấy PENDING và cần đọc lại API trạng thái. Nếu xác minh Return lỗi, deep link có `status=FAILED`; đây không phải thao tác đổi attempt trong DB.
+[handleReturn / buildAppReturnUri](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java) chỉ xác minh và đọc DB, rồi controller trả HTTP 302 về app. Return không cập nhật thanh toán. Nếu Return đến trước IPN, app có thể thấy PENDING và cần đọc lại API trạng thái. Nếu xác minh Return lỗi, deep link có `status=FAILED`; đây không phải thao tác đổi attempt trong DB.
 
 ## 4. Từ nhận tiền đến hoàn tất đơn
 
-1. [recordSuccessfulCharge](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java:39>) chọn charge đầu cho Saga; charge khác của cùng đơn được ghi nghĩa vụ hoàn do thanh toán thừa.
-2. [Booking.acceptPayment](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:750>) khóa dữ liệu và kiểm snapshot. Cùng charge đã nhận trả ACCEPTED; charge khác trả DUPLICATE.
-3. [settlePendingPayment](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:973>) đọc giờ DB **sau khi chờ các khóa**. Nếu trước deadline và chưa hủy: reservation HELD → COMMITTED, counter held → purchased, đơn → ISSUING. Nếu trễ/hủy: giải phóng phần còn HELD, trả LATE/CANCELLED. Thời điểm VNPay trừ tiền không thay thế mốc phân xử này.
-4. [recordPaymentDecision](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java:74>) nhận ACCEPTED và chưa có marker hủy thì lưu confirmation, chuyển WAITING_TICKETS và gửi `ticket.issue.v1`; nhánh còn lại tạo refund và COMPENSATING.
-5. [TicketService.issue](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/ticket-service/src/main/java/com/flashticket/ticket_service/application/TicketService.java:190>) kiểm cấu hình sự kiện, chống phát trùng theo order/hash; tạo vé VALID, QR và lịch gửi email; issuance, inbox và result outbox commit cùng transaction. Thiếu access configuration là lỗi chờ xử lý lại; sự kiện đã hủy cho terminal FAILED. Không dùng `IssuanceServiceImpl` scaffold để mô tả bước phát vé.
-6. [recordIssuanceResult](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java:123>) kiểm charge và số vé, lưu kết quả thông báo Booking. Nhận COMPLETED vẫn giữ WAITING_TICKETS. FAILED tạo refund và báo Booking; marker hủy chuyển sang bù trừ.
-7. [processBookingIssuanceResult](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:380>) có logic hoàn tất đơn và phát `booking.order-completed.v1`; lỗi phát vé thì trả tài nguyên đã purchased/used, đơn thành ISSUANCE_FAILED hoặc CANCELLED. **Hiện message đầu vào bước này chưa khớp Payment, xem mục 5.**
-8. [recordOrderCompleted](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java:199>) kiểm charge, issuanceId, số vé và checkpoint kết quả đã gửi; chỉ chuyển Saga COMPLETED khi hợp lệ, chưa bù trừ và không có marker hủy.
+1. [recordSuccessfulCharge](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java) chọn charge đầu cho Saga; charge khác của cùng đơn được ghi nghĩa vụ hoàn do thanh toán thừa.
+2. [Booking.acceptPayment](../../../services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java) khóa dữ liệu và kiểm snapshot. Cùng charge đã nhận trả ACCEPTED; charge khác trả DUPLICATE.
+3. [settlePendingPayment](../../../services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java) đọc giờ DB **sau khi chờ các khóa**. Nếu trước deadline và chưa hủy: reservation HELD → COMMITTED, counter held → purchased, đơn → ISSUING. Nếu trễ/hủy: giải phóng phần còn HELD, trả LATE/CANCELLED. Thời điểm VNPay trừ tiền không thay thế mốc phân xử này.
+4. [recordPaymentDecision](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java) nhận ACCEPTED và chưa có marker hủy thì lưu confirmation, chuyển WAITING_TICKETS và gửi `ticket.issue.v1`; nhánh còn lại tạo refund và COMPENSATING.
+5. [TicketService.issue](../../../services/ticket-service/src/main/java/com/flashticket/ticket_service/application/TicketService.java) kiểm cấu hình sự kiện, chống phát trùng theo order/hash; tạo vé VALID, QR và lịch gửi email; issuance, inbox và result outbox commit cùng transaction. Thiếu access configuration là lỗi chờ xử lý lại; sự kiện đã hủy cho terminal FAILED. Không dùng `IssuanceServiceImpl` scaffold để mô tả bước phát vé.
+6. [recordIssuanceResult](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java) kiểm charge và số vé, lưu kết quả thông báo Booking. Nhận COMPLETED vẫn giữ WAITING_TICKETS. FAILED tạo refund và báo Booking; marker hủy chuyển sang bù trừ.
+7. [processBookingIssuanceResult](../../../services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java) có logic hoàn tất đơn và phát `booking.order-completed.v1`; lỗi phát vé thì trả tài nguyên đã purchased/used, đơn thành ISSUANCE_FAILED hoặc CANCELLED. Payment gửi ticket.issued.v1 / booking.issuance-failed.v1 với version snapshot; definitions phải được áp riêng khi deploy.
+8. [recordOrderCompleted](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java) kiểm charge, issuanceId, số vé và checkpoint kết quả đã gửi; chỉ chuyển Saga COMPLETED khi hợp lệ, chưa bù trừ và không có marker hủy.
 
-**Khác Shop App:** đây là Saga nhiều transaction cục bộ, có inbox/outbox và RabbitMQ. Lưu DB không đồng nghĩa broker đã nhận; broker ACK không đồng nghĩa Booking/Ticket đã xử lý. Payment listener ACK sau service commit. [PaymentWorker](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/worker/PaymentWorker.java:46>) gửi outbox với confirm/return và retry; recovery gửi lại bước đang chờ, không coi timeout là phát vé thất bại.
+**Khác Shop App:** đây là Saga nhiều transaction cục bộ, có inbox/outbox và RabbitMQ. Lưu DB không đồng nghĩa broker đã nhận; broker ACK không đồng nghĩa Booking/Ticket đã xử lý. Payment listener ACK sau service commit. [PaymentWorker](../../../services/payment-service/src/main/java/com/flashticket/payment_service/worker/PaymentWorker.java) gửi outbox với confirm/return và retry; recovery gửi lại bước đang chờ, không coi timeout là phát vé thất bại.
 
-## 5. Những chỗ hiện chưa nối thông từ đầu đến cuối
+## 5. Contract đã đồng bộ và giới hạn runtime
 
-| Điểm | Bằng chứng trong code/cấu hình | Hệ quả theo cấu hình trong repo |
-| --- | --- | --- |
-| Ticket → Payment khác routing | Ticket phát `ticket.issuance-result.v1`; [definitions.json](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/deploy/rabbitmq/definitions.json:1>) gắn queue `payment.ticket-issuance-failed.q` với `ticket.issuance-failed.v1`. | Kết quả phát vé không được route vào queue Payment mặc định qua binding đã khai báo. |
-| Payment → Booking khác message type | Payment phát `booking.issuance-result.v1`; [BookingIssuanceResultListener](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/messaging/BookingIssuanceResultListener.java:18>) yêu cầu `ticket.issued.v1` hoặc `booking.issuance-failed.v1`; topology cũng dùng hai key đó. | Không có binding tương ứng cho message Payment; chỉ sửa routing mà giữ type cũ thì listener vẫn reject. |
-| Version thông báo kết quả vé khác nghĩa | Payment đặt aggregateVersion theo `saga.rowVersion + 2` tại [envelope gửi Booking](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/PaymentSagaServiceImpl.java:173>); [Booking validator](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/booking-service/src/main/java/com/flashticket/booking_service/order/service/impl/OrderServiceImpl.java:446>) yêu cầu bằng `frozen.sourceOrderVersion`. | Cần thống nhất version khi nối hai bên; hiện hai phía không dùng cùng nguồn version. |
-| Tính năng Ticket mặc định tắt | [ticket-service.yaml](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/infrastructure/config-server/src/main/resources/config/ticket-service.yaml:71>) mặc định business/listeners/workers là false. | Cần cấu hình bật các tính năng tương ứng khi chạy; tài liệu này không đọc secret hay xác nhận giá trị môi trường runtime. |
-| Hoàn tiền mới ghi nghĩa vụ | [ensureRefund](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/impl/RefundServiceImpl.java:27>) chỉ tìm/tạo Refund PENDING. | Không thể coi COMPENSATING/PENDING là đã trả tiền về ngân hàng. |
+| Điểm | Hành vi code mới |
+| --- | --- |
+| Ticket→Payment | ticket.issuance-result.v1 vào payment.ticket-issuance-failed.q; definitions đã sửa, chưa xác nhận binding119 đã đổi |
+| Payment→Booking | COMPLETED→ticket.issued.v1; FAILED→booking.issuance-failed.v1; cùng DTO BookingIssuanceResult |
+| Version gửi Booking | Lấy source_order_version từ snapshot Payment, không lấy rowVersion Saga |
+| Checkpoint | OrderCompleted phải khớp COMPLETED đã lưu; không cho bypass Ticket→Payment; reply không cần chờ publishedAt |
+| Recovery | Có result thì gửi lại result, không phát vé lần hai; chưa result thì retry command cũ, giữ version command |
+| Legacy | Chỉ nhận diện result cũ trong lịch sử để recovery đúng key; pending/DLQ cần xử lý được duyệt trước rollout |
+| Runtime Ticket | Cần bật business/listeners/workers và có access event/QR key ring; chưa được xác nhận bằng E2E lượt này |
+| Refund | `ensureRefund` ghi nghĩa vụ hoàn tiền `PENDING`. Worker xử lý hoàn tiền VNPay, theo dõi kết quả và xử lý các đơn thuộc sự kiện bị hủy. |
 
-Đây là đối chiếu tĩnh giữa source và cấu hình khai báo, chưa thử broker đang chạy. Chưa sửa các điểm trên trong lượt viết tài liệu.
+**Khác Shop App:** checkpoint/inbox/outbox và transaction/ACK hiện có bảo vệ replay/rollback giữa các service; không có transaction DB bao trùm HTTP/broker. Query IN tìm cả hai outcome và so conflict trước state early-return. Không thêm class/helper/framework.
 
 ## 6. Các nhánh lỗi cần hiểu khi đọc luồng
 
@@ -149,8 +152,8 @@ boolean failed =
 | Payment thấy event cancellation marker | Chặn bước phát hành/hoàn tất mới theo các nhánh Saga; tạo nghĩa vụ EVENT_CANCELLED. Không suy từ đây rằng mọi consumer hủy đã được triển khai. |
 | HTTP/broker/worker lỗi tạm thời | Có rollback, outbox retry hoặc Saga recovery tùy bước; không tự suy thành thanh toán FAILED hay hoàn tiền thành công. |
 
-API [getPayment](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java:316>) trả confirmation chargeId, latest attempt, trạng thái start request nếu truyền requestId và danh sách refunds; kiểm quyền chủ đơn. Nó không trả trực tiếp lifecycle đơn hoặc Saga state. API vé nằm ở [TicketApiController](<C:/Users/WEOHWOEH/Documents/DATN 2026/Docs/flash-ticket-platform/services/ticket-service/src/main/java/com/flashticket/ticket_service/web/TicketApiController.java:24>).
+API [getPayment](../../../services/payment-service/src/main/java/com/flashticket/payment_service/service/PaymentService.java) trả confirmation chargeId, latest attempt, trạng thái start request nếu truyền requestId và danh sách refunds; kiểm quyền chủ đơn. Nó không trả trực tiếp lifecycle đơn hoặc Saga state. API vé nằm ở [TicketApiController](../../../services/ticket-service/src/main/java/com/flashticket/ticket_service/web/TicketApiController.java).
 
 ## 7. Phạm vi kiểm chứng
 
-Đã đối chiếu implementation Booking/Payment/Ticket và topology RabbitMQ trong repo; các dẫn nguồn chỉ tới checkout hiện tại. Lượt này chỉ tạo tài liệu, kiểm đường dẫn/đoạn trích và diff; không gọi VNPay thật, không chạy giao dịch E2E hay chạy lại test suite. Sơ đồ thể hiện đầy đủ logic đã viết và đánh dấu ranh giới chưa nối thông; không khẳng định hệ thống hiện chạy hoàn tất một giao dịch thật.
+Các fixture kiểm tra sáu dạng snapshot và hai kết quả phát vé. `PaymentFlowIntegrationTest` kiểm tra version khi gửi lại, kết quả phát vé mâu thuẫn và checkpoint trước khi đóng Saga. Suite này có `TRUNCATE` và chỉ dùng với môi trường kiểm thử riêng. Kiểm chứng xuyên service cần một giao dịch trên bộ Compose đã cấu hình hạ tầng 119.

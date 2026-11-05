@@ -1,0 +1,499 @@
+{
+  "startedAt": "2026-11-02T15:19:26.360Z",
+  "finishedAt": "2026-11-02T15:19:59.960Z",
+  "scope": "Payment JAR đã sửa + HTTP + PostgreSQL/RabbitMQ local thật; Booking/OAuth/Ticket/VNPay mô phỏng, không chuyển tiền thật; không phải UAT ba service.",
+  "passed": 5,
+  "failed": 0,
+  "bookingRequests": [
+    {
+      "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "a4ba1ac7-9f99-4abf-92ed-596a0c75bb30",
+      "actor": "buyer-b",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "dea12709-4c6d-422f-9f92-1c676cedb396",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "a312bb88-fa97-4f24-9c97-1e38264532b0",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    },
+    {
+      "orderId": "e9218621-1c82-4c4d-8bc2-074975e49239",
+      "actor": "buyer-a",
+      "serviceCredentialValidated": true
+    }
+  ],
+  "records": [
+    {
+      "id": "S01",
+      "title": "Thanh toán thành công qua các bước xác nhận",
+      "startedAt": "2026-11-02T15:19:49.590Z",
+      "passed": true,
+      "evidence": {
+        "summary": "HTTP200, amount180000; callback00; đúng key/version; Saga COMPLETED sau Booking xác nhận",
+        "http": {
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/payments",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "[test JWT đã che]",
+              "Idempotency-Key": "a6b7a307-b385-4118-915c-b32708294d11"
+            },
+            "body": {
+              "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "data": {
+                "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+                "attemptId": "28da8f06-5b2c-4c42-9388-67fa84e7c4c1",
+                "attemptState": "PENDING",
+                "amount": "180000",
+                "currency": "VND",
+                "paymentUrl": "https://sandbox.example.test/pay?vnp_Amount=18000000&vnp_Command=pay&vnp_CreateDate=20261102221951&vnp_CurrCode=VND&vnp_ExpireDate=20261102222949&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+8a59caf1-1166-4e39-88bc-d2262be50f00&vnp_OrderType=billpayment&vnp_ReturnUrl=http%3A%2F%2F127.0.0.1%3A18085%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=test&vnp_TxnRef=28da8f06-5b2c-4c42-9388-67fa84e7c4c1&vnp_Version=2.1.0&vnp_SecureHash=fc5ea2dd5097862ddc080fd52597e765d05e3598dc7e1c9624d98e45ce99b9706b6c2d7c70640d3e0946c554f3129c41c4c4b11debaffceb6ad2ba1ea9ddb58f",
+                "expiresAt": "2026-11-02T15:29:49.590Z"
+              },
+              "success": true,
+              "message": "Payment created successfully"
+            }
+          }
+        },
+        "callback": {
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/payments/vnpay/ipn?vnp_TmnCode=test&vnp_TxnRef=28da8f06-5b2c-4c42-9388-67fa84e7c4c1&vnp_Amount=18000000&vnp_ResponseCode=00&vnp_TransactionStatus=00&vnp_TransactionNo=d145b41f-fc66-473d-9950-fcd7813e9856&vnp_PayDate=20261102221951&vnp_SecureHash=d91ef88d25ddc6d0ea85acf5594aafb4662dba7009fe416cbda44d139aec88cfb6f1d55f47253d7d1b393833bbdd9c4e8f901aae2dbdc218a3d876cfce77d136",
+            "headers": {
+              "Content-Type": "application/json"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "RspCode": "00",
+              "Message": "Confirm success"
+            }
+          }
+        },
+        "acceptCommand": {
+          "data": {
+            "amount": "180000",
+            "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+            "chargeId": "8c51db7d-ee27-47a0-b16e-35b0ced28148",
+            "currency": "VND",
+            "attemptId": "28da8f06-5b2c-4c42-9388-67fa84e7c4c1",
+            "sourceOrderVersion": "1"
+          },
+          "messageId": "399b6a80-6a95-4e31-a965-7f3ed17c544e",
+          "occurredAt": "2026-11-02T15:19:51.270728100Z",
+          "aggregateId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+          "causationId": null,
+          "messageType": "booking.accept-payment.v1",
+          "traceparent": null,
+          "correlationId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+          "schemaVersion": 1,
+          "aggregateVersion": "1"
+        },
+        "resultCommand": {
+          "data": {
+            "state": "COMPLETED",
+            "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+            "chargeId": "8c51db7d-ee27-47a0-b16e-35b0ced28148",
+            "issuanceId": "6c93b4c5-48f6-4750-a47c-153227c59df8",
+            "failureCode": null,
+            "ticketCount": 2
+          },
+          "messageId": "e572bb07-a9eb-485a-bb39-ad7c56103056",
+          "occurredAt": "2026-11-02T15:19:53.651489Z",
+          "aggregateId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+          "causationId": "1c68746f-5365-4d92-a0e6-09435798e46b",
+          "messageType": "ticket.issued.v1",
+          "traceparent": null,
+          "correlationId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+          "schemaVersion": 1,
+          "aggregateVersion": "1"
+        },
+        "query": {
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/orders/8a59caf1-1166-4e39-88bc-d2262be50f00/payment",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "[test JWT đã che]"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "data": {
+                "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+                "acceptedChargeId": "8c51db7d-ee27-47a0-b16e-35b0ced28148",
+                "latestAttempt": {
+                  "orderId": "8a59caf1-1166-4e39-88bc-d2262be50f00",
+                  "attemptId": "28da8f06-5b2c-4c42-9388-67fa84e7c4c1",
+                  "attemptState": "SUCCEEDED",
+                  "amount": "180000",
+                  "currency": "VND",
+                  "paymentUrl": null,
+                  "expiresAt": "2026-11-02T15:29:49.590Z"
+                },
+                "startRequest": null,
+                "refunds": []
+              },
+              "success": true,
+              "message": "Lấy thông tin thanh toán thành công"
+            }
+          }
+        },
+        "database": {
+          "attempts": [
+            {
+              "attemptId": "28da8f06-5b2c-4c42-9388-67fa84e7c4c1",
+              "state": "SUCCEEDED",
+              "amount": "180000",
+              "requestKey": "a6b7a307-b385-4118-915c-b32708294d11"
+            }
+          ],
+          "saga": {
+            "state": "COMPLETED",
+            "chargeId": "8c51db7d-ee27-47a0-b16e-35b0ced28148"
+          },
+          "chargeCount": 1,
+          "confirmationCount": 1,
+          "refunds": [],
+          "outbox": [
+            {
+              "messageType": "booking.accept-payment.v1",
+              "published": true
+            },
+            {
+              "messageType": "ticket.issue.v1",
+              "published": true
+            },
+            {
+              "messageType": "ticket.issued.v1",
+              "published": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S02",
+      "title": "Bấm thanh toán lặp với cùng key",
+      "startedAt": "2026-11-02T15:19:55.808Z",
+      "passed": true,
+      "evidence": {
+        "summary": "Hai POST đồng thời và một retry đều HTTP200, chỉ một attempt/URL",
+        "responses": [
+          {
+            "request": {
+              "method": "POST",
+              "path": "/api/v1/payments",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "[test JWT đã che]",
+                "Idempotency-Key": "b02588ca-6a25-4f9c-b1cc-78d0f2e1741f"
+              },
+              "body": {
+                "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b"
+              }
+            },
+            "response": {
+              "status": 200,
+              "body": {
+                "data": {
+                  "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+                  "attemptId": "92803e68-3bd6-43af-930b-9b381300e501",
+                  "attemptState": "PENDING",
+                  "amount": "180000",
+                  "currency": "VND",
+                  "paymentUrl": "https://sandbox.example.test/pay?vnp_Amount=18000000&vnp_Command=pay&vnp_CreateDate=20261102221955&vnp_CurrCode=VND&vnp_ExpireDate=20261102222955&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+69340c62-f1ae-4539-b2d9-3b204b68a87b&vnp_OrderType=billpayment&vnp_ReturnUrl=http%3A%2F%2F127.0.0.1%3A18085%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=test&vnp_TxnRef=92803e68-3bd6-43af-930b-9b381300e501&vnp_Version=2.1.0&vnp_SecureHash=77b383230ee0e2afab91d681dbc9cc3b723a03d3c4764295e1fd14a9b36fa122cfbffa44dedbef5d60aa50807a5da3ba7aef4d55a473b15aa88597aa0cb77147",
+                  "expiresAt": "2026-11-02T15:29:55.808Z"
+                },
+                "success": true,
+                "message": "Payment created successfully"
+              }
+            }
+          },
+          {
+            "request": {
+              "method": "POST",
+              "path": "/api/v1/payments",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "[test JWT đã che]",
+                "Idempotency-Key": "b02588ca-6a25-4f9c-b1cc-78d0f2e1741f"
+              },
+              "body": {
+                "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b"
+              }
+            },
+            "response": {
+              "status": 200,
+              "body": {
+                "data": {
+                  "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+                  "attemptId": "92803e68-3bd6-43af-930b-9b381300e501",
+                  "attemptState": "PENDING",
+                  "amount": "180000",
+                  "currency": "VND",
+                  "paymentUrl": "https://sandbox.example.test/pay?vnp_Amount=18000000&vnp_Command=pay&vnp_CreateDate=20261102221955&vnp_CurrCode=VND&vnp_ExpireDate=20261102222955&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+69340c62-f1ae-4539-b2d9-3b204b68a87b&vnp_OrderType=billpayment&vnp_ReturnUrl=http%3A%2F%2F127.0.0.1%3A18085%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=test&vnp_TxnRef=92803e68-3bd6-43af-930b-9b381300e501&vnp_Version=2.1.0&vnp_SecureHash=77b383230ee0e2afab91d681dbc9cc3b723a03d3c4764295e1fd14a9b36fa122cfbffa44dedbef5d60aa50807a5da3ba7aef4d55a473b15aa88597aa0cb77147",
+                  "expiresAt": "2026-11-02T15:29:55.808Z"
+                },
+                "success": true,
+                "message": "Payment created successfully"
+              }
+            }
+          }
+        ],
+        "retry": {
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/payments",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "[test JWT đã che]",
+              "Idempotency-Key": "b02588ca-6a25-4f9c-b1cc-78d0f2e1741f"
+            },
+            "body": {
+              "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+              "clientIp": "203.0.113.99"
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "data": {
+                "orderId": "69340c62-f1ae-4539-b2d9-3b204b68a87b",
+                "attemptId": "92803e68-3bd6-43af-930b-9b381300e501",
+                "attemptState": "PENDING",
+                "amount": "180000",
+                "currency": "VND",
+                "paymentUrl": "https://sandbox.example.test/pay?vnp_Amount=18000000&vnp_Command=pay&vnp_CreateDate=20261102221955&vnp_CurrCode=VND&vnp_ExpireDate=20261102222955&vnp_IpAddr=127.0.0.1&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+ve+69340c62-f1ae-4539-b2d9-3b204b68a87b&vnp_OrderType=billpayment&vnp_ReturnUrl=http%3A%2F%2F127.0.0.1%3A18085%2Fapi%2Fv1%2Fpayments%2Fvnpay%2Freturn&vnp_TmnCode=test&vnp_TxnRef=92803e68-3bd6-43af-930b-9b381300e501&vnp_Version=2.1.0&vnp_SecureHash=77b383230ee0e2afab91d681dbc9cc3b723a03d3c4764295e1fd14a9b36fa122cfbffa44dedbef5d60aa50807a5da3ba7aef4d55a473b15aa88597aa0cb77147",
+                "expiresAt": "2026-11-02T15:29:55.808Z"
+              },
+              "success": true,
+              "message": "Payment created successfully"
+            }
+          }
+        },
+        "database": {
+          "attempts": [
+            {
+              "attemptId": "92803e68-3bd6-43af-930b-9b381300e501",
+              "state": "PENDING",
+              "amount": "180000",
+              "requestKey": "b02588ca-6a25-4f9c-b1cc-78d0f2e1741f"
+            }
+          ],
+          "saga": null,
+          "chargeCount": 0,
+          "confirmationCount": 0,
+          "refunds": [],
+          "outbox": []
+        }
+      }
+    },
+    {
+      "id": "S03",
+      "title": "Người khác thanh toán đơn không thuộc mình",
+      "startedAt": "2026-11-02T15:19:56.742Z",
+      "passed": true,
+      "evidence": {
+        "summary": "HTTP404; không tạo attempt/charge",
+        "http": {
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/payments",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "[test JWT đã che]",
+              "Idempotency-Key": "5dfe2ac0-2e82-4de6-b42d-1bdee4f213f0"
+            },
+            "body": {
+              "orderId": "a4ba1ac7-9f99-4abf-92ed-596a0c75bb30"
+            }
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "data": {
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "Resource was not found.",
+                "correlationId": "1a43e5cf-c097-4f0a-bcaf-7379b2a50274",
+                "violations": []
+              },
+              "success": false,
+              "message": "Resource was not found."
+            }
+          }
+        },
+        "database": {
+          "attempts": [],
+          "saga": null,
+          "chargeCount": 0,
+          "confirmationCount": 0,
+          "refunds": [],
+          "outbox": []
+        }
+      }
+    },
+    {
+      "id": "S04",
+      "title": "Thanh toán đơn đã hết hạn",
+      "startedAt": "2026-11-02T15:19:57.441Z",
+      "passed": true,
+      "evidence": {
+        "summary": "HTTP409; không tạo attempt/charge",
+        "http": {
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/payments",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "[test JWT đã che]",
+              "Idempotency-Key": "26ebd6f3-7919-4cb7-bed8-717f8dff8dde"
+            },
+            "body": {
+              "orderId": "dea12709-4c6d-422f-9f92-1c676cedb396"
+            }
+          },
+          "response": {
+            "status": 409,
+            "body": {
+              "data": {
+                "code": "PAYMENT_STATE_INVALID",
+                "message": "Payment cannot be started in its current state.",
+                "correlationId": "ce1f316e-1e8e-48ba-9253-e05105a6733b",
+                "violations": []
+              },
+              "success": false,
+              "message": "Payment cannot be started in its current state."
+            }
+          }
+        },
+        "database": {
+          "attempts": [],
+          "saga": null,
+          "chargeCount": 0,
+          "confirmationCount": 0,
+          "refunds": [],
+          "outbox": []
+        }
+      }
+    },
+    {
+      "id": "S05",
+      "title": "Booking lỗi hoặc trả JSON snapshot không hợp lệ",
+      "startedAt": "2026-11-02T15:19:58.107Z",
+      "passed": true,
+      "evidence": {
+        "summary": "Cả Booking503 và JSON sai đều HTTP503; không tạo attempt",
+        "responses": [
+          {
+            "mode": "unavailable",
+            "http": {
+              "request": {
+                "method": "POST",
+                "path": "/api/v1/payments",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "[test JWT đã che]",
+                  "Idempotency-Key": "66d00786-5be7-498e-a18f-d6c0b3387a20"
+                },
+                "body": {
+                  "orderId": "a312bb88-fa97-4f24-9c97-1e38264532b0"
+                }
+              },
+              "response": {
+                "status": 503,
+                "body": {
+                  "data": {
+                    "code": "BOOKING_UNAVAILABLE",
+                    "message": "Booking is temporarily unavailable.",
+                    "correlationId": "200471d7-a55f-4f40-9fde-f6e3d83f157e",
+                    "violations": []
+                  },
+                  "success": false,
+                  "message": "Booking is temporarily unavailable."
+                }
+              }
+            },
+            "database": {
+              "attempts": [],
+              "saga": null,
+              "chargeCount": 0,
+              "confirmationCount": 0,
+              "refunds": [],
+              "outbox": []
+            }
+          },
+          {
+            "mode": "malformed",
+            "http": {
+              "request": {
+                "method": "POST",
+                "path": "/api/v1/payments",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "[test JWT đã che]",
+                  "Idempotency-Key": "3c4f345e-3083-4bd0-a33b-c3459a91f10e"
+                },
+                "body": {
+                  "orderId": "e9218621-1c82-4c4d-8bc2-074975e49239"
+                }
+              },
+              "response": {
+                "status": 503,
+                "body": {
+                  "data": {
+                    "code": "BOOKING_UNAVAILABLE",
+                    "message": "Booking is temporarily unavailable.",
+                    "correlationId": "cbdd66fe-84a8-4449-b069-09f741dcb9f9",
+                    "violations": []
+                  },
+                  "success": false,
+                  "message": "Booking is temporarily unavailable."
+                }
+              }
+            },
+            "database": {
+              "attempts": [],
+              "saga": null,
+              "chargeCount": 0,
+              "confirmationCount": 0,
+              "refunds": [],
+              "outbox": []
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

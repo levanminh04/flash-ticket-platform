@@ -17,7 +17,7 @@ và kiểm tra chủ đơn trên API nghiệp vụ vẫn được giữ nguyên.
 Dependency dùng `springdoc-openapi-starter-webmvc-ui` cùng phiên bản 3.1.1 đang
 có trong dự án, theo [hướng dẫn springdoc](https://springdoc.org/#getting-started).
 
-Payment có 13 JPA entity, DTO/MapStruct, contract boundary và API đọc trạng thái với JWT, ownership. Phần VNPay được chuyển từ Cinema: `VNPayConfig`, `VNPayUtil` và các phương thức tạo URL/IPN/return trong `PaymentService`. DTO/message và schema hiện có được giữ nguyên; chưa có runtime consumer, outbox relay hoặc Saga.
+Payment xử lý thanh toán VNPay, điều phối phát vé qua RabbitMQ, hoàn tiền và đối soát. API đọc trạng thái kiểm tra JWT và quyền sở hữu đơn. Cấu hình Swagger ở trên dùng cho các API Payment, Finance và Refund.
 
 `GET /api/v1/orders/{orderId}/payment` trả `ApiResponse<PaymentView>`. `POST /api/v1/payments` tạo URL VNPay, hai GET `/api/v1/payments/vnpay/ipn` và `/api/v1/payments/vnpay/return` nhận callback. PaymentController gọi PaymentService; dữ liệu được đọc/ghi qua repository cục bộ.
 
@@ -25,7 +25,7 @@ Payment có 13 JPA entity, DTO/MapStruct, contract boundary và API đọc trạ
 
 Nguồn: `C:/Users/WEOHWOEH/Documents/PersionalProject/Cinema-Booking-System`. Helper được lấy từ `Shared/enums/VNPayUtil.java`, đúng import mà Cinema PaymentService đang dùng; lớp cùng tên trong `Shared/utils` dùng cách ký khác và không được sử dụng. Logic helper được giữ nguyên, chỉ đổi package và format theo dự án. Config giữ `@Value`/`@Getter`, service giữ Lombok constructor injection, controller điều phối mỏng.
 
-- `POST /api/v1/payments`: JWT role BUYER, body `{"orderId":"<UUID>","clientIp":"203.0.113.5"}`; `clientIp` có thể bỏ qua. Trả `ApiResponse<PaymentStart>` với paymentUrl. Số tiền lấy từ snapshot có sẵn trong Payment. Chưa snapshot trả PAYMENT_NOT_READY; khác chủ đơn trả RESOURCE_NOT_FOUND; hết hạn hoặc đã thanh toán không tạo attempt. Attempt PENDING được dùng lại như Cinema.
+- `POST /api/v1/payments`: cần JWT role BUYER và header `Idempotency-Key`. Body `{"orderId":"<UUID>","clientIp":"203.0.113.5"}` có thể bỏ `clientIp`. Payment gọi Booking để cố định số tiền, lưu snapshot và tạo attempt. Response trả `ApiResponse<PaymentStart>` chứa `paymentUrl`.
 - `GET /api/v1/payments/vnpay/ipn`: public, kiểm chữ ký trước truy cập dữ liệu, merchant, amount ×100 và kết quả giao dịch. Trả trực tiếp JSON `{"RspCode":"00","Message":"Confirm success"}`; các ACK khác giữ mã Cinema 97/01/02/04, 99 cho dữ liệu callback không hợp lệ. Không bọc ACK vào ApiResponse để VNPay đọc được RspCode.
 - `GET /api/v1/payments/vnpay/return`: public, xác minh chữ ký rồi redirect HTTP 302 về app với orderId/attemptId/status và transactionId nếu đã có receipt. Return chỉ đọc trạng thái trong database; có thể PENDING nếu IPN chưa tới. Chữ ký sai trả deep link status=FAILED và không tra thông tin order.
 
@@ -33,7 +33,7 @@ Nạp biến môi trường trong `.env.example` vào tiến trình chạy như 
 
 Điều chỉnh theo mô hình Payment: bookingId -> orderId; payment -> PaymentAttempt; vnp_TxnRef là UUID attempt để không nhận nhầm callback của lần thử trước; giao dịch thành công lưu Charge. Tạo thanh toán khóa snapshot, IPN khóa attempt trong transaction. Hạn URL tối đa 15 phút và không vượt expiresAt của snapshot. Trạng thái dùng SUCCEEDED/FAILED của Payment thay SUCCESS/FAILED của Cinema. Kết quả chưa rõ (gồm mã 07) giữ UNKNOWN, finishedAt=null, không mở lần thanh toán mới; IPN cuối cùng có thể hoàn tất attempt UNKNOWN. Chỉ response=00/status=00 là thành công; status=02 kèm response thất bại rõ ràng mới kết thúc FAILED. Xem [mã kết quả VNPay](https://sandbox.vnpayment.vn/apis/docs/bang-ma-loi/).
 
-Phần này chưa xác nhận order ở Booking, gửi thông báo/email hoặc phát hành vé: các tích hợp đó trong Cinema gọi service cùng monolith, còn dự án này cần consumer/outbox/Saga riêng. IPN thành công không tự tạo PaymentConfirmation; acceptedChargeId vẫn do luồng chấp nhận của Booking quyết định. Không thêm API refund giả chỉ đổi trạng thái local như Cinema. Các kiểm tự động dùng fixture và repository mock; chưa xác minh giao dịch thật trên sandbox/PostgreSQL hoặc E2E liên service.
+Sau IPN thành công, Payment đợi Booking chấp nhận khoản thu trước khi tạo `PaymentConfirmation` và yêu cầu phát vé. Payment nhận kết quả từ Ticket, gửi Booking với version snapshot đã lưu, rồi đợi xác nhận trước khi đóng Saga. Xem [luồng Payment qua các service](../../docs/java-workflow/explanations/2026-11-02-payment-end-to-end-flow.md).
 
 ## Build
 

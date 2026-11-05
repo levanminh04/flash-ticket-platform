@@ -114,7 +114,7 @@ async function rabbit(method, path, body) {
 async function publish(order, type, data, messageId = randomUUID()) {
   const envelope = { messageId, messageType: type, schemaVersion: 1, aggregateId: order.orderId,
     aggregateVersion: '1', occurredAt: new Date().toISOString(), correlationId: order.orderId, causationId: null, traceparent: null, data };
-  const brokerResult = await rabbit('POST', `/exchanges/%2F/${exchange}/publish`, { properties: { content_type: 'application/json', delivery_mode: 2 }, routing_key: type === 'ticket.issuance-result.v1' ? 'ticket.issuance-failed.v1' : type, payload: JSON.stringify(envelope), payload_encoding: 'string' });
+  const brokerResult = await rabbit('POST', `/exchanges/%2F/${exchange}/publish`, { properties: { content_type: 'application/json', delivery_mode: 2 }, routing_key: type, payload: JSON.stringify(envelope), payload_encoding: 'string' });
   assert.equal(brokerResult.routed, true); return { envelope, brokerResult };
 }
 async function outgoing(order, type) {
@@ -146,7 +146,7 @@ async function accept(order) {
 }
 async function tickets(order, { failed = false, count = 2 } = {}) {
   order.issuanceId ??= randomUUID();
-  return publish(order, failed ? 'ticket.issuance-failed.v1' : 'ticket.issuance-result.v1', { orderId: order.orderId, chargeId: order.chargeId, issuanceId: order.issuanceId,
+  return publish(order, 'ticket.issuance-result.v1', { orderId: order.orderId, chargeId: order.chargeId, issuanceId: order.issuanceId,
     state: failed ? 'FAILED' : 'COMPLETED', ticketCount: failed ? 0 : count, failureCode: failed ? 'TERMINAL_ISSUANCE_FAILURE' : null });
 }
 async function complete(order, issuanceId = order.issuanceId) {

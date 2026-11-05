@@ -58,6 +58,10 @@ class GatewaySecurityConfigurationTests {
     assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/events/event-1", null));
     assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/events/event-1/availability", null));
     assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/orders", null));
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/payments/vnpay/return", null));
+    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/payments/vnpay/ipn", null));
+    assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/payments/vnpay/ipn", null));
+    assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/payments", null));
   }
 
   @Test
@@ -112,6 +116,8 @@ class GatewaySecurityConfigurationTests {
 
     assertTrue(reachesDownstream(HttpMethod.POST, "/api/v1/orders", buyer));
     assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/orders", organizer));
+    assertTrue(reachesDownstream(HttpMethod.POST, "/api/v1/payments", buyer));
+    assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/payments", organizer));
     assertTrue(reachesDownstream(HttpMethod.POST, "/api/v1/events/event-1/check-ins", organizer));
   }
 

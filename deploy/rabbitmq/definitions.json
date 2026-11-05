@@ -455,7 +455,7 @@
       "vhost": "/",
       "destination": "payment.ticket-issuance-failed.q",
       "destination_type": "queue",
-      "routing_key": "ticket.issuance-failed.v1",
+      "routing_key": "ticket.issuance-result.v1",
       "arguments": {}
     },
     {

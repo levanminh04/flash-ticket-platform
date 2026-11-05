@@ -70,6 +70,55 @@ class PaymentConfigurationTest {
     assertThat(exchanges).contains(env.getProperty("payment.exchange"));
     assertThat(env.getProperty("payment.exchange"))
         .isEqualTo(env.getProperty("spring.rabbitmq.template.exchange"));
+    var config = new RabbitMqConfig();
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "exchangeName", env.getProperty("payment.exchange"));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "decisionQueue", env.getProperty("payment.queues.decision"));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "issuanceQueue", env.getProperty("payment.queues.issuance"));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "completedQueue", env.getProperty("payment.queues.completed"));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "eventCancelledQueue", env.getProperty("payment.queues.event-cancelled"));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "financeConfiguredQueue", env.getProperty("payment.queues.finance-configured"));
+    var declarations = config.paymentSagaTopology();
+    var runtimeQueues =
+        declarations.getDeclarablesByType(org.springframework.amqp.core.Queue.class);
+    for (var queue : runtimeQueues) {
+      assertThat(queue.getArguments()).containsEntry("x-queue-type", "quorum");
+      var definition =
+          java.util.stream.StreamSupport.stream(topology.get("queues").spliterator(), false)
+              .filter(node -> node.get("name").asString().equals(queue.getName()))
+              .findFirst()
+              .orElseThrow();
+      assertThat(definition.get("arguments").get("x-queue-type").asString()).isEqualTo("quorum");
+    }
+    for (var binding :
+        declarations.getDeclarablesByType(org.springframework.amqp.core.Binding.class)) {
+      assertThat(
+              java.util.stream.StreamSupport.stream(topology.get("bindings").spliterator(), false)
+                  .anyMatch(
+                      node ->
+                          node.get("source").asString().equals(binding.getExchange())
+                              && node.get("destination").asString().equals(binding.getDestination())
+                              && node.get("routing_key")
+                                  .asString()
+                                  .equals(binding.getRoutingKey())))
+          .isTrue();
+    }
+    assertThat(
+            java.util.stream.StreamSupport.stream(topology.get("bindings").spliterator(), false)
+                .anyMatch(
+                    node ->
+                        node.get("destination")
+                                .asString()
+                                .equals(env.getProperty("payment.queues.issuance"))
+                            && node.get("routing_key")
+                                .asString()
+                                .equals("ticket.issuance-failed.v1")))
+        .isFalse();
   }
 
   @Test

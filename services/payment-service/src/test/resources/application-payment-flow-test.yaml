@@ -36,6 +36,6 @@ payment:
   queues:
     finance-configured: payment.gov156.test.finance-configured
     event-cancelled: payment.gov156.test.event-cancelled
-    decision: payment.gov156.test.decision
-    issuance: payment.gov156.test.issuance
-    completed: payment.gov156.test.completed
+    decision: payment.gov156.test.decision.quorum
+    issuance: payment.gov156.test.issuance.quorum
+    completed: payment.gov156.test.completed.quorum

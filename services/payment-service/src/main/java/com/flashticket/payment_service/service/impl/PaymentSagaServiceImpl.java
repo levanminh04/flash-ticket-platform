@@ -148,15 +148,11 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       throw new ContractValidationException("ticketCount", "TICKET_COUNT_MISMATCH");
     if (!messaging.recordInbox(
         "payment.issuance-result.v1", incomingEnvelope, codec.toTree(result))) return;
-    if (saga.getState() != PaymentSagaState.WAITING_TICKETS) return;
     var previousNotification =
-        outbox
-            .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                result.orderId(), "ticket.issued.v1")
-            .or(
-                () ->
-                    outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                        result.orderId(), "booking.issuance-failed.v1"));
+        outbox.findFirstByAggregateIdAndMessageTypeInOrderByOccurredAtDescMessageIdDesc(
+            result.orderId(),
+            List.of(
+                "ticket.issued.v1", "booking.issuance-failed.v1", "booking.issuance-result.v1"));
     if (previousNotification.isPresent()) {
       var previousResult =
           codec
@@ -166,10 +162,13 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       if (!previousResult.issuanceId().equals(result.issuanceId())
           || !previousResult.chargeId().equals(result.chargeId())
           || !previousResult.state().name().equals(result.state().name())
-          || !previousResult.ticketCount().equals(result.ticketCount()))
+          || !previousResult.ticketCount().equals(result.ticketCount())
+          || !java.util.Objects.equals(previousResult.failureCode(), result.failureCode()))
         throw new ContractValidationException("issuanceId", "ISSUANCE_RESULT_CONFLICT");
       return;
     }
+    // So checkpoint trước state guard để không ACK nhầm kết quả trái nhau đến muộn.
+    if (saga.getState() != PaymentSagaState.WAITING_TICKETS) return;
     if (eventMarker.map(marker -> marker.getCancellationId() != null).orElse(false)) {
       refunds.ensureRefund(
           charges.findById(saga.getChargeId()).orElseThrow(),
@@ -195,7 +194,7 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
                   : "booking.issuance-failed.v1",
               1,
               saga.getOrderId(),
-              Long.toString(saga.getRowVersion() + 2),
+              snapshot.getSourceOrderVersion().toString(),
               Instant.now(),
               saga.getOrderId(),
               incomingEnvelope.messageId(),
@@ -256,24 +255,33 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
       var notification =
-          outbox.findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-              result.orderId(), "ticket.issued.v1");
+          outbox.findFirstByAggregateIdAndMessageTypeInOrderByOccurredAtDescMessageIdDesc(
+              result.orderId(),
+              List.of(
+                  "ticket.issued.v1", "booking.issuance-failed.v1", "booking.issuance-result.v1"));
       var purchase = codec.fromTree(snapshot.getPurchaseSnapshot(), PurchaseSnapshot.class);
       if (result.ticketCount() != purchases.expectedTicketCount(purchase))
         throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
-      // Topology hiện tại gửi Ticket thành công thẳng sang Booking; checkpoint cũ là tùy chọn.
-      if (notification.isPresent()) {
-        var ticketResult =
-            codec
-                .readEnvelope(
-                    notification.get().getPayload().toString(), BookingIssuanceResult.class)
-                .data();
-        if (ticketResult.state() != BookingIssuanceState.COMPLETED
-            || !ticketResult.issuanceId().equals(result.issuanceId())
-            || !ticketResult.chargeId().equals(result.chargeId())
-            || !ticketResult.ticketCount().equals(result.ticketCount()))
-          throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
-      }
+      // Outbox đã commit trước khi gửi: không cần chờ worker ghi publishedAt.
+      if (notification.isEmpty())
+        throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
+      if (!incomingEnvelope.aggregateVersion().equals(snapshot.getSourceOrderVersion().toString())
+          || !notification
+              .get()
+              .getPayload()
+              .get("aggregateVersion")
+              .asString()
+              .equals(snapshot.getSourceOrderVersion().toString()))
+        throw new ContractValidationException("aggregateVersion", "ORDER_COMPLETION_MISMATCH");
+      var ticketResult =
+          codec
+              .readEnvelope(notification.get().getPayload().toString(), BookingIssuanceResult.class)
+              .data();
+      if (ticketResult.state() != BookingIssuanceState.COMPLETED
+          || !ticketResult.issuanceId().equals(result.issuanceId())
+          || !ticketResult.chargeId().equals(result.chargeId())
+          || !ticketResult.ticketCount().equals(result.ticketCount()))
+        throw new ContractValidationException("issuanceId", "ORDER_COMPLETION_MISMATCH");
       if (saga.getState() != PaymentSagaState.WAITING_TICKETS
           && saga.getState() != PaymentSagaState.COMPLETED)
         throw new ContractValidationException("state", "SAGA_STATE_MISMATCH");
@@ -325,21 +333,33 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
           Instant.now());
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
-      String messageType =
-          saga.getState() == PaymentSagaState.WAITING_BOOKING
-              ? "booking.accept-payment.v1"
-              : "ticket.issue.v1";
-      if (saga.getState() == PaymentSagaState.WAITING_TICKETS
-          && outbox
-              .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                  orderId, "ticket.issued.v1")
-              .isPresent()) messageType = "ticket.issued.v1";
+      var previousNotification =
+          saga.getState() == PaymentSagaState.WAITING_TICKETS
+              ? outbox.findFirstByAggregateIdAndMessageTypeInOrderByOccurredAtDescMessageIdDesc(
+                  orderId,
+                  List.of(
+                      "ticket.issued.v1",
+                      "booking.issuance-failed.v1",
+                      "booking.issuance-result.v1"))
+              : java.util.Optional.<OutboxMessage>empty();
       var previousCommand =
-          outbox
-              .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
-                  orderId, messageType)
-              .orElseThrow();
+          previousNotification.orElseGet(
+              () ->
+                  outbox
+                      .findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
+                          orderId,
+                          saga.getState() == PaymentSagaState.WAITING_BOOKING
+                              ? "booking.accept-payment.v1"
+                              : "ticket.issue.v1")
+                      .orElseThrow());
       var previousEnvelope = previousCommand.getPayload();
+      String messageType = previousCommand.getMessageType();
+      // Chỉ đọc type cũ trong lịch sử; message mới luôn gửi theo contract hiện hành.
+      if ("booking.issuance-result.v1".equals(messageType))
+        messageType =
+            "COMPLETED".equals(previousEnvelope.get("data").get("state").asString())
+                ? "ticket.issued.v1"
+                : "booking.issuance-failed.v1";
       // Chưa gửi/đang retry transport thì không nhân thêm lệnh recovery.
       if (previousCommand.getPublishedAt() != null) {
         UUID commandId = UUID.randomUUID();
@@ -349,10 +369,10 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
                 messageType,
                 1,
                 orderId,
-                // Recovery AcceptPayment vẫn tham chiếu snapshot thanh toán đã cố định.
-                "booking.accept-payment.v1".equals(messageType)
-                    ? snapshot.getSourceOrderVersion().toString()
-                    : Long.toString(saga.getRowVersion() + 2),
+                // Recovery giữ version dữ liệu gốc, không lấy rowVersion Saga.
+                "ticket.issue.v1".equals(messageType)
+                    ? previousEnvelope.get("aggregateVersion").asString()
+                    : snapshot.getSourceOrderVersion().toString(),
                 Instant.now(),
                 orderId,
                 previousCommand.getMessageId(),

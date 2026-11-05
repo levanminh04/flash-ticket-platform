@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.flashticket.payment_service.config.PaymentRuntimeConfig;
 import com.flashticket.payment_service.dto.common.ContractCodec;
-import com.flashticket.payment_service.dto.common.ContractValidationException;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.validation.PaymentContractFixtures;
 import java.time.Instant;
@@ -104,6 +103,7 @@ class BookingPurchaseClientTest {
     try {
       for (String response :
           new String[] {
+            "",
             "{}",
             "{bad-json",
             snapshotJson.replace("\"total\":\"9999999999999999999\"", "\"total\":1.5")
@@ -111,7 +111,12 @@ class BookingPurchaseClientTest {
         server.reset();
         server.expect(anything()).andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
         assertThatThrownBy(() -> client.preparePurchaseSnapshot(orderId, "buyer-1"))
-            .isInstanceOf(ContractValidationException.class);
+            .isInstanceOfSatisfying(
+                PaymentException.class,
+                ex -> {
+                  assertThat(ex.code()).isEqualTo("BOOKING_UNAVAILABLE");
+                  assertThat(ex.status().value()).isEqualTo(503);
+                });
         server.verify();
       }
     } finally {

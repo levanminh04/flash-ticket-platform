@@ -22,4 +22,8 @@ public interface OutboxMessageRepository extends JpaRepository<OutboxMessage, UU
   java.util.Optional<OutboxMessage>
       findFirstByAggregateIdAndMessageTypeOrderByOccurredAtDescMessageIdDesc(
           UUID aggregateId, String messageType);
+
+  java.util.Optional<OutboxMessage>
+      findFirstByAggregateIdAndMessageTypeInOrderByOccurredAtDescMessageIdDesc(
+          UUID aggregateId, java.util.List<String> messageTypes);
 }

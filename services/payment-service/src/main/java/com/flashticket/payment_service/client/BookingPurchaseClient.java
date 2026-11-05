@@ -46,7 +46,8 @@ public class BookingPurchaseClient {
         throw new PaymentException(PaymentErrorCode.PAYMENT_STATE_INVALID);
       // Không chuyển lỗi credential của service thành lỗi đăng nhập của buyer.
       throw new PaymentException(PaymentErrorCode.BOOKING_UNAVAILABLE);
-    } catch (RestClientException
+    } catch (com.flashticket.payment_service.dto.common.ContractValidationException
+        | RestClientException
         | org.springframework.security.oauth2.core.OAuth2AuthorizationException ex) {
       throw new PaymentException(PaymentErrorCode.BOOKING_UNAVAILABLE);
     }
