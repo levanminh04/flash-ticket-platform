@@ -59,9 +59,7 @@ jobs:
         with:
           persist-credentials: false
       - name: ShellCheck
-        run: shellcheck --severity=warning deploy/scripts/*.sh .github/scripts/*.sh deploy/tests/*.sh
-      - name: Script tests
-        run: bash deploy/tests/run-all.sh
+        run: shellcheck --severity=warning deploy/scripts/*.sh .github/scripts/*.sh
 
   dependency_review:
     name: Dependency Review

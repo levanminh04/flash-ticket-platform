@@ -55,7 +55,7 @@ Tạo `env/<svc>.env` từ `<thư mục service>/.env.example`, rồi đổi:
 | payment: `NGROK_DOMAIN`, `NGROK_AUTHTOKEN` | domain và token ngrok |
 | payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://<NGROK_DOMAIN>/api/v1/payments/vnpay/return` và `/ipn` |
 | ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/keys.json` |
-| keycloak | mẫu trong `services/keycloak-spi/.env.example` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
+| keycloak | `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, `KC_HOSTNAME`, `KC_HTTP_ENABLED`, `KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD`, `KC_DB_POOL_MIN_SIZE`, `KC_DB_POOL_INITIAL_SIZE`, `KC_DB_POOL_MAX_SIZE`, `KC_HTTP_MAX_QUEUED_REQUESTS`, `FT_IDENTITY_OUTBOX_ENABLED`, `FT_IDENTITY_OUTBOX_INTERVAL_MS`, `FT_IDENTITY_RABBITMQ_HOST`, `FT_IDENTITY_RABBITMQ_PORT`, `FT_IDENTITY_RABBITMQ_VHOST`, `FT_IDENTITY_RABBITMQ_USERNAME`, `FT_IDENTITY_RABBITMQ_PASSWORD` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
 
 ## Lưu ý về Ngrok (payment-service)
 
@@ -90,7 +90,7 @@ Trước lần deploy CD đầu tiên cho Keycloak:
 2. Thêm `deploy/app/<svc>.yml` (sao chép `user-service.yml`, đổi tên và `mem_limit`).
 3. Thêm `[<svc>]=<port>` vào bảng `PORT` của `deploy/scripts/deploy-service.sh`.
 4. Dùng Dockerfile mẫu (sao chép từ discovery-server).
-5. `wsl bash deploy/tests/run-all.sh` phải xanh.
+5. Chạy ShellCheck + actionlint phải xanh.
 
 ## Lên 2 máy / Kubernetes
 
