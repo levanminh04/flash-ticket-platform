@@ -1,9 +1,9 @@
 # CI/CD cho FlashTicket — thiết kế
 
-- Ngày: 2026-11-07 (cập nhật lần 2)
+- Ngày: 2026-11-07 (cập nhật lần 3)
 - Trạng thái: **DRAFT — chờ người dùng duyệt**
 - Người yêu cầu: Sơn (`dev/son`)
-- Phạm vi: CI cho PR và CD tự động 7 ứng dụng Spring lên máy 84 qua GitHub Actions
+- Phạm vi: CI cho PR và CD tự động 8 ứng dụng (7 Spring + Keycloak) lên máy 84 qua GitHub Actions
 
 ## 1. Ý định
 
@@ -49,7 +49,8 @@ copy-paste, nhắm 2 máy khác nhau, thiếu gateway/discovery/payment. Mục t
 | Mục | Hiện trạng |
 |---|---|
 | Máy đích | 84 (`ip-172-31-41-236`, Ubuntu 24.04, kernel 7.0, x86_64, Docker 29.1.3, Compose 2.40.3, đĩa trống 7,8 GB). **RAM 1,9 GiB** — người dùng sẽ nâng lên ~8 GiB |
-| Hạ tầng trên 84 | `/opt/flash-ticket-infra`: Postgres (`127.0.0.1:5432`, đủ `event_db`, `booking_db`, `payment_db`, `ticket_db`, `keycloak_db`), RabbitMQ (`:5672`, ~30 queue, user `flash_ticket_app`, `flash_ticket_identity`), Redis (`:6379`), Keycloak (`:8080`). **MongoDB đang restart liên tục**: Mongo 8.0 không chạy trên kernel ≥ 6.19 |
+| Hạ tầng trên 84 | `/opt/flash-ticket-infra`: Postgres (`127.0.0.1:5432`, đủ `event_db`, `booking_db`, `payment_db`, `ticket_db`, `keycloak_db`), RabbitMQ (`:5672`, ~30 queue, user `flash_ticket_app`, `flash_ticket_identity`), Redis (`:6379`). MongoDB đã chạy lại bằng `mongo:7.0` trên volume mới `flash-ticket-mongo7-data` (2026-11-07, chưa pin digest, dữ liệu 8.0 cũ bỏ theo ý Sơn; volume cũ còn nguyên) |
+| Keycloak | đang chạy từ `/opt/flash-ticket-infra/keycloak` (project `keycloak`, build ngay trên server, 512m) — sẽ chuyển sang CD quản lý |
 | Ứng dụng cũ trên 84 | `flash-ticket-event-event-service-1`, `flash-ticket-user-user-service-1` đã dừng (Exited); thư mục `/home/ubuntu/flash-ticket-{event,user,ticket}`; QR key ring của ticket ở `/home/ubuntu/flash-ticket-ticket/runtime/qr` |
 | Port (không đổi) | gateway 8081, booking 8082, payment 8083, ticket 8084, user 8085, event 8086, discovery 8761 |
 | Repo | Monorepo, mỗi ứng dụng một project Maven độc lập có `mvnw`, không module chung |
@@ -103,7 +104,7 @@ push main  (hoặc workflow_dispatch: service | all, action = deploy | restart |
 | `.github/**` | chỉ chạy CI, không deploy |
 | `*.md`, `.env.example` | bỏ qua |
 
-Path của từng service nằm trong `.github/service-filters.yml` (định dạng `dorny/paths-filter`).
+Path của từng service nằm trong `.github/services.json` + `.github/scripts/detect-changes.sh`.
 Thêm service mới = 1 mục ở đây + 1 file compose.
 
 | Service | Path | Image GHCR | Port |
@@ -115,14 +116,17 @@ Thêm service mới = 1 mục ở đây + 1 file compose.
 | ticket-service | `services/ticket-service/**` | `.../ticket-service` | 8084 |
 | booking-service | `services/booking-service/**` | `.../booking-service` | 8082 |
 | payment-service | `services/payment-service/**` | `.../payment-service` | 8083 |
+| keycloak | `services/keycloak-spi/**` | `.../keycloak` | 8080 |
 
 ### 5.3 Cấu trúc file
 
-**`.github/`** (5 workflow + 1 file filter)
+**`.github/`** (5 workflow + 1 services.json + 2 scripts)
 
 | File | Trạng thái | Vai trò |
 |---|---|---|
-| `service-filters.yml` | mới | service → path |
+| `services.json` | mới | định nghĩa 8 service, path, port, context, Dockerfile |
+| `scripts/detect-changes.sh` | mới | phát hiện service thay đổi từ git diff |
+| `scripts/plan-deploy.sh` | mới | tính danh sách service cần deploy/recreate theo thứ tự |
 | `workflows/ci.yml` | sửa | PR vào `main`: chỉ verify service bị đổi; giữ `CI / Required`; bỏ config-server |
 | `workflows/codeql.yml` | sửa | bỏ config-server khỏi danh sách compile |
 | `workflows/cd.yml` | mới | push `main` / dispatch |
@@ -135,13 +139,13 @@ Thêm service mới = 1 mục ở đây + 1 file compose.
 | File | Vai trò |
 |---|---|
 | `app/_common.yml` | khung chung qua `extends`: host network, user non-root, `read_only` + tmpfs `/tmp`, `cap_drop: ALL`, `no-new-privileges`, `restart: unless-stopped`, log json-file 10m×3 |
-| `app/<svc>.yml` ×7 | `image: ${IMAGE}`, `env_file: ../env/<svc>.env`, `mem_limit`, phần riêng (ticket: mount read-only QR key ring vào `/run/ticket-qr`; payment: thêm service `ngrok`) |
+| `app/<svc>.yml` ×8 | `image: ${IMAGE}`, `env_file: ../env/<svc>.env`, `mem_limit`, phần riêng (ticket: mount read-only QR key ring vào `/run/ticket-qr`; payment: thêm service `ngrok`; keycloak: không `extends _common.yml`, dùng network bridge `flash-ticket-infra`, mount theme/realm từ `/opt/flash-ticket-infra/keycloak/keycloak`, mem_limit 768m) |
 | `scripts/deploy-service.sh` | script deploy duy nhất |
 | **Xóa** | `docker-compose.{api-gateway,discovery-server,config-server,booking,event,ticket,user,payment,payment.ft119}.yml`, `deploy-{booking,event,ticket,user}.sh`, `README.payment.md` phần 119, `Dockerfile.integration-java21` nếu không còn dùng |
 | **Sửa** | `docker-compose.integration.local.yml`: bỏ config-server, bỏ `CONFIG_SERVER_URL` |
 | **Xóa module** | `infrastructure/config-server/` |
 
-**Ngân sách bộ nhớ khởi điểm** (chỉnh sau khi đo `docker stats`; tổng ~4,4 GiB, cần máy ~8 GiB):
+**Ngân sách bộ nhớ khởi điểm** (chỉnh sau khi đo `docker stats`; tổng ~5,2 GiB, cần máy ~8 GiB):
 
 | Service | mem_limit | Service | mem_limit |
 |---|---|---|---|
@@ -149,13 +153,15 @@ Thêm service mới = 1 mục ở đây + 1 file compose.
 | discovery | 384m | booking | 512m |
 | user | 768m | payment | 512m |
 | event | 512m | ngrok | 128m |
+| keycloak | 768m | | |
 
 ### 5.4 Image
 
-- Một mẫu Dockerfile cho 7 service: CI đã chạy `mvnw verify` → Dockerfile chỉ `COPY target/*.jar`
+- Một mẫu Dockerfile cho 7 Spring service: CI đã chạy `mvnw verify` → Dockerfile chỉ `COPY target/*.jar`
   (như `event-service` hiện tại), base `eclipse-temurin:21-jre-alpine` pin digest, user `10001`,
   `HEALTHCHECK` không cần (script tự kiểm health).
-- Label OCI `source`, `revision=<commit>`. Tag `sha-<commit>`; deploy luôn bằng digest. Không build trên server.
+- Keycloak giữ `services/keycloak-spi/Dockerfile` (Keycloak 26.8.0 + 2 JAR).
+- Nhãn OCI `source`, `revision=<commit>` do `build-push-action` gắn. Tag `sha-<commit>`; deploy luôn bằng digest. Không build trên server.
 
 ### 5.5 Trên máy 84
 
@@ -185,8 +191,9 @@ Thêm service mới = 1 mục ở đây + 1 file compose.
 6. Chờ health, tối đa 180 s; kiểm container đúng image ID, `RestartCount=0`. Nếu `OOMKilled=true` → báo
    `OOM_KILLED` (không coi là bản lỗi), vẫn rollback. Cách đo health:
    - **discovery-server**: `GET 127.0.0.1:8761/actuator/health` = `UP` (không có Spring Security).
-   - **6 service còn lại**: instance của service trong Eureka (`GET 127.0.0.1:8761/eureka/apps/<APP>`, header
-     `Accept: application/json`) có `status=UP` và `port` = port của service. Lý do: `/actuator/health` của
+   - **keycloak**: `GET 127.0.0.1:8080/realms/flash-ticket/.well-known/openid-configuration` = 200.
+   - **6 service Spring còn lại**: instance của service trong Eureka (`GET 127.0.0.1:8761/eureka/apps/<APP>`, header
+     `Accept: application/json`) có `status=UP`, đúng `port` của service và có `registrationTimestamp` ≥ lúc container start. Lý do: `/actuator/health` của
      gateway bị `denyAll`, của event/ticket cần role `INTERNAL_SERVICE`, payment không mở — gọi không token sẽ
      401/403. Eureka phản ánh health thật nhờ `eureka.client.healthcheck.enabled: true` (§5.8).
 7. Đạt → `previous ← current`, `current ← image mới`; in `DEPLOY_SUCCESS`.
@@ -236,11 +243,12 @@ Action bên thứ ba pin theo commit SHA (như workflow hiện tại).
 
 ## 6. Điều kiện tiên quyết (người dùng/vận hành làm, ngoài CI)
 
-1. **MongoDB trên 84 chạy lại được** (Mongo 8.0 không chạy trên kernel 7.0 hiện tại) — user-service phụ thuộc.
+1. **MongoDB trên 84 chạy lại được** — **ĐÃ XONG** (2026-11-07: MongoDB đã chạy lại bằng `mongo:7.0` trên volume mới `flash-ticket-mongo7-data`, DB trống).
 2. **RAM 84 ≥ ~8 GiB.**
 3. Các thay đổi đang dở trên `dev/integration` được commit bởi người sở hữu; PR `dev/integration` → `main` có `CI / Required` xanh.
-4. Tạo `/opt/flash-ticket-app/env/<svc>.env` cho 7 service (từ `.env.example` + secret thật), mode 600; chép QR key ring.
+4. Tạo `/opt/flash-ticket-app/env/<svc>.env` cho 8 service (từ `.env.example` + secret thật), mode 600; chép QR key ring.
 5. Kiểm Keycloak có client `internal-service` / `user-management` và secret khớp env.
+6. **Chuyển Keycloak sang pipeline CD:** `docker compose down` project `keycloak` (không `-v`), bỏ khai báo keycloak khỏi `/opt/flash-ticket-infra/docker-compose.yml`. Dữ liệu Keycloak trong PostgreSQL được bảo toàn.
 
 ## 7. Thứ tự triển khai
 

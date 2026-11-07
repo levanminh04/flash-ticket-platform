@@ -26,4 +26,14 @@ done
 grep -q 'TICKET_QR_KEY_RING_LOCATION=file:/run/ticket-qr/keys.json' "$root/services/ticket-service/.env.example" \
   || fail "ticket .env.example must point to /run/ticket-qr/keys.json"
 
+# --- the four hand-rolled deploy workflows/scripts and the 119 leftovers are gone
+for f in .github/workflows/deploy-booking.yml .github/workflows/deploy-event.yml .github/workflows/deploy-ticket.yml \
+         .github/workflows/deploy-user.yml deploy/deploy-booking.sh deploy/deploy-event.sh deploy/deploy-ticket.sh \
+         deploy/deploy-user.sh deploy/docker-compose.payment.ft119.yml deploy/ngrok/payment.yml; do
+  [[ ! -e "$root/$f" ]] || fail "$f must be deleted"
+done
+if grep -rn -i 'FT119\|config-server\|CONFIG_SERVER' "$root/.github"; then fail ".github still mentions 119 or config-server"; fi
+# --- every third-party action is pinned to a commit SHA
+if grep -rhn 'uses:' "$root/.github/workflows" | grep -v -E '@[0-9a-f]{40}|uses: \./'; then fail "unpinned action found"; fi
+
 echo "test-config OK"

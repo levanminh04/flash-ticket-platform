@@ -40,9 +40,7 @@ truyền bytes xuyên Gateway thực hoặc upload provider thật. Log workstat
 
 ## Bộ deploy đồng bộ Booking/User — 02/11/2026
 
-Entry point là [deploy/deploy-event.sh](../../deploy/deploy-event.sh), Compose cạnh script tại
-[deploy/docker-compose.event.yml](../../deploy/docker-compose.event.yml). Workflow riêng
-[deploy-event.yml](../../.github/workflows/deploy-event.yml) verify/publish/deploy Event lên AWS #2.
+Bộ deploy và CI/CD của Event đã được hợp nhất vào pipeline chung, xem tài liệu tại [deploy/app/README.md](../../deploy/app/README.md).
 Bash đọc snapshot của bộ Python cũ để rollback; giữ `event_owner`, `business.ex` và JWT health.
 Test/tunnel/mẫu env/README thao tác giữ local tại `deploy/`, theo convention User; không upload
 các file đó trong workflow. Sửa source lần này không tự thay container hoặc cấu hình AWS.

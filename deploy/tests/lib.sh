@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034
 # Tiny assert helpers sourced by every test-*.sh.
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 

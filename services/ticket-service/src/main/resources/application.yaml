@@ -99,6 +99,9 @@ ticket:
     key-ring-location: ${TICKET_QR_KEY_RING_LOCATION:}
 
 management:
+  health:
+    mail:
+      enabled: ${TICKET_MAIL_HEALTH_ENABLED:true}
   endpoints:
     web:
       exposure:

@@ -336,9 +336,7 @@ qua Gateway thật và correlation header, có đợi cache Eureka cập nhật.
 
 ## Bộ deploy và CI Event
 
-Hai file chạy chính nằm trực tiếp trong `deploy/`: [deploy-event.sh](../../deploy/deploy-event.sh)
-và [docker-compose.event.yml](../../deploy/docker-compose.event.yml), đồng bộ bố cục Booking/User.
-[deploy-event.yml](../../.github/workflows/deploy-event.yml) chạy Java 21/UTC Maven verify,
+Bộ deploy và CI/CD của Event đã được hợp nhất vào pipeline chung, xem tài liệu tại [deploy/app/README.md](../../deploy/app/README.md). Workflow dùng Java 21/UTC Maven verify,
 publish image theo digest và deploy riêng Event trên AWS #2. Giữ JWT health,
 snapshot/rollback và đường runtime env hiện có. Event không cần Config Server hoặc
 `CONFIG_SERVER_URL`; candidate image phải có label `org.flashticket.configuration=service-local-v1`.
