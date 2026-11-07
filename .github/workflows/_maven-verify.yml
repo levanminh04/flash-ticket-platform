@@ -1,0 +1,115 @@
+name: Maven verify
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+      path:
+        type: string
+        required: true
+      mvn:
+        type: string
+        required: true
+      postgres:
+        type: boolean
+        default: false
+      rabbitmq:
+        type: boolean
+        default: false
+      upload_jar:
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Maven / ${{ inputs.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      ticket-postgres:
+        image: ${{ inputs.postgres && 'postgres:16.15' || '' }}
+        env:
+          POSTGRES_DB: ticket_test_c1
+          POSTGRES_USER: ticket_ci
+          POSTGRES_PASSWORD: ticket_ci_disposable
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U ticket_ci -d ticket_test_c1"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: ${{ inputs.rabbitmq && 'rabbitmq:4.3.6-management' || '' }}
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+          # guest is loopback-only by default; the runner reaches the broker over the docker bridge
+          RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit loopback_users none
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 10s --health-retries 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ${{ inputs.path }}/pom.xml
+
+      - name: Make Maven Wrapper executable
+        if: ${{ inputs.mvn == './mvnw' }}
+        run: chmod +x mvnw
+        working-directory: ${{ inputs.path }}
+
+      - name: Isolated PostgreSQL checks
+        if: ${{ inputs.postgres }}
+        env:
+          MVN: ${{ inputs.mvn }}
+          TICKET_TEST_DB_URL: jdbc:postgresql://127.0.0.1:15432/ticket_test_c1
+          TICKET_TEST_DB_USER: ticket_ci
+          TICKET_TEST_DB_PASSWORD: ticket_ci_disposable
+        run: $MVN -B -ntp -Dtest=TicketPostgresIT test
+        working-directory: ${{ inputs.path }}
+
+      - name: Verify
+        env:
+          MVN: ${{ inputs.mvn }}
+          JAVA_TOOL_OPTIONS: -Duser.timezone=UTC
+        run: $MVN -B -ntp verify
+        working-directory: ${{ inputs.path }}
+
+      - name: Upload Maven reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: maven-reports-${{ inputs.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ inputs.path }}/target/surefire-reports/**
+            ${{ inputs.path }}/target/failsafe-reports/**
+            ${{ inputs.path }}/target/site/jacoco/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload JAR for the image build
+        if: ${{ inputs.upload_jar }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: jar-${{ inputs.name }}
+          path: |
+            ${{ inputs.path }}/target/*.jar
+            ${{ inputs.path }}/target/dependency/*.jar
+          if-no-files-found: error
+          retention-days: 1

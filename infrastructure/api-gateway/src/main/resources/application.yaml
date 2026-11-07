@@ -1,5 +1,170 @@
+server:
+  port: ${API_GATEWAY_PORT:8081}
+
 spring:
   application:
     name: api-gateway
-  config:
-    import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      connect-timeout: ${GATEWAY_REDIS_TIMEOUT:10s}
+      timeout: ${GATEWAY_REDIS_TIMEOUT:10s}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: ${INTEGRATION_GATEWAY_HTTP_RESPONSE_TIMEOUT:8s}
+          discovery:
+            locator:
+              enabled: false
+          # Route cụ thể đứng trước: nhiều path của payment/ticket/booking nằm dưới prefix của service khác.
+          routes:
+            - id: payment-vnpay-callbacks   # VNPay gọi vào: không token, không rate limit, không breaker
+              uri: lb://payment-service
+              order: -10
+              predicates:
+                - Path=/api/v1/payments/vnpay/return,/api/v1/payments/vnpay/ipn
+                - Method=GET
+            - id: payment
+              uri: lb://payment-service
+              order: 0
+              predicates:
+                - Path=/api/v1/payments/**,/api/v1/orders/*/payment,/api/v1/events/*/reconciliation,/api/v1/admin/events/*/payout,/api/v1/admin/events/*/reconciliation,/api/v1/admin/events/*/refund-progress,/api/v1/admin/refunds/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=paymentServiceBreaker
+            - id: ticket
+              uri: lb://ticket-service
+              order: 10
+              predicates:
+                - Path=/api/v1/tickets/**,/api/v1/events/*/check-ins,/api/v1/orders/*/tickets,/api/v1/orders/*/ticket-deliveries
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=ticketServiceBreaker
+            - id: booking
+              uri: lb://booking-service
+              order: 20
+              predicates:
+                - Path=/api/v1/events/*/availability,/api/v1/orders/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=bookingServiceBreaker
+            - id: event-images
+              uri: lb://event-service
+              order: 30
+              predicates:
+                - Path=/api/v1/organizer/events/*/images/**
+              metadata:
+                response-timeout: ${gateway.event-images.response-timeout-ms:45000}
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=eventImageServiceBreaker
+            - id: user
+              uri: lb://user-service
+              order: 40
+              predicates:
+                - Path=/api/v1/me,/api/v1/organizers/**,/api/v1/organizer-applications/**,/api/v1/admin/organizer-applications/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=userServiceBreaker
+            - id: event
+              uri: lb://event-service
+              order: 50
+              predicates:
+                - Path=/api/v1/events/**,/api/v1/categories/**,/api/v1/venues/**,/api/v1/organizer/**,/api/v1/admin/events/**,/api/v1/admin/cancellation-requests/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=eventServiceBreaker
+
+flashticket:
+  gateway:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+logging:
+  structured:
+    format:
+      console: logstash
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    circuitbreakers:
+      enabled: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      eventServiceBreaker: &breaker
+        base-config: default
+      eventImageServiceBreaker: *breaker
+      bookingServiceBreaker: *breaker
+      paymentServiceBreaker: *breaker
+      ticketServiceBreaker: *breaker
+      userServiceBreaker: *breaker
+  timelimiter:
+    instances:
+      eventImageServiceBreaker:
+        timeoutDuration: ${EVENT_IMAGES_GATEWAY_TIME_LIMIT:50s}
+      eventServiceBreaker:
+        timeoutDuration: ${INTEGRATION_EVENT_GATEWAY_TIME_LIMIT:25s}
+      bookingServiceBreaker:
+        timeoutDuration: ${INTEGRATION_BOOKING_GATEWAY_TIME_LIMIT:25s}
+      paymentServiceBreaker:
+        timeoutDuration: ${INTEGRATION_PAYMENT_GATEWAY_TIME_LIMIT:25s}
+      ticketServiceBreaker:
+        timeoutDuration: ${INTEGRATION_TICKET_GATEWAY_TIME_LIMIT:25s}
+      userServiceBreaker:
+        timeoutDuration: ${INTEGRATION_USER_GATEWAY_TIME_LIMIT:25s}

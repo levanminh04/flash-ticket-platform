@@ -1,0 +1,94 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "deploy = build + deploy; restart = recreate the running digest (after updating secret ENV_<SVC>); rollback = run a given digest"
+        type: choice
+        options: [deploy, restart, rollback]
+        default: deploy
+      service:
+        description: 'Service name from .github/services.json, or "all" (not allowed for rollback)'
+        type: string
+        required: true
+      image_digest:
+        description: "sha256:<64 hex>, rollback only"
+        type: string
+        required: false
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      first: ${{ steps.plan.outputs.first }}
+      rest: ${{ steps.plan.outputs.rest }}
+      has_first: ${{ steps.plan.outputs.has_first }}
+      has_rest: ${{ steps.plan.outputs.has_rest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Decide what to deploy
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          ACTION: ${{ inputs.action }}
+          SERVICE: ${{ inputs.service }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: bash .github/scripts/plan-deploy.sh >> "$GITHUB_OUTPUT"
+
+  discovery:
+    name: Deploy / ${{ matrix.service.name }}
+    needs: plan
+    if: ${{ needs.plan.outputs.has_first == 'true' }}
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.plan.outputs.first) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy-service.yml
+    with:
+      service: ${{ matrix.service.name }}
+      path: ${{ matrix.service.path }}
+      mvn: ${{ matrix.service.mvn }}
+      postgres: ${{ matrix.service.postgres }}
+      rabbitmq: ${{ matrix.service.rabbitmq }}
+      mode: ${{ matrix.service.mode }}
+      image_digest: ${{ matrix.service.image_digest }}
+    secrets: inherit
+
+  rest:
+    name: Deploy / ${{ matrix.service.name }}
+    needs: [plan, discovery]
+    if: ${{ !cancelled() && needs.discovery.result != 'failure' && needs.plan.outputs.has_rest == 'true' }}
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.plan.outputs.rest) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy-service.yml
+    with:
+      service: ${{ matrix.service.name }}
+      path: ${{ matrix.service.path }}
+      mvn: ${{ matrix.service.mvn }}
+      postgres: ${{ matrix.service.postgres }}
+      rabbitmq: ${{ matrix.service.rabbitmq }}
+      mode: ${{ matrix.service.mode }}
+      image_digest: ${{ matrix.service.image_digest }}
+    secrets: inherit

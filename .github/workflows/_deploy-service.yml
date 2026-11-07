@@ -1,0 +1,157 @@
+name: Deploy service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        type: string
+        required: true
+      path:
+        type: string
+        required: true
+      mvn:
+        type: string
+        required: true
+      postgres:
+        type: boolean
+        default: false
+      rabbitmq:
+        type: boolean
+        default: false
+      mode:
+        description: build-and-deploy | recreate | rollback
+        type: string
+        required: true
+      image_digest:
+        description: sha256:<64 hex>, rollback only
+        type: string
+        default: ''
+
+permissions: {}
+
+jobs:
+  verify:
+    if: ${{ inputs.mode == 'build-and-deploy' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_maven-verify.yml
+    with:
+      name: ${{ inputs.service }}
+      path: ${{ inputs.path }}
+      mvn: ${{ inputs.mvn }}
+      postgres: ${{ inputs.postgres }}
+      rabbitmq: ${{ inputs.rabbitmq }}
+      upload_jar: true
+
+  publish:
+    needs: verify
+    if: ${{ inputs.mode == 'build-and-deploy' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download verified JAR
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: jar-${{ inputs.service }}
+          path: ${{ inputs.path }}/target
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ${{ inputs.path }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ghcr.io/levanminh04/flash-ticket-platform/${{ inputs.service }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  deploy:
+    needs: [verify, publish]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: deploy-${{ inputs.service }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      REGISTRY_IMAGE: ghcr.io/levanminh04/flash-ticket-platform/${{ inputs.service }}
+      APP_ROOT: /opt/flash-ticket-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Deploy ${{ inputs.service }} to 84
+        env:
+          SSH_KEY: ${{ secrets.FT84_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.FT84_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.FT84_SSH_HOST }}
+          SSH_USER: ${{ vars.FT84_SSH_USER }}
+          SSH_PORT: ${{ vars.FT84_SSH_PORT }}
+          SERVICE: ${{ inputs.service }}
+          MODE: ${{ inputs.mode }}
+          PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
+          ROLLBACK_DIGEST: ${{ inputs.image_digest }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENV_SECRET: ${{ secrets[format('ENV_{0}', fromJSON('{"discovery-server":"DISCOVERY_SERVER","api-gateway":"API_GATEWAY","user-service":"USER_SERVICE","event-service":"EVENT_SERVICE","ticket-service":"TICKET_SERVICE","booking-service":"BOOKING_SERVICE","payment-service":"PAYMENT_SERVICE","keycloak":"KEYCLOAK"}')[inputs.service])] }}
+        run: |
+          set -euo pipefail
+          [[ $SERVICE =~ ^[a-z-]+$ ]]
+          [[ $SSH_HOST =~ ^[A-Za-z0-9.-]+$ && $SSH_USER =~ ^[A-Za-z0-9_-]+$ && $SSH_PORT =~ ^[0-9]+$ ]]
+          [[ $REGISTRY_USER =~ ^[A-Za-z0-9-]+$ ]]
+          test -n "$SSH_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          dir=$(mktemp -d "$RUNNER_TEMP/ssh.XXXXXXXX")
+          trap 'rm -rf -- "$dir"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$dir/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$dir/known_hosts"
+          chmod 600 "$dir/key" "$dir/known_hosts"
+          opts=(-i "$dir/key" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o "UserKnownHostsFile=$dir/known_hosts")
+          dest="$SSH_USER@$SSH_HOST"
+
+          case "$MODE" in
+            build-and-deploy) image="$REGISTRY_IMAGE@$PUBLISHED_DIGEST" ;;
+            rollback) image="$REGISTRY_IMAGE@$ROLLBACK_DIGEST" ;;
+            recreate)
+              # shellcheck disable=SC2029
+              image=$(ssh "${opts[@]}" "$dest" "cat '$APP_ROOT/state/$SERVICE.current'")
+              [[ $image == "$REGISTRY_IMAGE@sha256:"* ]] || { echo "No digest recorded for $SERVICE: deploy it first"; exit 1; } ;;
+            *) echo "Unknown mode $MODE"; exit 1 ;;
+          esac
+          [[ $image =~ ^[a-z0-9./-]+@sha256:[a-f0-9]{64}$ ]]
+
+          if [[ $MODE == build-and-deploy || $MODE == recreate ]]; then
+            [[ -n $ENV_SECRET ]] || { echo "DEPLOY_REJECTED MISSING_ENV_SECRET $SERVICE"; exit 1; }
+            # shellcheck disable=SC2029
+            printf '%s\n' "$ENV_SECRET" | ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$APP_ROOT/env' && cat > '$APP_ROOT/env/$SERVICE.env.tmp' && chmod 600 '$APP_ROOT/env/$SERVICE.env.tmp' && mv -f '$APP_ROOT/env/$SERVICE.env.tmp' '$APP_ROOT/env/$SERVICE.env'"
+          fi
+
+          # shellcheck disable=SC2029
+          tar -C deploy/app -cf - . | ssh "${opts[@]}" "$dest" "tar -C '$APP_ROOT/compose' -xf -"
+          # shellcheck disable=SC2029
+          ssh "${opts[@]}" "$dest" "cat > '$APP_ROOT/deploy-service.sh.new' && chmod 755 '$APP_ROOT/deploy-service.sh.new' && mv '$APP_ROOT/deploy-service.sh.new' '$APP_ROOT/deploy-service.sh'" < deploy/scripts/deploy-service.sh
+          # shellcheck disable=SC2029
+          printf '%s' "$REGISTRY_TOKEN" | ssh "${opts[@]}" "$dest" "REGISTRY_USER='$REGISTRY_USER' '$APP_ROOT/deploy-service.sh' '$SERVICE' '$image' '$GITHUB_SHA'"

@@ -77,6 +77,7 @@ SELECT pg_temp.expect_failure($q$INSERT INTO payment_confirmations(order_id,char
 SELECT pg_temp.expect_failure($q$INSERT INTO payment_confirmations(order_id,charge_id,amount,currency) VALUES(md5('order-2')::uuid,md5('mismatch')::uuid,10,'VND')$q$, '23503', 'P04 cannot relabel actual receipt amount');
 SELECT pg_temp.expect_failure($q$UPDATE refunds SET amount = 9$q$, '23503', 'P05 no partial refund');
 SELECT pg_temp.expect_failure($q$INSERT INTO refunds(charge_id,order_id,amount,currency,reason,state) VALUES(md5('charge-1')::uuid,md5('order-1')::uuid,10,'VND','LATE_PAYMENT','PENDING')$q$, '23505', 'P06 one refund per charge');
+SELECT pg_temp.expect_failure($q$UPDATE refunds SET settled_by = 'admin-1'$q$, '23514', 'P06a manual settlement needs reference and SUCCEEDED');
 SELECT pg_temp.expect_failure($q$UPDATE event_refund_items SET confirmed_charge_id = md5('mismatch')::uuid$q$, '23503', 'P07 excess charge cannot enter cancellation run');
 SELECT pg_temp.expect_failure($q$UPDATE event_refund_runs SET completed_at = now()$q$, '23514', 'P08 incomplete selection cannot complete run');
 SELECT pg_temp.expect_failure($q$UPDATE payment_attempts SET state='SUCCEEDED'$q$, '23514', 'P09 terminal attempt needs finish time');

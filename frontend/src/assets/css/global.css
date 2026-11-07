@@ -1,0 +1,294 @@
+:root {
+  /* Vàng là màu hành động; chữ trên nền trắng dùng biến ink đậm hơn. */
+  --brand: #cc9900;
+  --brand-hover: #dfb329;
+  --brand-active: #b88b00;
+  --brand-ink: #805c00;
+  --brand-soft: #fff4cc;
+  --brand-on-dark: #f4d773;
+  --on-brand: #1b1d21;
+  --primary: var(--brand);
+  --primary-light: var(--brand-soft);
+  --primary-dark: var(--brand-ink);
+  --canvas-dark: #1d1e22;
+  --surface-dark: #282a30;
+  --text-on-dark: #f8fafc;
+  --text-secondary-on-dark: #d1d3d8;
+  --border-dark: #5c606b;
+  --focus-ring: #805c00;
+  --disabled-surface: #e9e9e5;
+  --disabled-ink: #60646d;
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  /* Three-zone page gradients */
+  --page-gradient-discovery:
+    radial-gradient(circle at top center, rgba(92, 228, 155, 0.24), transparent 24%),
+    linear-gradient(
+      180deg,
+      #08281d 0%,
+      #16533a 34%,
+      #d8f4e4 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-booking:
+    radial-gradient(circle at top right, rgba(45, 194, 117, 0.2), transparent 26%),
+    linear-gradient(
+      180deg,
+      #0a1d29 0%,
+      #135164 34%,
+      #d9f1ee 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-account:
+    radial-gradient(circle at top left, rgba(45, 194, 117, 0.18), transparent 24%),
+    linear-gradient(
+      180deg,
+      #0f172a 0%,
+      #214e43 34%,
+      #e5f5ec 70%,
+      #f8fafc 100%
+    );
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  --bg-main: #f8fafc; /* Very light blue-gray */
+  --bg-card: #ffffff;
+  --bg-input: #f1f5f9;
+
+  --text-primary: #202126;
+  --text-secondary: #555b65;
+  --text-muted: #666b74;
+
+  --border: #e2e8f0; /* Slate 200 */
+
+  /* Smooth Radii */
+  --radius-sm: 12px;
+  --radius-md: 24px; /* Increased for softer "box" look */
+  --radius-lg: 32px;
+  --radius-full: 9999px; /* Pill shape */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  --font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Class dùng riêng để căn giữa nội dung (cho Login/Register/Forgot Password) */
+.body-center {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+a {
+  text-decoration: none;
+  color: var(--brand-ink);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+/* Base Card Style */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  border: 1px solid var(--border);
+  padding: 24px;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.card:hover {
+  border-color: transparent;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Button Component */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-brand);
+}
+
+.btn-primary:hover {
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:active {
+  background: var(--brand-active);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.btn:disabled,
+.home-page button:disabled {
+  background: var(--disabled-surface);
+  color: var(--disabled-ink);
+  border-color: transparent;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--on-brand);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover {
+  background: var(--bg-input);
+  border-color: var(--text-muted);
+}
+
+/* Shared pagination */
+.pagination-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.pagination__item {
+  display: flex;
+}
+
+.pagination__link {
+  min-width: 42px;
+  height: 42px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination__link:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  background: #ffffff;
+}
+
+.pagination__link--nav {
+  padding: 0 18px;
+}
+
+.pagination__link--break {
+  cursor: default;
+  background: transparent;
+  border-color: transparent;
+}
+
+.pagination__item.is-active .pagination__link {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-sm);
+}
+
+.pagination__item.is-disabled .pagination__link {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .pagination {
+    gap: 8px;
+  }
+
+  .pagination__link {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .pagination__link--nav {
+    padding: 0 14px;
+  }
+}

@@ -1,0 +1,665 @@
+﻿import { CSSProperties, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { LoaderCircle } from "lucide-react";
+import { FaCalendarAlt, FaMapMarkedAlt } from "react-icons/fa";
+import { IoTicketSharp } from "react-icons/io5";
+import { useTranslation } from "react-i18next";
+import { categoryService } from "../../services/categoryService";
+import { eventService } from "../../services/eventService";
+import { organizerService } from "../../services/organizerService";
+import { venueService } from "../../services/venueService";
+import Blog from "../../components/common/Blog";
+import Footer from "../../components/common/Footer";
+import { Category, EventSummary, Venue } from "../../types/api";
+import { partnerLogos } from "../../constants/partners";
+
+export default function EventDetailPage() {
+  const { i18n, t } = useTranslation();
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const [event, setEvent] = useState<EventSummary | null>(null);
+  const [venue, setVenue] = useState<Venue | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const language = i18n.resolvedLanguage || "vi";
+
+  useEffect(() => {
+    categoryService
+      .getCategories()
+      .then((res) => {
+        if (res && Array.isArray(res)) setAllCategories(res);
+      })
+      .catch((err) => console.error("Failed to load categories", err));
+  }, []);
+
+  useEffect(() => {
+    if (!slug) return;
+    setIsLoading(true);
+    eventService
+      .getEventDetails(slug)
+      .then((data) => {
+        setEvent(data);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load event details:", err);
+        setError(t("selectTicket.ticketLoadFailed"));
+      })
+      .finally(() => setIsLoading(false));
+  }, [slug, t]);
+
+  useEffect(() => {
+    if (!event?.venue?.id) return;
+    venueService
+      .getVenues()
+      .then((venues) => {
+        const selectedVenue = venues.find(
+          (v) => v.id === event.venue!.id,
+        );
+        if (selectedVenue) setVenue(selectedVenue);
+      })
+      .catch((err) => console.error("Failed to load venue:", err));
+  }, [event?.venue?.id]);
+
+  useEffect(() => {
+    const organizer = event?.organizer;
+    const organizerUserId = organizer?.userId || organizer?.id;
+    const needsOrganizerProfile =
+      !organizer?.slug ||
+      !organizer?.logoUrl ||
+      !organizer?.email ||
+      !organizer?.bannerUrl;
+
+    if (!organizerUserId || !needsOrganizerProfile) return;
+
+    organizerService
+      .getOrganizerByUserId(organizerUserId)
+      .then((profile) => {
+        setEvent((current) =>
+          current
+            ? {
+                ...current,
+                organizer: {
+                  ...(current.organizer || {}),
+                  id: profile.id,
+                  userId: profile.userId,
+                  name: profile.name,
+                  slug: profile.slug || undefined,
+                  logoUrl: profile.logoUrl || undefined,
+                  bannerUrl: profile.bannerUrl || undefined,
+                  description: profile.description || undefined,
+                  websiteUrl: profile.websiteUrl || undefined,
+                  isVerified: profile.isVerified ?? undefined,
+                  totalEvents: profile.totalEvents ?? undefined,
+                  totalTicketsSold: profile.totalTicketsSold ?? undefined,
+                  followerCount: profile.followerCount ?? undefined,
+                  averageRating: profile.averageRating ?? undefined,
+                  email: profile.email || undefined,
+                  phone: profile.phone || undefined,
+                },
+              }
+            : current,
+        );
+      })
+      .catch((err) => console.error("Failed to enrich organizer profile:", err));
+  }, [
+    event?.organizer?.bannerUrl,
+    event?.organizer?.email,
+    event?.organizer?.id,
+    event?.organizer?.logoUrl,
+    event?.organizer?.slug,
+    event?.organizer?.userId,
+  ]);
+
+  const categoryNav = (
+    <nav className="category-nav">
+      <div className="container">
+        <ul className="category-list">
+          <li className="category-item">
+            <Link to="/search" className="category-link">
+              {t("common.all")}
+            </Link>
+          </li>
+          {allCategories.length > 0 ? (
+            allCategories.map((category) => (
+              <li className="category-item" key={category.id}>
+                <Link
+                  to={`/search?category=${category.slug || category.id}`}
+                  className="category-link"
+                >
+                  {category.name}
+                </Link>
+              </li>
+            ))
+          ) : (
+            <li className="category-item">
+              <span className="category-link">{t("eventDetail.loading")}</span>
+            </li>
+          )}
+        </ul>
+      </div>
+    </nav>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div className="event-detail-loading" role="status" aria-live="polite">
+          <LoaderCircle className="event-detail-loading-icon" size={24} />
+          <span>{t("eventDetail.loading")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>{error || t("eventDetail.notFound")}</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            {t("eventDetail.returnHome")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const startDatetime = event.schedule?.startDatetime || event.startDatetime;
+  const endDatetime = event.schedule?.endDatetime || event.endDatetime;
+  if (!startDatetime || !endDatetime) {
+    return (
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>{t("eventDetail.invalidTime")}</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            {t("eventDetail.returnHome")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const startDate = new Date(startDatetime);
+  const endDate = new Date(endDatetime);
+  const venueName = event.venue?.name || event.venueName;
+  const city = event.venue?.city || event.city;
+  const totalCapacity = event.statistics?.totalCapacity ?? event.totalCapacity;
+  const ticketsSold = event.statistics?.ticketsSold ?? event.ticketsSold;
+  const detailAddressLine = [venueName, city].filter(Boolean).join(" • ");
+  const minPrice =
+    event.minPriceAmount ? BigInt(event.minPriceAmount) : event.ticketTypes && event.ticketTypes.length > 0
+      ? Math.min(...event.ticketTypes.map((ticketType) => ticketType.price))
+      : event.minPrice;
+  const bannerUrl =
+    event.images?.find((image) => image.type === "BANNER")?.url ||
+    event.bannerUrl ||
+    event.images?.[0]?.url;
+  const posterUrl =
+    event.images?.find((image) => image.type === "POSTER")?.url ||
+    event.images?.find((image) => image.type === "THUMBNAIL")?.url ||
+    event.thumbnailUrl ||
+    event.images?.[0]?.url ||
+    event.bannerUrl;
+  const fallbackGalleryImages = [
+    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=80",
+    "https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80",
+  ];
+  const venueImageUrl =
+    venue?.imageUrls?.[0] ||
+    "https://images.unsplash.com/photo-1519167758993-b505a9dd0652?auto=format&fit=crop&w=1200&q=80";
+  const otherGalleryImages = [
+    posterUrl,
+    ...(event.images || []).map((image) => image.url),
+  ].filter((url): url is string => Boolean(url));
+  const uniqueOtherImages = Array.from(new Set(otherGalleryImages));
+  const eventGalleryImages = [
+    bannerUrl || fallbackGalleryImages[0],
+    venueImageUrl,
+    ...uniqueOtherImages,
+    ...fallbackGalleryImages,
+  ]
+    .filter((url): url is string => Boolean(url))
+    .slice(0, 5);
+  const ticketTypes = [...(event.ticketTypes || [])].sort(
+    (left, right) => left.price - right.price,
+  );
+  const hasTotalCapacity = typeof totalCapacity === "number";
+  const hasTicketsSold = typeof ticketsSold === "number";
+  const eventDescription =
+    event.description ||
+    event.shortDescription ||
+    t("eventDetail.updatingDescription");
+  const eventTerms = [
+    `${t("eventDetail.time")}: ${startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} ${startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
+    venueName ? `${t("eventDetail.venue")}: ${venueName}${city ? `, ${city}` : ""}` : null,
+    hasTotalCapacity
+      ? `${t("eventDetail.capacity")}: ${totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")}`
+      : null,
+    event.tags && event.tags.length > 0
+      ? `${t("eventDetail.theme")}: ${event.tags.join(", ")}`
+      : null,
+  ].filter((term): term is string => Boolean(term));
+  const organizer = event.organizer;
+  const organizerInitials = organizer?.name
+    ? organizer.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase()
+    : "OT";
+  const formattedMinPrice =
+    typeof minPrice === "number" || typeof minPrice === "bigint" ? minPrice.toLocaleString(language === "en" ? "en-US" : "vi-VN") : null;
+  const heroMaskId = "event-hero-mask";
+  const heroCardStyle = {
+    "--event-hero-mask": `url(#${heroMaskId})`,
+  } as CSSProperties;
+
+  return (
+    <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+      {categoryNav}
+
+      <div
+        style={{
+          width: "100%",
+          height: "400px",
+          position: "relative",
+          backgroundColor: "#f0f0f0",
+        }}
+      >
+        <img
+          src={
+            bannerUrl || "https://via.placeholder.com/1200x400?text=No+Banner"
+          }
+          alt={event.title}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1))",
+          }}
+        />
+      </div>
+
+      <div className="container event-hero-wrap">
+        <svg
+          aria-hidden="true"
+          className="event-hero-mask-defs"
+          focusable="false"
+          width="0"
+          height="0"
+        >
+          <defs>
+            <mask
+              id={heroMaskId}
+              maskUnits="objectBoundingBox"
+              maskContentUnits="objectBoundingBox"
+            >
+              <rect x="0" y="0" width="1" height="1" fill="white" />
+              <ellipse cx="0.466" cy="0" rx="0.022" ry="0.065" fill="black" />
+              <ellipse cx="0.466" cy="1" rx="0.022" ry="0.065" fill="black" />
+            </mask>
+          </defs>
+        </svg>
+
+        <article className="event-hero-card" style={heroCardStyle}>
+          <section className="event-hero-info">
+            {event.categories && event.categories.length > 0 ? (
+              <div className="event-hero-tags">
+                {event.categories.map((category) => (
+                  <span
+                    key={category.id || category.slug || category.name}
+                    className="event-hero-tag"
+                  >
+                    {category.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              event.category && (
+                <div className="event-hero-tags">
+                  <span className="event-hero-tag">{event.category.name}</span>
+                </div>
+              )
+            )}
+            <h1 className="event-hero-title">{event.title}</h1>
+            <div className="event-hero-meta-list">
+              <div className="event-hero-meta-item">
+                <FaCalendarAlt size={20} className="event-hero-meta-icon" />
+                <div>
+                  <p className="event-hero-meta-primary">
+                    {startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </p>
+                  <p className="event-hero-meta-secondary">
+                    {startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    -{" "}
+                    {endDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </div>
+              <div className="event-hero-meta-item">
+                <FaMapMarkedAlt size={20} className="event-hero-meta-icon" />
+                <div>
+                  <p className="event-hero-meta-primary">
+                    {venueName || t("eventDetail.venueUpdating")}
+                  </p>
+                  <p className="event-hero-meta-secondary">
+                    {detailAddressLine || t("eventDetail.addressUpdating")}
+                  </p>
+                </div>
+              </div>
+              {(hasTotalCapacity || hasTicketsSold) && (
+                <div className="event-hero-meta-item">
+                  <IoTicketSharp size={20} className="event-hero-meta-icon" />
+                  <div>
+                    <p className="event-hero-meta-primary">
+                      {t("eventDetail.soldQuantity")}{" "}
+                      {hasTotalCapacity
+                        ? totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")
+                        : t("eventDetail.unlimited")}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="event-hero-separator" />
+            <div className="event-hero-cta-row">
+              <div className="event-hero-price-inline">
+                <p className="event-hero-price-label">{t("eventDetail.minPriceLabel")}</p>
+                <p
+                  className="event-hero-price-value"
+                  style={{ color: "#CC9900" }}
+                >
+                  {formattedMinPrice ? `${formattedMinPrice} đ` : t("eventDetail.free")}
+                </p>
+              </div>
+            </div>
+            <button
+              className="btn btn-primary event-hero-cta-button"
+              onClick={() => navigate(`/events/${slug}/book`)}
+              style={{ backgroundColor: "#CC9900", borderColor: "#CC9900" }}
+            >
+              {t("eventDetail.buyTicket")}
+            </button>
+          </section>
+
+          <div className="event-hero-divider" aria-hidden="true">
+            <span className="event-hero-divider-cap top" />
+            <span className="event-hero-divider-line" />
+            <span className="event-hero-divider-cap bottom" />
+          </div>
+
+          <div className="event-hero-poster">
+            <img
+              src={
+                posterUrl ||
+                "https://via.placeholder.com/800x1000?text=No+Poster"
+              }
+              alt={`${event.title} poster`}
+              className="event-hero-poster-image"
+            />
+            <div className="event-hero-poster-overlay" />
+          </div>
+        </article>
+
+        <section className="event-detail-lower">
+          <div className="event-detail-content-grid">
+            <article className="event-detail-main-card">
+              <div className="event-detail-card-header">
+                <h2>{t("eventDetail.detailTitle")}</h2>
+              </div>
+              <div className="event-detail-description">{eventDescription}</div>
+              <div className="event-detail-card-divider event-detail-card-divider--dashed" />
+              <div className="event-detail-terms">
+                <div className="event-detail-card-header">
+                  <h2>{t("eventDetail.terms")}</h2>
+                </div>
+                <ul className="event-detail-terms-list">
+                  {eventTerms.map((term) => (
+                    <li key={term}>{term}</li>
+                  ))}
+                </ul>
+              </div>
+            </article>
+
+            <aside className="event-detail-sidebar">
+              <section className="event-detail-side-card">
+                <div className="event-detail-card-header">
+                  <h2>{t("eventDetail.ticketOptions")}</h2>
+                </div>
+                {ticketTypes.length > 0 ? (
+                  <div className="event-ticket-list">
+                    {ticketTypes.map((ticketType) => (
+                      <div className="event-ticket-item" key={ticketType.id}>
+                        <div>
+                          <div className="event-ticket-item-top">
+                            <p
+                              className="event-ticket-item-name"
+                              style={{
+                                color: ticketType.colorCode || undefined,
+                              }}
+                            >
+                              {ticketType.name}
+                            </p>
+                          </div>
+                          <p className="event-ticket-item-meta">
+                            {ticketType.description?.trim() ||
+                              t("eventDetail.ticketDescriptionFallback")}
+                          </p>
+                        </div>
+                        <div className="event-ticket-item-price">
+                          {ticketType.unitPrice ? `${BigInt(ticketType.unitPrice).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ` : typeof ticketType.price === "number"
+                            ? `${ticketType.price.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`
+                            : t("eventDetail.priceUpdating")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="event-ticket-item-meta">
+                    {t("eventDetail.ticketTypeEmpty")}
+                  </p>
+                )}
+              </section>
+
+              <section className="event-detail-side-card">
+                <div className="event-detail-card-header">
+                  <h2>{t("eventDetail.organizer")}</h2>
+                </div>
+                {organizer?.bannerUrl ? (
+                  <div className="event-organizer-banner">
+                    <img src={organizer.bannerUrl} alt={`${organizer.name} banner`} />
+                  </div>
+                ) : null}
+                <div className="event-organizer-header">
+                  {organizer?.logoUrl ? (
+                    <img
+                      src={organizer.logoUrl}
+                      alt={organizer.name}
+                      className="event-organizer-avatar"
+                    />
+                  ) : (
+                    <div className="event-organizer-avatar event-organizer-avatar-fallback">
+                      {organizerInitials}
+                    </div>
+                  )}
+                  <div className="event-organizer-meta">
+                    <div className="event-organizer-title-row">
+                      <h4>{organizer?.name || t("eventDetail.priceUpdating")}</h4>
+                      {organizer?.isVerified && (
+                        <span className="event-organizer-badge">Verified</span>
+                      )}
+                    </div>
+                    <p>
+                      {organizer?.description ||
+                        t("eventDetail.organizerDescriptionFallback")}
+                    </p>
+                    {organizer?.slug ? (
+                      <Link
+                        className="event-organizer-profile-link"
+                        to={`/organizers/${organizer.slug}`}
+                      >
+                        {t("eventDetail.organizerProfile")}
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="event-organizer-stats event-organizer-stats--list">
+                  <div className="event-organizer-stat event-organizer-stat--list">
+                    <span>
+                      <span className="event-organizer-label">Name:</span>{" "}
+                      <span className="event-organizer-value">
+                        {organizer?.name || t("eventDetail.priceUpdating")}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="event-organizer-stat event-organizer-stat--list">
+                    <span>
+                      <span className="event-organizer-label">Describe:</span>{" "}
+                      <span className="event-organizer-value">
+                        {organizer?.description || t("eventDetail.priceUpdating")}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="event-organizer-stat event-organizer-stat--list">
+                    <span>
+                      <span className="event-organizer-label">Email:</span>{" "}
+                      <span className="event-organizer-value">
+                        {organizer?.email || t("eventDetail.priceUpdating")}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="event-organizer-stat event-organizer-stat--list">
+                    <span>
+                      <span className="event-organizer-label">Phone:</span>{" "}
+                      <span className="event-organizer-value">
+                        {organizer?.phone || t("eventDetail.priceUpdating")}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="event-organizer-stat event-organizer-stat--list">
+                    <span>
+                      <span className="event-organizer-label">Web:</span>{" "}
+                      <span className="event-organizer-value">
+                        {organizer?.websiteUrl ? (
+                          <a
+                            href={organizer.websiteUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {organizer.websiteUrl}
+                          </a>
+                        ) : (
+                          t("eventDetail.priceUpdating")
+                        )}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section className="event-gallery-section" aria-label="Event Gallery">
+          <header className="event-gallery-header">
+            <h2>{t("eventDetail.eventGallery")}</h2>
+            <p>{t("eventDetail.eventGalleryDescription")}</p>
+          </header>
+
+          <div className="event-gallery-grid">
+            <div className="event-gallery-row event-gallery-row-top">
+              <figure className="event-gallery-item event-gallery-item-large">
+                <img
+                  src={eventGalleryImages[0]}
+                  alt={`${event.title} crowd moment`}
+                />
+              </figure>
+              <figure className="event-gallery-item event-gallery-item-small">
+                <img
+                  src={eventGalleryImages[1]}
+                  alt={`${event.title} activity moment`}
+                />
+              </figure>
+            </div>
+
+            <div className="event-gallery-row event-gallery-row-bottom">
+              {eventGalleryImages.slice(2, 5).map((imageUrl, index) => (
+                <figure className="event-gallery-item" key={`${imageUrl}-${index}`}>
+                  <img
+                    src={imageUrl}
+                    alt={`${event.title} performance moment ${index + 1}`}
+                  />
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="event-trust-strip">
+          <header className="event-trust-header">
+            <h2>{t("eventDetail.acceptedFirst")} <span className="event-trust-title-highlight">{t("eventDetail.acceptedHighlight")}</span></h2>
+          </header>
+
+          <p className="event-trust-copy">
+            {t("eventDetail.trustCopy")}
+          </p>
+
+          <div className="partner-grid event-partner-grid">
+            {partnerLogos.map((partner) => (
+              <div
+                className="partner-logo event-partner-logo"
+                key={partner.id}
+                title={partner.name}
+              >
+                <img src={partner.image} alt={partner.name} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "0 16px",
+          boxSizing: "border-box",
+        }}
+      >
+        <Blog />
+      </div>
+      <Footer />
+    </div>
+  );
+}

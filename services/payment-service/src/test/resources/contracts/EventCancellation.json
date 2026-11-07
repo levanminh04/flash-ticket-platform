@@ -1,0 +1,59 @@
+{
+  "eventId": "10000000-0000-0000-0000-000000000002",
+  "cancellationId": "10000000-0000-0000-0000-000000000008",
+  "sourceConfigVersion": "1",
+  "cancelledAt": "2030-01-01T01:00:00Z",
+  "actorSubject": "org-1",
+  "sales": {
+    "schemaVersion": 1,
+    "eventId": "10000000-0000-0000-0000-000000000002",
+    "organizerSubject": "org-1",
+    "sourceConfigVersion": "1",
+    "eventStatus": "CANCELLED",
+    "eventTitle": "Concert",
+    "eventStartsAt": "2030-01-01T01:00:00Z",
+    "eventEndsAt": "2030-01-01T01:00:00Z",
+    "venueName": null,
+    "mode": "QUANTITY",
+    "saleStartsAt": "2030-01-01T01:00:00Z",
+    "saleEndsAt": "2030-01-01T01:00:00Z",
+    "purchaseLimit": 10,
+    "ticketTypes": [],
+    "sectors": [],
+    "seats": [],
+    "promotions": [
+      {
+        "promotionId": "10000000-0000-0000-0000-000000000009",
+        "code": "A",
+        "startsAt": "2030-01-01T01:00:00Z",
+        "endsAt": "2030-01-01T01:00:00Z",
+        "maximumUses": "1",
+        "maximumUsesPerUser": 1,
+        "discount": {
+          "kind": "FIXED",
+          "amount": "10"
+        }
+      },
+      {
+        "promotionId": "10000000-0000-0000-0000-000000000010",
+        "code": "B",
+        "startsAt": "2030-01-01T01:00:00Z",
+        "endsAt": "2030-01-01T01:00:00Z",
+        "maximumUses": "1",
+        "maximumUsesPerUser": 1,
+        "discount": {
+          "kind": "PERCENT",
+          "percent": 10
+        }
+      }
+    ]
+  },
+  "access": {
+    "eventId": "10000000-0000-0000-0000-000000000002",
+    "organizerSubject": "org-1",
+    "eventStatus": "CANCELLED",
+    "eventStartsAt": "2030-01-01T01:00:00Z",
+    "eventEndsAt": "2030-01-01T01:00:00Z",
+    "sourceConfigVersion": "1"
+  }
+}

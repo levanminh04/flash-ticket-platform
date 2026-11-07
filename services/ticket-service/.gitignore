@@ -1,4 +1,6 @@
 HELP.md
+.env.ticket-db
+!.env.ticket-db.example
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

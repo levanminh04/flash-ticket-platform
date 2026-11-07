@@ -97,3 +97,33 @@ failsafe-reports/
 *.db
 docker-data/
 **/docker-data/
+/.gitignore
+
+.codegraph/
+image/
+.gitignore
+docs/knowledge
+docs/projectd
+/services/keycloak-spi/.mvn/
+/services/keycloak-spi/mvnw
+/services/keycloak-spi/mvnw.cmd
+/services/keycloak-spi/.gitattributes
+/services/keycloak-spi/.env.example
+# Postman local environments contain Keycloak client secrets.
+/deploy/keycloak/postman/environments/*.local.postman_environment.json
+/spec/
+/docs/superpowers/
+/deploy/Note.md
+/services/booking-service/.mvn/
+
+/AGENTS.md
+/CLAUDE.md
+/.superpowers/
+
+# One-file Postman import contains local client secrets.
+/deploy/keycloak/postman/import.json
+
+# Local database consolidation backups.
+/deploy/postgres/backups/
+/.playwright-mcp/
+/deploy/keycloak/postman/RESET-TEST-RESULTS.md

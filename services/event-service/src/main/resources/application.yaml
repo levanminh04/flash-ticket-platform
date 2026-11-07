@@ -1,5 +1,117 @@
+# Bundled runtime configuration; endpoints and credentials remain environment supplied.
+server:
+  tomcat:
+    # Consume bounded rejected bodies so clients receive the JSON 413 response.
+    max-swallow-size: ${EVENT_IMAGES_MAX_REQUEST_BYTES:6291456}B
+  port: ${EVENT_SERVICE_PORT:8086}
+
 spring:
   application:
     name: event-service
-  config:
-    import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  servlet:
+    multipart:
+      max-file-size: ${EVENT_IMAGES_MAX_BYTES:5242880}B
+      max-request-size: ${EVENT_IMAGES_MAX_REQUEST_BYTES:6291456}B
+  datasource:
+    url: ${EVENT_DB_URL}
+    username: ${EVENT_DB_USERNAME:event_admin}
+    password: ${EVENT_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE event_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: event_schema
+        jdbc:
+          time_zone: UTC
+  rabbitmq:
+    host: ${EVENT_RABBITMQ_HOST:${RABBITMQ_HOST}}
+    port: ${EVENT_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${EVENT_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:flash_ticket_app}}
+    password: ${EVENT_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
+    virtual-host: ${EVENT_RABBITMQ_VHOST:${RABBITMQ_VHOST:/}}
+    connection-timeout: 5s
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${EVENT_RABBITMQ_BUSINESS_EXCHANGE:${RABBITMQ_BUSINESS_EXCHANGE:business.ex}}
+      mandatory: true
+  security:
+    oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: ${EVENT_INTERNAL_SERVICE_CLIENT_SECRET:${INTERNAL_SERVICE_CLIENT_SECRET}}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${EVENT_KEYCLOAK_TOKEN_URI:${KEYCLOAK_TOKEN_URI}}
+      resourceserver:
+        jwt:
+          issuer-uri: ${EVENT_KEYCLOAK_ISSUER_URI:${KEYCLOAK_ISSUER_URI}}
+          jwk-set-uri: ${EVENT_KEYCLOAK_JWK_SET_URI:${KEYCLOAK_JWK_SET_URI}}
+          audiences:
+            - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
+
+event:
+  images:
+    cloud-name: ${EVENT_IMAGES_CLOUD_NAME:}
+    api-key: ${EVENT_IMAGES_API_KEY:}
+    api-secret: ${EVENT_IMAGES_API_SECRET:}
+    folder: ${EVENT_IMAGES_FOLDER:flash-ticket/events}
+    max-bytes: ${EVENT_IMAGES_MAX_BYTES:5242880}
+    max-pixels: ${EVENT_IMAGES_MAX_PIXELS:16000000}
+    max-count: ${EVENT_IMAGES_MAX_COUNT:20}
+    timeout: ${EVENT_IMAGES_TIMEOUT:10s}
+  read-model:
+    enabled: ${EVENT_READ_MODEL_ENABLED:false}
+    payment-base-url: ${EVENT_PAYMENT_BASE_URL:}
+    booking-base-url: ${EVENT_BOOKING_BASE_URL:}
+    connect-timeout: ${EVENT_READ_CONNECT_TIMEOUT:2s}
+    response-timeout: ${EVENT_READ_RESPONSE_TIMEOUT:5s}
+    cancellation-max-age: ${EVENT_CANCELLATION_SUMMARY_MAX_AGE:30s}
+    clock-skew: ${EVENT_READ_CLOCK_SKEW:5s}
+  outbox:
+    enabled: ${EVENT_OUTBOX_ENABLED:true}
+    poll-delay: ${EVENT_OUTBOX_POLL_DELAY:1s}
+    batch-size: ${EVENT_OUTBOX_BATCH_SIZE:20}
+    lease: ${EVENT_OUTBOX_LEASE:30s}
+    confirm-timeout: ${EVENT_OUTBOX_CONFIRM_TIMEOUT:5s}
+    initial-retry: ${EVENT_OUTBOX_INITIAL_RETRY:1s}
+    maximum-retry: ${EVENT_OUTBOX_MAXIMUM_RETRY:5m}
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.event_service.observability.EventLogCustomizer
+      stacktrace:
+        printer: com.flashticket.event_service.observability.SafeStackTracePrinter
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

@@ -1,5 +1,7 @@
 # Chỉ mục tài liệu
 
+> Luồng đặt vé hiện hành 29/10: [ảnh ClickUp/GOV-156](evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md), B13/B14/B15-v0.3 REVIEW_READY; thay hướng start/result 03/10 ở bảng lịch sử bên dưới.
+
 Thư mục này là nguồn sự thật cho quá trình phân tích, thiết kế, hiện thực và đánh giá đồ án FlashTicket Platform.
 
 > **Đề tài chính thức:** *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*. Nguồn hiện hành do Minh xác nhận ngày 18/09/2026: [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md).
@@ -30,7 +32,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Yêu cầu chức năng và phi chức năng B8 | `domain/B8-requirements.md` |
 | **Chuỗi kiến trúc B11-A → B11-B → B11-C** — đường dẫn canonical. Cả ba cổng đều `APPROVED`. **`B11-C-v0.3` đã chốt `PA-6`**, năm service `event`/`booking`/`payment`/`ticket`/`user`, một Saga do `payment-service` điều phối, RCA riêng chỉ đọc với lớp giải thích dùng Gemini API, và bố trí hai máy không HA (`GOV-086`–`GOV-099`). `ADR-001`–`ADR-004` đều `Chấp nhận`; thử tải thật thuộc Giai đoạn 5–6, có quyền nâng instance AWS tạm thời nếu cần | `architecture/B11-A-independent-alternatives.md`, `architecture/B11-B-legacy-feasibility.md`, `architecture/B11-C-target-architecture.md` |
 | **B12 — Quyền sở hữu dữ liệu và schema đích** — `B12-v0.2` `APPROVED`; 47 bảng SQL/467 cột và 4 collection, init mới; chưa triển khai AWS. Năm ERD, baseline SQL/Mongo/Keycloak và kết quả kiểm dẫn từ tài liệu nguồn; đối chiếu legacy/configuration tách `COMPARISON` | [Thiết kế](architecture/B12-data-ownership-and-schema.md), [baseline](architecture/data/README.md), [kiểm chứng](architecture/B12-validation.md), [đối chiếu cấu hình](architecture/B12-legacy-configuration-comparison.md) |
-| **B13/B14/B15** — hợp đồng, sequence và kế hoạch kiểm; **B16/readiness** — tất cả được Minh duyệt `APPROVED` ngày 2026-09-14 (GOV-144). Kết quả runtime chưa chạy vẫn NOT RUN | [B13](architecture/B13-api-and-event-contracts.md), [B14](architecture/B14-main-flow-sequences.md), [B15](architecture/B15-verification-plan.md), [B16](architecture/B16-observability-baseline.md), [Bắt đầu code](architecture/implementation-readiness.md), [Bản giải thích](architecture/B12-B14-review-pack.md) |
+| **B13/B14/B15/readiness v0.2** — `REVIEW_READY` ngày 03/10 theo GOV-149/150: start qua Booking, poll Payment; success Ticket → Booking → Payment. Baseline v0.1 và B16 được duyệt 14/09 (GOV-144); QR payment độc lập còn OPEN, runtime NOT RUN | [B13](architecture/B13-api-and-event-contracts.md), [B14](architecture/B14-main-flow-sequences.md), [B15](architecture/B15-verification-plan.md), [B16](architecture/B16-observability-baseline.md), [Bắt đầu code](architecture/implementation-readiness.md), [Đối chiếu ba UC](evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md) |
 | Quyết định kiến trúc | `adr/` |
 | Sơ đồ và tệp nguồn | `diagrams/` |
 | API và lược đồ sự kiện | `contracts/` |

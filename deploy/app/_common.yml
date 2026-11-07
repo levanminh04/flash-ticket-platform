@@ -1,0 +1,17 @@
+# Hardening shared by every application container; per-service files `extends` this.
+services:
+  common:
+    network_mode: host
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

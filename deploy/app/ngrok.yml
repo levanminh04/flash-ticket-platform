@@ -1,0 +1,6 @@
+version: "3"
+agent:
+  web_addr: 127.0.0.1:4040
+  log: stdout
+  log_format: json
+  update_check: false

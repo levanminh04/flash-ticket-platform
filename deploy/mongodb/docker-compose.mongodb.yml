@@ -1,0 +1,38 @@
+name: flash-ticket-mongodb
+
+services:
+  mongodb:
+    image: ${MONGO_IMAGE:?Set the verified MongoDB image digest}
+    restart: unless-stopped
+    mem_limit: ${MONGO_MEMORY_LIMIT:-512m}
+    env_file:
+      - ${MONGO_ADMIN_ENV_FILE:?Set the private mode-0600 admin environment file}
+    command: [mongod, --auth, --wiredTigerCacheSizeGB, "${MONGO_WIREDTIGER_CACHE_GB:-0.25}", --bind_ip_all]
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      database:
+        aliases: [mongodb]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.runCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  mongo-data:
+    external: true
+    name: ${MONGO_DATA_VOLUME:?Set the imported MongoDB volume}
+
+networks:
+  database:
+    external: true
+    name: ${MONGO_NETWORK:?Set the provisioned Docker network}

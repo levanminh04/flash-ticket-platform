@@ -1,0 +1,29 @@
+services:
+  payment-service:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    env_file: ../env/payment-service.env
+    mem_limit: 512m
+
+  ngrok:
+    # Agent 3.39.13; pinned so CLI and config behaviour stay reproducible.
+    image: ngrok/ngrok:latest@sha256:ff3b5c3674432d14a786349908b7bdf28ee56c25662637afcbe7180d471993ef
+    network_mode: host
+    command:
+      - http
+      - http://127.0.0.1:8083
+      - --url=https://${NGROK_DOMAIN:?NGROK_DOMAIN missing in env/payment-service.env}
+      - --config=/etc/ngrok.yml
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?NGROK_AUTHTOKEN missing in env/payment-service.env}
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml:ro
+    restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

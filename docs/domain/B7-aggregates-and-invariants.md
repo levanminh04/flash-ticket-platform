@@ -2,8 +2,8 @@
 
 > **Cập nhật ngữ cảnh 18/09:** đề tài/nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm bốn người; mobile là phần phụ theo PRJ-035. Nội dung nghiệp vụ/bất biến và baseline duyệt bên dưới không được đổi trong đợt này. Các phiên bản A1–A6 và DH-* được dẫn trong hồ sơ duyệt là đầu vào tại thời điểm duyệt; bản diễn giải A1–A6 hiện hành đang REVIEW_READY. Không coi bản mới tự được phê duyệt, không dùng lời khai cũ để hạ nhiệm vụ xây dựng/đánh giá DT18.
 
-- Phiên bản: `B7-v0.13`
-- Trạng thái: `APPROVED`
+- Phiên bản: `B7-v0.14`
+- Trạng thái: `REVIEW_READY` — `B7-v0.13` là bản `APPROVED` gần nhất; `v0.14` chỉ lan truyền `BIZ-159` vào `Yêu cầu hoàn tiền`/`INV-08`
 - Phân lớp: `FORMATION`
 - Người duyệt: Lê Văn Minh
 - Ngày duyệt: 2026-09-14 (GOV-144); các mốc trước ở nhật ký phiên bản.
@@ -219,6 +219,7 @@ Nguồn biểu đồ: `docs/diagrams/src/B7-03-payment-and-refund-class-model.pu
 - Hoàn khoản thu trùng hoặc đến muộn không tạo trạng thái nghiệp vụ riêng cho đơn, không làm đơn/vé hợp lệ mất hiệu lực và không đổi tồn kho hoặc giới hạn mua (`BIZ-065`, `BIZ-102`–`BIZ-105`, `BIZ-150`).
 - Kết quả hoàn được liên kết với đơn theo B2 §5 và B4 `C03`; đây là liên kết tham chiếu, không đưa `Đơn hàng` vào trong ranh giới của aggregate này.
 - `Chính sách hoàn tiền` là **quy tắc cố định của nền tảng** (`BIZ-033`), được từng yêu cầu hoàn tham chiếu chứ không phải value object do mỗi yêu cầu sở hữu.
+- Yêu cầu đã thất bại chỉ kết thúc bằng một trong hai lệnh của admin (`BIZ-159`): **thử lại** trên cùng yêu cầu, hoặc **ghi nhận đã hoàn ngoài hệ thống** kèm người thao tác, thời điểm và mã tham chiếu. Root từ chối ghi nhận ngoài hệ thống khi yêu cầu đã hoàn thành hoặc còn lần gọi cổng chưa có kết quả; kết quả thành công từ cổng đến sau ghi nhận ngoài hệ thống không tạo hoàn thành thứ hai. Yêu cầu đã thất bại vẫn tính là đang xử lý đối với `Hồ sơ chi trả sự kiện`.
 
 Thay đổi từ xác nhận thu tiền sang chốt giữ chỗ, phát hành vé hoặc hoàn tiền đi qua aggregate/context khác. `HOT-03` vì vậy được tách thành phần idempotency cục bộ đã có root bảo vệ và phần phối hợp lỗi xuyên aggregate còn phải phân tích ở B9–B11.
 
@@ -322,7 +323,7 @@ Dòng `E01`–`E05` không tạo aggregate hoặc bất biến mới tại B7. `
 | `INV-05` | `Xác nhận thanh toán` | Một kết quả thu hợp lệ cho đơn | Từng khoản thu thừa đi sang `Yêu cầu hoàn tiền` |
 | `INV-06` | `Đơn hàng`, `Giữ chỗ`, các root nguồn cung, `Giới hạn mua`, `Khuyến mãi`, `Lượt dùng khuyến mãi` | Mỗi root dùng chuyển trạng thái hội tụ để không ghi nhận hai lần | Thứ tự, retry và phục hồi xuyên root ở B9–B11 |
 | `INV-07` | `Phát hành vé`; `Gửi vé` chỉ tham chiếu | Một lần phát hành logic/đơn, đúng số quyền; gửi lại không sinh quyền | Thu tiền, trả tài nguyên và hoàn kỹ thuật đi qua context khác |
-| `INV-08` | `Yêu cầu hoàn tiền` | Một yêu cầu logic và một hoàn thành/khoản thu | Lô hoàn N đơn khi hủy sự kiện còn `B5-OPEN-03` |
+| `INV-08` | `Yêu cầu hoàn tiền` | Một yêu cầu logic và một hoàn thành/khoản thu; hoàn thành qua cổng hoặc qua ghi nhận ngoài hệ thống của admin (`BIZ-159`) đều là hoàn thành duy nhất | Lô hoàn N đơn khi hủy sự kiện còn `B5-OPEN-03` |
 | `INV-09` | `Phát hành vé` | Một vé tối đa một check-in thành công | Cơ chế tranh chấp cụ thể ở B9–B11 |
 | `INV-10` | `Hồ sơ chi trả sự kiện` | Một lần đánh dấu đã chi trả/sự kiện | Dữ liệu đọc từ thanh toán/hoàn tiền là xuyên context |
 | `INV-11` | `Sự kiện bán vé`; `Hồ sơ chi trả sự kiện` tiêu thụ giá trị đã duyệt | Không sửa âm thầm tỷ lệ sau duyệt | Sở hữu dữ liệu vật lý chờ B12 |
@@ -424,6 +425,7 @@ Chuỗi `B4-v0.11 → B5-v0.9` đã được Lê Văn Minh duyệt trực tiếp
 
 | Phiên bản | Ngày | Thay đổi | Loại |
 |---|---|---|---|
+| `B7-v0.14` | 2026-11-03 | Lan truyền `BIZ-159`: aggregate `Yêu cầu hoàn tiền` nhận hai lệnh của admin cho yêu cầu đã thất bại; `INV-08` ghi hoàn thành qua ghi nhận ngoài hệ thống cũng là hoàn thành duy nhất. Không đổi root/context hay sơ đồ; chờ duyệt | Lan truyền quyết định |
 | `B7-v0.13` | 2026-09-14 | Đồng bộ quyết định yêu cầu hủy, follow/unfollow, tiền và ghế ẩn; không đổi root/context/INV-01–11 hoặc sơ đồ; REVIEW_READY | GOV-143 |
 | `B7-v0.12` | 2026-08-29 | **Nâng `Giữ chỗ` từ entity bên trong `Đơn hàng` thành aggregate root riêng** theo `RES-052`. `INV-03` chuyển từ bất biến **cục bộ** của `Đơn hàng` thành bất biến **xuyên `Đơn hàng`–`Giữ chỗ`**; §3, §4.2, §5 và §6 được sửa theo. Bổ sung **câu hỏi thứ năm** vào §2 — *ranh giới aggregate này có buộc B11 phải cắt ngang aggregate không* — cùng hai lập luận không hợp lệ mà `RES-052` ghi lại để không lặp. Thêm một điểm `OPEN`: mức **bất đối xứng tải** giữa lượt giữ chỗ và lượt thành đơn, phép thử số 5 của tài liệu chủ §4.2, owner Lê Văn Minh, gate B11. Sơ đồ `B7-02` vẽ lại: thêm khung `Giữ chỗ`, đổi quan hệ hợp thành thành liên kết `1`–`1`, đưa hai ghi chú vào trong khung, giãn `nodesep`; tỷ lệ 1,32 → **0,84**. **Không câu chữ bất biến nào đổi, không mục từ B2 nào phải thêm hay sửa, sáu context còn lại không bị đụng tới, 48 tên lớp không đổi.** Tài liệu về `REVIEW_READY` chờ Lê Văn Minh duyệt lại | Đổi mô hình miền theo quyết định nghiệp vụ |
 | `B7-v0.11` | 2026-08-27 | **Đổi tên root `Chi trả` → `Hồ sơ chi trả sự kiện`** theo `RES-040`, khớp thứ nó thật sự giữ; `B2-v0.12` bổ sung mục từ tương ứng. Đây là **chỗ lệch nghĩa cuối cùng** của B7 và nay đã hết. Sơ đồ `B7-05` đổi tên và dựng lại, tỷ lệ giữ nguyên 1,02. **Sửa bố cục `B7-04`** theo `GOV-027`: bốn nhãn cạnh chuyển thành một ghi chú, bỏ `left to right direction`, ghi chú đặt hai bên; dựng lại và mở ảnh xác nhận hết nhãn chồng. **Gỡ trọn §4.8 "Chẩn đoán sự cố"** và aggregate ứng viên `Sự cố`; **xóa sơ đồ `B7-08-incident-diagnosis-class-model.puml`** → tám sơ đồ còn **bảy**, 57 tên lớp còn **48**, tất cả vẫn truy được về từ điển. Gỡ dòng `Sự cố` khỏi bảng aggregate §3 và dòng workflow chẩn đoán khỏi §6; khai lại đầu vào theo `B2-v0.11`/`B5-v0.14`. **Lý do:** toàn bộ mục đó mô hình hóa thiết kế trợ lý cũ (`RES-034`). **Bảy context, mọi aggregate và cả 11 bất biến của vòng đời vé không đổi một chữ** | Gỡ thiết kế trợ lý cũ |

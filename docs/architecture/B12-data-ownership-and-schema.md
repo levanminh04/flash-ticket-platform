@@ -1,7 +1,7 @@
 # B12 — Thiết kế dữ liệu đích và baseline khởi tạo
 
-- Phiên bản: `B12-v0.2`
-- Trạng thái: `APPROVED`
+- Phiên bản: `B12-v0.3`
+- Trạng thái: `REVIEW_READY` — `B12-v0.2` là bản `APPROVED` gần nhất (GOV-144); `v0.3` chỉ lan truyền `BIZ-159` vào `payment_schema.refunds`
 - Ngày mở: 2026-09-07
 - Người duyệt: Lê Văn Minh; ngày duyệt: 2026-09-14 (GOV-144)
 - Phân lớp: `FORMATION`
@@ -222,6 +222,7 @@ Báo cáo sau duyệt dùng ownership, ERD, lý do chọn datastore, snapshot v�
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| B12-v0.3 | 2026-11-03 | Lan truyền `BIZ-159`: `refunds` thêm `settled_by`, `external_reference` và CHECK ghi nhận đã hoàn ngoài hệ thống; ghi `FAILED` vẫn tính vào `refund_pending_count`; thêm phép thử `P06a`; không thêm bảng (vẫn 47); chờ duyệt |
 | B12-v0.2 | 2026-09-14 | Đồng bộ quyết định đã xác nhận, hợp đồng B13/B14, init sạch 47 bảng và 4 collection; bổ sung dictionary đầy đủ; chưa tự duyệt gate |
 | B12-v0.1 | 2026-09-07 | Mở DRAFT theo kế hoạch đã được yêu cầu thực hiện; tạo nguồn độc lập trước tài sản dẫn xuất, giữ các OPEN và giới hạn baseline |
 
@@ -1056,11 +1057,17 @@ Mục đích: tối đa một yêu cầu hoàn logic cho mỗi charge và hoàn 
 | `state` | TEXT | Không | `NOT NULL CHECK (state IN ('PENDING','PROCESSING','SUCCEEDED','FAILED'))` |
 | `created_at` | TIMESTAMPTZ | Không | `NOT NULL DEFAULT now()` |
 | `completed_at` | TIMESTAMPTZ | Có | — |
+| `settled_by` | TEXT [không trắng] | Có | — |
+| `external_reference` | TEXT [không trắng] | Có | — |
 | `row_version` | BIGINT | Không | `NOT NULL DEFAULT 0 CHECK (row_version >= 0)` |
 
 - `FOREIGN KEY (charge_id, order_id, amount, currency) REFERENCES charges(id, order_id, amount, currency)`
 
 - `CHECK ((state = 'SUCCEEDED' AND completed_at IS NOT NULL) OR (state <> 'SUCCEEDED' AND completed_at IS NULL))`
+
+- `CHECK ((settled_by IS NULL AND external_reference IS NULL) OR (settled_by IS NOT NULL AND external_reference IS NOT NULL AND state = 'SUCCEEDED'))`
+
+- Ghi nhận đã hoàn ngoài hệ thống (`BIZ-159`, FR-39a): admin chuyển `FAILED` → `SUCCEEDED`, ghi `settled_by` (subject admin), `external_reference` và `completed_at`; cặp cột rỗng nghĩa là hoàn qua cổng. Chuyển từ `FAILED` và điều kiện không còn `refund_attempts` chưa kết thúc là guard của transaction ứng dụng (B13 §3.1), CHECK không tự chứng minh. Thử lại (FR-37a) chuyển `FAILED` → `PENDING` và tạo attempt mới với `request_key` mới. `FAILED` vẫn được đếm vào `event_payouts.refund_pending_count`; index `refunds_pending_idx` chỉ phục vụ worker gửi lệnh, không phải điều kiện chi trả.
 
 - `UNIQUE (id, charge_id, order_id)`
 

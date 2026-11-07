@@ -1,5 +1,123 @@
+server:
+  port: ${BOOKING_SERVICE_PORT:8082}
+
+booking:
+  availability-cache:
+    ttl: ${BOOKING_AVAILABILITY_CACHE_TTL:PT15M}
+    key-prefix: ${BOOKING_AVAILABILITY_CACHE_KEY_PREFIX:flash-ticket:dev:booking:availability:v2:}
+  event-cancellation:
+    enabled: true
+    poll-interval: PT5S
+    batch-size: 20
+  expiry:
+    enabled: true
+    poll-interval: PT5S
+    batch-size: 20
+  outbox:
+    enabled: true
+    poll-interval: PT2S
+    batch-size: 20
+    confirm-timeout: PT5S
+    retry-delay: PT5S
+  reservation:
+    hold-duration: PT15M
+    lock-timeout: 5s
+
 spring:
   application:
     name: booking-service
-  config:
-    import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  task:
+    scheduling:
+      pool:
+        size: 2
+  datasource:
+    url: ${BOOKING_DB_URL}
+    username: ${BOOKING_DB_USERNAME:booking_admin}
+    password: ${BOOKING_DB_PASSWORD}
+    hikari:
+      connection-init-sql: SET ROLE booking_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${BOOKING_DDL_AUTO:none}
+    properties:
+      hibernate:
+        default_schema: booking_schema
+        type:
+          json_format_mapper: jackson3
+        jdbc:
+          time_zone: UTC
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      connect-timeout: 2s
+      timeout: 2s
+  rabbitmq:
+    connection-timeout: 5s
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+  security:
+    oauth2:
+      client:
+        registration:
+          internal:
+            provider: keycloak
+            client-id: internal-service
+            client-secret: ${INTERNAL_SERVICE_CLIENT_SECRET}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URI}
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  cloud:
+    openfeign:
+      oauth2:
+        enabled: false
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 5000
+            loggerLevel: none
+
+logging:
+  charset:
+    console: UTF-8
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

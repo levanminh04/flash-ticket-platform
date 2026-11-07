@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "IdentityUserCreatedV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "realmId",
+    "identitySubject"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "eventType": {
+      "const": "identity.user-created.v1"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "realmId": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "identitySubject": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "displayName": {
+      "type": "string",
+      "pattern": "\\S"
+    }
+  }
+}
