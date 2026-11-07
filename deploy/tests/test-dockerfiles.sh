@@ -11,12 +11,14 @@ for path in $(jq -r '.services[] | select(.name != "keycloak") | .path' "$root/.
 done
 
 cleanup_dummy() {
-  for row in $(jq -r '.services[] | select(.name != "keycloak") | @base64' "$root/.github/services.json"); do
-    _svc=$(echo "$row" | base64 --decode | jq -r .name)
-    _p=$(echo "$row" | base64 --decode | jq -r .path)
-    rm -f "$root/$_p/target/${_svc}-dummy.jar"
-    rmdir "$root/$_p/target" 2>/dev/null || true
-  done
+  if [[ "${RUN_DOCKER_BUILD:-0}" == "1" ]]; then
+    for row in $(jq -r '.services[] | select(.name != "keycloak") | @base64' "$root/.github/services.json"); do
+      _svc=$(echo "$row" | base64 --decode | jq -r .name)
+      _p=$(echo "$row" | base64 --decode | jq -r .path)
+      rm -f "$root/$_p/target/${_svc}-dummy.jar"
+      rmdir "$root/$_p/target" 2>/dev/null || true
+    done
+  fi
 }
 trap cleanup_dummy EXIT
 
@@ -29,7 +31,8 @@ for row in $(jq -r '.services[] | select(.name != "keycloak") | @base64' "$root/
     grep -q '!target/' "$ign" || fail "$path/.dockerignore must not ignore target/"
     grep -qE '!target/(\*|[a-z0-9_-]+-\*)\.jar' "$ign" || fail "$path/.dockerignore must allow target JAR"
   fi
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  # Optional docker build test; disabled by default to avoid slow network/credential dependency
+  if [[ "${RUN_DOCKER_BUILD:-0}" == "1" ]] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     mkdir -p "$root/$path/target"
     touch "$root/$path/target/${svc}-dummy.jar"
     docker build --quiet -f "$root/$path/Dockerfile" "$root/$path" >/dev/null || fail "$path: docker build failed (context may block target/*.jar)"
