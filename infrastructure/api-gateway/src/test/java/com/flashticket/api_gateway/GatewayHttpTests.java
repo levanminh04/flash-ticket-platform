@@ -10,8 +10,10 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.sun.net.httpserver.HttpServer;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -40,6 +43,7 @@ import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -50,10 +54,10 @@ import reactor.core.publisher.Mono;
 /**
  * Real HTTP proxy and signed JWTs; only discovery, Redis and downstream services are substitutes.
  */
+@ActiveProfiles("test")
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "spring.config.import=file:../config-server/src/main/resources/config/api-gateway.yaml",
       "API_GATEWAY_PORT=0",
       "REDIS_HOST=127.0.0.1",
       "REDIS_PORT=1",
@@ -73,7 +77,10 @@ class GatewayHttpTests {
   private static final HttpServer OTHER = backend("other");
   private static final String ISSUER = "http://127.0.0.1:" + BOOKING.getAddress().getPort();
 
+  private static final int DEAD_PORT = unusedPort();
+
   @LocalServerPort private int port;
+  @Autowired private CircuitBreakerRegistry breakers;
   private WebTestClient client;
 
   @MockitoBean(name = "redisRateLimiter")
@@ -278,20 +285,17 @@ class GatewayHttpTests {
   }
 
   @Test
-  void requiresBuyerForAllOrderPathsAndBlocksInternalAndFallbackPaths() {
-    String organizer = token("ORGANIZER", "flash-ticket-api");
+  void leavesBuyerOnlyRulesToTheServiceButBlocksInternalPaths() {
     client
         .get()
         .uri("/api/v1/orders/" + ORDER_ID)
-        .headers(headers -> headers.setBearerAuth(organizer))
+        .headers(headers -> headers.setBearerAuth(token("ORGANIZER", "flash-ticket-api")))
         .exchange()
         .expectStatus()
-        .isForbidden()
-        .expectBody()
-        .jsonPath("$.code")
-        .isEqualTo("ACCESS_DENIED");
-    for (String path :
-        List.of("/internal/v1/orders/" + ORDER_ID, "/fallback/booking", "/actuator/env")) {
+        .isOk();
+    assertEquals(1, CALLS.get());
+    CALLS.set(0);
+    for (String path : List.of("/internal/v1/orders/" + ORDER_ID, "/actuator/env")) {
       client
           .get()
           .uri(path)
@@ -402,6 +406,72 @@ class GatewayHttpTests {
             value -> org.junit.jupiter.api.Assertions.assertTrue(value.contains(REQUEST)));
   }
 
+  @Test
+  void returns503WithoutCallingBackendWhenTheBreakerIsOpen() {
+    client
+        .get()
+        .uri("/api/v1/events/" + ORDER_ID + "/availability")
+        .exchange()
+        .expectStatus()
+        .isOk();
+    CALLS.set(0);
+    var open = breakers.getAllCircuitBreakers().stream().toList();
+    open.forEach(breaker -> breaker.transitionToOpenState());
+    try {
+      client
+          .get()
+          .uri("/api/v1/events/" + ORDER_ID + "/availability")
+          .exchange()
+          .expectStatus()
+          .isEqualTo(503)
+          .expectBody()
+          .jsonPath("$.code")
+          .isEqualTo("DEPENDENCY_UNAVAILABLE")
+          .jsonPath("$.correlationId")
+          .exists();
+      assertEquals(0, CALLS.get());
+    } finally {
+      open.forEach(breaker -> breaker.reset());
+    }
+  }
+
+  @Test
+  void returns503WhenTheServiceRefusesConnections() {
+    client
+        .get()
+        .uri("/api/v1/tickets/" + ORDER_ID + "/qr")
+        .headers(headers -> headers.setBearerAuth(token("BUYER", "flash-ticket-api")))
+        .exchange()
+        .expectStatus()
+        .isEqualTo(503)
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("DEPENDENCY_UNAVAILABLE");
+  }
+
+  @Test
+  void fallbackPathIsNoLongerServed() {
+    client
+        .get()
+        .uri("/fallback/booking")
+        .headers(headers -> headers.setBearerAuth(token("BUYER", "flash-ticket-api")))
+        .exchange()
+        .expectStatus()
+        .isNotFound()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("ROUTE_NOT_FOUND");
+    assertEquals(0, CALLS.get());
+  }
+
+  private static int unusedPort() {
+    try (ServerSocket socket = new ServerSocket(0)) {
+      return socket.getLocalPort();
+    } catch (IOException error) {
+      throw new IllegalStateException(error);
+    }
+  }
+
   private static String token(String role, String audience) {
     var claims =
         JwtClaimsSet.builder()
@@ -503,7 +573,10 @@ class GatewayHttpTests {
     @Bean
     ServiceInstanceListSupplier fixtureInstances(Environment environment) {
       String serviceId = environment.getProperty("loadbalancer.client.name");
-      int port = ("booking-service".equals(serviceId) ? BOOKING : OTHER).getAddress().getPort();
+      int port =
+          "ticket-service".equals(serviceId)
+              ? DEAD_PORT
+              : ("booking-service".equals(serviceId) ? BOOKING : OTHER).getAddress().getPort();
       return new ServiceInstanceListSupplier() {
         public String getServiceId() {
           return serviceId;

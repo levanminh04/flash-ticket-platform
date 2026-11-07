@@ -1,16 +1,16 @@
+# Giá trị mặc định để application.yaml chính khởi động được trong test, không cần biến môi trường.
+# Dùng ${BIEN:mặc-định} để test nào truyền BIEN qua properties / @DynamicPropertySource vẫn thắng.
 spring:
-  application:
-    name: api-gateway
-  config:
-    import: "optional:configserver:"
-  cloud:
-    config:
-      enabled: false
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://issuer.invalid/realms/flashticket
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:https://issuer.invalid/realms/flashticket}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:1}
+      password: ${REDIS_PASSWORD:fixture}
 
 eureka:
   client:
