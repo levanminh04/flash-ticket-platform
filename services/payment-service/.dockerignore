@@ -1,8 +1,5 @@
-*
-!.mvn/
-!.mvn/**
-!mvnw
-!mvnw.cmd
-!pom.xml
-!src/
-!src/**
+**
+!Dockerfile
+!.dockerignore
+!target/
+!target/payment-service-*.jar
