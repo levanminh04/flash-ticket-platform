@@ -1,0 +1,15 @@
+services:
+  ticket-service:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    env_file: ../env/ticket-service.env
+    mem_limit: 768m
+    volumes:
+      - type: bind
+        source: ../secrets/ticket-qr
+        target: /run/ticket-qr
+        read_only: true
+        bind:
+          create_host_path: false

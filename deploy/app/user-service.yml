@@ -1,0 +1,8 @@
+services:
+  user-service:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    env_file: ../env/user-service.env
+    mem_limit: 768m
