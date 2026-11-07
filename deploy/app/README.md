@@ -57,6 +57,10 @@ Tạo `env/<svc>.env` từ `<thư mục service>/.env.example`, rồi đổi:
 | ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/keys.json` |
 | keycloak | mẫu trong `services/keycloak-spi/.env.example` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
 
+## Lưu ý về Ngrok (payment-service)
+
+Ngrok local và ngrok CD trên FT84 dùng **chung một `NGROK_DOMAIN`** và 1 URL IPN VNPay. Do đó, **trước khi CD deploy `payment-service`/`ngrok` lên máy 84, phải tắt ngrok/payment local** (`docker compose --env-file .env -f deploy/docker-compose.payment.yml down`) để tránh xung đột domain và tranh chấp webhook IPN.
+
 ## Cutover Keycloak thủ công trên máy 84
 
 Trước lần deploy CD đầu tiên cho Keycloak:

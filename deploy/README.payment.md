@@ -30,6 +30,9 @@ Payment dùng Java 21 bên trong image, máy không cần cài Java để build/
 
 ## Chạy
 
+> [!WARNING]
+> Ngrok local và ngrok CD trên FT84 dùng **chung một `NGROK_DOMAIN`** và 1 URL IPN VNPay. Do đó, trước khi CD deploy `payment-service`/`ngrok` lên máy 84, phải tắt ngrok/payment local (`docker compose --env-file .env -f deploy/docker-compose.payment.yml down`) để tránh xung đột domain và tranh chấp webhook IPN.
+
 Dừng Payment trong IntelliJ trước để tránh trùng cổng và hai bản cùng xử lý queue.
 Giữ Booking ở cổng 8082.
 Nếu đang dùng SSH tunnel PostgreSQL/Booking, giữ các tunnel chạy.

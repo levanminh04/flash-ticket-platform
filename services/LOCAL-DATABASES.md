@@ -25,8 +25,10 @@ PostgreSQL publishes one shared port, `5432`, in the deployment Compose file.
 From the repository root, start the shared PostgreSQL service:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml up -d --wait postgres
 ```
+
+Keycloak is hosted centrally on server FT84 for test and development; no local Keycloak container is required.
 
 For a fresh checkout, copy `.env.example` to `.env` and fill in the application
 and database passwords. This one file supplies both database Compose setup and
@@ -44,7 +46,7 @@ Stop PostgreSQL with the shared Compose service; this also stops DB access for
 all four business services and Keycloak:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml stop postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml stop postgres
 ```
 
 There are no per-service PostgreSQL Compose files. Data persist in the shared

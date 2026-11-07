@@ -51,8 +51,10 @@ Spring không tự đọc `.env`; khi chạy từ IDE, nạp file `.env` của �
 Compose hạ tầng chạy từ thư mục gốc vẫn truyền rõ `--env-file .env`, ví dụ:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml up -d --wait postgres
 ```
+
+Keycloak dùng chung trên server FT84 cho cả test và dev; không cần chạy Keycloak local.
 
 Mật khẩu kết nối ứng dụng (`<SERVICE>_DB_PASSWORD`) phải khớp mật khẩu quản trị
 được khởi tạo (`<SERVICE>_DB_ADMIN_PASSWORD`) trong cùng file. Thay đổi các biến

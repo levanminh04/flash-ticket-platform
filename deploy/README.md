@@ -64,14 +64,15 @@ Trên server119 đã triển khai, override `deploy/compose.registration-outbox.
 không quay về image Keycloak thiếu provider. Realm tồn tại cần cập nhật listener
 qua Admin API/UI; `--import-realm` không ghi đè realm hiện có.
 
-Chạy PostgreSQL trước, đợi container healthy rồi chạy Keycloak:
+## Keycloak
+
+Dự án dùng Keycloak tập trung trên server FT84 cho cả môi trường kiểm thử và phát triển; không chạy Keycloak container ở local. Keycloak trên FT84 do pipeline CD quản lý (`deploy/app/keycloak.yml`). Khi chạy ứng dụng ở máy local, cấu hình URL Keycloak trỏ tới server FT84 (hoặc qua SSH tunnel tới cổng 8080).
+
+Chạy PostgreSQL hạ tầng local:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait postgres
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait keycloak
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait postgres
 ```
-
-Admin Console: http://localhost:8080/admin/flash-ticket/console/
 
 ## RabbitMQ
 
@@ -82,7 +83,7 @@ tối đa 64 ký tự chữ, số, `_`, `-`. Password không rỗng hoặc chứ
 Compose yêu cầu phiên bản từ 2.30 để chạy lifecycle hook.
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait rabbitmq
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --wait rabbitmq
 ```
 
 Lệnh này tự tạo topology và tài khoản ngay lần đầu, không cần init thủ công.
@@ -114,7 +115,7 @@ Docker daemon tự restart container không chạy lại hook Compose; tài kho�
 được lưu trong volume. Khi đổi credentials hoặc hook lỗi, sửa `.env`/config rồi chạy:
 
 ```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --force-recreate --wait rabbitmq
+docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.redis.yml -f deploy/docker-compose.rabbitmq.yml up -d --force-recreate --wait rabbitmq
 ```
 
 Lệnh giữ nguyên volume và cập nhật ba tài khoản. Import không xóa tài nguyên cũ;
