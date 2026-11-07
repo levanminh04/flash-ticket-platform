@@ -236,8 +236,8 @@ verify_running() {
   local directory="$1" ref="$2" expected_id="$3" check_port="$4" check_revision="$5" healthy=false
   local attempt container token='' token_deadline=0 token_uri client_secret basic response lifetime
   render "$directory" "$ref" || return 1
-  token_uri=$(setting TICKET_KEYCLOAK_TOKEN_URI) || return 1
-  client_secret=$(setting TICKET_INTERNAL_SERVICE_CLIENT_SECRET) || return 1
+  token_uri=$(setting KEYCLOAK_TOKEN_URI) || token_uri=$(setting TICKET_KEYCLOAK_TOKEN_URI) || return 1
+  client_secret=$(setting TICKET_INTERNAL_SERVICE_CLIENT_SECRET) || client_secret=$(setting INTERNAL_SERVICE_CLIENT_SECRET) || return 1
   basic=$(printf 'internal-service:%s' "$client_secret" | base64 -w 0)
   for (( attempt=0; attempt<90; attempt++ )); do
     if (( SECONDS >= token_deadline )); then

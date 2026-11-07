@@ -4,6 +4,7 @@ import static com.flashticket.ticket_service.support.TicketFixtures.*;
 import static org.assertj.core.api.Assertions.*;
 
 import com.flashticket.ticket_service.dto.snapshot.PurchaseSnapshot;
+import com.flashticket.ticket_service.messaging.TicketRabbitConfiguration;
 import com.flashticket.ticket_service.messaging.TicketRabbitErrorHandler;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class RuntimeConfigurationTests {
     configuredRunner()
         .withConfiguration(
             AutoConfigurations.of(JacksonAutoConfiguration.class, RabbitAutoConfiguration.class))
-        .withUserConfiguration(TicketJsonConfig.class, RabbitMqConfig.class)
+        .withUserConfiguration(TicketJsonConfig.class, TicketRabbitConfiguration.class)
         .withPropertyValues("RABBITMQ_HOST=broker.example.test", "RABBITMQ_PASSWORD=test-only")
         .run(
             context -> {
@@ -120,7 +121,9 @@ class RuntimeConfigurationTests {
         .withPropertyValues(
             "TICKET_DB_URL=jdbc:postgresql://127.0.0.1:15432/ticket_db?currentSchema=ticket_schema",
             "TICKET_DB_PASSWORD=test-only",
-            "KEYCLOAK_ISSUER_URI=https://issuer.example.test/realms/ticket",
+            "TICKET_KEYCLOAK_ISSUER_URI=https://issuer.example.test/realms/ticket",
+            "TICKET_KEYCLOAK_JWK_SET_URI=https://issuer.example.test/realms/ticket/certs",
+            "TICKET_KEYCLOAK_AUDIENCE=flash-ticket-api",
             "MAIL_HOST=mail.example.test",
             "MAIL_PORT=587",
             "MAIL_USERNAME=test-user",
@@ -150,9 +153,9 @@ class RuntimeConfigurationTests {
               assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri"))
                   .isEqualTo("https://issuer.example.test/realms/ticket");
               assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri"))
-                  .isNull();
-              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.audiences"))
-                  .isNull();
+                  .isEqualTo("https://issuer.example.test/realms/ticket/certs");
+              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.audiences[0]"))
+                  .isEqualTo("flash-ticket-api");
               assertThat(env.getProperty("spring.mail.host")).isEqualTo("mail.example.test");
             });
   }

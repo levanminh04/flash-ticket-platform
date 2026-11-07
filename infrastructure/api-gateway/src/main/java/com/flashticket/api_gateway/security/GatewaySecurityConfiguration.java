@@ -1,6 +1,6 @@
 package com.flashticket.api_gateway.security;
 
-import com.flashticket.api_gateway.web.GatewayHttpHandler;
+import com.flashticket.api_gateway.web.GatewayErrorWriter;
 import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -48,62 +48,28 @@ public class GatewaySecurityConfiguration {
         .authorizeExchange(
             exchanges ->
                 exchanges
+                    // Công khai: preflight, callback VNPay và các GET đọc công khai.
                     .pathMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
                     .pathMatchers(
                         HttpMethod.GET,
                         "/api/v1/payments/vnpay/return",
-                        "/api/v1/payments/vnpay/ipn")
+                        "/api/v1/payments/vnpay/ipn",
+                        "/api/v1/events",
+                        "/api/v1/events/*",
+                        "/api/v1/events/*/availability",
+                        "/api/v1/categories",
+                        "/api/v1/venues",
+                        "/api/v1/organizers/*")
                     .permitAll()
-                    .pathMatchers(HttpMethod.POST, "/api/v1/payments")
-                    .hasRole("BUYER")
-                    .pathMatchers(HttpMethod.GET, "/api/v1/organizers/*")
-                    .permitAll()
-                    .pathMatchers(
-                        "/api/v1/admin/organizer-applications",
-                        "/api/v1/admin/organizer-applications/**")
+                    // Không bao giờ lộ ra ngoài.
+                    .pathMatchers("/internal/**", "/actuator/**")
+                    .denyAll()
+                    // Phân quyền thô theo khu vực; quyền chi tiết do từng service kiểm.
+                    .pathMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")
-                    .pathMatchers(
-                        "/api/v1/organizer-applications",
-                        "/api/v1/organizer-applications/**",
-                        "/api/v1/organizers/*/follow")
-                    .hasRole("BUYER")
-                    .pathMatchers(
-                        HttpMethod.POST,
-                        "/api/v1/organizers/me/logo",
-                        "/api/v1/organizers/me/banner")
+                    .pathMatchers("/api/v1/organizer/**")
                     .hasRole("ORGANIZER")
-                    .pathMatchers("/api/v1/me")
-                    .hasAnyRole("BUYER", "ORGANIZER", "ADMIN")
-                    .pathMatchers(HttpMethod.GET, "/api/v1/events/*/availability")
-                    .permitAll()
-                    .pathMatchers(HttpMethod.GET, "/api/v1/events/*")
-                    .permitAll()
-                    .pathMatchers(
-                        HttpMethod.GET, "/api/v1/events", "/api/v1/categories", "/api/v1/venues")
-                    .permitAll()
-                    .pathMatchers("/api/v1/organizer/events", "/api/v1/organizer/events/**")
-                    .hasRole("ORGANIZER")
-                    .pathMatchers(
-                        "/api/v1/admin/events",
-                        "/api/v1/admin/events/**",
-                        "/api/v1/admin/cancellation-requests",
-                        "/api/v1/admin/cancellation-requests/**")
-                    .hasRole("ADMIN")
-                    .pathMatchers("/api/v1/orders", "/api/v1/orders/**", "/api/v1/tickets/**")
-                    .hasRole("BUYER")
-                    .pathMatchers(HttpMethod.GET, "/api/v1/organizer/events/*/seat-map")
-                    .hasRole("ORGANIZER")
-                    .pathMatchers(HttpMethod.PUT, "/api/v1/organizer/events/*/seat-map")
-                    .hasRole("ORGANIZER")
-                    .pathMatchers(HttpMethod.POST, "/api/v1/events/*/check-ins")
-                    .hasRole("ORGANIZER")
-                    .pathMatchers("/internal/v1/**")
-                    .denyAll()
-                    .pathMatchers("/actuator/**")
-                    .denyAll()
-                    .pathMatchers("/fallback/**")
-                    .denyAll()
                     .anyExchange()
                     .authenticated())
         .exceptionHandling(
@@ -121,7 +87,7 @@ public class GatewaySecurityConfiguration {
   }
 
   @Bean
-  ServerAuthenticationEntryPoint problemAuthenticationEntryPoint(GatewayHttpHandler errors) {
+  ServerAuthenticationEntryPoint problemAuthenticationEntryPoint(GatewayErrorWriter errors) {
     return (exchange, error) -> {
       exchange
           .getResponse()
@@ -136,7 +102,7 @@ public class GatewaySecurityConfiguration {
   }
 
   @Bean
-  ServerAccessDeniedHandler problemAccessDeniedHandler(GatewayHttpHandler errors) {
+  ServerAccessDeniedHandler problemAccessDeniedHandler(GatewayErrorWriter errors) {
     return (exchange, error) -> {
       exchange
           .getResponse()
@@ -145,21 +111,6 @@ public class GatewaySecurityConfiguration {
       return errors.write(exchange, HttpStatus.FORBIDDEN, error);
     };
   }
-
-  /**
-   * .oauth2ResourceServer(...): biến ứng dụng này thành một Resource Server, Tác dụng chính của nó
-   * là chuyên tiếp nhận, kiểm tra và tự đông bắt và giải mã Access Token. tự động chui vào Header
-   * của HTTP Request gửi đến Gateway để tìm kiếm chuỗi Authorization: Bearer <chuỗi_jwt> Từ khóa
-   * oauth2 đầu tiên đại diện cho đối tượng cấu hình của OAuth2 Resource Server. .jwt(...) nói cho
-   * Spring Security biết Ứng dụng này là OAuth2 Resource Server và sẽ xác thực request bằng JWT,
-   * biến jwt ở đây đại diện cho đối tượng cấu hình chuyên biệt của JWT. "Sau khi nhận được JWT,
-   * thay vì dùng cách đọc quyền (roles) mặc định của Spring, hãy dùng cái Converter mà tôi tự viết
-   * (jwtAuthenticationConverter()) để lôi quyền từ trong mảng realm_access của Keycloak ra.
-   */
-  //                .oauth2ResourceServer(oauth2 -> oauth2
-  //                        .jwt(cauhinhJwt -> cauhinhJwt.jwtAuthenticationConverter(
-  // thietLapQuyenTuKeycloak() ))
-  //                )
 
   @Bean
   Converter<Jwt, Mono<AbstractAuthenticationToken>> keycloakJwtAuthenticationConverter(

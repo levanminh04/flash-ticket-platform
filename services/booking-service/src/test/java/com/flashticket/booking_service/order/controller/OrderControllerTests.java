@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -340,5 +341,25 @@ class OrderControllerTests {
                 """))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("SEAT_UNAVAILABLE"));
+  }
+
+  @Test
+  void getOrderReturnsStubForAuthenticatedBuyer() throws Exception {
+    UUID id = UUID.randomUUID();
+    mvc.perform(
+            get("/api/v1/orders/" + id)
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.orderId").value(id.toString()))
+        .andExpect(jsonPath("$.status").value("STUB"));
+  }
+
+  @Test
+  void getOrderRequiresAuthentication() throws Exception {
+    UUID id = UUID.randomUUID();
+    mvc.perform(get("/api/v1/orders/" + id)).andExpect(status().isUnauthorized());
   }
 }

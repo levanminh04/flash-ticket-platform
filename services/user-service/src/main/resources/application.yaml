@@ -65,7 +65,7 @@ user:
     wait-timeout: ${USER_ROLE_GRANT_WAIT_TIMEOUT:5s}
   keycloak-admin:
     base-url: ${USER_KEYCLOAK_ADMIN_BASE_URL:}
-    realm: ${USER_KEYCLOAK_ADMIN_REALM:}
+    realm: ${USER_KEYCLOAK_ADMIN_REALM:${KEYCLOAK_IDENTITY_REALM_ID:flash-ticket}}
     client-id: ${USER_KEYCLOAK_ADMIN_CLIENT_ID:user-management}
     client-secret: ${USER_KEYCLOAK_ADMIN_CLIENT_SECRET:}
     timeout: ${USER_KEYCLOAK_ADMIN_TIMEOUT:5s}

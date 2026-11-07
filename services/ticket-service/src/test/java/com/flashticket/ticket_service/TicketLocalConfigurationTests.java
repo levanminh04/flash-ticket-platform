@@ -98,11 +98,11 @@ class TicketLocalConfigurationTests {
               assertThat(context).hasNotFailed();
               var env = context.getEnvironment();
               assertThat(env.getProperty("ticket.messaging.completed-result-message-type"))
-                  .isEqualTo("ticket.issued.v1");
+                  .isEqualTo("ticket.issuance-result.v1");
               assertThat(env.getProperty("ticket.messaging.completed-result-routing-key"))
-                  .isEqualTo("ticket.issued.v1");
+                  .isEqualTo("ticket.issuance-result.v1");
               assertThat(env.getProperty("ticket.messaging.failed-result-routing-key"))
-                  .isEqualTo("ticket.issuance-failed.v1");
+                  .isEqualTo("ticket.issuance-result.v1");
               assertThat(env.getProperty("ticket.qr.active-key-version")).isEqualTo("fixture-v1");
               assertThat(env.getProperty("ticket.qr.key-ring-location"))
                   .isEqualTo("file:/run/ticket-qr/keys.json");

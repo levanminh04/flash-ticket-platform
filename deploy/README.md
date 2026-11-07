@@ -1,3 +1,26 @@
+# Chạy ứng dụng local với hạ tầng server 119
+
+`docker-compose.integration.local.yml` build frontend, Gateway, Config Server,
+Discovery Server và năm service nghiệp vụ từ source. RabbitMQ, Redis, Keycloak,
+PostgreSQL và MongoDB chạy trên server 119.
+
+Điền các biến `INTEGRATION_*_DB_URL` và `INTEGRATION_MONGO_URI` trong `.env` gốc
+bằng URI tới server 119 mà container truy cập được. Với database qua SSH tunnel,
+kiểm tra tunnel đích đúng server 119 trước khi chạy ứng dụng. RabbitMQ, Redis và
+Keycloak dùng các biến hiện có trong `.env`. Frontend nhận các biến `VITE_*`
+công khai khi build. Kiểm tra `CORS_ALLOWED_ORIGINS` và redirect URI của Keycloak
+khớp với địa chỉ frontend dùng trong trình duyệt.
+
+```powershell
+docker compose --env-file .env -f deploy/docker-compose.integration.local.yml config --services
+docker compose --env-file .env -f deploy/docker-compose.integration.local.yml build
+docker compose --env-file .env -f deploy/docker-compose.integration.local.yml up -d --no-build
+```
+
+Frontend ở `http://localhost:5173`. Gateway ở `http://127.0.0.1:18081` theo cổng
+mặc định. Trước khi bật listener/worker với hạ tầng dùng chung, kiểm tra binding
+RabbitMQ, outbox đang chờ, schema PostgreSQL và cấu hình QR/mail của Ticket.
+
 # Chạy hạ tầng local
 
 Chạy các lệnh từ thư mục gốc repository. Chỉ dùng `.env` ở thư mục gốc; tạo

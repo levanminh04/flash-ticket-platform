@@ -51,7 +51,7 @@ flashticket:
     jwt:
       issuer-uri: ${KEYCLOAK_ISSUER_URI}
       jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
-      audience: ${KEYCLOAK_AUDIENCE}
+      audience: ${KEYCLOAK_AUDIENCE:flash-ticket-api}
 
 vnpay:
   api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
@@ -61,7 +61,7 @@ vnpay:
   hash-secret: ${VNPAY_HASH_SECRET}
   payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
   return-url: ${VNPAY_RETURN_URL}
-  ipn-url: ${VNPAY_IPN_URL}
+  ipn-url: ${VNPAY_IPN_URL:}
   app-return-url: ${VNPAY_APP_RETURN_URL:flash-ticket://payment-return}
   version: 2.1.0
   command: pay

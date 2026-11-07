@@ -1,0 +1,48 @@
+{
+  "status": "SEEDED_AND_VERIFIED",
+  "createdAt": "2026-11-02T16:39:33Z",
+  "server": "3.106.109.119",
+  "eventId": "83c2d8fb-9ca6-4277-8beb-4122d72dceb8",
+  "eventTitle": "[TEST119] Booking end-to-end 2026-11-02 16:39 UTC",
+  "customerEmail": "buyer@gmail.com",
+  "buyerSubject": "659d1963-3d1e-4886-9c85-119f11fcd133",
+  "organizerSubject": "ae3a05cd-95c2-47ec-a041-9c9de198c4a1",
+  "selectionMode": "QUANTITY",
+  "quantity": 1,
+  "promotionCode": "",
+  "saleEndsAt": "2026-11-16T16:39:33Z",
+  "eventStartsAt": "2026-11-23T16:39:33Z",
+  "ticketTypes": [
+    {
+      "ticketTypeId": "27ecd568-a44d-4db1-aaeb-3d168e56483f",
+      "name": "Standard test",
+      "unitPrice": "20000",
+      "currency": "VND",
+      "sectorId": null,
+      "configuredQuantity": "100",
+      "colorCode": "#1677FF"
+    },
+    {
+      "ticketTypeId": "1e46cbb3-4c74-40e0-b490-6c1a3cb7b364",
+      "name": "VIP test",
+      "unitPrice": "50000",
+      "currency": "VND",
+      "sectorId": null,
+      "configuredQuantity": "100",
+      "colorCode": "#FAAD14"
+    }
+  ],
+  "committedDatabases": [
+    "event_db",
+    "booking_db",
+    "payment_db",
+    "ticket_db"
+  ],
+  "notes": "Prerequisite seed only. Create orders/payment attempts/tickets through real APIs. No fabricated payment success or QR.",
+  "checks": {
+    "event_db": "1",
+    "booking_db": "1",
+    "payment_db": "1",
+    "ticket_db": "1"
+  }
+}

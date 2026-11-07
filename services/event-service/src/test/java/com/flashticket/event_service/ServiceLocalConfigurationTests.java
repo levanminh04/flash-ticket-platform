@@ -92,4 +92,44 @@ class ServiceLocalConfigurationTests {
               assertThat(env.getProperty("server.tomcat.max-swallow-size")).isEqualTo("2345B");
             });
   }
+
+  @Test
+  void canonicalGenericEnvironmentVariablesSatisfyAllSharedEndpoints() {
+    new ApplicationContextRunner()
+        .withInitializer(new ConfigDataApplicationContextInitializer())
+        .withPropertyValues(
+            "spring.config.location=classpath:service-config/application.yaml",
+            "CONFIG_SERVER_URL=http://127.0.0.1:1/config-server-must-not-be-used",
+            "EVENT_DB_URL=jdbc:postgresql://127.0.0.1:1/event_db",
+            "EVENT_DB_PASSWORD=fixture-db",
+            "RABBITMQ_HOST=canonical-broker",
+            "RABBITMQ_PORT=5673",
+            "RABBITMQ_USERNAME=canonical-user",
+            "RABBITMQ_PASSWORD=canonical-secret",
+            "RABBITMQ_VHOST=/canonical-vhost",
+            "RABBITMQ_BUSINESS_EXCHANGE=canonical.business.ex",
+            "KEYCLOAK_TOKEN_URI=http://127.0.0.1:1/canonical-token",
+            "EVENT_INTERNAL_SERVICE_CLIENT_SECRET=fixture-oauth",
+            "KEYCLOAK_ISSUER_URI=http://127.0.0.1:1/canonical-realm",
+            "KEYCLOAK_JWK_SET_URI=http://127.0.0.1:1/canonical-jwks")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var env = context.getEnvironment();
+              assertThat(env.getProperty("spring.rabbitmq.host")).isEqualTo("canonical-broker");
+              assertThat(env.getProperty("spring.rabbitmq.port", Integer.class)).isEqualTo(5673);
+              assertThat(env.getProperty("spring.rabbitmq.username")).isEqualTo("canonical-user");
+              assertThat(env.getProperty("spring.rabbitmq.virtual-host"))
+                  .isEqualTo("/canonical-vhost");
+              assertThat(env.getProperty("spring.rabbitmq.template.exchange"))
+                  .isEqualTo("canonical.business.ex");
+              assertThat(
+                      env.getProperty("spring.security.oauth2.client.provider.keycloak.token-uri"))
+                  .isEqualTo("http://127.0.0.1:1/canonical-token");
+              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri"))
+                  .isEqualTo("http://127.0.0.1:1/canonical-realm");
+              assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri"))
+                  .isEqualTo("http://127.0.0.1:1/canonical-jwks");
+            });
+  }
 }

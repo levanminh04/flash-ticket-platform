@@ -9,6 +9,11 @@ services:
     network_mode: host
     restart: unless-stopped
     mem_limit: 768m
+    environment:
+      USER_SERVICE_PORT: ${USER_SERVICE_PORT:-8085}
+      SERVER_ADDRESS: ${USER_SERVER_ADDRESS:-${SERVER_ADDRESS:-127.0.0.1}}
+      USER_SERVER_ADDRESS: ${USER_SERVER_ADDRESS:-${SERVER_ADDRESS:-127.0.0.1}}
+      JAVA_TOOL_OPTIONS: ${USER_JAVA_OPTIONS:--XX:MaxRAMPercentage=60.0 -Duser.timezone=UTC}
     logging:
       driver: json-file
       options:

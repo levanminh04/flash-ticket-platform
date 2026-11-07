@@ -2,70 +2,187 @@ package com.flashticket.api_gateway.routing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.cloud.gateway.route.Route;
 import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.http.HttpMethod;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.test.context.ActiveProfiles;
+import reactor.core.publisher.Mono;
 
+@ActiveProfiles("test")
 @SpringBootTest
 class GatewayRouteConfigurationTests {
 
-  @Autowired
-  @Qualifier("customRouteLocator")
-  private RouteLocator routeLocator;
-
+  @Autowired private RouteLocator routeLocator;
   @Autowired private RedisRateLimiter redisRateLimiter;
+  @Autowired private CircuitBreakerRegistry breakers;
+  @Autowired private TimeLimiterRegistry timeLimiters;
 
-  @Test
-  void mapsOnlyApprovedBootstrapRoutesToTheFiveServiceIds() {
-    Map<String, Route> routes = routesById();
-
-    assertEquals(32, routes.size());
-    assertEquals("lb://booking-service", routes.get("booking-availability").getUri().toString());
-    assertEquals("lb://ticket-service", routes.get("ticket-check-in").getUri().toString());
-    assertEquals("lb://event-service", routes.get("event-public-detail").getUri().toString());
-    assertEquals("lb://event-service", routes.get("event-organizer-seat-map").getUri().toString());
-    assertEquals(
-        45000L, routes.get("event-organizer-images").getMetadata().get("response-timeout"));
-    assertEquals(45000L, routes.get("event-organizer-image").getMetadata().get("response-timeout"));
-    assertEquals("lb://booking-service", routes.get("booking-create-order").getUri().toString());
-    assertEquals("lb://booking-service", routes.get("booking-promote-order").getUri().toString());
-    assertEquals("lb://booking-service", routes.get("booking-cancel-order").getUri().toString());
-    assertEquals("lb://booking-service", routes.get("booking-read-order").getUri().toString());
-    assertEquals("lb://booking-service", routes.get("booking-start-payment").getUri().toString());
-    assertEquals("lb://booking-service", routes.get("booking-list-orders").getUri().toString());
-    assertEquals("lb://payment-service", routes.get("payment-read-order").getUri().toString());
-    assertEquals("lb://ticket-service", routes.get("ticket-order-tickets").getUri().toString());
-    assertEquals("lb://ticket-service", routes.get("ticket-qr").getUri().toString());
-    assertEquals("lb://ticket-service", routes.get("ticket-delivery").getUri().toString());
-    assertEquals("lb://user-service", routes.get("user-current-user").getUri().toString());
-    assertTrue(
-        routes.values().stream()
-            .noneMatch(route -> route.getUri().toString().contains("CORE-SERVICE")));
-    assertTrue(
-        routes.values().stream()
-            .noneMatch(route -> route.getUri().toString().contains("DISCOVERY-SERVICE")));
+  /** Toàn bộ endpoint công khai (/api/v1/**) của 5 service, trích từ controller. */
+  @ParameterizedTest(name = "{0} {1} -> {2}")
+  @CsvSource({
+    "GET, /api/v1/admin/cancellation-requests, lb://event-service",
+    "POST, /api/v1/admin/cancellation-requests/id-1/approve, lb://event-service",
+    "POST, /api/v1/admin/cancellation-requests/id-1/reject, lb://event-service",
+    "GET, /api/v1/admin/events, lb://event-service",
+    "GET, /api/v1/admin/events/id-1, lb://event-service",
+    "POST, /api/v1/admin/events/id-1/approve, lb://event-service",
+    "POST, /api/v1/admin/events/id-1/cancel, lb://event-service",
+    "GET, /api/v1/admin/events/id-1/cancellation-requests, lb://event-service",
+    "POST, /api/v1/admin/events/id-1/return-to-draft, lb://event-service",
+    "GET, /api/v1/categories, lb://event-service",
+    "GET, /api/v1/events, lb://event-service",
+    "GET, /api/v1/events/id-1, lb://event-service",
+    "GET, /api/v1/organizer/events, lb://event-service",
+    "POST, /api/v1/organizer/events, lb://event-service",
+    "GET, /api/v1/organizer/events/id-1, lb://event-service",
+    "PUT, /api/v1/organizer/events/id-1, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/cancel, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/cancellation-requests, lb://event-service",
+    "GET, /api/v1/organizer/events/id-1/cancellation-requests, lb://event-service",
+    "GET, /api/v1/organizer/events/id-1/images, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/images, lb://event-service",
+    "PUT, /api/v1/organizer/events/id-1/images/image-1, lb://event-service",
+    "PATCH, /api/v1/organizer/events/id-1/images/image-1, lb://event-service",
+    "DELETE, /api/v1/organizer/events/id-1/images/image-1, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/publish, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/sales-mode, lb://event-service",
+    "GET, /api/v1/organizer/events/id-1/seat-map, lb://event-service",
+    "PUT, /api/v1/organizer/events/id-1/seat-map, lb://event-service",
+    "GET, /api/v1/organizer/events/id-1/statistics, lb://event-service",
+    "POST, /api/v1/organizer/events/id-1/submit, lb://event-service",
+    "PUT, /api/v1/organizer/events/id-1/ticket-types, lb://event-service",
+    "GET, /api/v1/venues, lb://event-service",
+    "GET, /api/v1/admin/organizer-applications, lb://user-service",
+    "GET, /api/v1/admin/organizer-applications/id-1, lb://user-service",
+    "POST, /api/v1/admin/organizer-applications/id-1/approve, lb://user-service",
+    "POST, /api/v1/admin/organizer-applications/id-1/reject, lb://user-service",
+    "PUT, /api/v1/me, lb://user-service",
+    "GET, /api/v1/me, lb://user-service",
+    "POST, /api/v1/organizer-applications, lb://user-service",
+    "GET, /api/v1/organizer-applications, lb://user-service",
+    "GET, /api/v1/organizer-applications/id-1, lb://user-service",
+    "POST, /api/v1/organizers/me/logo, lb://user-service",
+    "POST, /api/v1/organizers/me/banner, lb://user-service",
+    "GET, /api/v1/organizers/id-1, lb://user-service",
+    "DELETE, /api/v1/organizers/id-1/follow, lb://user-service",
+    "GET, /api/v1/organizers/id-1/follow, lb://user-service",
+    "PUT, /api/v1/organizers/id-1/follow, lb://user-service",
+    "GET, /api/v1/events/id-1/availability, lb://booking-service",
+    "POST, /api/v1/orders, lb://booking-service",
+    "POST, /api/v1/orders/id-1/cancel, lb://booking-service",
+    "POST, /api/v1/orders/id-1/promotion, lb://booking-service",
+    "POST, /api/v1/admin/events/id-1/payout, lb://payment-service",
+    "POST, /api/v1/admin/events/id-1/reconciliation, lb://payment-service",
+    "GET, /api/v1/admin/events/id-1/refund-progress, lb://payment-service",
+    "GET, /api/v1/admin/refunds, lb://payment-service",
+    "POST, /api/v1/admin/refunds/id-1/manual-settlement, lb://payment-service",
+    "POST, /api/v1/admin/refunds/id-1/retry, lb://payment-service",
+    "GET, /api/v1/events/id-1/reconciliation, lb://payment-service",
+    "GET, /api/v1/orders/id-1/payment, lb://payment-service",
+    "POST, /api/v1/payments, lb://payment-service",
+    "GET, /api/v1/payments/vnpay/ipn, lb://payment-service",
+    "GET, /api/v1/payments/vnpay/return, lb://payment-service",
+    "POST, /api/v1/events/id-1/check-ins, lb://ticket-service",
+    "POST, /api/v1/orders/id-1/ticket-deliveries, lb://ticket-service",
+    "GET, /api/v1/orders/id-1/tickets, lb://ticket-service",
+    "GET, /api/v1/tickets/id-1/qr, lb://ticket-service"
+  })
+  void routesEveryServiceEndpointToItsOwner(String method, String path, String expectedUri) {
+    Route route = resolve(method, path);
+    assertNotNull(route, method + " " + path + " has no route");
+    assertEquals(expectedUri, route.getUri().toString(), method + " " + path);
   }
 
   @Test
-  void evaluatesNestedEventPathsBeforeTheGenericEventDetailRoute() {
-    Map<String, Route> routes = routesById();
+  void hasExactlySevenRoutes() {
+    assertEquals(
+        List.of(
+            "booking",
+            "event",
+            "event-images",
+            "payment",
+            "payment-vnpay-callbacks",
+            "ticket",
+            "user"),
+        routesById().keySet().stream().sorted().toList());
+  }
 
-    assertTrue(
-        routes.get("booking-availability").getOrder()
-            < routes.get("event-public-detail").getOrder());
-    assertTrue(
-        routes.get("ticket-check-in").getOrder() < routes.get("event-public-detail").getOrder());
+  @Test
+  void vnpayCallbacksBypassRateLimitAndBreakerAndOnlyMatchGet() {
+    Route callbacks = routesById().get("payment-vnpay-callbacks");
+    assertEquals(0, callbacks.getFilters().size());
+    assertEquals("payment-vnpay-callbacks", resolve("GET", "/api/v1/payments/vnpay/ipn").getId());
+    assertEquals(
+        "payment-vnpay-callbacks", resolve("GET", "/api/v1/payments/vnpay/return").getId());
+    assertEquals("payment", resolve("POST", "/api/v1/payments/vnpay/ipn").getId());
+  }
+
+  @Test
+  void everyOtherRouteHasRateLimiterAndCircuitBreaker() {
+    routesById().values().stream()
+        .filter(route -> !route.getId().equals("payment-vnpay-callbacks"))
+        .forEach(route -> assertEquals(2, route.getFilters().size(), route.getId()));
+  }
+
+  @Test
+  void eventImagesUseTheLongResponseTimeout() {
+    Route images = routesById().get("event-images");
+    assertEquals("45000", String.valueOf(images.getMetadata().get("response-timeout")));
+    assertEquals("event-images", resolve("POST", "/api/v1/organizer/events/id-1/images").getId());
+    assertEquals("event", resolve("PUT", "/api/v1/organizer/events/id-1/seat-map").getId());
+  }
+
+  @Test
+  void internalActuatorAndFallbackPathsAreNeverRouted() {
+    assertNull(resolve("GET", "/internal/v1/users/id-1"));
+    assertNull(resolve("POST", "/internal/v1/orders/id-1/purchase-snapshot"));
+    assertNull(resolve("GET", "/actuator/health"));
+    assertNull(resolve("GET", "/fallback/booking"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "eventServiceBreaker",
+        "eventImageServiceBreaker",
+        "bookingServiceBreaker",
+        "paymentServiceBreaker",
+        "ticketServiceBreaker",
+        "userServiceBreaker"
+      })
+  void everyBreakerSharesTheDefaultConfigAndHasAnExplicitTimeLimit(String name) {
+    CircuitBreakerConfig config = breakers.circuitBreaker(name).getCircuitBreakerConfig();
+    assertEquals(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED, config.getSlidingWindowType());
+    assertEquals(10, config.getSlidingWindowSize());
+    assertEquals(5, config.getMinimumNumberOfCalls());
+    assertEquals(3, config.getPermittedNumberOfCallsInHalfOpenState());
+    assertEquals(50f, config.getFailureRateThreshold());
+    assertEquals(10_000L, config.getWaitIntervalFunctionInOpenState().apply(1));
+    assertEquals(true, config.isAutomaticTransitionFromOpenToHalfOpenEnabled());
+    Duration expected =
+        name.equals("eventImageServiceBreaker") ? Duration.ofSeconds(50) : Duration.ofSeconds(25);
+    assertEquals(
+        expected, timeLimiters.timeLimiter(name).getTimeLimiterConfig().getTimeoutDuration());
   }
 
   @Test
@@ -73,151 +190,18 @@ class GatewayRouteConfigurationTests {
     assertNotNull(redisRateLimiter);
   }
 
-  @Test
-  void routesCinemaPaymentCreationAndCallbacksToPayment() {
-    var routes = routesById();
-    assertNotNull(routes.get("payment-create"));
-    assertEquals("lb://payment-service", routes.get("payment-create").getUri().toString());
-    assertNotNull(routes.get("payment-vnpay-callbacks"));
-    var callback = routes.get("payment-vnpay-callbacks");
-    assertEquals("lb://payment-service", callback.getUri().toString());
-    for (String endpoint : List.of("ipn", "return")) {
-      var get =
-          org.springframework.mock.web.server.MockServerWebExchange.from(
-              org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(
-                  "/api/v1/payments/vnpay/" + endpoint));
-      var post =
-          org.springframework.mock.web.server.MockServerWebExchange.from(
-              org.springframework.mock.http.server.reactive.MockServerHttpRequest.post(
-                  "/api/v1/payments/vnpay/" + endpoint));
-      assertEquals(
-          Boolean.TRUE,
-          reactor.core.publisher.Mono.from(callback.getPredicate().apply(get))
-              .block(Duration.ofSeconds(5)));
-      assertEquals(
-          Boolean.FALSE,
-          reactor.core.publisher.Mono.from(callback.getPredicate().apply(post))
-              .block(Duration.ofSeconds(5)));
-    }
-  }
-
-  @Test
-  void separatesStartPostFromPaymentGetByMethodAndPath() {
-    var routes = routesById();
-    var start = routes.get("booking-start-payment");
-    var read = routes.get("payment-read-order");
-    var post =
-        org.springframework.mock.web.server.MockServerWebExchange.from(
-            org.springframework.mock.http.server.reactive.MockServerHttpRequest.post(
-                "/api/v1/orders/10000000-0000-0000-0000-000000000001/payment-attempts"));
-    var get =
-        org.springframework.mock.web.server.MockServerWebExchange.from(
-            org.springframework.mock.http.server.reactive.MockServerHttpRequest.get(
-                "/api/v1/orders/10000000-0000-0000-0000-000000000001/payment"));
-    assertEquals(
-        Boolean.TRUE,
-        reactor.core.publisher.Mono.from(start.getPredicate().apply(post))
-            .block(Duration.ofSeconds(5)));
-    assertEquals(
-        Boolean.FALSE,
-        reactor.core.publisher.Mono.from(read.getPredicate().apply(post))
-            .block(Duration.ofSeconds(5)));
-    assertEquals(
-        Boolean.TRUE,
-        reactor.core.publisher.Mono.from(read.getPredicate().apply(get))
-            .block(Duration.ofSeconds(5)));
-    assertEquals(
-        Boolean.FALSE,
-        reactor.core.publisher.Mono.from(start.getPredicate().apply(get))
-            .block(Duration.ofSeconds(5)));
-  }
-
-  @Test
-  void routesEventEditorCancellationAndStatisticsWithoutTakingBookingOrTicketPaths() {
-    String[][] routes = {
-      {"GET", "/api/v1/events"},
-      {"GET", "/api/v1/categories"},
-      {"GET", "/api/v1/venues"},
-      {"POST", "/api/v1/organizer/events"},
-      {"GET", "/api/v1/organizer/events"},
-      {"GET", "/api/v1/organizer/events/event-1"},
-      {"PUT", "/api/v1/organizer/events/event-1"},
-      {"POST", "/api/v1/organizer/events/event-1/submit"},
-      {"POST", "/api/v1/organizer/events/event-1/publish"},
-      {"POST", "/api/v1/organizer/events/event-1/sales-mode"},
-      {"PUT", "/api/v1/organizer/events/event-1/ticket-types"},
-      {"POST", "/api/v1/organizer/events/event-1/cancel"},
-      {"POST", "/api/v1/organizer/events/event-1/cancellation-requests"},
-      {"GET", "/api/v1/organizer/events/event-1/cancellation-requests"},
-      {"GET", "/api/v1/organizer/events/event-1/statistics"},
-      {"GET", "/api/v1/organizer/events/event-1/images"},
-      {"POST", "/api/v1/organizer/events/event-1/images"},
-      {"PUT", "/api/v1/organizer/events/event-1/images/image-1"},
-      {"PATCH", "/api/v1/organizer/events/event-1/images/image-1"},
-      {"DELETE", "/api/v1/organizer/events/event-1/images/image-1"},
-      {"GET", "/api/v1/admin/events"},
-      {"GET", "/api/v1/admin/events/event-1"},
-      {"POST", "/api/v1/admin/events/event-1/approve"},
-      {"POST", "/api/v1/admin/events/event-1/return-to-draft"},
-      {"POST", "/api/v1/admin/events/event-1/cancel"},
-      {"GET", "/api/v1/admin/cancellation-requests"},
-      {"GET", "/api/v1/admin/events/event-1/cancellation-requests"},
-      {"POST", "/api/v1/admin/cancellation-requests/request-1/approve"},
-      {"POST", "/api/v1/admin/cancellation-requests/request-1/reject"}
-    };
-    for (var endpoint : routes)
-      assertEquals(
-          "lb://event-service", target(endpoint[0], endpoint[1]), endpoint[0] + " " + endpoint[1]);
-    assertEquals("lb://booking-service", target("GET", "/api/v1/events/event-1/availability"));
-    assertEquals("lb://ticket-service", target("POST", "/api/v1/events/event-1/check-ins"));
-    assertEquals(null, target("POST", "/api/v1/events/event-1/unapproved-operation"));
-    assertEquals(null, target("GET", "/internal/v1/events/event-1/financial-summary"));
-  }
-
-  private String target(String method, String path) {
+  /** Giống RoutePredicateHandlerMapping: route đầu tiên theo order mà predicate khớp. */
+  private Route resolve(String method, String path) {
     var exchange =
-        org.springframework.mock.web.server.MockServerWebExchange.from(
-            org.springframework.mock.http.server.reactive.MockServerHttpRequest.method(
-                    org.springframework.http.HttpMethod.valueOf(method), path)
-                .build());
-    var matches =
-        routeLocator
-            .getRoutes()
-            .filterWhen(
-                route -> reactor.core.publisher.Mono.from(route.getPredicate().apply(exchange)))
-            .collectList()
-            .block(Duration.ofSeconds(5));
-    assertNotNull(matches);
-    if (matches.isEmpty()) return null;
-    assertEquals(1, matches.size(), "Ambiguous route " + path);
-    return matches.getFirst().getUri().toString();
-  }
-
-  @Test
-  void routesUserWorkflowsWithoutCapturingOtherServicesOrInternalEndpoints() {
-    String[][] endpoints = {
-      {"GET", "/api/v1/me"},
-      {"PUT", "/api/v1/me"},
-      {"GET", "/api/v1/organizer-applications"},
-      {"POST", "/api/v1/organizer-applications"},
-      {"GET", "/api/v1/organizer-applications/application-1"},
-      {"GET", "/api/v1/admin/organizer-applications"},
-      {"GET", "/api/v1/admin/organizer-applications/application-1"},
-      {"POST", "/api/v1/admin/organizer-applications/application-1/approve"},
-      {"POST", "/api/v1/admin/organizer-applications/application-1/reject"},
-      {"GET", "/api/v1/organizers/subject-1"},
-      {"GET", "/api/v1/organizers/subject-1/follow"},
-      {"PUT", "/api/v1/organizers/subject-1/follow"},
-      {"DELETE", "/api/v1/organizers/subject-1/follow"},
-      {"POST", "/api/v1/organizers/me/logo"},
-      {"POST", "/api/v1/organizers/me/banner"}
-    };
-    for (var endpoint : endpoints)
-      assertEquals("lb://user-service", target(endpoint[0], endpoint[1]), endpoint[1]);
-    assertEquals(null, target("PUT", "/api/v1/organizer-applications/application-1"));
-    assertEquals(null, target("GET", "/internal/v1/users/subject-1"));
-    assertEquals("lb://booking-service", target("POST", "/api/v1/orders"));
-    assertEquals("lb://payment-service", target("GET", "/api/v1/orders/order-1/payment"));
+        MockServerWebExchange.from(
+            MockServerHttpRequest.method(HttpMethod.valueOf(method), path).build());
+    return routeLocator
+        .getRoutes()
+        .sort(Comparator.comparingInt(Route::getOrder))
+        .concatMap(
+            route -> Mono.from(route.getPredicate().apply(exchange)).filter(m -> m).map(m -> route))
+        .next()
+        .block(Duration.ofSeconds(5));
   }
 
   private Map<String, Route> routesById() {

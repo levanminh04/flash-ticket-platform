@@ -1,0 +1,190 @@
+name: flashticket-integration
+
+x-relay-volumes: &relay-volumes
+  - type: bind
+    source: ./relay/LocalRelay.class
+    target: /tmp/LocalRelay.class
+    read_only: true
+  - type: bind
+    source: ./relay/start-with-relay.sh
+    target: /tmp/start-with-relay.sh
+    read_only: true
+
+x-app-hosts: &app-hosts
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+x-discovery-env: &discovery-env
+  EUREKA_CLIENT_ENABLED: "true"
+  EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+
+x-config-env: &config-env
+  <<: *discovery-env
+  CONFIG_SERVER_URL: http://config-server:8888
+
+x-discovery-dependency: &discovery-dependency
+  discovery-server:
+    condition: service_healthy
+
+x-config-dependencies: &config-dependencies
+  <<: *discovery-dependency
+  config-server:
+    condition: service_healthy
+
+services:
+  config-server:
+    build: ../infrastructure/config-server
+    env_file:
+      - path: ../infrastructure/config-server/.env
+        required: true
+    ports:
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  discovery-server:
+    build: ../infrastructure/discovery-server
+    env_file:
+      - path: ../infrastructure/discovery-server/.env
+        required: true
+    ports:
+      - "127.0.0.1:8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8761/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  api-gateway:
+    <<: *app-hosts
+    build: ../infrastructure/api-gateway
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes: *relay-volumes
+    depends_on: *discovery-dependency
+    ports:
+      - "127.0.0.1:8081:8081"
+    env_file:
+      - path: ../infrastructure/api-gateway/.env
+        required: true
+    environment:
+      <<: *discovery-env
+      RESILIENCE4J_TIMELIMITER_INSTANCES_BOOKINGSERVICEBREAKER_TIMEOUTDURATION: 25s
+      RESILIENCE4J_TIMELIMITER_INSTANCES_PAYMENTSERVICEBREAKER_TIMEOUTDURATION: 25s
+      RESILIENCE4J_TIMELIMITER_INSTANCES_TICKETSERVICEBREAKER_TIMEOUTDURATION: 25s
+      RESILIENCE4J_TIMELIMITER_INSTANCES_USERSERVICEBREAKER_TIMEOUTDURATION: 25s
+
+  event-service:
+    <<: *app-hosts
+    build:
+      context: ../services/event-service
+      dockerfile: ../../deploy/Dockerfile.integration-java21
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes: *relay-volumes
+    depends_on: *config-dependencies
+    ports:
+      - "127.0.0.1:8086:8086"
+    env_file:
+      - path: ../services/event-service/.env
+        required: true
+    environment:
+      <<: *config-env
+      EVENT_BOOKING_BASE_URL: http://booking-service:8082
+      EVENT_PAYMENT_BASE_URL: http://payment-service:8083
+
+  user-service:
+    <<: *app-hosts
+    build:
+      context: ../services/user-service
+      dockerfile: ../../deploy/Dockerfile.integration-java21
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes: *relay-volumes
+    depends_on: *config-dependencies
+    ports:
+      - "127.0.0.1:8085:8085"
+    env_file:
+      - path: ../services/user-service/.env
+        required: true
+    environment:
+      <<: *config-env
+
+  booking-service:
+    <<: *app-hosts
+    build: ../services/booking-service
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes: *relay-volumes
+    depends_on: *discovery-dependency
+    ports:
+      - "127.0.0.1:8082:8082"
+    env_file:
+      - path: ../services/booking-service/.env
+        required: true
+    environment:
+      <<: *discovery-env
+
+  payment-service:
+    <<: *app-hosts
+    build: ../services/payment-service
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes: *relay-volumes
+    depends_on:
+      <<: *discovery-dependency
+      booking-service:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8083:8083"
+    env_file:
+      - path: ../services/payment-service/.env
+        required: true
+    environment:
+      <<: *discovery-env
+      PAYMENT_BOOKING_READ_TIMEOUT: 25s
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: DEBUG
+      LOGGING_LEVEL_COM_FLASHTICKET: DEBUG
+      BOOKING_SERVICE_URL: http://booking-service:8082
+
+  ticket-service:
+    <<: *app-hosts
+    build: ../services/ticket-service
+    entrypoint: ["sh", "/tmp/start-with-relay.sh"]
+    volumes:
+      - type: bind
+        source: ./relay/LocalRelay.class
+        target: /tmp/LocalRelay.class
+        read_only: true
+      - type: bind
+        source: ./relay/start-with-relay.sh
+        target: /tmp/start-with-relay.sh
+        read_only: true
+      - type: bind
+        source: ${INTEGRATION_TICKET_QR_KEY_RING_FILE:-../.integration-secrets/ticket/key-ring.json}
+        target: /run/ticket-qr/key-ring.json
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on: *config-dependencies
+    ports:
+      - "127.0.0.1:8084:8084"
+    env_file:
+      - path: ../services/ticket-service/.env
+        required: true
+    environment:
+      <<: *config-env
+
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ../frontend
+      args:
+        VITE_API_GATEWAY_URL: ${VITE_API_GATEWAY_URL:-http://127.0.0.1:8081}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8080}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-flash-ticket}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-user-management}
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - '127.0.0.1:5173:5173'

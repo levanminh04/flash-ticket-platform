@@ -12,15 +12,15 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
-      connect-timeout: 2s
-      timeout: 2s
+      connect-timeout: ${GATEWAY_REDIS_TIMEOUT:10s}
+      timeout: ${GATEWAY_REDIS_TIMEOUT:10s}
   cloud:
     gateway:
       server:
         webflux:
           httpclient:
             connect-timeout: 2000
-            response-timeout: 8s
+            response-timeout: ${INTEGRATION_GATEWAY_HTTP_RESPONSE_TIMEOUT:8s}
           discovery:
             locator:
               enabled: false
@@ -93,15 +93,15 @@ resilience4j:
       eventImageServiceBreaker:
         timeoutDuration: ${EVENT_IMAGES_GATEWAY_TIME_LIMIT:50s}
       eventServiceBreaker:
-        timeoutDuration: 10s
+        timeoutDuration: ${INTEGRATION_EVENT_GATEWAY_TIME_LIMIT:25s}
       bookingServiceBreaker:
-        timeoutDuration: 10s
+        timeoutDuration: ${INTEGRATION_BOOKING_GATEWAY_TIME_LIMIT:25s}
       paymentServiceBreaker:
-        timeoutDuration: 10s
+        timeoutDuration: ${INTEGRATION_PAYMENT_GATEWAY_TIME_LIMIT:25s}
       ticketServiceBreaker:
-        timeoutDuration: 10s
+        timeoutDuration: ${INTEGRATION_TICKET_GATEWAY_TIME_LIMIT:25s}
       userServiceBreaker:
-        timeoutDuration: 10s
+        timeoutDuration: ${INTEGRATION_USER_GATEWAY_TIME_LIMIT:25s}
 
 #registerHealthIndicator	                    Đưa trạng thái của Circuit Breaker này vào trang /actuator/health.
 #slidingWindowSize: 10	                        Theo dõi kết quả của 10 cuộc gọi gần nhất để tính toán tỷ lệ lỗi.

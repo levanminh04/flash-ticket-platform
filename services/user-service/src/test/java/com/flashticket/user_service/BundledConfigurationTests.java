@@ -57,6 +57,8 @@ class BundledConfigurationTests {
               var rabbit = context.getBean(RabbitProperties.class);
               var jwt = context.getBean(OAuth2ResourceServerProperties.class).getJwt();
               assertThat(rabbit.getHost()).isEqualTo("127.0.0.1");
+              assertThat(rabbit.getUsername()).isEqualTo("flash_ticket_app");
+              assertThat(rabbit.getPassword()).isEqualTo("fixture-only");
               assertThat(environment.getProperty("spring.rabbitmq.dynamic", Boolean.class))
                   .isFalse();
               assertThat(rabbit.getListener().getSimple().getAcknowledgeMode().name())
@@ -80,30 +82,44 @@ class BundledConfigurationTests {
                   .isEqualTo("com.flashticket.user_service.observability.UserLogCustomizer");
               assertThat(environment.getProperty("logging.structured.json.include"))
                   .contains("correlationId");
+              assertThat(environment.getProperty("user.keycloak-admin.realm"))
+                  .isEqualTo("flash-ticket");
             });
   }
 
   @Test
   void scopedRuntimeEnvironmentOverridesFallbackAndDisablesBackgroundWork() {
     bundledConfiguration(
-            Map.of(
-                "USER_MONGO_URI", "mongodb://127.0.0.1:2/scoped",
-                "USER_RABBITMQ_HOST", "scoped-broker.invalid",
-                "USER_RABBITMQ_PORT", "5673",
-                "USER_KEYCLOAK_AUDIENCE", "scoped-audience",
-                "USER_IDENTITY_ENABLED", "false",
-                "USER_RECOVERY_ENABLED", "false"))
+            Map.ofEntries(
+                Map.entry("USER_MONGO_URI", "mongodb://127.0.0.1:2/scoped"),
+                Map.entry("USER_RABBITMQ_HOST", "scoped-broker.invalid"),
+                Map.entry("USER_RABBITMQ_PORT", "5673"),
+                Map.entry("USER_RABBITMQ_USERNAME", "scoped-user"),
+                Map.entry("USER_RABBITMQ_PASSWORD", "scoped-pass"),
+                Map.entry("USER_KEYCLOAK_ISSUER_URI", "https://scoped.invalid/realm"),
+                Map.entry("USER_KEYCLOAK_JWK_SET_URI", "https://scoped.invalid/jwks"),
+                Map.entry("USER_KEYCLOAK_AUDIENCE", "scoped-audience"),
+                Map.entry("USER_KEYCLOAK_ADMIN_REALM", "scoped-realm"),
+                Map.entry("USER_IDENTITY_ENABLED", "false"),
+                Map.entry("USER_RECOVERY_ENABLED", "false")))
         .run(
             context -> {
               assertThat(context).hasNotFailed();
               assertThat(context.getBean(RabbitProperties.class).getHost())
                   .isEqualTo("scoped-broker.invalid");
               assertThat(context.getBean(RabbitProperties.class).getPort()).isEqualTo(5673);
-              assertThat(
-                      context.getBean(OAuth2ResourceServerProperties.class).getJwt().getAudiences())
-                  .containsExactly("scoped-audience");
+              assertThat(context.getBean(RabbitProperties.class).getUsername())
+                  .isEqualTo("scoped-user");
+              assertThat(context.getBean(RabbitProperties.class).getPassword())
+                  .isEqualTo("scoped-pass");
+              var jwt = context.getBean(OAuth2ResourceServerProperties.class).getJwt();
+              assertThat(jwt.getIssuerUri()).isEqualTo("https://scoped.invalid/realm");
+              assertThat(jwt.getJwkSetUri()).isEqualTo("https://scoped.invalid/jwks");
+              assertThat(jwt.getAudiences()).containsExactly("scoped-audience");
               assertThat(context.getEnvironment().getProperty("spring.mongodb.uri"))
                   .isEqualTo("mongodb://127.0.0.1:2/scoped");
+              assertThat(context.getEnvironment().getProperty("user.keycloak-admin.realm"))
+                  .isEqualTo("scoped-realm");
               assertThat(
                       context.getEnvironment().getProperty("user.identity.enabled", Boolean.class))
                   .isFalse();

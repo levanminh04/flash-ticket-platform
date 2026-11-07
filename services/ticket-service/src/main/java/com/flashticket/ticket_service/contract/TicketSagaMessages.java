@@ -12,11 +12,11 @@ public final class TicketSagaMessages {
   private final String completedType, completedRoutingKey, failedRoutingKey;
 
   public TicketSagaMessages(
-      @Value("${ticket.messaging.completed-result-message-type:ticket.issued.v1}")
+      @Value("${ticket.messaging.completed-result-message-type:ticket.issuance-result.v1}")
           String completedType,
-      @Value("${ticket.messaging.completed-result-routing-key:ticket.issued.v1}")
+      @Value("${ticket.messaging.completed-result-routing-key:ticket.issuance-result.v1}")
           String completedRoutingKey,
-      @Value("${ticket.messaging.failed-result-routing-key:ticket.issuance-failed.v1}")
+      @Value("${ticket.messaging.failed-result-routing-key:ticket.issuance-result.v1}")
           String failedRoutingKey) {
     if (!("ticket.issued.v1".equals(completedType) || RESULT.equals(completedType))
         || completedRoutingKey == null

@@ -1,7 +1,5 @@
 package com.flashticket.ticket_service.config;
 
-import org.springframework.amqp.rabbit.config.ContainerCustomizer;
-import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -16,13 +14,5 @@ public class RabbitMqConfig {
   @Bean
   MessageConverter rabbitMessageConverter(JsonMapper jsonMapper) {
     return new JacksonJsonMessageConverter(jsonMapper);
-  }
-
-  /** Gắn handler lỗi vào listener container, giữ cơ chế reject native của Spring AMQP. */
-  @Bean
-  ContainerCustomizer<SimpleMessageListenerContainer> ticketRabbitContainerCustomizer() {
-    return container ->
-        container.setErrorHandler(
-            new com.flashticket.ticket_service.messaging.TicketRabbitErrorHandler());
   }
 }
