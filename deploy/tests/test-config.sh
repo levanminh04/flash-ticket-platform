@@ -14,4 +14,16 @@ for p in services/booking-service services/ticket-service; do
   grep -q '<version>\[21,22)</version>' "$root/$p/pom.xml" || fail "$p: enforcer range must be [21,22)"
 done
 
+# --- Eureka status must follow /actuator/health, and the QR key file name must match the server (keys.json)
+for p in infrastructure/api-gateway services/user-service services/event-service \
+         services/ticket-service services/booking-service services/payment-service; do
+  awk '/^eureka:/{e=1;next} /^[^ ]/{e=0}
+       e&&/healthcheck:/{h=1;next}
+       h==1{ if ($0 ~ /enabled: true/) ok=1; h=0 }
+       END{exit !ok}' "$root/$p/src/main/resources/application.yaml" \
+    || fail "$p: eureka.client.healthcheck.enabled: true missing"
+done
+grep -q 'TICKET_QR_KEY_RING_LOCATION=file:/run/ticket-qr/keys.json' "$root/services/ticket-service/.env.example" \
+  || fail "ticket .env.example must point to /run/ticket-qr/keys.json"
+
 echo "test-config OK"
