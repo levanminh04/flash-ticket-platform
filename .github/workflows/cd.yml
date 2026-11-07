@@ -65,6 +65,7 @@ jobs:
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
       postgres: ${{ matrix.service.postgres }}
+      rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}
       image_digest: ${{ matrix.service.image_digest }}
     secrets: inherit
@@ -87,6 +88,7 @@ jobs:
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
       postgres: ${{ matrix.service.postgres }}
+      rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}
       image_digest: ${{ matrix.service.image_digest }}
     secrets: inherit

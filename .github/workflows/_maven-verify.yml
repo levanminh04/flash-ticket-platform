@@ -15,6 +15,9 @@ on:
       postgres:
         type: boolean
         default: false
+      rabbitmq:
+        type: boolean
+        default: false
       upload_jar:
         type: boolean
         default: false
@@ -40,6 +43,18 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ticket_ci -d ticket_test_c1"
           --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: ${{ inputs.rabbitmq && 'rabbitmq:4.3.6-management' || '' }}
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+          # guest is loopback-only by default; the runner reaches the broker over the docker bridge
+          RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit loopback_users none
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 10s --health-retries 12
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

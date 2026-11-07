@@ -18,10 +18,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(
     properties = {
-      "spring.rabbitmq.host=${RABBITMQ_HOST}",
-      "spring.rabbitmq.port=${RABBITMQ_PORT:5672}",
-      "spring.rabbitmq.username=${RABBITMQ_USERNAME}",
-      "spring.rabbitmq.password=${RABBITMQ_PASSWORD}",
+      "spring.rabbitmq.host=localhost",
+      "spring.rabbitmq.port=5672",
+      "spring.rabbitmq.username=guest",
+      "spring.rabbitmq.password=guest",
       "spring.rabbitmq.connection-timeout=5s",
       "spring.rabbitmq.dynamic=false",
       "spring.rabbitmq.listener.simple.auto-startup=false",

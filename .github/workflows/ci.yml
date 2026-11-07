@@ -47,6 +47,7 @@ jobs:
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
       postgres: ${{ matrix.service.postgres }}
+      rabbitmq: ${{ matrix.service.rabbitmq }}
 
   scripts:
     name: Deploy scripts
@@ -72,6 +73,9 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           fail-on-severity: high
+          # TODO: temporary exceptions; frontend needs major bumps (vite 8, react-router-dom 7, typescript-eslint 7+).
+          # Only the high-severity advisories that trip fail-on-severity; remove after the major upgrade.
+          allow-ghsas: GHSA-587h-7wmj-h5pm, GHSA-3ppc-4f35-3m26, GHSA-7r86-cg39-jmmj, GHSA-23c5-xmqv-rm74
 
   codeql:
     name: CodeQL

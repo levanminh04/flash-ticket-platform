@@ -15,6 +15,9 @@ on:
       postgres:
         type: boolean
         default: false
+      rabbitmq:
+        type: boolean
+        default: false
       mode:
         description: build-and-deploy | recreate | rollback
         type: string
@@ -37,6 +40,7 @@ jobs:
       path: ${{ inputs.path }}
       mvn: ${{ inputs.mvn }}
       postgres: ${{ inputs.postgres }}
+      rabbitmq: ${{ inputs.rabbitmq }}
       upload_jar: true
 
   publish:
