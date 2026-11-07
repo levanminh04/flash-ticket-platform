@@ -44,11 +44,11 @@ ssh ft84 'curl -s -H "Accept: application/json" http://127.0.0.1:8761/eureka/app
 
 ## Quản lý cấu hình Env qua GitHub Secrets
 
-Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đặt trong GitHub Environment `production`. Khi CD chạy action `deploy` hoặc `restart`, pipeline sẽ tự động ghi nội dung secret xuống `/opt/flash-ticket-app/env/<svc>.env` (mode 600, ghi atomic) trước khi chạy `deploy-service.sh`.
+Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đặt ở **cấp repo** (không phải Environment `production`). Job deploy (`environment: production`) vẫn đọc được secret cấp repo; GitHub tự tạo Environment ở lần chạy đầu. Khi CD chạy action `deploy` hoặc `restart`, pipeline sẽ tự động ghi nội dung secret xuống `/opt/flash-ticket-app/env/<svc>.env` (mode 600, ghi atomic) trước khi chạy `deploy-service.sh`.
 
 ### Bảng tên Secret tương ứng các service
 
-| Service | Tên GitHub Secret (`--env production`) |
+| Service | Tên GitHub Secret (cấp repo) |
 |---|---|
 | `discovery-server` | `ENV_DISCOVERY_SERVER` |
 | `api-gateway` | `ENV_API_GATEWAY` |
@@ -61,10 +61,11 @@ Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đ�
 
 ### Quy trình tạo hoặc cập nhật cấu hình env
 
-1. Tạo hoặc sửa secret trên GitHub Environment `production`:
+1. Tạo hoặc sửa secret cấp repo:
    ```bash
-   gh secret set ENV_BOOKING_SERVICE --env production < /path/to/booking.env
+   gh secret set ENV_BOOKING_SERVICE -R levanminh04/flash-ticket-platform < /path/to/booking.env
    ```
+   Ticket-service cần thêm file `/opt/flash-ticket-app/secrets/ticket-qr/key-ring.json` (owner 10001, mode 0440).
 2. Kích hoạt cập nhật trên máy 84 và khởi động lại container:
    ```bash
    gh workflow run cd.yml -f action=restart -f service=booking-service
