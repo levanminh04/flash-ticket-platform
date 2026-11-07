@@ -37,7 +37,7 @@ ssh ft84 'curl -s -H "Accept: application/json" http://127.0.0.1:8761/eureka/app
 /opt/flash-ticket-app/
 ├── compose/             # CI ghi đè mỗi lần deploy (từ deploy/app/)
 ├── env/<svc>.env        # CD ghi tự động từ secret ENV_<SVC>, mode 600
-├── secrets/ticket-qr/   # keys.json của ticket, mount read-only
+├── secrets/ticket-qr/   # key-ring.json của ticket, mount read-only
 ├── state/<svc>.current, <svc>.previous
 └── deploy-service.sh
 ```
@@ -84,7 +84,7 @@ Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đ�
 | Host Postgres/RabbitMQ/Redis/Mongo/Keycloak | `127.0.0.1` |
 | payment: `NGROK_DOMAIN`, `NGROK_AUTHTOKEN` | domain và token ngrok |
 | payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://<NGROK_DOMAIN>/api/v1/payments/vnpay/return` và `/ipn` |
-| ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/keys.json` |
+| ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/key-ring.json` |
 | keycloak | `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, `KC_HOSTNAME`, `KC_HTTP_ENABLED`, `KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD`, `KC_DB_POOL_MIN_SIZE`, `KC_DB_POOL_INITIAL_SIZE`, `KC_DB_POOL_MAX_SIZE`, `KC_HTTP_MAX_QUEUED_REQUESTS`, `FT_IDENTITY_OUTBOX_ENABLED`, `FT_IDENTITY_OUTBOX_INTERVAL_MS`, `FT_IDENTITY_RABBITMQ_HOST`, `FT_IDENTITY_RABBITMQ_PORT`, `FT_IDENTITY_RABBITMQ_VHOST`, `FT_IDENTITY_RABBITMQ_USERNAME`, `FT_IDENTITY_RABBITMQ_PASSWORD` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
 
 ## Lưu ý về Ngrok (payment-service)
