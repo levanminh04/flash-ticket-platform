@@ -1,0 +1,40 @@
+{
+  "status": "SEEDED_AND_VERIFIED",
+  "eventId": "83c2d8fb-9ca6-4277-8beb-4122d72dceb8",
+  "existingOrderCount": 1,
+  "promotions": [
+    {
+      "promotionId": "a7c0565c-7ce1-497c-8866-41659356db52",
+      "code": "SAVE5K",
+      "startsAt": "2026-11-01T16:39:33Z",
+      "endsAt": "2026-11-16T16:39:33Z",
+      "maximumUses": "100",
+      "maximumUsesPerUser": 1,
+      "discount": {
+        "kind": "FIXED",
+        "amount": "5000"
+      }
+    },
+    {
+      "promotionId": "dab41960-9378-4228-8f1f-e8ce12e2f8ec",
+      "code": "SAVE10",
+      "startsAt": "2026-11-01T16:39:33Z",
+      "endsAt": "2026-11-16T16:39:33Z",
+      "maximumUses": "100",
+      "maximumUsesPerUser": 1,
+      "discount": {
+        "kind": "PERCENT",
+        "percent": 10
+      }
+    }
+  ],
+  "committedDatabases": [
+    "event_db",
+    "booking_db"
+  ],
+  "checks": {
+    "version": 2,
+    "snapshotCount": 2,
+    "inventoryCount": 2
+  }
+}

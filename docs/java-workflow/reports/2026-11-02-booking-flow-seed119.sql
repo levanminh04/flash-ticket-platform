@@ -1,0 +1,23 @@
+\set ON_ERROR_STOP on
+\connect event_db
+BEGIN; SET LOCAL ROLE event_owner; SET LOCAL search_path=event_schema,pg_catalog; SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s';
+INSERT INTO tbl_categories(id,name) VALUES ('d79b7e19-273d-43f5-929b-66563533d413','TEST119');
+INSERT INTO tbl_venues(id,name,address) VALUES ('cb593c60-690b-49c4-a224-497560854372','Test venue 119','Synthetic test venue');
+INSERT INTO tbl_events(id,organizer_subject,category_id,venue_id,title,description,sales_mode,status,starts_at,ends_at,sale_starts_at,sale_ends_at,checkin_starts_at,checkin_ends_at,purchase_limit,fee_rate,approved_by,approved_at) VALUES ('83c2d8fb-9ca6-4277-8beb-4122d72dceb8','ae3a05cd-95c2-47ec-a041-9c9de198c4a1','d79b7e19-273d-43f5-929b-66563533d413','cb593c60-690b-49c4-a224-497560854372','[TEST119] Booking end-to-end 2026-11-02 16:39 UTC','Synthetic data for manual booking and VNPay sandbox testing','QUANTITY','PUBLISHED','2026-11-23T16:39:33Z','2026-11-24T16:39:33Z','2026-11-01T16:39:33Z','2026-11-16T16:39:33Z','2026-11-23T16:39:33Z','2026-11-24T16:39:33Z',10,0.05,'01388e8e-721c-42d5-81b6-3f98f2c521df',now());
+INSERT INTO tbl_ticket_types(id,event_id,name,sales_mode,unit_price,currency,configured_quantity,color_code) VALUES ('27ecd568-a44d-4db1-aaeb-3d168e56483f','83c2d8fb-9ca6-4277-8beb-4122d72dceb8','Standard test','QUANTITY',20000,'VND',100,'#1677FF');
+INSERT INTO tbl_ticket_types(id,event_id,name,sales_mode,unit_price,currency,configured_quantity,color_code) VALUES ('1e46cbb3-4c74-40e0-b490-6c1a3cb7b364','83c2d8fb-9ca6-4277-8beb-4122d72dceb8','VIP test','QUANTITY',50000,'VND',100,'#FAAD14');
+COMMIT;
+\connect booking_db
+BEGIN; SET LOCAL ROLE booking_owner; SET LOCAL search_path=booking_schema,pg_catalog; SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s';
+INSERT INTO tbl_event_sales_snapshots(event_id,organizer_subject,sales_mode,event_status,sale_starts_at,sale_ends_at,purchase_limit,configuration_snapshot,source_config_version,received_at) VALUES ('83c2d8fb-9ca6-4277-8beb-4122d72dceb8','ae3a05cd-95c2-47ec-a041-9c9de198c4a1','QUANTITY','PUBLISHED','2026-11-01T16:39:33Z','2026-11-16T16:39:33Z',10,'{"schemaVersion": 1, "eventId": "83c2d8fb-9ca6-4277-8beb-4122d72dceb8", "organizerSubject": "ae3a05cd-95c2-47ec-a041-9c9de198c4a1", "sourceConfigVersion": "1", "eventStatus": "PUBLISHED", "eventTitle": "[TEST119] Booking end-to-end 2026-11-02 16:39 UTC", "eventStartsAt": "2026-11-23T16:39:33Z", "eventEndsAt": "2026-11-24T16:39:33Z", "venueName": "Test venue 119", "mode": "QUANTITY", "saleStartsAt": "2026-11-01T16:39:33Z", "saleEndsAt": "2026-11-16T16:39:33Z", "purchaseLimit": 10, "ticketTypes": [{"ticketTypeId": "27ecd568-a44d-4db1-aaeb-3d168e56483f", "name": "Standard test", "unitPrice": "20000", "currency": "VND", "sectorId": null, "configuredQuantity": "100", "colorCode": "#1677FF"}, {"ticketTypeId": "1e46cbb3-4c74-40e0-b490-6c1a3cb7b364", "name": "VIP test", "unitPrice": "50000", "currency": "VND", "sectorId": null, "configuredQuantity": "100", "colorCode": "#FAAD14"}], "sectors": [], "seats": [], "promotions": []}'::jsonb,1,now());
+INSERT INTO tbl_ticket_type_inventory(ticket_type_id,event_id,configured_capacity,source_config_version) VALUES ('27ecd568-a44d-4db1-aaeb-3d168e56483f','83c2d8fb-9ca6-4277-8beb-4122d72dceb8',100,1);
+INSERT INTO tbl_ticket_type_inventory(ticket_type_id,event_id,configured_capacity,source_config_version) VALUES ('1e46cbb3-4c74-40e0-b490-6c1a3cb7b364','83c2d8fb-9ca6-4277-8beb-4122d72dceb8',100,1);
+COMMIT;
+\connect payment_db
+BEGIN; SET LOCAL ROLE payment_owner; SET LOCAL search_path=payment_schema,pg_catalog; SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s';
+INSERT INTO tbl_event_finance_snapshots(event_id,organizer_subject,event_ends_at,fee_rate,source_fee_version,received_at) VALUES ('83c2d8fb-9ca6-4277-8beb-4122d72dceb8','ae3a05cd-95c2-47ec-a041-9c9de198c4a1','2026-11-24T16:39:33Z',0.05,1,now());
+COMMIT;
+\connect ticket_db
+BEGIN; SET LOCAL ROLE ticket_owner; SET LOCAL search_path=ticket_schema,pg_catalog; SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s';
+INSERT INTO tbl_event_access_snapshots(event_id,organizer_subject,event_status,event_starts_at,event_ends_at,source_config_version,received_at) VALUES ('83c2d8fb-9ca6-4277-8beb-4122d72dceb8','ae3a05cd-95c2-47ec-a041-9c9de198c4a1','PUBLISHED','2026-11-23T16:39:33Z','2026-11-24T16:39:33Z',1,now());
+COMMIT;
