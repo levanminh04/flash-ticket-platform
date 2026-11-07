@@ -183,8 +183,7 @@ class BookingPersistenceIT {
     public void initialize(ConfigurableApplicationContext context) {
       var yaml =
           Path.of(System.getProperty("basedir", "."))
-              .resolve(
-                  "../../infrastructure/config-server/src/main/resources/config/booking-service.yaml");
+              .resolve("src/main/resources/application.yaml");
       try {
         for (var source :
             new YamlPropertySourceLoader().load("booking", new FileSystemResource(yaml))) {

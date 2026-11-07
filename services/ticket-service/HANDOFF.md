@@ -45,8 +45,7 @@ rtk proxy ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:15432:127.0.0.1:5432 f
 rtk proxy .\mvnw.cmd -B -ntp '-Dspring-boot.run.jvmArguments=-Duser.timezone=UTC' spring-boot:run
 ```
 
-Central config: [ticket-service.yaml](../../infrastructure/config-server/src/main/resources/config/ticket-service.yaml).
-Sau khi sửa YAML, build/chạy lại Config Server để phục vụ cấu hình mới.
+Service config: [application.yaml](src/main/resources/application.yaml).
 Hikari áp `SET ROLE ticket_owner` cho account NOINHERIT; pool 5/1,
 `ddl-auto=none`, `open-in-view=false`, JDBC timezone UTC, Hibernate JSON mapper Jackson 3.
 

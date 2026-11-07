@@ -16,7 +16,7 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.EnumerablePropertySource;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ClassPathResource;
 
 public final class LogCapture implements AutoCloseable {
   private final Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -51,10 +51,7 @@ public final class LogCapture implements AutoCloseable {
     var source =
         (EnumerablePropertySource<?>)
             new YamlPropertySourceLoader()
-                .load(
-                    "ticket",
-                    new FileSystemResource(
-                        "../../infrastructure/config-server/src/main/resources/config/ticket-service.yaml"))
+                .load("ticket", new ClassPathResource("service-config/application.yaml"))
                 .getFirst();
     Map<String, Object> properties = new HashMap<>();
     for (String key : source.getPropertyNames()) {

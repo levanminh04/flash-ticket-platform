@@ -125,7 +125,7 @@ def start(key, image, arguments=None, tail=None, env=None):
 def start_app():
     start("app", "maven:3.9.9-eclipse-temurin-23", ["--memory", "768m", "-p", "127.0.0.1:38082:8082",
           "--mount", "type=bind,source=" + str(JAR) + ",target=/runtime/app.jar,readonly",
-          "--mount", "type=bind,source=" + str(ROOT / "infrastructure/config-server/src/main/resources/config/booking-service.yaml")
+          "--mount", "type=bind,source=" + str(ROOT / "services/booking-service/src/main/resources/application.yaml")
           + ",target=/runtime/booking-service.yaml,readonly"], ["java", "-jar", "/runtime/app.jar"], BOOKING_ENV)
     wait_for(lambda: curl(BASE + "/actuator/health", record=False)[1].get("status") == "UP", 120)
     print("Production JAR health UP with real PostgreSQL/Rabbit/Redis/Keycloak", flush=True)

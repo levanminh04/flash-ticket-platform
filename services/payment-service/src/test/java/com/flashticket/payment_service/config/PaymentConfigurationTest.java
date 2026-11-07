@@ -24,10 +24,7 @@ class PaymentConfigurationTest {
                     "fixture-only")));
     var loader = new YamlPropertySourceLoader();
     for (var ps :
-        loader.load(
-            "payment",
-            new FileSystemResource(
-                "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
+        loader.load("payment", new FileSystemResource("src/main/resources/application.yaml")))
       env.getPropertySources().addLast(ps);
     for (var ps :
         loader.load(
@@ -152,10 +149,7 @@ class PaymentConfigurationTest {
                     "internal-secret-xyz")));
     var loader = new YamlPropertySourceLoader();
     for (var ps :
-        loader.load(
-            "payment",
-            new FileSystemResource(
-                "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
+        loader.load("payment", new FileSystemResource("src/main/resources/application.yaml")))
       env.getPropertySources().addLast(ps);
     for (var ps :
         loader.load(
@@ -194,10 +188,7 @@ class PaymentConfigurationTest {
                     "legacy-secret-abc")));
     var loader = new YamlPropertySourceLoader();
     for (var ps :
-        loader.load(
-            "payment",
-            new FileSystemResource(
-                "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
+        loader.load("payment", new FileSystemResource("src/main/resources/application.yaml")))
       env.getPropertySources().addLast(ps);
     for (var ps :
         loader.load(

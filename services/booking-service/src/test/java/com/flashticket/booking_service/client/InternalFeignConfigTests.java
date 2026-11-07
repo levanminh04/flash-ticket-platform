@@ -133,8 +133,7 @@ class InternalFeignConfigTests {
               try {
                 var path =
                     Path.of(System.getProperty("basedir", "."))
-                        .resolve(
-                            "../../infrastructure/config-server/src/main/resources/config/booking-service.yaml");
+                        .resolve("src/main/resources/application.yaml");
                 for (var source :
                     new YamlPropertySourceLoader()
                         .load("booking-feign", new FileSystemResource(path))) {

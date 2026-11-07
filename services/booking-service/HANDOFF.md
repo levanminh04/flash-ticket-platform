@@ -175,7 +175,7 @@ Required runtime variables:
 | `RABBITMQ_PASSWORD` | Broker password |
 | `KEYCLOAK_ISSUER_URI` | JWT issuer URI |
 
-Optional variables and defaults are defined in `infrastructure/config-server/src/main/resources/config/booking-service.yaml`. `BOOKING_DB_PASSWORD` is the application credential. `BOOKING_DB_ADMIN_PASSWORD` belongs only to database bootstrap and is not consumed by this service. The connection initializes `SET ROLE booking_owner`; retain the approved database role model when changing credentials.
+Optional variables and defaults are defined in `src/main/resources/application.yaml`. `BOOKING_DB_PASSWORD` is the application credential. `BOOKING_DB_ADMIN_PASSWORD` belongs only to database bootstrap and is not consumed by this service. The connection initializes `SET ROLE booking_owner`; retain the approved database role model when changing credentials.
 
 The Rabbit configuration uses `business.ex`, correlated publisher confirms and
 `dynamic: false`. The sales-configuration listener overrides the shared manual
