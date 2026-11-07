@@ -34,12 +34,21 @@ Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệ
 
 ## Cấu hình môi trường local
 
-Chỉ dùng một file env local là `.env` ở thư mục gốc. Tạo từ `.env.example` rồi
-điền cấu hình ứng dụng, Keycloak và PostgreSQL/MongoDB Compose vào cùng file.
-File `.env` bị Git bỏ qua; chỉ commit `.env.example`.
+Mỗi ứng dụng có một file env riêng nằm cạnh source, tạo từ `.env.example` cùng thư mục:
 
-Spring không tự đọc `.env`; cấu hình IDE/runtime nạp file này khi chạy ứng dụng.
-Khi chạy Compose từ thư mục gốc, truyền rõ `--env-file .env`, ví dụ:
+| File | Dùng cho |
+|---|---|
+| `infrastructure/{api-gateway,discovery-server,config-server}/.env` | Gateway, Eureka, Config Server |
+| `services/{event,user,booking,payment,ticket}-service/.env` | Từng service nghiệp vụ |
+| `.env` ở thư mục gốc | Chỉ hạ tầng (PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak), frontend `VITE_*` và vài biến dùng chung |
+
+Người phụ trách service nào chỉ sửa `.env.example` của service đó. Mọi file `.env` thật bị Git
+bỏ qua; chỉ commit `.env.example`. Giá trị dùng chung (RabbitMQ, Keycloak) được lặp lại có chủ
+đích trong từng file để mỗi service chỉ thấy secret của chính nó.
+
+Spring không tự đọc `.env`; khi chạy từ IDE, nạp file `.env` của đúng service đó.
+`deploy/docker-compose.integration.local.yml` tự nạp từng file qua `env_file`.
+Compose hạ tầng chạy từ thư mục gốc vẫn truyền rõ `--env-file .env`, ví dụ:
 
 ```powershell
 docker compose --env-file .env -f deploy/docker-compose.postgresql.yml -f deploy/docker-compose.keycloak.yml up -d --wait postgres
