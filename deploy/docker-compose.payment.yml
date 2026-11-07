@@ -66,7 +66,7 @@ services:
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in the root .env}
     volumes:
-      - ./ngrok/payment.yml:/etc/ngrok.yml:ro
+      - ./app/ngrok.yml:/etc/ngrok.yml:ro
     ports:
       - "127.0.0.1:${NGROK_INSPECTOR_PORT:-4040}:4040"
     depends_on:
