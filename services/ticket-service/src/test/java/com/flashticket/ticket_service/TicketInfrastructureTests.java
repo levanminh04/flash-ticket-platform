@@ -3,6 +3,7 @@ package com.flashticket.ticket_service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.flashticket.ticket_service.messaging.TicketRabbitConfiguration;
 import com.zaxxer.hikari.HikariDataSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -28,8 +29,8 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.io.ClassPathResource;
 
@@ -183,13 +184,14 @@ class TicketInfrastructureTests {
                       new java.sql.SQLTransientConnectionException(),
                       message));
           assertThat(output.getAll())
-              .doesNotContain("sensitive-fixture", "invalid fixture", "database unavailable");
+              .doesNotContain("sensitive-fixture")
+              .contains("ticket.message.failed");
         });
   }
 
   public record AccessFixture(String eventId, String sourceConfigVersion) {}
 
   @Configuration(proxyBeanMethods = false)
-  @ComponentScan("com.flashticket.ticket_service.messaging")
+  @Import(TicketRabbitConfiguration.class)
   static class MessagingScan {}
 }

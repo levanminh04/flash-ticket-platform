@@ -59,6 +59,7 @@ class EventFlowTests {
           .withPassword("isolated-bootstrap");
 
   static {
+    java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
     POSTGRES.start();
     try {
       try (var connection =

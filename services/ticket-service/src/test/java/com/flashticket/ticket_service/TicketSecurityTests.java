@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.flashticket.ticket_service.config.TicketSecurityConfiguration;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -26,8 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -35,9 +35,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TicketSecurityTests.ProtectedEndpoints.class)
+@WebMvcTest(TicketSecurityTests.ProtectedEndpoints.class)
+@Import({TicketSecurityConfiguration.class, TicketSecurityTests.ProtectedEndpoints.class})
 class TicketSecurityTests {
   private static final String ISSUER = "https://issuer.test/realms/ticket";
   private static final String ORDER = "/api/v1/orders/00000000-0000-0000-0000-000000000001";
@@ -217,6 +216,7 @@ class TicketSecurityTests {
       "/api/v1/tickets/{id}/qr",
       "/internal/v1/orders/{id}/issuance",
       "/internal/v1/unknown",
+      "/actuator/health",
       "/actuator/env"
     })
     Map<String, Boolean> read() {

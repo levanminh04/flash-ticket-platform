@@ -1,12 +1,33 @@
+server:
+  port: ${PAYMENT_SERVICE_PORT:8083}
+
 spring:
   application:
     name: payment-service
-  config:
-    import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  sql:
+    init:
+      mode: never
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_schema
+        jdbc:
+          time_zone: UTC
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
   datasource:
+    url: ${PAYMENT_DB_URL}
+    username: ${PAYMENT_DB_USERNAME:payment_admin}
+    password: ${PAYMENT_DB_PASSWORD}
     hikari:
       # Để JDBC trả tên domain nhất quán với columnDefinition trong entity.
       schema: payment_schema
+      connection-init-sql: SET ROLE payment_owner
+      maximum-pool-size: 5
+      minimum-idle: 1
   security:
     oauth2:
       client:
@@ -14,16 +35,30 @@ spring:
           booking:
             provider: booking
             client-id: ${PAYMENT_SERVICE_CLIENT_ID:internal-service}
-            client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET}
+            client-secret: ${PAYMENT_INTERNAL_SERVICE_CLIENT_SECRET:${PAYMENT_SERVICE_CLIENT_SECRET}}
             authorization-grant-type: client_credentials
         provider:
           booking:
-            token-uri: ${PAYMENT_SERVICE_TOKEN_URI}
+            token-uri: ${KEYCLOAK_TOKEN_URI:${PAYMENT_SERVICE_TOKEN_URI}}
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
   rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:flash_ticket_app}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    dynamic: false
     publisher-confirm-type: correlated
     publisher-returns: true
     template:
+      exchange: ${RABBITMQ_BUSINESS_EXCHANGE:business.ex}
       mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
 
 payment:
   booking:
@@ -38,3 +73,59 @@ payment:
     decision: payment.decision.q
     issuance: payment.ticket-issuance-failed.q
     completed: payment.order-completed.q
+
+flashticket:
+  payment:
+    jwt:
+      issuer-uri: ${KEYCLOAK_ISSUER_URI}
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+      audience: ${KEYCLOAK_AUDIENCE:flash-ticket-api}
+
+vnpay:
+  api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+  server-ip: ${VNPAY_SERVER_IP:127.0.0.1}
+  refund-create-by: ${VNPAY_REFUND_CREATE_BY:flash-ticket}
+  tmn-code: ${VNPAY_TMN_CODE}
+  hash-secret: ${VNPAY_HASH_SECRET}
+  payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+  return-url: ${VNPAY_RETURN_URL}
+  ipn-url: ${VNPAY_IPN_URL:}
+  app-return-url: ${VNPAY_APP_RETURN_URL:flash-ticket://payment-return}
+  version: 2.1.0
+  command: pay
+  currency-code: VND
+  locale: vn
+
+logging:
+  charset:
+    console: UTF-8
+  structured:
+    format:
+      console: logstash
+    json:
+      # Native Boot filtering/renaming; never include arbitrary MDC fields.
+      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
+      rename:
+        level: severity
+        stack_trace: stackTrace
+      add:
+        serviceName: payment-service
+        serviceVersion: ${PAYMENT_SERVICE_VERSION:local-dev}
+        instanceId: ${PAYMENT_INSTANCE_ID:${random.uuid}}
+        environment: ${PAYMENT_ENVIRONMENT:local}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

@@ -3,8 +3,8 @@ package com.flashticket.ticket_service.config;
 import com.flashticket.ticket_service.security.KeycloakRealmRoleConverter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,8 +18,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
-/** Cấu hình xác thực JWT và quyền truy cập API của Ticket. */
-@Configuration(proxyBeanMethods = false)
+/** Cấu hình JWT của bản scaffold để các test cũ import trực tiếp. */
+@TestConfiguration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfig {
 

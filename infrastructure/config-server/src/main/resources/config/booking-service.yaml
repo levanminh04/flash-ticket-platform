@@ -39,7 +39,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${BOOKING_DDL_AUTO:none}
     properties:
       hibernate:
         default_schema: booking_schema

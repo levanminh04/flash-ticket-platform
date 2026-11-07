@@ -30,7 +30,7 @@ public class VNPayConfig {
   @Value("${vnpay.return-url}")
   private String returnUrl;
 
-  @Value("${vnpay.ipn-url}")
+  @Value("${vnpay.ipn-url:}")
   private String ipnUrl;
 
   @Value("${vnpay.app-return-url:flash-ticket://payment-return}")

@@ -133,4 +133,84 @@ class PaymentConfigurationTest {
         .isFalse();
     assertThat(env.getProperty("management.health.rabbit.enabled", Boolean.class)).isFalse();
   }
+
+  @Test
+  void resolvesCanonicalKeycloakTokenUriAndInternalClientSecret() throws Exception {
+    var env = new StandardEnvironment();
+    env.getPropertySources()
+        .addFirst(
+            new MapPropertySource(
+                "testInputs",
+                Map.of(
+                    "PAYMENT_DB_URL",
+                    "jdbc:postgresql://localhost/test",
+                    "PAYMENT_DB_PASSWORD",
+                    "fixture-only",
+                    "KEYCLOAK_TOKEN_URI",
+                    "https://keycloak.example.com/realms/flash-ticket/protocol/openid-connect/token",
+                    "PAYMENT_INTERNAL_SERVICE_CLIENT_SECRET",
+                    "internal-secret-xyz")));
+    var loader = new YamlPropertySourceLoader();
+    for (var ps :
+        loader.load(
+            "payment",
+            new FileSystemResource(
+                "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
+      env.getPropertySources().addLast(ps);
+    for (var ps :
+        loader.load(
+            "paymentDefaults", new FileSystemResource("src/main/resources/application.yaml")))
+      env.getPropertySources().addLast(ps);
+
+    assertThat(
+            env.resolveRequiredPlaceholders(
+                "${spring.security.oauth2.client.registration.booking.client-secret}"))
+        .isEqualTo("internal-secret-xyz");
+    assertThat(
+            env.resolveRequiredPlaceholders(
+                "${spring.security.oauth2.client.provider.booking.token-uri}"))
+        .isEqualTo(
+            "https://keycloak.example.com/realms/flash-ticket/protocol/openid-connect/token");
+    assertThat(env.resolveRequiredPlaceholders("${flashticket.payment.jwt.audience}"))
+        .isEqualTo("flash-ticket-api");
+    assertThat(env.resolveRequiredPlaceholders("${vnpay.ipn-url}")).isEmpty();
+  }
+
+  @Test
+  void fallsBackToLegacyTokenUriAndClientSecretWhenCanonicalUnset() throws Exception {
+    var env = new StandardEnvironment();
+    env.getPropertySources()
+        .addFirst(
+            new MapPropertySource(
+                "testInputs",
+                Map.of(
+                    "PAYMENT_DB_URL",
+                    "jdbc:postgresql://localhost/test",
+                    "PAYMENT_DB_PASSWORD",
+                    "fixture-only",
+                    "PAYMENT_SERVICE_TOKEN_URI",
+                    "https://legacy-token.example.com/token",
+                    "PAYMENT_SERVICE_CLIENT_SECRET",
+                    "legacy-secret-abc")));
+    var loader = new YamlPropertySourceLoader();
+    for (var ps :
+        loader.load(
+            "payment",
+            new FileSystemResource(
+                "../../infrastructure/config-server/src/main/resources/config/payment-service.yaml")))
+      env.getPropertySources().addLast(ps);
+    for (var ps :
+        loader.load(
+            "paymentDefaults", new FileSystemResource("src/main/resources/application.yaml")))
+      env.getPropertySources().addLast(ps);
+
+    assertThat(
+            env.resolveRequiredPlaceholders(
+                "${spring.security.oauth2.client.registration.booking.client-secret}"))
+        .isEqualTo("legacy-secret-abc");
+    assertThat(
+            env.resolveRequiredPlaceholders(
+                "${spring.security.oauth2.client.provider.booking.token-uri}"))
+        .isEqualTo("https://legacy-token.example.com/token");
+  }
 }
