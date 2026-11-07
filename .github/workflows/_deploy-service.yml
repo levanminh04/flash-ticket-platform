@@ -113,6 +113,7 @@ jobs:
           ROLLBACK_DIGEST: ${{ inputs.image_digest }}
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENV_SECRET: ${{ secrets[format('ENV_{0}', fromJSON('{"discovery-server":"DISCOVERY_SERVER","api-gateway":"API_GATEWAY","user-service":"USER_SERVICE","event-service":"EVENT_SERVICE","ticket-service":"TICKET_SERVICE","booking-service":"BOOKING_SERVICE","payment-service":"PAYMENT_SERVICE","keycloak":"KEYCLOAK"}')[inputs.service])] }}
         run: |
           set -euo pipefail
           [[ $SERVICE =~ ^[a-z-]+$ ]]
@@ -137,6 +138,12 @@ jobs:
             *) echo "Unknown mode $MODE"; exit 1 ;;
           esac
           [[ $image =~ ^[a-z0-9./-]+@sha256:[a-f0-9]{64}$ ]]
+
+          if [[ $MODE == build-and-deploy || $MODE == recreate ]]; then
+            [[ -n $ENV_SECRET ]] || { echo "DEPLOY_REJECTED MISSING_ENV_SECRET $SERVICE"; exit 1; }
+            # shellcheck disable=SC2029
+            printf '%s\n' "$ENV_SECRET" | ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$APP_ROOT/env' && cat > '$APP_ROOT/env/$SERVICE.env.tmp' && chmod 600 '$APP_ROOT/env/$SERVICE.env.tmp' && mv -f '$APP_ROOT/env/$SERVICE.env.tmp' '$APP_ROOT/env/$SERVICE.env'"
+          fi
 
           # shellcheck disable=SC2029
           tar -C deploy/app -cf - . | ssh "${opts[@]}" "$dest" "tar -C '$APP_ROOT/compose' -xf -"

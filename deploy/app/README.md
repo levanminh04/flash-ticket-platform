@@ -20,7 +20,7 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 ```bash
 gh workflow run cd.yml -f action=deploy   -f service=user-service      # build commit hiện tại của main và deploy
 gh workflow run cd.yml -f action=deploy   -f service=all               # cả 8 service, tuần tự
-gh workflow run cd.yml -f action=restart  -f service=payment-service   # sau khi sửa env/payment-service.env
+gh workflow run cd.yml -f action=restart  -f service=payment-service   # sau khi cập nhật secret ENV_PAYMENT_SERVICE
 gh workflow run cd.yml -f action=rollback -f service=ticket-service -f image_digest=sha256:<64 hex>
 ```
 Digest cũ nằm trên server: `/opt/flash-ticket-app/state/<svc>.previous`.
@@ -36,15 +36,44 @@ ssh ft84 'curl -s -H "Accept: application/json" http://127.0.0.1:8761/eureka/app
 ```
 /opt/flash-ticket-app/
 ├── compose/             # CI ghi đè mỗi lần deploy (từ deploy/app/)
-├── env/<svc>.env        # người vận hành tạo, mode 600, CI không bao giờ ghi
+├── env/<svc>.env        # CD ghi tự động từ secret ENV_<SVC>, mode 600
 ├── secrets/ticket-qr/   # keys.json của ticket, mount read-only
 ├── state/<svc>.current, <svc>.previous
 └── deploy-service.sh
 ```
 
-## Env: giá trị khác bản local
+## Quản lý cấu hình Env qua GitHub Secrets
 
-Tạo `env/<svc>.env` từ `<thư mục service>/.env.example`, rồi đổi:
+Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đặt trong GitHub Environment `production`. Khi CD chạy action `deploy` hoặc `restart`, pipeline sẽ tự động ghi nội dung secret xuống `/opt/flash-ticket-app/env/<svc>.env` (mode 600, ghi atomic) trước khi chạy `deploy-service.sh`.
+
+### Bảng tên Secret tương ứng các service
+
+| Service | Tên GitHub Secret (`--env production`) |
+|---|---|
+| `discovery-server` | `ENV_DISCOVERY_SERVER` |
+| `api-gateway` | `ENV_API_GATEWAY` |
+| `user-service` | `ENV_USER_SERVICE` |
+| `event-service` | `ENV_EVENT_SERVICE` |
+| `ticket-service` | `ENV_TICKET_SERVICE` |
+| `booking-service` | `ENV_BOOKING_SERVICE` |
+| `payment-service` | `ENV_PAYMENT_SERVICE` |
+| `keycloak` | `ENV_KEYCLOAK` |
+
+### Quy trình tạo hoặc cập nhật cấu hình env
+
+1. Tạo hoặc sửa secret trên GitHub Environment `production`:
+   ```bash
+   gh secret set ENV_BOOKING_SERVICE --env production < /path/to/booking.env
+   ```
+2. Kích hoạt cập nhật trên máy 84 và khởi động lại container:
+   ```bash
+   gh workflow run cd.yml -f action=restart -f service=booking-service
+   ```
+
+> [!WARNING]
+> **Tuyệt đối không commit file `.env` vào repository!** Tất cả cấu hình bí mật và môi trường runtime chỉ được lưu trong GitHub Secrets hoặc máy local của người vận hành ngoài git tracking.
+
+### Các giá trị biến trên máy 84 khác bản local
 
 | Biến | Giá trị trên 84 |
 |---|---|

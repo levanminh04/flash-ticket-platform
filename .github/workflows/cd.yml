@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "deploy = build + deploy; restart = recreate the running digest (after editing env/<svc>.env); rollback = run a given digest"
+        description: "deploy = build + deploy; restart = recreate the running digest (after updating secret ENV_<SVC>); rollback = run a given digest"
         type: choice
         options: [deploy, restart, rollback]
         default: deploy
