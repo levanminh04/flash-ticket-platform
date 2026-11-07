@@ -114,10 +114,11 @@ docker logs --tail 50 "$cid" 2>&1 | sed -E 's/((password|secret|token|key)[A-Za-
 if [[ -z $current ]]; then
   echo "DEPLOY_FAILED $reason (first deploy: no previous digest to roll back to)"; exit 1
 fi
+first_reason=$reason
 recreate "$current"
 if verify "$current"; then
-  echo "ROLLED_BACK $reason -> $current"
+  echo "ROLLED_BACK $first_reason -> $current"
 else
-  echo "DEPLOY_FAILED $reason (rollback to $current also failed: $reason)"
+  echo "DEPLOY_FAILED $first_reason (rollback to $current also failed: $reason)"
 fi
 exit 1

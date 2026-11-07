@@ -102,6 +102,11 @@ assert_contains "$out" "HEALTH_TIMEOUT" "stale registration"
 FAKE_INSPECT_FIRST="true 0 true sha256:fakeimageid" run user-service "$(img user-service "$digest_a")"
 assert_contains "$out" "ROLLED_BACK OOM_KILLED" "oom"
 
+# --- rollback also fails: report both reasons
+FAKE_INSPECT_FIRST="true 0 true sha256:fakeimageid" FAKE_HEALTH=never run user-service "$(img user-service "$digest_a")"
+assert_contains "$out" "DEPLOY_FAILED OOM_KILLED (rollback to $(img user-service "$digest_b") also failed: HEALTH_TIMEOUT)" "rollback failure reports both reasons"
+assert_eq "$(ups)" 2 "both recreates attempted"
+
 # --- first deploy that fails has nothing to roll back to
 use_svc user-service
 FAKE_HEALTH=never run user-service "$(img user-service "$digest_a")"
