@@ -3,8 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -14,89 +12,56 @@ concurrency:
 permissions: {}
 
 jobs:
-  maven:
-    name: Maven / ${{ matrix.application }}
+  detect:
+    name: Detect changed services
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      services: ${{ steps.detect.outputs.build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Map the diff to services
+        id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || '0000000000000000000000000000000000000000' }}
+        run: bash .github/scripts/detect-changes.sh "$BASE" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  maven:
+    name: Maven / ${{ matrix.service.name }}
+    needs: detect
+    if: ${{ needs.detect.outputs.services != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - application: API Gateway
-            path: infrastructure/api-gateway
-          - application: Config Server
-            path: infrastructure/config-server
-          - application: Discovery Server
-            path: infrastructure/discovery-server
-          - application: Event Service
-            path: services/event-service
-          - application: Booking Service
-            path: services/booking-service
-          - application: Payment Service
-            path: services/payment-service
-          - application: Ticket Service
-            path: services/ticket-service
-          - application: User Service
-            path: services/user-service
-    services:
-      ticket-postgres:
-        image: ${{ matrix.path == 'services/ticket-service' && 'postgres:16.15' || '' }}
-        env:
-          POSTGRES_DB: ticket_test_c1
-          POSTGRES_USER: ticket_ci
-          POSTGRES_PASSWORD: ticket_ci_disposable
-        ports:
-          - 15432:5432
-        options: >-
-          --health-cmd "pg_isready -U ticket_ci -d ticket_test_c1"
-          --health-interval 5s --health-timeout 5s --health-retries 12
+        service: ${{ fromJSON(needs.detect.outputs.services) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_maven-verify.yml
+    with:
+      name: ${{ matrix.service.name }}
+      path: ${{ matrix.service.path }}
+      mvn: ${{ matrix.service.mvn }}
+      postgres: ${{ matrix.service.postgres }}
+
+  scripts:
+    name: Deploy scripts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-          cache-dependency-path: |
-            ${{ matrix.path }}/pom.xml
-            ${{ matrix.path }}/.mvn/wrapper/maven-wrapper.properties
-
-      - name: Make Maven Wrapper executable
-        run: chmod +x ./mvnw
-        working-directory: ${{ matrix.path }}
-
-      - name: Ticket deploy syntax and isolated PostgreSQL checks
-        if: matrix.path == 'services/ticket-service'
-        env:
-          TICKET_TEST_DB_URL: jdbc:postgresql://127.0.0.1:15432/ticket_test_c1
-          TICKET_TEST_DB_USER: ticket_ci
-          TICKET_TEST_DB_PASSWORD: ticket_ci_disposable
-        run: |
-          bash -n ../../deploy/deploy-ticket.sh
-          ./mvnw -B -ntp -Dtest=TicketPostgresIT test
-        working-directory: services/ticket-service
-
-      - name: Verify
-        run: ./mvnw -B -ntp verify
-        working-directory: ${{ matrix.path }}
-
-      - name: Upload Maven reports
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: maven-reports-${{ matrix.application }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ matrix.path }}/target/surefire-reports/**
-            ${{ matrix.path }}/target/failsafe-reports/**
-            ${{ matrix.path }}/target/site/jacoco/**
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: ShellCheck
+        run: shellcheck --severity=warning deploy/scripts/*.sh .github/scripts/*.sh deploy/tests/*.sh
+      - name: Script tests
+        run: bash deploy/tests/run-all.sh
 
   dependency_review:
     name: Dependency Review
@@ -106,7 +71,7 @@ jobs:
       contents: read
     steps:
       - name: Review dependency changes
-        uses: actions/dependency-review-action@v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           fail-on-severity: high
 
@@ -121,29 +86,26 @@ jobs:
   required:
     name: Required
     if: ${{ always() }}
-    needs: [maven, dependency_review, codeql]
+    needs: [detect, maven, scripts, dependency_review, codeql]
     permissions: {}
     runs-on: ubuntu-latest
     steps:
       - name: Enforce required CI results
         shell: bash
         env:
-          MAVEN_RESULT: ${{ needs.maven.result }}
-          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
-          CODEQL_RESULT: ${{ needs.codeql.result }}
+          DETECT: ${{ needs.detect.result }}
+          MAVEN: ${{ needs.maven.result }}
+          SCRIPTS: ${{ needs.scripts.result }}
+          DEPENDENCY_REVIEW: ${{ needs.dependency_review.result }}
+          CODEQL: ${{ needs.codeql.result }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           failed=0
-          if [[ "$MAVEN_RESULT" != "success" ]]; then
-            echo "Maven verification did not succeed: $MAVEN_RESULT"
-            failed=1
-          fi
-          if [[ "$CODEQL_RESULT" != "success" ]]; then
-            echo "CodeQL did not succeed: $CODEQL_RESULT"
-            failed=1
-          fi
-          if [[ "$EVENT_NAME" == "pull_request" && "$DEPENDENCY_REVIEW_RESULT" != "success" ]]; then
-            echo "Dependency Review did not succeed on this pull request: $DEPENDENCY_REVIEW_RESULT"
-            failed=1
-          fi
+          check() { [[ $2 == success ]] || { echo "$1 did not succeed: $2"; failed=1; }; }
+          check "Change detection" "$DETECT"
+          check "Deploy scripts" "$SCRIPTS"
+          check "CodeQL" "$CODEQL"
+          # Maven is skipped when no service changed.
+          [[ $MAVEN == success || $MAVEN == skipped ]] || { echo "Maven verification did not succeed: $MAVEN"; failed=1; }
+          if [[ $EVENT_NAME == pull_request ]]; then check "Dependency Review" "$DEPENDENCY_REVIEW"; fi
           exit "$failed"
