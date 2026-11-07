@@ -1,14 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM maven:3.9-eclipse-temurin-21 AS build
-WORKDIR /build
-COPY pom.xml pom.xml
-COPY src src
-RUN --mount=type=cache,target=/root/.m2,sharing=locked \
-    mvn -B -ntp -Dmaven.test.skip=true package
-
-FROM eclipse-temurin:21-jre-alpine
+# CI builds and verifies the JAR (mvnw verify) first; the server never builds from source.
+FROM eclipse-temurin:21-jre-alpine@sha256:b48e02e0ea88d7bfb305335df94923bdef394905f4147dccd52e873cf17b1088
+RUN addgroup -S -g 10001 app && adduser -S -D -u 10001 -G app app
 WORKDIR /app
-COPY --from=build /build/target/*.jar app.jar
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -Duser.timezone=UTC"
+COPY --chown=10001:10001 target/*.jar /app/app.jar
 USER 10001:10001
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50.0 -Duser.timezone=UTC"
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
