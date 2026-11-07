@@ -1,4 +1,5 @@
-*
-!pom.xml
-!src
-!src/**
+**
+!Dockerfile
+!.dockerignore
+!target/
+!target/booking-service-*.jar
