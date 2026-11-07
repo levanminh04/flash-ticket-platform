@@ -1,0 +1,8 @@
+services:
+  discovery-server:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    env_file: ../env/discovery-server.env
+    mem_limit: 384m

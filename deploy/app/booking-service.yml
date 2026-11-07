@@ -1,0 +1,8 @@
+services:
+  booking-service:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    env_file: ../env/booking-service.env
+    mem_limit: 512m
