@@ -1,0 +1,12 @@
+name: flash-ticket-frontend-local
+
+services:
+  gateway-local-port:
+    image: flash-ticket/db-tunnel-proxy:local
+    command:
+      - socat
+      - TCP-LISTEN:18081,bind=0.0.0.0,fork,reuseaddr
+      - TCP:172.17.0.1:${API_GATEWAY_PORT:?Set API_GATEWAY_PORT in root .env}
+    ports:
+      - "127.0.0.1:18081:18081"
+    restart: unless-stopped

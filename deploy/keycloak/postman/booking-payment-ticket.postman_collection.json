@@ -1,0 +1,2057 @@
+{
+  "info": {
+    "name": "FlashTicket - Booking to Payment to Tickets",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Bộ kiểm thử dựa trên source checkout 02/11/2026 và B13/B14. Booking: OrderView trực tiếp; Payment: ApiResponse.data. Mặc định Run đến P02 rồi dừng để thanh toán VNPay sandbox, sau đó Run folder 03. V02/V03 Ticket và V04 GET Order là CONTRACT CHƯA TRIỂN KHAI; HTTP 404 là fail, không phải E2E thành công. Không tự tạo event/config, giả IPN, publish Rabbit hoặc sửa dữ liệu DB. Xem BOOKING-PAYMENT-TICKET.md trong repo. A01 dùng OAuth2 PKCE, không lưu password/client secret trong collection."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{userAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "keycloakBaseUrl",
+      "value": "http://3.106.109.119:8080",
+      "type": "string"
+    },
+    {
+      "key": "realm",
+      "value": "flash-ticket",
+      "type": "string"
+    },
+    {
+      "key": "userClientId",
+      "value": "frontend",
+      "type": "string"
+    },
+    {
+      "key": "bookingBaseUrl",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "paymentBaseUrl",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "ticketBaseUrl",
+      "value": "http://localhost:8084",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "selectionMode",
+      "value": "QUANTITY",
+      "type": "string"
+    },
+    {
+      "key": "ticketTypeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sectorId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "seatIdsJson",
+      "value": "[]",
+      "type": "string"
+    },
+    {
+      "key": "quantity",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "selectionJson",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "promotionCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stopAfterPaymentUrl",
+      "value": "true",
+      "type": "string"
+    },
+    {
+      "key": "pollIntervalMs",
+      "value": "2000",
+      "type": "string"
+    },
+    {
+      "key": "maxPollAttempts",
+      "value": "30",
+      "type": "string"
+    },
+    {
+      "key": "cleanupSelectionJson",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "buyerSubject",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderRequestBody",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderTotal",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderExpiresAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expectedOrderItems",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expectedTicketCount",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentUrl",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "acceptedChargeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "issuedTicketIds",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "issuedTicketSet",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "availabilityBefore",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flowStatus",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lastFlowError",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentPollCount",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ticketPollCount",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "completionPollCount",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cleanupOrderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "try {",
+          "// Runtime ở collection; không để environment/iteration data cũ ghi đè các ID/key/token nối bước.",
+          "const runtimeKeys = [\"userAccessToken\", \"buyerSubject\", \"orderIdempotencyKey\", \"paymentIdempotencyKey\", \"orderRequestBody\", \"orderId\", \"orderTotal\", \"orderExpiresAt\", \"expectedOrderItems\", \"expectedTicketCount\", \"attemptId\", \"paymentUrl\", \"acceptedChargeId\", \"issuedTicketIds\", \"issuedTicketSet\", \"availabilityBefore\", \"flowStatus\", \"lastFlowError\", \"paymentPollCount\", \"ticketPollCount\", \"completionPollCount\", \"cleanupIdempotencyKey\", \"cleanupOrderId\"];",
+          "runtimeKeys.forEach(key => pm.variables.set(key, pm.collectionVariables.get(key) || ''));",
+          "if (!pm.info.requestName.startsWith('A01') && pm.request.auth && pm.request.auth.type !== 'noauth') {",
+          "  const token = pm.collectionVariables.get('userAccessToken');",
+          "  if (!token) throw new Error('Chạy A01 bằng token BUYER trước.');",
+          "}",
+          "} catch (e) {",
+          "  pm.test('Có token BUYER trước khi gửi', () => { throw e; });",
+          "  pm.execution.setNextRequest(null);",
+          "  pm.execution.skipRequest();",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Auth",
+      "item": [
+        {
+          "name": "A01 - Login BUYER (OAuth2 PKCE)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const oauth = pm.request.auth && pm.request.auth.oauth2;",
+                  "const token = pm.variables.replaceIn(String(oauth ? oauth.get('accessToken') || '' : '')).trim();",
+                  "if (!token || token.includes('{{')) throw new Error('Get New Access Token → Use Token, hoặc điền userAccessToken tại Collection Variables.');",
+                  "pm.variables.set('__loginToken', token);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('UserInfo HTTP 200', () => pm.response.to.have.status(200));",
+                  "const user = pm.response.json();",
+                  "const token = pm.variables.get('__loginToken');",
+                  "const claims = JSON.parse(require('buffer').Buffer.from(token.split('.')[1], 'base64').toString('utf8'));",
+                  "check('Đúng subject/issuer, token còn hạn và có role BUYER', () => {",
+                  "  pm.expect(claims.sub).to.eql(user.sub);",
+                  "  pm.expect(claims.iss).to.eql(String(pm.variables.get('keycloakBaseUrl')).replace(/\\/$/, '') + '/realms/' + pm.variables.get('realm'));",
+                  "  pm.expect(claims.exp * 1000).to.be.above(Date.now() + 5000);",
+                  "  pm.expect((claims.realm_access || {}).roles || []).to.include('BUYER');",
+                  "});",
+                  "cv.set('userAccessToken', token);",
+                  "cv.set('buyerSubject', user.sub);",
+                  "cv.unset('lastFlowError');",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "oauth2",
+              "oauth2": [
+                {
+                  "key": "addTokenTo",
+                  "value": "header",
+                  "type": "string"
+                },
+                {
+                  "key": "headerPrefix",
+                  "value": "Bearer",
+                  "type": "string"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code_with_pkce",
+                  "type": "string"
+                },
+                {
+                  "key": "callbackUrl",
+                  "value": "https://oauth.pstmn.io/v1/callback",
+                  "type": "string"
+                },
+                {
+                  "key": "authUrl",
+                  "value": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/auth?prompt=login",
+                  "type": "string"
+                },
+                {
+                  "key": "accessTokenUrl",
+                  "value": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/token",
+                  "type": "string"
+                },
+                {
+                  "key": "clientId",
+                  "value": "{{userClientId}}",
+                  "type": "string"
+                },
+                {
+                  "key": "clientSecret",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid profile email",
+                  "type": "string"
+                },
+                {
+                  "key": "state",
+                  "value": "{{$guid}}",
+                  "type": "string"
+                },
+                {
+                  "key": "client_authentication",
+                  "value": "body",
+                  "type": "string"
+                },
+                {
+                  "key": "useBrowser",
+                  "value": "true",
+                  "type": "string"
+                },
+                {
+                  "key": "challengeAlgorithm",
+                  "value": "S256",
+                  "type": "string"
+                },
+                {
+                  "key": "tokenName",
+                  "value": "FlashTicket User PKCE",
+                  "type": "string"
+                },
+                {
+                  "key": "accessToken",
+                  "value": "{{userAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{keycloakBaseUrl}}/realms/{{realm}}/protocol/openid-connect/userinfo",
+              "host": [
+                "{{keycloakBaseUrl}}"
+              ],
+              "path": [
+                "realms",
+                "{{realm}}",
+                "protocol",
+                "openid-connect",
+                "userinfo"
+              ]
+            },
+            "description": "Authorization → Get New Access Token → Use Token → Send. Hoặc điền userAccessToken tại collection Variables trước khi Run. Không dùng mật khẩu grant/password hoặc machine token để đặt vé."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Booking",
+      "description": "QUANTITY/STANDING/SEATED qua selectionMode hoặc selectionJson. Tất cả POST dùng token BUYER.",
+      "item": [
+        {
+          "name": "B01 - Availability",
+          "request": {
+            "method": "GET",
+            "url": "{{bookingBaseUrl}}/api/v1/events/{{eventId}}/availability",
+            "header": [],
+            "description": "Public API; đây là dữ liệu đọc, không giữ chỗ. CONFIG_NOT_READY/503 là lỗi chuẩn bị fixture, không phải pass.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.variables.get('eventId')) throw new Error('Điền eventId của sự kiện đang mở bán.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Availability HTTP 200, no-store', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store');",
+                  "});",
+                  "const a = pm.response.json();",
+                  "check('Đúng event, version và cấu trúc inventory', () => {",
+                  "  pm.expect(a.eventId).to.eql(pm.variables.get('eventId'));",
+                  "  pm.expect(a.sourceConfigVersion).to.match(/^[1-9][0-9]*$/);",
+                  "  ['ticketTypes','sectors','seats'].forEach(k => pm.expect(a[k]).to.be.an('array'));",
+                  "});",
+                  "cv.set('availabilityBefore', JSON.stringify(a));",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B02 - Create order / hold",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Booking trả OrderView trực tiếp, không có data. Key/body được giữ nguyên để retry; muốn kịch bản mới phải xóa biến runtime theo README. Không gọi API internal freeze từ phía buyer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{orderRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "",
+                  "const cv = pm.collectionVariables;",
+                  "const get = key => pm.variables.get(key);",
+                  "if (!cv.get('orderIdempotencyKey')) cv.set('orderIdempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
+                  "if (!cv.get('paymentIdempotencyKey')) cv.set('paymentIdempotencyKey', pm.variables.replaceIn('{{$guid}}'));",
+                  "if (!cv.get('orderRequestBody')) {",
+                  "  const mode = get('selectionMode');",
+                  "  let selection;",
+                  "  if (get('selectionJson')) selection = JSON.parse(get('selectionJson'));",
+                  "  else if (mode === 'SEATED') selection = {mode:'SEAT_MAP', kind:'SEATED', sectorId:get('sectorId'), seatIds:JSON.parse(get('seatIdsJson') || '[]')};",
+                  "  else {",
+                  "    const quantity = Number(get('quantity'));",
+                  "    if (!Number.isSafeInteger(quantity) || quantity < 1) throw new Error('quantity phải là số nguyên dương.');",
+                  "    const items = [{ticketTypeId:get('ticketTypeId'), quantity}];",
+                  "    if (mode === 'QUANTITY') selection = {mode:'QUANTITY', items};",
+                  "    else if (mode === 'STANDING') selection = {mode:'SEAT_MAP', kind:'STANDING', sectorId:get('sectorId'), items};",
+                  "    else throw new Error('selectionMode chỉ nhận QUANTITY, STANDING hoặc SEATED.');",
+                  "  }",
+                  "  const requested = {eventId:get('eventId'), customerEmail:get('customerEmail'), selection};",
+                  "  if (!requested.eventId || !requested.customerEmail) throw new Error('Điền eventId và customerEmail.');",
+                  "  const ids = selection.kind === 'SEATED' ? selection.seatIds : (selection.items || []).map(i => i.ticketTypeId);",
+                  "  if (!ids || !ids.length || ids.some(id => !id)) throw new Error('Điền các ID loại vé/ghế hợp lệ.');",
+                  "  if (selection.mode === 'SEAT_MAP' && !selection.sectorId) throw new Error('Điền sectorId cho SEAT_MAP.');",
+                  "  cv.set('orderRequestBody', JSON.stringify(requested));",
+                  "}",
+                  "['orderIdempotencyKey','paymentIdempotencyKey','orderRequestBody'].forEach(k => pm.variables.set(k, cv.get(k)));",
+                  "",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Tạo đơn HTTP 201 và Location đúng order', () => pm.response.to.have.status(201));",
+                  "const o = pm.response.json();",
+                  "const requested = JSON.parse(cv.get('orderRequestBody'));",
+                  "check('Đơn đúng buyer input, PENDING_PAYMENT và còn hạn', () => {",
+                  "  pm.expect(o.orderId).to.match(uuid);",
+                  "  pm.expect(o.eventId).to.eql(requested.eventId);",
+                  "  pm.expect(o.customerEmail).to.eql(requested.customerEmail);",
+                  "  pm.expect(o.state).to.eql('PENDING_PAYMENT');",
+                  "  pm.expect(Date.parse(o.expiresAt)).to.be.above(Date.now());",
+                  "  pm.expect(pm.response.headers.get('Location')).to.eql('/api/v1/orders/' + o.orderId);",
+                  "});",
+                  "check('Số vé và tiền VND lấy từ server, không sai số Number', () => {",
+                  "  pm.expect(o.currency).to.eql('VND');",
+                  "  ['subtotal','discount','total'].forEach(k => pm.expect(o[k]).to.match(/^(0|[1-9][0-9]*)$/));",
+                  "  pm.expect(BigInt(o.total) > 0n).to.eql(true);",
+                  "  pm.expect(BigInt(o.subtotal) - BigInt(o.discount)).to.eql(BigInt(o.total));",
+                  "  const count = requested.selection.kind === 'SEATED' ? requested.selection.seatIds.length : requested.selection.items.reduce((n,i) => n+i.quantity,0);",
+                  "  pm.expect(o.items).to.be.an('array').and.not.empty;",
+                  "  pm.expect(o.items.reduce((n,i) => n+i.quantity,0)).to.eql(count);",
+                  "  pm.expect(o.items.reduce((n,i) => n+BigInt(i.lineSubtotal),0n)).to.eql(BigInt(o.subtotal));",
+                  "  o.items.forEach(i => {",
+                  "    pm.expect(i.orderItemId).to.match(uuid);",
+                  "    pm.expect(BigInt(i.unitPrice) * BigInt(i.quantity)).to.eql(BigInt(i.lineSubtotal));",
+                  "  });",
+                  "});",
+                  "cv.set('orderId', o.orderId);",
+                  "cv.set('orderTotal', o.total);",
+                  "cv.set('orderExpiresAt', o.expiresAt);",
+                  "cv.set('expectedOrderItems', JSON.stringify(o.items));",
+                  "cv.set('expectedTicketCount', String(o.items.reduce((n,i) => n+i.quantity,0)));",
+                  "cv.set('flowStatus', 'ORDER_HELD');",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B03 - Replay order (same key/body)",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Kiểm cùng identity và các item; không chứng minh số counter trong DB nếu chỉ nhìn response. Chạy trước khi áp voucher/thanh toán.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{orderRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Replay HTTP 201, cùng order, hạn và tổng tiền', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const o = pm.response.json();",
+                  "  pm.expect(o.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(o.expiresAt).to.eql(cv.get('orderExpiresAt'));",
+                  "  pm.expect(o.total).to.eql(cv.get('orderTotal'));",
+                  "  pm.expect(o.items).to.deep.eql(JSON.parse(cv.get('expectedOrderItems')));",
+                  "});",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "B04 - Apply promotion (optional)",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders/{{orderId}}/promotion",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Để promotionCode trống sẽ skip riêng bước tùy chọn này. Áp mã trước POST Payment freeze tiền; không tính discount tại client.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{promotionBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "if (!pm.variables.get('promotionCode')) pm.execution.skipRequest();",
+                  "pm.variables.set('promotionBody', JSON.stringify({code:pm.variables.get('promotionCode')}));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Áp mã HTTP 200, cùng order và hạn giữ', () => pm.response.to.have.status(200));",
+                  "const o = pm.response.json();",
+                  "check('Giảm giá đúng quan hệ tổng tiền, không gia hạn', () => {",
+                  "  pm.expect(o.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(o.expiresAt).to.eql(cv.get('orderExpiresAt'));",
+                  "  pm.expect(BigInt(o.total) > 0n).to.eql(true);",
+                  "  pm.expect(BigInt(o.subtotal) - BigInt(o.discount)).to.eql(BigInt(o.total));",
+                  "  pm.expect(o.state).to.eql('PENDING_PAYMENT');",
+                  "});",
+                  "cv.set('orderTotal', o.total);",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Payment",
+      "item": [
+        {
+          "name": "P01 - Create VNPay payment",
+          "request": {
+            "method": "POST",
+            "url": "{{paymentBaseUrl}}/api/v1/payments",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{paymentIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Route thực tế từ PaymentController; không dùng route CANDIDATE /orders/{id}/payment-attempts trong B13. Payment tự gọi Booking preparePurchaseSnapshot. Collection chỉ chấp nhận URL sandbox.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{paymentRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "pm.variables.set('paymentRequestBody', JSON.stringify({orderId:pm.collectionVariables.get('orderId')}));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Payment HTTP 200, ApiResponse.success=true', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().success).to.eql(true);",
+                  "});",
+                  "const p = pm.response.json().data;",
+                  "check('Attempt PENDING khớp đơn, tiền và hạn giữ', () => {",
+                  "  pm.expect(p.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(p.attemptId).to.match(uuid);",
+                  "  pm.expect(p.attemptState).to.eql('PENDING');",
+                  "  pm.expect(p.amount).to.eql(cv.get('orderTotal'));",
+                  "  pm.expect(p.currency).to.eql('VND');",
+                  "  pm.expect(p.expiresAt).to.eql(cv.get('orderExpiresAt'));",
+                  "  pm.expect(Date.parse(p.expiresAt)).to.be.above(Date.now());",
+                  "  pm.expect(p.paymentUrl).to.be.a('string').and.not.empty;",
+                  "});",
+                  "check('URL đúng VNPay sandbox, vnp_TxnRef=attempt và amount x100', () => {",
+                  "  const u = new (require('postman-collection').Url)(p.paymentUrl);",
+                  "  pm.expect(u.protocol).to.eql('https');",
+                  "  pm.expect(u.getHost()).to.eql('sandbox.vnpayment.vn');",
+                  "  pm.expect(u.query.get('vnp_TxnRef')).to.eql(p.attemptId);",
+                  "  pm.expect(u.query.get('vnp_Amount')).to.eql(String(BigInt(p.amount) * 100n));",
+                  "  pm.expect(u.query.get('vnp_CurrCode')).to.eql('VND');",
+                  "});",
+                  "cv.set('attemptId', p.attemptId);",
+                  "cv.set('paymentUrl', p.paymentUrl);",
+                  "cv.set('flowStatus', 'PAYMENT_URL_READY');",
+                  "pm.visualizer.set('<p>Mở URL này để thanh toán VNPay sandbox, sau đó Run folder <b>03 - Verify payment and tickets</b>.</p><p><a href=\"{{url}}\" target=\"_blank\" rel=\"noopener noreferrer\">Mở VNPay sandbox</a></p>', {url:p.paymentUrl});",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "P02 - Replay payment and show checkout URL",
+          "request": {
+            "method": "POST",
+            "url": "{{paymentBaseUrl}}/api/v1/payments",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{paymentIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Mặc định kết thúc lượt chuẩn bị tại đây để người test mở URL sandbox. stopAfterPaymentUrl=false cho phép Runner chạy thẳng sang poll nếu bạn thanh toán trong thời gian chờ.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{paymentRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "pm.variables.set('paymentRequestBody', JSON.stringify({orderId:pm.collectionVariables.get('orderId')}));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Replay trả cùng attempt và URL, không tạo lần thu mới', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  const p = body.data;",
+                  "  pm.expect(p.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(p.attemptId).to.eql(cv.get('attemptId'));",
+                  "  pm.expect(p.attemptState).to.eql('PENDING');",
+                  "  pm.expect(p.paymentUrl).to.eql(cv.get('paymentUrl'));",
+                  "  pm.expect(p.amount).to.eql(cv.get('orderTotal'));",
+                  "});",
+                  "pm.visualizer.set('<p><a href=\"{{url}}\" target=\"_blank\" rel=\"noopener noreferrer\">Thanh toán VNPay sandbox</a></p><p>Sau thanh toán: Run folder <b>03 - Verify payment and tickets</b>. PAYMENT_URL_READY chỉ là chuẩn bị, chưa phải E2E thành công.</p>', {url:cv.get('paymentUrl')});",
+                  "if (String(pm.variables.get('stopAfterPaymentUrl')) === 'true') pm.execution.setNextRequest(null);",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Verify payment and tickets",
+      "description": "Chạy sau sandbox checkout. Poll Payment → Ticket COMPLETED → đọc lại bộ vé → Booking COMPLETED. Ticket/GET Order chưa triển khai sẽ fail rõ.",
+      "item": [
+        {
+          "name": "V01 - Wait payment SUCCEEDED and Booking accepted",
+          "request": {
+            "method": "GET",
+            "url": "{{paymentBaseUrl}}/api/v1/orders/{{orderId}}/payment",
+            "header": [],
+            "description": "Chạy folder 03 sau khi thanh toán sandbox. SUCCEEDED là kết quả thu tiền; acceptedChargeId chứng minh bước Booking accept đã được Payment ghi nhận, chưa chứng minh phát vé. Có giới hạn polling; Send một request chỉ đọc một lần."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "const prefix = pm.info.requestName.startsWith('V01') ? 'payment' : pm.info.requestName.startsWith('V02') ? 'ticket' : 'completion';",
+                  "const delay = Number(pm.variables.get('pollIntervalMs'));",
+                  "const limit = Number(pm.variables.get('maxPollAttempts'));",
+                  "if (!Number.isSafeInteger(delay) || delay < 0 || delay > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 300) throw new Error('pollIntervalMs: 0..10000; maxPollAttempts: 1..300.');",
+                  "const key = prefix + 'PollCount';",
+                  "const previous = Number(pm.collectionVariables.get(key) || 0);",
+                  "const count = previous >= limit ? 0 : previous;",
+                  "pm.collectionVariables.set(key, String(count + 1));",
+                  "if (count > 0 && count < limit) setTimeout(() => {}, delay);",
+                  "",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Payment query HTTP 200 và đúng envelope', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().success).to.eql(true);",
+                  "});",
+                  "const p = pm.response.json().data;",
+                  "check('Đúng order và attempt; tiền không đổi', () => {",
+                  "  pm.expect(p.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(p.latestAttempt.attemptId).to.eql(cv.get('attemptId'));",
+                  "  pm.expect(p.latestAttempt.amount).to.eql(cv.get('orderTotal'));",
+                  "  pm.expect(p.latestAttempt.currency).to.eql('VND');",
+                  "  pm.expect(['PENDING','UNKNOWN','SUCCEEDED','FAILED']).to.include(p.latestAttempt.attemptState);",
+                  "  pm.expect(p.refunds).to.be.an('array');",
+                  "});",
+                  "check('Happy path chưa FAILED hoặc phát sinh refund', () => {",
+                  "  pm.expect(p.latestAttempt.attemptState).not.to.eql('FAILED');",
+                  "  pm.expect(p.refunds).to.have.lengthOf(0);",
+                  "});",
+                  "if (p.latestAttempt.attemptState === 'SUCCEEDED' && p.acceptedChargeId) {",
+                  "  check('Booking đã chấp nhận charge, khác việc Return báo thành công', () => pm.expect(p.acceptedChargeId).to.match(uuid));",
+                  "  cv.set('acceptedChargeId', p.acceptedChargeId);",
+                  "  cv.unset('paymentPollCount');",
+                  "  cv.set('flowStatus', 'PAYMENT_ACCEPTED_WAITING_TICKETS');",
+                  "} else {",
+                  "  check('Còn thời gian chờ IPN/Booking, không coi timeout là FAILED', () => {",
+                  "    pm.expect(Number(cv.get('paymentPollCount'))).to.be.below(Number(pm.variables.get('maxPollAttempts')));",
+                  "    if (p.latestAttempt.attemptState !== 'SUCCEEDED') pm.expect(Date.parse(cv.get('orderExpiresAt'))).to.be.above(Date.now());",
+                  "  });",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "}",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "V02 - Wait complete ticket set [CONTRACT]",
+          "request": {
+            "method": "GET",
+            "url": "{{ticketBaseUrl}}/api/v1/orders/{{orderId}}/tickets",
+            "header": [],
+            "description": "CONTRACT CHƯA TRIỂN KHAI trong checkout 02/11/2026: TicketController/TicketServiceImpl/IssuanceServiceImpl là khung. Path/response từ B13 §3. Request chủ động fail khi 404/501, không giả lập phát vé hoặc tự publish event."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "const prefix = pm.info.requestName.startsWith('V01') ? 'payment' : pm.info.requestName.startsWith('V02') ? 'ticket' : 'completion';",
+                  "const delay = Number(pm.variables.get('pollIntervalMs'));",
+                  "const limit = Number(pm.variables.get('maxPollAttempts'));",
+                  "if (!Number.isSafeInteger(delay) || delay < 0 || delay > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 300) throw new Error('pollIntervalMs: 0..10000; maxPollAttempts: 1..300.');",
+                  "const key = prefix + 'PollCount';",
+                  "const previous = Number(pm.collectionVariables.get(key) || 0);",
+                  "const count = previous >= limit ? 0 : previous;",
+                  "pm.collectionVariables.set(key, String(count + 1));",
+                  "if (count > 0 && count < limit) setTimeout(() => {}, delay);",
+                  "",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Ticket API HTTP 200 (404/501 không phải pass)', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json();",
+                  "check('Issuance state và mảng vé đúng contract B13', () => {",
+                  "  pm.expect(['PENDING','COMPLETED','FAILED']).to.include(t.issuanceState);",
+                  "  pm.expect(t.tickets).to.be.an('array');",
+                  "  pm.expect(t.issuanceState).not.to.eql('FAILED');",
+                  "});",
+                  "",
+                  "if (t.issuanceState !== 'COMPLETED') {",
+                  "  check('PENDING chưa lộ vé một phần và chưa quá giới hạn chờ', () => {",
+                  "    pm.expect(t.tickets).to.have.lengthOf(0);",
+                  "    pm.expect(Number(cv.get('ticketPollCount'))).to.be.below(Number(pm.variables.get('maxPollAttempts')));",
+                  "  });",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "  return;",
+                  "}",
+                  "",
+                  "const items = JSON.parse(cv.get('expectedOrderItems'));",
+                  "check('Đủ số vé, đúng từng orderItem, ordinal và chỗ ngồi', () => {",
+                  "  pm.expect(t.tickets).to.have.lengthOf(Number(cv.get('expectedTicketCount')));",
+                  "  pm.expect(new Set(t.tickets.map(v => v.ticketId)).size).to.eql(t.tickets.length);",
+                  "  const ordinals = new Set();",
+                  "  for (const v of t.tickets) {",
+                  "    pm.expect(v.ticketId).to.match(uuid);",
+                  "    pm.expect(v.eventId).to.eql(JSON.parse(cv.get('orderRequestBody')).eventId);",
+                  "    const item = items.find(i => i.orderItemId === v.orderItemId);",
+                  "    pm.expect(item, 'orderItemId thuộc đơn').to.exist;",
+                  "    pm.expect(v.ticketTypeName).to.eql(item.ticketTypeName);",
+                  "    pm.expect(v.state).to.eql('VALID');",
+                  "    pm.expect(Number.isInteger(v.ordinal) && v.ordinal > 0 && v.ordinal <= item.quantity).to.eql(true);",
+                  "    const key = v.orderItemId + ':' + v.ordinal;",
+                  "    pm.expect(ordinals.has(key), 'Không lặp ordinal trong item').to.eql(false);",
+                  "    ordinals.add(key);",
+                  "    if (item.seats.length) pm.expect(item.seats.map(s => s.seatLabel)).to.include(v.seatLabel);",
+                  "    else pm.expect(v.seatLabel).to.eql(null);",
+                  "  }",
+                  "  items.forEach(i => {",
+                  "    const issued = t.tickets.filter(v => v.orderItemId === i.orderItemId);",
+                  "    pm.expect(issued.length).to.eql(i.quantity);",
+                  "    if (i.seats.length) pm.expect(issued.map(v => v.seatLabel).sort()).to.deep.eql(i.seats.map(s => s.seatLabel).sort());",
+                  "  });",
+                  "});",
+                  "",
+                  "cv.set('issuedTicketIds', JSON.stringify(t.tickets.map(v => v.ticketId).sort()));",
+                  "cv.set('issuedTicketSet', JSON.stringify(t.tickets.slice().sort((a,b) => a.ticketId.localeCompare(b.ticketId))));",
+                  "cv.unset('ticketPollCount');",
+                  "cv.set('flowStatus', 'TICKETS_ISSUED_WAITING_ORDER_COMPLETED');",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "V03 - Read tickets again, same issued set [CONTRACT]",
+          "request": {
+            "method": "GET",
+            "url": "{{ticketBaseUrl}}/api/v1/orders/{{orderId}}/tickets",
+            "header": [],
+            "description": "Đọc lại cùng bộ vé; không chứng minh xử lý message trùng. Muốn kiểm delivery duplicate cần bài kiểm Rabbit/inbox riêng."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Ticket API HTTP 200 (404/501 không phải pass)', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json();",
+                  "check('Issuance state và mảng vé đúng contract B13', () => {",
+                  "  pm.expect(['PENDING','COMPLETED','FAILED']).to.include(t.issuanceState);",
+                  "  pm.expect(t.tickets).to.be.an('array');",
+                  "  pm.expect(t.issuanceState).not.to.eql('FAILED');",
+                  "});",
+                  "",
+                  "check('Đọc lại vẫn COMPLETED', () => pm.expect(t.issuanceState).to.eql('COMPLETED'));",
+                  "",
+                  "const items = JSON.parse(cv.get('expectedOrderItems'));",
+                  "check('Đủ số vé, đúng từng orderItem, ordinal và chỗ ngồi', () => {",
+                  "  pm.expect(t.tickets).to.have.lengthOf(Number(cv.get('expectedTicketCount')));",
+                  "  pm.expect(new Set(t.tickets.map(v => v.ticketId)).size).to.eql(t.tickets.length);",
+                  "  const ordinals = new Set();",
+                  "  for (const v of t.tickets) {",
+                  "    pm.expect(v.ticketId).to.match(uuid);",
+                  "    pm.expect(v.eventId).to.eql(JSON.parse(cv.get('orderRequestBody')).eventId);",
+                  "    const item = items.find(i => i.orderItemId === v.orderItemId);",
+                  "    pm.expect(item, 'orderItemId thuộc đơn').to.exist;",
+                  "    pm.expect(v.ticketTypeName).to.eql(item.ticketTypeName);",
+                  "    pm.expect(v.state).to.eql('VALID');",
+                  "    pm.expect(Number.isInteger(v.ordinal) && v.ordinal > 0 && v.ordinal <= item.quantity).to.eql(true);",
+                  "    const key = v.orderItemId + ':' + v.ordinal;",
+                  "    pm.expect(ordinals.has(key), 'Không lặp ordinal trong item').to.eql(false);",
+                  "    ordinals.add(key);",
+                  "    if (item.seats.length) pm.expect(item.seats.map(s => s.seatLabel)).to.include(v.seatLabel);",
+                  "    else pm.expect(v.seatLabel).to.eql(null);",
+                  "  }",
+                  "  items.forEach(i => {",
+                  "    const issued = t.tickets.filter(v => v.orderItemId === i.orderItemId);",
+                  "    pm.expect(issued.length).to.eql(i.quantity);",
+                  "    if (i.seats.length) pm.expect(issued.map(v => v.seatLabel).sort()).to.deep.eql(i.seats.map(s => s.seatLabel).sort());",
+                  "  });",
+                  "});",
+                  "",
+                  "check('Giữ nguyên ID và dữ liệu bộ vé khi đọc lại', () => {",
+                  "  pm.expect(t.tickets.map(v => v.ticketId).sort()).to.deep.eql(JSON.parse(cv.get('issuedTicketIds')));",
+                  "  pm.expect(t.tickets.slice().sort((a,b) => a.ticketId.localeCompare(b.ticketId))).to.deep.eql(JSON.parse(cv.get('issuedTicketSet')));",
+                  "});",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "V04 - Wait order COMPLETED [CONTRACT]",
+          "request": {
+            "method": "GET",
+            "url": "{{bookingBaseUrl}}/api/v1/orders/{{orderId}}",
+            "header": [],
+            "description": "CONTRACT B13: OrderController hiện có POST create/cancel/promotion, chưa có GET order. Không dùng Payment SUCCEEDED thay cho Booking COMPLETED. API hiện cũng chưa công bố Saga state, nên E2E_COMPLETE không chứng minh Payment Saga đã đóng."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "const prefix = pm.info.requestName.startsWith('V01') ? 'payment' : pm.info.requestName.startsWith('V02') ? 'ticket' : 'completion';",
+                  "const delay = Number(pm.variables.get('pollIntervalMs'));",
+                  "const limit = Number(pm.variables.get('maxPollAttempts'));",
+                  "if (!Number.isSafeInteger(delay) || delay < 0 || delay > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 300) throw new Error('pollIntervalMs: 0..10000; maxPollAttempts: 1..300.');",
+                  "const key = prefix + 'PollCount';",
+                  "const previous = Number(pm.collectionVariables.get(key) || 0);",
+                  "const count = previous >= limit ? 0 : previous;",
+                  "pm.collectionVariables.set(key, String(count + 1));",
+                  "if (count > 0 && count < limit) setTimeout(() => {}, delay);",
+                  "",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Order query HTTP 200 (endpoint hiện chưa triển khai)', () => pm.response.to.have.status(200));",
+                  "const o = pm.response.json();",
+                  "check('Đúng đơn, tiền đã freeze và không trạng thái lỗi', () => {",
+                  "  pm.expect(o.orderId).to.eql(cv.get('orderId'));",
+                  "  pm.expect(o.eventId).to.eql(JSON.parse(cv.get('orderRequestBody')).eventId);",
+                  "  pm.expect(o.total).to.eql(cv.get('orderTotal'));",
+                  "  pm.expect(o.paymentFrozenAt).to.be.a('string').and.not.empty;",
+                  "  pm.expect(['PENDING_PAYMENT','ISSUING','COMPLETED']).to.include(o.state);",
+                  "});",
+                  "if (o.state !== 'COMPLETED') {",
+                  "  check('Còn lượt đợi Booking commit COMPLETED', () => pm.expect(Number(cv.get('completionPollCount'))).to.be.below(Number(pm.variables.get('maxPollAttempts'))));",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  check('Đã có bộ vé đủ trước khi công bố E2E_COMPLETE', () => pm.expect(JSON.parse(cv.get('issuedTicketIds'))).to.have.lengthOf(Number(cv.get('expectedTicketCount'))));",
+                  "  cv.set('flowStatus', 'E2E_COMPLETE');",
+                  "  cv.unset('completionPollCount');",
+                  "  cv.unset('lastFlowError');",
+                  "  pm.execution.setNextRequest(null);",
+                  "}",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Negative checks (run separately)",
+      "description": "Run riêng sau B02/P01. Các request đều dự kiến bị từ chối; không tạo thêm payment/hold khi backend đúng.",
+      "item": [
+        {
+          "name": "N01 - Booking without bearer",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{{orderRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('HTTP 401', () => pm.response.to.have.status(401));",
+                  "check('Mã lỗi đúng nguyên nhân', () => { const b=pm.response.json(); pm.expect(b.code).to.eql('UNAUTHENTICATED'); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N02 - Payment query without bearer",
+          "request": {
+            "method": "GET",
+            "url": "{{paymentBaseUrl}}/api/v1/orders/{{orderId}}/payment",
+            "header": [],
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('HTTP 401', () => pm.response.to.have.status(401));",
+                  "check('Mã lỗi đúng nguyên nhân', () => { const b=pm.response.json(); pm.expect(b.data.code).to.eql('AUTHENTICATION_REQUIRED'); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N03 - Booking missing Idempotency-Key",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{{orderRequestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('HTTP 400', () => pm.response.to.have.status(400));",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N04 - Payment missing Idempotency-Key",
+          "request": {
+            "method": "POST",
+            "url": "{{paymentBaseUrl}}/api/v1/payments",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{{negativePaymentBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "pm.variables.set('negativePaymentBody',JSON.stringify({orderId:pm.collectionVariables.get('orderId')}));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('HTTP 400', () => pm.response.to.have.status(400));",
+                  "check('Mã lỗi đúng nguyên nhân', () => { const b=pm.response.json(); pm.expect(b.data.code).to.eql('INVALID_REQUEST'); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N05 - Order same key, changed email",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{{changedOrderBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "const o=JSON.parse(pm.collectionVariables.get('orderRequestBody')); o.customerEmail=o.customerEmail === 'postman-conflict@example.test' ? 'postman-other@example.test' : 'postman-conflict@example.test'; pm.variables.set('changedOrderBody',JSON.stringify(o));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('HTTP 409', () => pm.response.to.have.status(409));",
+                  "check('Mã lỗi đúng nguyên nhân', () => { const b=pm.response.json(); pm.expect(b.code).to.eql('IDEMPOTENCY_CONFLICT'); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N06 - VNPay unsigned IPN is rejected",
+          "request": {
+            "method": "GET",
+            "url": "{{paymentBaseUrl}}/api/v1/payments/vnpay/ipn",
+            "header": [],
+            "description": "Không gửi chữ ký nên Payment trả 97 trước truy cập DB. HTTP 200 không có nghĩa thu tiền thành công.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Public IPN HTTP 200 nhưng RspCode=97', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().RspCode).to.eql('97'); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "N07 - Invalid Return only redirects, never confirms payment",
+          "request": {
+            "method": "GET",
+            "url": "{{paymentBaseUrl}}/api/v1/payments/vnpay/return",
+            "header": [],
+            "description": "Tắt Follow redirects trên request để đọc 302; không tải app deep link. Return không ghi charge/order.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Return HTTP 302 với status=FAILED', () => { pm.response.to.have.status(302); const location=pm.response.headers.get('Location'); pm.expect(location).to.match(/[?&]status=FAILED(?:&|$)/); pm.expect(location).not.to.match(/[?&]orderId=/); });",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": [],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Cancel disposable hold (run separately)",
+      "item": [
+        {
+          "name": "C01 - Create separate disposable hold",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{cleanupIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Chỉ Run folder 05 khi muốn test hủy; tạo order phụ để không hủy đơn đã thanh toán. SEATED phải cung cấp cleanupSelectionJson với ghế khác.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{cleanupOrderBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('orderId')) throw new Error('Chạy B02 trước để có orderId.');",
+                  "const o=JSON.parse(pm.collectionVariables.get('orderRequestBody')); if(pm.variables.get('cleanupSelectionJson')) o.selection=JSON.parse(pm.variables.get('cleanupSelectionJson')); else if(o.selection.kind==='SEATED') throw new Error('Cleanup cần chọn ghế khác chưa mua qua cleanupSelectionJson.'); pm.variables.set('cleanupOrderBody',JSON.stringify(o)); if(!pm.collectionVariables.get('cleanupIdempotencyKey')) pm.collectionVariables.set('cleanupIdempotencyKey',pm.variables.replaceIn('{{$guid}}')); pm.variables.set('cleanupIdempotencyKey',pm.collectionVariables.get('cleanupIdempotencyKey'));",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Tạo đơn cleanup riêng HTTP 201', () => pm.response.to.have.status(201));",
+                  "const o = pm.response.json();",
+                  "check('Đơn cleanup PENDING_PAYMENT, khác đơn chính', () => {",
+                  "  pm.expect(o.state).to.eql('PENDING_PAYMENT');",
+                  "  pm.expect(o.orderId).not.to.eql(cv.get('orderId'));",
+                  "  pm.expect(o.orderId).to.match(uuid);",
+                  "});",
+                  "cv.set('cleanupOrderId', o.orderId);",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "C02 - Cancel disposable order",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders/{{cleanupOrderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('cleanupOrderId') || pm.collectionVariables.get('cleanupOrderId') === pm.collectionVariables.get('orderId')) throw new Error('Chạy C01 để có order cleanup riêng.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Hủy đơn cleanup HTTP 200, CANCELLED', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const o = pm.response.json();",
+                  "  pm.expect(o.orderId).to.eql(cv.get('cleanupOrderId'));",
+                  "  pm.expect(o.state).to.eql('CANCELLED');",
+                  "});",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "C03 - Replay cancel, still CANCELLED",
+          "request": {
+            "method": "POST",
+            "url": "{{bookingBaseUrl}}/api/v1/orders/{{cleanupOrderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Cùng cleanupOrderId trả CANCELLED lần nữa; không có nghĩa đã đo counter DB hoặc race release.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "if (!pm.collectionVariables.get('cleanupOrderId') || pm.collectionVariables.get('cleanupOrderId') === pm.collectionVariables.get('orderId')) throw new Error('Chạy C01 để có order cleanup riêng.');",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "check('Hủy đơn cleanup HTTP 200, CANCELLED', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const o = pm.response.json();",
+                  "  pm.expect(o.orderId).to.eql(cv.get('cleanupOrderId'));",
+                  "  pm.expect(o.state).to.eql('CANCELLED');",
+                  "});",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 - New scenario (manual only)",
+      "item": [
+        {
+          "name": "R01 - Clear runtime for a new scenario (no HTTP)",
+          "request": {
+            "method": "GET",
+            "url": "{{bookingBaseUrl}}/actuator/health",
+            "header": [],
+            "description": "Chỉ Send riêng khi chủ ý tạo kịch bản mới. Giữ token, xóa key/ID/body và counter cũ; không tự hủy đơn hay hoàn tiền. Request không gửi HTTP.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "",
+                  "const keys = [\"orderIdempotencyKey\", \"paymentIdempotencyKey\", \"orderRequestBody\", \"orderId\", \"orderTotal\", \"orderExpiresAt\", \"expectedOrderItems\", \"expectedTicketCount\", \"attemptId\", \"paymentUrl\", \"acceptedChargeId\", \"issuedTicketIds\", \"issuedTicketSet\", \"availabilityBefore\", \"flowStatus\", \"lastFlowError\", \"paymentPollCount\", \"ticketPollCount\", \"completionPollCount\", \"cleanupIdempotencyKey\", \"cleanupOrderId\"];",
+                  "keys.forEach(k => pm.collectionVariables.unset(k));",
+                  "pm.execution.setNextRequest(null);",
+                  "pm.execution.skipRequest();",
+                  "",
+                  "} catch (e) {",
+                  "  pm.collectionVariables.set('lastFlowError', e.message);",
+                  "  pm.test('Đủ điều kiện trước khi gửi request', () => { throw e; });",
+                  "  pm.execution.setNextRequest(null);",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "  let assertionFailed = false;",
+                  "  function check(name, fn) {",
+                  "    let failure;",
+                  "    pm.test(name, () => { try { fn(); } catch (e) { failure = e; throw e; } });",
+                  "    if (failure) { assertionFailed = true; throw failure; }",
+                  "  }",
+                  "  const cv = pm.collectionVariables;",
+                  "  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "  try {",
+                  "",
+                  "  } catch (e) {",
+                  "    cv.set('lastFlowError', e.message);",
+                  "    pm.execution.setNextRequest(null);",
+                  "    if (!assertionFailed) pm.test('Response hợp lệ và có đủ dữ liệu nối bước', () => { throw e; });",
+                  "  }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

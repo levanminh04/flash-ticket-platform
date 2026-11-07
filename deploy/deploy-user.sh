@@ -116,7 +116,7 @@ port=$(setting USER_SERVICE_PORT) || fail invalid_port
 [[ "$port" =~ ^[0-9]{1,10}$ ]] && (( 10#$port >= 1024 && 10#$port <= 65535 )) || fail invalid_port
 port=$((10#$port))
 printf '\nUSER_SERVICE_PORT=%s\n' "$port" >> "$work/runtime.env"
-address=$(setting SERVER_ADDRESS) || fail independent_rollout_requires_loopback
+address=$(setting SERVER_ADDRESS 2>/dev/null || setting USER_SERVER_ADDRESS) || fail independent_rollout_requires_loopback
 [[ "$address" == 127.0.0.1 && "$(jq -r '.services["user-service"].network_mode' "$work/model.json")" == host ]] || fail independent_rollout_requires_loopback
 state_root="${USER_DEPLOY_STATE_ROOT:-$HOME/.flash-ticket-user-deploy}"
 take_lock "port-$port"
