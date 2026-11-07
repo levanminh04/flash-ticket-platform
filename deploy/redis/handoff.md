@@ -57,12 +57,10 @@ spring:
       timeout: 2s
 ```
 
-Spring không tự đọc `.env`: cấu hình IDE/runtime nạp các biến vào process.
-Service dùng Config Server đặt YAML trên trong file cấu hình của chính service
-tại `infrastructure/config-server/src/main/resources/config/`. Config Client
-nhận các property source từ server; nạp `REDIS_*` vào process của service
-dùng Redis để resolve placeholder. Chỉ nạp `.env` cho lệnh Compose không
-tự truyền biến sang JVM đang chạy trong IDE.
+Spring không tự đọc `.env`: cấu hình IDE/runtime nạp các biến vào process. Service đặt
+YAML trong `src/main/resources/application.yaml` của chính nó; nạp `REDIS_*` vào process
+của service dùng Redis. Chỉ nạp `.env` cho lệnh Compose không tự truyền biến sang JVM
+đang chạy trong IDE.
 Giữ secret ngoài Git, không đặt Redis vào cấu hình chung để ép mọi service sử dụng.
 
 MVC inject `StringRedisTemplate`; ví dụ với biến `redis` là template được inject:

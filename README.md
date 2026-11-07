@@ -38,7 +38,7 @@ Mỗi ứng dụng có một file env riêng nằm cạnh source, tạo từ `.e
 
 | File | Dùng cho |
 |---|---|
-| `infrastructure/{api-gateway,discovery-server,config-server}/.env` | Gateway, Eureka, Config Server |
+| `infrastructure/{api-gateway,discovery-server}/.env` | Gateway, Eureka |
 | `services/{event,user,booking,payment,ticket}-service/.env` | Từng service nghiệp vụ |
 | `.env` ở thư mục gốc | Chỉ hạ tầng (PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak), frontend `VITE_*` và vài biến dùng chung |
 

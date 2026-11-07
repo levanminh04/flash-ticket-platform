@@ -1,7 +1,7 @@
 # Chạy Payment cùng ngrok bằng Docker
 
 Chạy lệnh bên dưới tại thư mục gốc repository. Compose chỉ chạy Payment và ngrok;
-Config Server, Booking, PostgreSQL, RabbitMQ và Keycloak phải sẵn sàng trước.
+Booking, PostgreSQL, RabbitMQ và Keycloak phải sẵn sàng trước.
 Payment dùng Java 21 bên trong image, máy không cần cài Java để build/chạy container.
 
 ## Cấu hình một lần
@@ -31,7 +31,7 @@ Payment dùng Java 21 bên trong image, máy không cần cài Java để build/
 ## Chạy
 
 Dừng Payment trong IntelliJ trước để tránh trùng cổng và hai bản cùng xử lý queue.
-Giữ Config Server chạy trên máy ở cổng 8888 và Booking ở cổng 8082.
+Giữ Booking ở cổng 8082.
 Nếu đang dùng SSH tunnel PostgreSQL/Booking, giữ các tunnel chạy.
 
 ```powershell
@@ -85,8 +85,8 @@ Ticket gửi cả hai kết quả qua `ticket.issuance-result.v1` vào queue
 thành công hoặc `booking.issuance-failed.v1` khi thất bại. Khi phát vé thành công,
 Payment đợi `booking.order-completed.v1` trước khi đóng Saga.
 
-Payment dùng `spring.rabbitmq.dynamic=false`. Trước khi bật consumer trên server
-119, kiểm tra binding thực tế và outbox Ticket còn chờ theo cấu hình cũ.
+Payment dùng `spring.rabbitmq.dynamic=false`. Trước khi bật consumer,
+kiểm tra binding thực tế và outbox Ticket còn chờ theo cấu hình cũ.
 
 ## Dịch vụ ngoài Docker
 
@@ -94,12 +94,11 @@ Payment dùng `spring.rabbitmq.dynamic=false`. Trước khi bật consumer trên
 
 | Dịch vụ | Địa chỉ Payment dùng |
 | --- | --- |
-| Config Server trên máy | `http://host.docker.internal:8888` |
 | Booking trên máy hoặc SSH tunnel | `http://host.docker.internal:8082` |
 | PostgreSQL trên máy hoặc SSH tunnel | `jdbc:postgresql://host.docker.internal:5432/payment_db` |
 | RabbitMQ/Keycloak | Theo `.env`, dùng địa chỉ container truy cập được |
 
-Có thể đổi `PAYMENT_DOCKER_CONFIG_SERVER_URL`, `PAYMENT_DOCKER_BOOKING_URL`,
+Có thể đổi `PAYMENT_DOCKER_BOOKING_URL`,
 `PAYMENT_DOCKER_DB_URL` nếu dùng trực tiếp server hoặc network khác.
 Nếu RabbitMQ hoặc Keycloak chạy trên máy, dùng hostname Docker truy cập được;
 giữ `KEYCLOAK_ISSUER_URI` khớp chính xác issuer của token, còn URL JWK/token phải

@@ -19,35 +19,15 @@ x-discovery-env: &discovery-env
   EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
   EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
 
-x-config-env: &config-env
-  <<: *discovery-env
-  CONFIG_SERVER_URL: http://config-server:8888
-
 x-discovery-dependency: &discovery-dependency
   discovery-server:
     condition: service_healthy
 
-x-config-dependencies: &config-dependencies
-  <<: *discovery-dependency
-  config-server:
-    condition: service_healthy
-
 services:
-  config-server:
-    build: ../infrastructure/config-server
-    env_file:
-      - path: ../infrastructure/config-server/.env
-        required: true
-    ports:
-      - "127.0.0.1:8888:8888"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 24
-
   discovery-server:
-    build: ../infrastructure/discovery-server
+    build:
+      context: ../infrastructure/discovery-server
+      dockerfile: ../../deploy/Dockerfile.integration-java21
     env_file:
       - path: ../infrastructure/discovery-server/.env
         required: true
@@ -61,7 +41,9 @@ services:
 
   api-gateway:
     <<: *app-hosts
-    build: ../infrastructure/api-gateway
+    build:
+      context: ../infrastructure/api-gateway
+      dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes: *relay-volumes
     depends_on: *discovery-dependency
@@ -84,14 +66,14 @@ services:
       dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes: *relay-volumes
-    depends_on: *config-dependencies
+    depends_on: *discovery-dependency
     ports:
       - "127.0.0.1:8086:8086"
     env_file:
       - path: ../services/event-service/.env
         required: true
     environment:
-      <<: *config-env
+      <<: *discovery-env
       EVENT_BOOKING_BASE_URL: http://booking-service:8082
       EVENT_PAYMENT_BASE_URL: http://payment-service:8083
 
@@ -102,18 +84,20 @@ services:
       dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes: *relay-volumes
-    depends_on: *config-dependencies
+    depends_on: *discovery-dependency
     ports:
       - "127.0.0.1:8085:8085"
     env_file:
       - path: ../services/user-service/.env
         required: true
     environment:
-      <<: *config-env
+      <<: *discovery-env
 
   booking-service:
     <<: *app-hosts
-    build: ../services/booking-service
+    build:
+      context: ../services/booking-service
+      dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes: *relay-volumes
     depends_on: *discovery-dependency
@@ -127,7 +111,9 @@ services:
 
   payment-service:
     <<: *app-hosts
-    build: ../services/payment-service
+    build:
+      context: ../services/payment-service
+      dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes: *relay-volumes
     depends_on:
@@ -148,7 +134,9 @@ services:
 
   ticket-service:
     <<: *app-hosts
-    build: ../services/ticket-service
+    build:
+      context: ../services/ticket-service
+      dockerfile: ../../deploy/Dockerfile.integration-java21
     entrypoint: ["sh", "/tmp/start-with-relay.sh"]
     volumes:
       - type: bind
@@ -165,14 +153,14 @@ services:
         read_only: true
         bind:
           create_host_path: false
-    depends_on: *config-dependencies
+    depends_on: *discovery-dependency
     ports:
       - "127.0.0.1:8084:8084"
     env_file:
       - path: ../services/ticket-service/.env
         required: true
     environment:
-      <<: *config-env
+      <<: *discovery-env
 
   frontend:
     profiles: ["frontend"]

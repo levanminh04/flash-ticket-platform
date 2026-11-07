@@ -16,8 +16,6 @@ spring:
         provider:
           booking:
             token-uri: http://127.0.0.1:1/not-used
-  config:
-    import: "optional:configserver:"
   cloud:
     config:
       enabled: false
