@@ -47,9 +47,15 @@ if [[ $svc == payment-service ]]; then targets+=(ngrok); fi
 need=$(dc "$image" config --format json | jq -er --arg s "$svc" '.services[$s].mem_limit | tonumber') \
   || { echo "DEPLOY_FAILED INVALID_COMPOSE"; exit 1; }
 avail=$(awk '/^MemAvailable:/ {print $2 * 1024}' "$MEMINFO_FILE")
-# shortcut: the running old container still counts as used RAM, so a nearly full host can refuse a restart that would fit; relax when it blocks real deploys.
-if (( avail < need )); then
-  echo "DEPLOY_REJECTED INSUFFICIENT_MEMORY need=${need}B available=${avail}B"; exit 65
+# The old container is replaced by the new one, so its current RAM is released; count it as available. An unreadable cgroup counts as 0 (strict check).
+old_cid=$(dc "$image" ps -q "$svc" 2>/dev/null | head -n1 || true)
+freed=0
+if [[ -n $old_cid ]]; then
+  freed=$(cat "${CGROUP_ROOT:-/sys/fs/cgroup}/system.slice/docker-$old_cid.scope/memory.current" 2>/dev/null || echo 0)
+  [[ $freed =~ ^[0-9]+$ ]] || freed=0
+fi
+if (( avail + freed < need )); then
+  echo "DEPLOY_REJECTED INSUFFICIENT_MEMORY need=${need}B available=${avail}B freed_by_old=${freed}B"; exit 65
 fi
 
 dc "$image" pull --quiet "${targets[@]}" || { echo "DEPLOY_FAILED PULL_FAILED"; exit 1; }
