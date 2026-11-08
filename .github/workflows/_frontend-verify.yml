@@ -1,0 +1,40 @@
+name: Frontend verify
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        type: string
+        default: frontend
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Frontend / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ inputs.path }}/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: ${{ inputs.path }}
+      - name: Type-check and build
+        run: npm run build
+        working-directory: ${{ inputs.path }}
+        env:
+          VITE_API_GATEWAY_URL: ${{ vars.VITE_API_GATEWAY_URL }}
+          VITE_KEYCLOAK_URL: ${{ vars.VITE_KEYCLOAK_URL }}
+          VITE_KEYCLOAK_REALM: ${{ vars.VITE_KEYCLOAK_REALM }}
+          VITE_KEYCLOAK_CLIENT_ID: ${{ vars.VITE_KEYCLOAK_CLIENT_ID }}
