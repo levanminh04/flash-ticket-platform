@@ -13,6 +13,8 @@ public interface OrderService {
 
   OrderView cancelOrder(String buyerSubject, UUID orderId);
 
+  OrderView getOrder(String buyerSubject, UUID orderId);
+
   void expireOrder(UUID orderId);
 
   void processBookingIssuanceResult(

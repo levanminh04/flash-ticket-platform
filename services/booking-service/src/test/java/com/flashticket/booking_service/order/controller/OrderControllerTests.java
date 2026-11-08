@@ -344,8 +344,24 @@ class OrderControllerTests {
   }
 
   @Test
-  void getOrderReturnsStubForAuthenticatedBuyer() throws Exception {
+  void getOrderReturnsOrderViewForAuthenticatedBuyer() throws Exception {
     UUID id = UUID.randomUUID();
+    UUID eventId = UUID.fromString("11111111-1111-4111-8111-111111111111");
+    when(orderService.getOrder("buyer", id))
+        .thenReturn(
+            new OrderView(
+                id,
+                eventId,
+                OrderState.PENDING_PAYMENT,
+                "buyer@example.com",
+                Currency.VND,
+                "200",
+                "20",
+                "180",
+                Instant.parse("2026-10-28T12:15:00Z"),
+                null,
+                "1",
+                List.of()));
     mvc.perform(
             get("/api/v1/orders/" + id)
                 .with(
@@ -354,7 +370,39 @@ class OrderControllerTests {
                         .authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orderId").value(id.toString()))
-        .andExpect(jsonPath("$.status").value("STUB"));
+        .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+        .andExpect(jsonPath("$.state").value("PENDING_PAYMENT"))
+        .andExpect(jsonPath("$.total").value("180"))
+        .andExpect(jsonPath("$.status").doesNotExist());
+    verify(orderService).getOrder("buyer", id);
+  }
+
+  @Test
+  void getOrderReturnsNotFoundForOtherBuyersOrMissingOrder() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(orderService.getOrder("other-buyer", id))
+        .thenThrow(new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    mvc.perform(
+            get("/api/v1/orders/" + id)
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("other-buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    verify(orderService).getOrder("other-buyer", id);
+  }
+
+  @Test
+  void getOrderRejectsInvalidOrderId() throws Exception {
+    mvc.perform(
+            get("/api/v1/orders/not-a-uuid")
+                .with(
+                    jwt()
+                        .jwt(t -> t.subject("buyer"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
   }
 
   @Test

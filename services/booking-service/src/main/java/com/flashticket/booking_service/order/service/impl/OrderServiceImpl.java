@@ -183,6 +183,19 @@ public class OrderServiceImpl implements OrderService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public OrderView getOrder(String buyerSubject, UUID orderId) {
+    if (buyerSubject == null || buyerSubject.isBlank())
+      throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+    if (orderId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    var order =
+        orderRepository
+            .findByIdAndBuyerSubject(orderId, buyerSubject)
+            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+    return orderMapper.toView(order);
+  }
+
+  @Override
   @Transactional
   public OrderView cancelOrder(String buyerSubject, UUID orderId) {
     if (buyerSubject == null || buyerSubject.isBlank())
