@@ -31,9 +31,9 @@ public class OrderController {
   private final PromotionService promotionService;
 
   @GetMapping("/{orderId}")
-  public ResponseEntity<Map<String, Object>> getOrder(
+  public ResponseEntity<OrderView> getOrder(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId) {
-    return ResponseEntity.ok(Map.of("orderId", orderId.toString(), "status", "STUB"));
+    return ResponseEntity.ok(orderService.getOrder(jwt.getSubject(), orderId));
   }
 
   @PostMapping("/{orderId}/cancel")

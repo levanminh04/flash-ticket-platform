@@ -58,6 +58,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   Optional<Order> findLockedByIdAndBuyerSubject(UUID id, String buyerSubject);
 
+  Optional<Order> findByIdAndBuyerSubject(UUID id, String buyerSubject);
+
   // Lấy giờ thực sau khi chờ khóa để kiểm tra thời hạn bán vé.
   @Query(value = "select clock_timestamp()", nativeQuery = true)
   Instant currentDatabaseTime();
