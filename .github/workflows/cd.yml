@@ -64,6 +64,7 @@ jobs:
       service: ${{ matrix.service.name }}
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
+      kind: ${{ matrix.service.kind }}
       postgres: ${{ matrix.service.postgres }}
       rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}
@@ -87,6 +88,7 @@ jobs:
       service: ${{ matrix.service.name }}
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
+      kind: ${{ matrix.service.kind }}
       postgres: ${{ matrix.service.postgres }}
       rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}

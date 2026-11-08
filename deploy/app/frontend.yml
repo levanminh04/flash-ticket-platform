@@ -1,0 +1,7 @@
+services:
+  frontend:
+    extends:
+      file: _common.yml
+      service: common
+    image: ${IMAGE:?image digest required}
+    mem_limit: 64m

@@ -18,7 +18,8 @@ jobs:
     permissions:
       contents: read
     outputs:
-      services: ${{ steps.detect.outputs.build }}
+      services: ${{ steps.detect.outputs.maven }}
+      frontend: ${{ steps.detect.outputs.frontend }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -29,7 +30,11 @@ jobs:
         id: detect
         env:
           BASE: ${{ github.event.pull_request.base.sha || '0000000000000000000000000000000000000000' }}
-        run: bash .github/scripts/detect-changes.sh "$BASE" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          build=$(bash .github/scripts/detect-changes.sh "$BASE" "$GITHUB_SHA" | sed -n 's/^build=//p')
+          echo "maven=$(jq -c '[.[] | select(.kind == "maven")]' <<< "$build")" >> "$GITHUB_OUTPUT"
+          echo "frontend=$(jq -c 'any(.[]; .kind == "node")' <<< "$build")" >> "$GITHUB_OUTPUT"
 
   maven:
     name: Maven / ${{ matrix.service.name }}
@@ -48,6 +53,14 @@ jobs:
       mvn: ${{ matrix.service.mvn }}
       postgres: ${{ matrix.service.postgres }}
       rabbitmq: ${{ matrix.service.rabbitmq }}
+
+  frontend:
+    name: Frontend
+    needs: detect
+    if: ${{ needs.detect.outputs.frontend == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_frontend-verify.yml
 
   scripts:
     name: Deploy scripts
@@ -88,7 +101,7 @@ jobs:
   required:
     name: Required
     if: ${{ always() }}
-    needs: [detect, maven, scripts, dependency_review, codeql]
+    needs: [detect, maven, frontend, scripts, dependency_review, codeql]
     permissions: {}
     runs-on: ubuntu-latest
     steps:
@@ -97,6 +110,7 @@ jobs:
         env:
           DETECT: ${{ needs.detect.result }}
           MAVEN: ${{ needs.maven.result }}
+          FRONTEND: ${{ needs.frontend.result }}
           SCRIPTS: ${{ needs.scripts.result }}
           DEPENDENCY_REVIEW: ${{ needs.dependency_review.result }}
           CODEQL: ${{ needs.codeql.result }}
@@ -109,5 +123,6 @@ jobs:
           check "CodeQL" "$CODEQL"
           # Maven is skipped when no service changed.
           [[ $MAVEN == success || $MAVEN == skipped ]] || { echo "Maven verification did not succeed: $MAVEN"; failed=1; }
+          [[ $FRONTEND == success || $FRONTEND == skipped ]] || { echo "Frontend verification did not succeed: $FRONTEND"; failed=1; }
           if [[ $EVENT_NAME == pull_request ]]; then check "Dependency Review" "$DEPENDENCY_REVIEW"; fi
           exit "$failed"

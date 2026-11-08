@@ -42,7 +42,7 @@ jobs:
           while IFS=$'\t' read -r path mvn; do
             if [[ $mvn == ./mvnw ]]; then chmod +x "$path/mvnw"; fi
             (cd "$path" && $mvn -B -ntp -DskipTests compile)
-          done < <(jq -r '.services[] | [.path, .mvn] | @tsv' .github/services.json)
+          done < <(jq -r '.services[] | select(.kind == "maven") | [.path, .mvn] | @tsv' .github/services.json)
 
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4

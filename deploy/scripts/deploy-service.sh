@@ -13,6 +13,7 @@ REPO=ghcr.io/levanminh04/flash-ticket-platform
 declare -A PORT=(
   [discovery-server]=8761 [api-gateway]=8081 [user-service]=8085 [event-service]=8086
   [ticket-service]=8084 [booking-service]=8082 [payment-service]=8083 [keycloak]=8080
+  [frontend]=5173
 )
 
 reject() { echo "DEPLOY_REJECTED $*"; exit 64; }
@@ -23,7 +24,11 @@ svc=${1:-}; image=${2:-}; commit=${3:-}
 [[ $commit =~ ^[a-f0-9]{40}$ ]] || reject "commit must be 40 hex characters"
 [[ ${REGISTRY_USER:-} =~ ^[A-Za-z0-9-]+$ ]] || reject "REGISTRY_USER is missing or invalid"
 env_file=$APP_ROOT/env/$svc.env
-[[ -f $env_file && $(stat -c %a "$env_file") == 600 ]] || reject "$env_file must exist with mode 600"
+env_args=()
+if [[ $svc != frontend ]]; then # frontend has no runtime env: VITE_* are baked in at build time
+  [[ -f $env_file && $(stat -c %a "$env_file") == 600 ]] || reject "$env_file must exist with mode 600"
+  env_args=(--env-file "$env_file")
+fi
 IFS= read -r token || true
 [[ -n $token ]] || reject "registry token must be passed on stdin"
 
@@ -40,7 +45,7 @@ docker_config=$(mktemp -d); export DOCKER_CONFIG=$docker_config
 trap 'rm -rf "$docker_config"' EXIT
 printf '%s' "$token" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin > /dev/null
 
-dc() { local img=$1; shift; IMAGE=$img docker compose --env-file "$env_file" -p "flash-ticket-$svc" -f "$APP_ROOT/compose/$svc.yml" "$@"; }
+dc() { local img=$1; shift; IMAGE=$img docker compose ${env_args[@]+"${env_args[@]}"} -p "flash-ticket-$svc" -f "$APP_ROOT/compose/$svc.yml" "$@"; }
 targets=("$svc")
 if [[ $svc == payment-service ]]; then targets+=(ngrok); fi
 
@@ -68,6 +73,8 @@ healthy() { # $1 = container id
       [[ $(curl -fsS -m 5 http://127.0.0.1:8761/actuator/health | jq -r .status) == UP ]] ;;
     keycloak)
       curl -fsS -m 5 -o /dev/null http://127.0.0.1:8080/realms/flash-ticket/.well-known/openid-configuration ;;
+    frontend)
+      [[ $(curl -fsS -m 5 http://127.0.0.1:5173/) == *'id="root"'* ]] ;;
     *)
       # Eureka keeps the old container's registration "UP" for up to 90 s, so require one registered after this container started.
       local started_ms
