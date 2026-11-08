@@ -35,7 +35,12 @@ TOKEN=eyJhbGciOi...   # access_token từ Keycloak
 - Role lấy từ realm roles: `BUYER`, `ORGANIZER`, `ADMIN`. Gateway map sang `ROLE_*`.
 - Env FE: `VITE_KEYCLOAK_URL=http://52.64.237.84:8080`, `VITE_KEYCLOAK_REALM=flash-ticket`, `VITE_KEYCLOAK_CLIENT_ID=frontend`, `VITE_API_GATEWAY_URL=http://52.64.237.84:8081`.
 
-> ⚠️ Client `frontend` hiện chỉ có `redirectUris: ["https://oauth.pstmn.io/*"]` (Postman) và `webOrigins: []`. Muốn FE (ví dụ `http://localhost:5173`) đăng nhập được thì phải thêm redirect URI và web origin của FE vào client này trên Keycloak.
+> Client `frontend` đã cho phép:
+> - Redirect URI: `http://localhost:5173/*`, `http://52.64.237.84:5173/*`, `http://52.64.237.84/*` và Postman.
+> - Web origin: `http://localhost:5173`, `http://52.64.237.84:5173`, `http://52.64.237.84`.
+> - Redirect sau logout: dùng chung danh sách redirect URI (`+`).
+>
+> FE chạy ở origin khác thì phải thêm origin đó vào client trên Keycloak.
 
 Muốn test curl nhanh thì lấy token qua Postman (OAuth 2.0 → Authorization Code with PKCE, callback `https://oauth.pstmn.io/v1/callback`).
 
@@ -673,7 +678,7 @@ Duyệt organizer → duyệt sự kiện (`feeRate`) → xử lý yêu cầu hu
 | # | Vấn đề | Ảnh hưởng FE |
 |---|---|---|
 | 1 | Port 8081 bị AWS Security Group chặn | FE chưa gọi được gateway trên server 84 |
-| 2 | Keycloak client `frontend` chỉ cho redirect về Postman, `webOrigins` rỗng | Phải thêm origin và redirect URI của FE thì mới login được |
+| 2 | Gateway `CORS_ALLOWED_ORIGINS` mới có `http://localhost:5173` | FE chạy ở `52.64.237.84` login được nhưng gọi API bị chặn CORS, cần thêm origin này vào env gateway |
 | 3 | `GET /api/v1/orders/{id}` là stub, chưa có API danh sách đơn | Dùng `/payment` và `/tickets` để theo dõi đơn |
 | 4 | `frontend/src/lib/internalServiceClients.ts` mặc định `http://localhost:8080` | Phải sửa thành biến gateway `VITE_API_GATEWAY_URL` |
 | 5 | Ticket check-in và QR phụ thuộc `TICKET_BUSINESS_ENABLED=true` | Đang bật trên server 84 |
