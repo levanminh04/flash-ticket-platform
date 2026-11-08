@@ -9,9 +9,13 @@ on:
       path:
         type: string
         required: true
+      kind:
+        description: maven | node
+        type: string
+        default: maven
       mvn:
         type: string
-        required: true
+        default: ''
       postgres:
         type: boolean
         default: false
@@ -31,7 +35,7 @@ permissions: {}
 
 jobs:
   verify:
-    if: ${{ inputs.mode == 'build-and-deploy' }}
+    if: ${{ inputs.mode == 'build-and-deploy' && inputs.kind == 'maven' }}
     permissions:
       contents: read
     uses: ./.github/workflows/_maven-verify.yml
@@ -45,7 +49,7 @@ jobs:
 
   publish:
     needs: verify
-    if: ${{ inputs.mode == 'build-and-deploy' }}
+    if: ${{ always() && inputs.mode == 'build-and-deploy' && (needs.verify.result == 'success' || (inputs.kind == 'node' && needs.verify.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -59,6 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download verified JAR
+        if: ${{ inputs.kind == 'maven' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: jar-${{ inputs.service }}
@@ -71,11 +76,33 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Frontend build args
+        id: args
+        if: ${{ inputs.kind == 'node' }}
+        env:
+          GATEWAY: ${{ vars.VITE_API_GATEWAY_URL }}
+          KC_URL: ${{ vars.VITE_KEYCLOAK_URL }}
+          KC_REALM: ${{ vars.VITE_KEYCLOAK_REALM }}
+          KC_CLIENT: ${{ vars.VITE_KEYCLOAK_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          for v in GATEWAY KC_URL KC_REALM KC_CLIENT; do
+            [[ -n ${!v} ]] || { echo "Repo variable for $v is empty: set the VITE_* variables first"; exit 1; }
+          done
+          {
+            echo 'value<<EOF'
+            echo "VITE_API_GATEWAY_URL=$GATEWAY"
+            echo "VITE_KEYCLOAK_URL=$KC_URL"
+            echo "VITE_KEYCLOAK_REALM=$KC_REALM"
+            echo "VITE_KEYCLOAK_CLIENT_ID=$KC_CLIENT"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Build and push
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ inputs.path }}
+          build-args: ${{ steps.args.outputs.value }}
           platforms: linux/amd64
           push: true
           provenance: false
@@ -113,6 +140,7 @@ jobs:
           SSH_PORT: ${{ vars.FT84_SSH_PORT }}
           SERVICE: ${{ inputs.service }}
           MODE: ${{ inputs.mode }}
+          KIND: ${{ inputs.kind }}
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
           ROLLBACK_DIGEST: ${{ inputs.image_digest }}
           REGISTRY_USER: ${{ github.actor }}
@@ -143,7 +171,7 @@ jobs:
           esac
           [[ $image =~ ^[a-z0-9./-]+@sha256:[a-f0-9]{64}$ ]]
 
-          if [[ $MODE == build-and-deploy || $MODE == recreate ]]; then
+          if [[ $KIND == maven && ( $MODE == build-and-deploy || $MODE == recreate ) ]]; then
             [[ -n $ENV_SECRET ]] || { echo "DEPLOY_REJECTED MISSING_ENV_SECRET $SERVICE"; exit 1; }
             # shellcheck disable=SC2029
             printf '%s\n' "$ENV_SECRET" | ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$APP_ROOT/env' && cat > '$APP_ROOT/env/$SERVICE.env.tmp' && chmod 600 '$APP_ROOT/env/$SERVICE.env.tmp' && mv -f '$APP_ROOT/env/$SERVICE.env.tmp' '$APP_ROOT/env/$SERVICE.env'"
