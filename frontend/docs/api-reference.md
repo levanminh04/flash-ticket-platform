@@ -14,7 +14,7 @@
 | Keycloak (đăng nhập) | `http://52.64.237.84:8080` — realm `flash-ticket` |
 | Local dev | `http://localhost:8081` |
 
-> ⚠️ **Hiện port 8081 bị AWS Security Group chặn từ ngoài.** Cần thêm inbound rule TCP 8081 thì FE mới gọi được.
+> Port 8081 (gateway) và 8080 (Keycloak) đã mở ra ngoài, gọi trực tiếp từ trình duyệt được.
 
 Biến cho các ví dụ curl:
 
@@ -31,6 +31,8 @@ TOKEN=eyJhbGciOi...   # access_token từ Keycloak
   - Token: `http://52.64.237.84:8080/realms/flash-ticket/protocol/openid-connect/token`
   - Logout: `http://52.64.237.84:8080/realms/flash-ticket/protocol/openid-connect/logout`
   - Discovery: `http://52.64.237.84:8080/realms/flash-ticket/.well-known/openid-configuration`
+- Issuer (`iss` trong token): `http://52.64.237.84:8080/realms/flash-ticket`. Trang login/đăng ký và mọi link Keycloak trả về đều dùng host public này, không còn `localhost`.
+- Token phải lấy từ Keycloak của đúng môi trường: token từ Keycloak chạy local trên máy dev (issuer `http://localhost:8080/...`) gọi gateway server 84 sẽ bị `401`, và ngược lại.
 - Gửi token qua header: `Authorization: Bearer <access_token>`.
 - Role lấy từ realm roles: `BUYER`, `ORGANIZER`, `ADMIN`. Gateway map sang `ROLE_*`.
 - Env FE: `VITE_KEYCLOAK_URL=http://52.64.237.84:8080`, `VITE_KEYCLOAK_REALM=flash-ticket`, `VITE_KEYCLOAK_CLIENT_ID=frontend`, `VITE_API_GATEWAY_URL=http://52.64.237.84:8081`.
@@ -66,7 +68,7 @@ Muốn test curl nhanh thì lấy token qua Postman (OAuth 2.0 → Authorization
 | `Idempotency-Key: <UUID v4>` | **Bắt buộc** với: `POST /orders`, `POST /payments`, `POST /orders/{id}/ticket-deliveries`, `POST /events/{id}/check-ins` | Retry cùng request thì dùng lại key cũ. Body khác mà cùng key → `409 IDEMPOTENCY_CONFLICT` |
 | `X-Correlation-Id` | Tuỳ chọn | Gateway trả lại trong response header để trace log |
 
-- CORS: origin lấy từ `CORS_ALLOWED_ORIGINS` (mặc định `http://localhost:5173`), có cho phép credentials. Header được expose cho FE: `X-Correlation-Id`, `X-Request-Id`.
+- CORS: gateway trên server 84 cho phép origin `http://localhost:5173`, `http://52.64.237.84:5173`, `http://52.64.237.84` (biến `CORS_ALLOWED_ORIGINS`, mặc định local là `http://localhost:5173`), có cho phép credentials. FE chạy ở origin khác thì phải thêm vào secret `ENV_API_GATEWAY` rồi chạy lại CD. Header được expose cho FE: `X-Correlation-Id`, `X-Request-Id`.
 - Rate limit: 10 req/s, burst 20, tính theo IP → `429 RATE_LIMIT_EXCEEDED`.
 
 ### 0.5 Quy ước dữ liệu
@@ -677,8 +679,6 @@ Duyệt organizer → duyệt sự kiện (`feeRate`) → xử lý yêu cầu hu
 
 | # | Vấn đề | Ảnh hưởng FE |
 |---|---|---|
-| 1 | Port 8081 bị AWS Security Group chặn | FE chưa gọi được gateway trên server 84 |
-| 2 | Gateway `CORS_ALLOWED_ORIGINS` mới có `http://localhost:5173` | FE chạy ở `52.64.237.84` login được nhưng gọi API bị chặn CORS, cần thêm origin này vào env gateway |
-| 3 | `GET /api/v1/orders/{id}` là stub, chưa có API danh sách đơn | Dùng `/payment` và `/tickets` để theo dõi đơn |
-| 4 | `frontend/src/lib/internalServiceClients.ts` mặc định `http://localhost:8080` | Phải sửa thành biến gateway `VITE_API_GATEWAY_URL` |
-| 5 | Ticket check-in và QR phụ thuộc `TICKET_BUSINESS_ENABLED=true` | Đang bật trên server 84 |
+| 1 | `GET /api/v1/orders/{id}` là stub, chưa có API danh sách đơn | Dùng `/payment` và `/tickets` để theo dõi đơn |
+| 2 | `frontend/src/lib/internalServiceClients.ts` mặc định `http://localhost:8080` | Phải sửa thành biến gateway `VITE_API_GATEWAY_URL` |
+| 3 | Ticket check-in và QR phụ thuộc `TICKET_BUSINESS_ENABLED=true` | Đang bật trên server 84 |
