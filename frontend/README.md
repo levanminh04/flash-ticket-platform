@@ -91,3 +91,14 @@ docker compose --env-file .env -f deploy/docker-compose.frontend.local.yml up -d
 Lệnh chạy từ root repo, cần image local `flash-ticket/db-tunnel-proxy:local` đã có từ cấu hình tunnel. Relay chỉ publish `127.0.0.1:18081`, trỏ tới Gateway trong Docker; các port service giữ nguyên. Nếu môi trường khác truy cập Gateway trực tiếp được, điền URL đúng vào root `.env` thay vì dùng relay này.
 
 Trạng thái tích hợp và các phụ thuộc backend: [docs/integration.md](docs/integration.md). Bốn task UI hoàn tất không đồng nghĩa luồng đặt vé/thanh toán đã nghiệm thu.
+
+## Production image
+
+- `frontend/Dockerfile` là multi-stage: stage `node:22-alpine` chạy `npm ci` và `npm run build`; stage `nginxinc/nginx-unprivileged` chỉ copy `dist/` và `nginx.conf`, phục vụ cổng 5173.
+- `VITE_*` là build-arg, lấy từ repo Variables khi CD build (xem `deploy/app/README.md`).
+- Chạy thử local (không cần Node):
+
+```bash
+docker build -t ft-frontend:test --build-arg VITE_API_GATEWAY_URL=http://127.0.0.1:18081 --build-arg VITE_KEYCLOAK_URL=http://52.64.237.84:8080 --build-arg VITE_KEYCLOAK_REALM=flash-ticket --build-arg VITE_KEYCLOAK_CLIENT_ID=frontend frontend
+docker run --rm --read-only --tmpfs /tmp --user 10001:10001 --cap-drop ALL -p 127.0.0.1:5173:5173 ft-frontend:test
+```

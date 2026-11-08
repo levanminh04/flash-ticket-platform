@@ -1,4 +1,4 @@
-# Deploy 8 service lên máy 84
+# Deploy 9 ứng dụng lên máy 84
 
 Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có file đổi. Image luôn được deploy bằng digest.
 
@@ -12,6 +12,7 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 | booking-service | `services/booking-service` | 8082 | như trên |
 | payment-service (+ ngrok) | `services/payment-service` | 8083 | như trên |
 | keycloak | `services/keycloak-spi` | 8080 | `/realms/flash-ticket/.well-known/openid-configuration` = 200 |
+| frontend | `frontend` | 5173 | `GET /` trả HTML có `id="root"` |
 
 "Như trên" nghĩa là instance của service trong Eureka (`/eureka/apps/<APP>`) có `status=UP`, đúng port và đăng ký **sau** khi container mới start.
 
@@ -19,7 +20,8 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 
 ```bash
 gh workflow run cd.yml -f action=deploy   -f service=user-service      # build commit hiện tại của main và deploy
-gh workflow run cd.yml -f action=deploy   -f service=all               # cả 8 service, tuần tự
+gh workflow run cd.yml -f action=deploy   -f service=all               # cả 9 ứng dụng, tuần tự
+gh workflow run cd.yml -f action=deploy   -f service=frontend              # frontend: build lại image từ commit main
 gh workflow run cd.yml -f action=restart  -f service=payment-service   # sau khi cập nhật secret ENV_PAYMENT_SERVICE
 gh workflow run cd.yml -f action=rollback -f service=ticket-service -f image_digest=sha256:<64 hex>
 ```
@@ -116,6 +118,8 @@ Trước lần deploy CD đầu tiên cho Keycloak:
 
 ## Thêm service mới
 
+Services có trường `kind`: `maven` cho service Spring/Keycloak, `node` cho frontend. Mục mới phải khai báo `kind`.
+
 1. Thêm một mục vào `.github/services.json` (đúng thứ tự deploy).
 2. Thêm `deploy/app/<svc>.yml` (sao chép `user-service.yml`, đổi tên và `mem_limit`).
 3. Thêm `[<svc>]=<port>` vào bảng `PORT` của `deploy/scripts/deploy-service.sh`.
@@ -126,3 +130,9 @@ Trước lần deploy CD đầu tiên cho Keycloak:
 
 - 2 máy: thêm trường `host` cho từng mục trong `services.json` và secret SSH thứ hai; `deploy-service.sh` không đổi.
 - Kubernetes: giữ job build + GHCR; thay bước SSH bằng bước ghi digest vào repo manifest cho Argo CD; `env/<svc>.env` thành Secret/ConfigMap; Eureka có thể thay bằng Service DNS.
+
+## Frontend
+
+- Image `frontend` là nginx (`nginxinc/nginx-unprivileged`) phục vụ `dist/` đã build, cổng 5173, không có env runtime (không `env/frontend.env`, không secret `ENV_FRONTEND`).
+- `VITE_*` được build cứng vào bundle. Lấy từ **repo Variables** (`vars.VITE_API_GATEWAY_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`), không phải secret. Đổi giá trị thì phải chạy `action=deploy` (không phải `restart`) để build lại.
+- Workflow và script bỏ qua bước ghi/kiểm tra env khi service là frontend (trường `kind: node` trong `.github/services.json`).
