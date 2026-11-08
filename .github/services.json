@@ -1,12 +1,13 @@
 {
   "services": [
-    {"name": "discovery-server", "path": "infrastructure/discovery-server", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "api-gateway", "path": "infrastructure/api-gateway", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "user-service", "path": "services/user-service", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "event-service", "path": "services/event-service", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "ticket-service", "path": "services/ticket-service", "mvn": "./mvnw", "postgres": true, "rabbitmq": false},
-    {"name": "booking-service", "path": "services/booking-service", "mvn": "./mvnw", "postgres": false, "rabbitmq": true},
-    {"name": "payment-service", "path": "services/payment-service", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "keycloak", "path": "services/keycloak-spi", "mvn": "mvn", "postgres": false, "rabbitmq": false}
+    {"name": "discovery-server", "path": "infrastructure/discovery-server", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
+    {"name": "api-gateway", "path": "infrastructure/api-gateway", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
+    {"name": "user-service", "path": "services/user-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
+    {"name": "event-service", "path": "services/event-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
+    {"name": "ticket-service", "path": "services/ticket-service", "kind": "maven", "mvn": "./mvnw", "postgres": true, "rabbitmq": false},
+    {"name": "booking-service", "path": "services/booking-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": true},
+    {"name": "payment-service", "path": "services/payment-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
+    {"name": "keycloak", "path": "services/keycloak-spi", "kind": "maven", "mvn": "mvn", "postgres": false, "rabbitmq": false},
+    {"name": "frontend", "path": "frontend", "kind": "node", "mvn": "", "postgres": false, "rabbitmq": false}
   ]
 }
