@@ -1,7 +1,5 @@
 # Chỉ mục tài liệu
 
-> Luồng đặt vé hiện hành 29/10: [ảnh ClickUp/GOV-156](evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md), B13/B14/B15-v0.3 REVIEW_READY; thay hướng start/result 03/10 ở bảng lịch sử bên dưới.
-
 Thư mục này là nguồn sự thật cho quá trình phân tích, thiết kế, hiện thực và đánh giá đồ án FlashTicket Platform.
 
 > **Đề tài chính thức:** *"Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố"*. Nguồn hiện hành do Minh xác nhận ngày 18/09/2026: [DT18](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md).
@@ -32,7 +30,7 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Yêu cầu chức năng và phi chức năng B8 | `domain/B8-requirements.md` |
 | **Chuỗi kiến trúc B11-A → B11-B → B11-C** — đường dẫn canonical. Cả ba cổng đều `APPROVED`. **`B11-C-v0.3` đã chốt `PA-6`**, năm service `event`/`booking`/`payment`/`ticket`/`user`, một Saga do `payment-service` điều phối, RCA riêng chỉ đọc với lớp giải thích dùng Gemini API, và bố trí hai máy không HA (`GOV-086`–`GOV-099`). `ADR-001`–`ADR-004` đều `Chấp nhận`; thử tải thật thuộc Giai đoạn 5–6, có quyền nâng instance AWS tạm thời nếu cần | `architecture/B11-A-independent-alternatives.md`, `architecture/B11-B-legacy-feasibility.md`, `architecture/B11-C-target-architecture.md` |
 | **B12 — Quyền sở hữu dữ liệu và schema đích** — `B12-v0.2` `APPROVED`; 47 bảng SQL/467 cột và 4 collection, init mới; chưa triển khai AWS. Năm ERD, baseline SQL/Mongo/Keycloak và kết quả kiểm dẫn từ tài liệu nguồn; đối chiếu legacy/configuration tách `COMPARISON` | [Thiết kế](architecture/B12-data-ownership-and-schema.md), [baseline](architecture/data/README.md), [kiểm chứng](architecture/B12-validation.md), [đối chiếu cấu hình](architecture/B12-legacy-configuration-comparison.md) |
-| **B13/B14/B15/readiness v0.2** — `REVIEW_READY` ngày 03/10 theo GOV-149/150: start qua Booking, poll Payment; success Ticket → Booking → Payment. Baseline v0.1 và B16 được duyệt 14/09 (GOV-144); QR payment độc lập còn OPEN, runtime NOT RUN | [B13](architecture/B13-api-and-event-contracts.md), [B14](architecture/B14-main-flow-sequences.md), [B15](architecture/B15-verification-plan.md), [B16](architecture/B16-observability-baseline.md), [Bắt đầu code](architecture/implementation-readiness.md), [Đối chiếu ba UC](evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md) |
+| **B13/B14/B15** — hợp đồng, sequence và kế hoạch kiểm; **B16/readiness** — tất cả được Minh duyệt `APPROVED` ngày 2026-09-14 (GOV-144). Kết quả runtime chưa chạy vẫn NOT RUN | [B13](architecture/B13-api-and-event-contracts.md), [B14](architecture/B14-main-flow-sequences.md), [B15](architecture/B15-verification-plan.md), [B16](architecture/B16-observability-baseline.md), [Bắt đầu code](architecture/implementation-readiness.md), [Bản giải thích](architecture/B12-B14-review-pack.md) |
 | Quyết định kiến trúc | `adr/` |
 | Sơ đồ và tệp nguồn | `diagrams/` |
 | API và lược đồ sự kiện | `contracts/` |
@@ -40,9 +38,9 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 | Kịch bản đo và kết quả thô | `experiments/` |
 | Bằng chứng khảo sát và quy trình dò lỗi | `evidence/` |
 | Phiếu nghiên cứu Tầng A — A1-v0.3/A2-v0.3/A3-v0.7/A4-v0.4/A5-v0.4/A6-v0.7 đã đồng bộ DT18, `REVIEW_READY`, không tự kế thừa duyệt cũ | `research/` |
-| Bộ tài liệu nghiên cứu chẩn đoán nguyên nhân gốc — độc lập về nhịp/cổng; **ràng buộc gửi tới B9–B16 nằm ở `research-rca/R0-boi-canh-va-rang-buoc.md` §3**; kiểm định 11 CSV/990 dòng kết quả và thiết kế MyRCA `CANDIDATE` nằm ở `research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` | `research-rca/` |
-| Sổ nguồn dùng chung cho cả hai bộ tài liệu | `research/source-register.md` |
-| Khung báo cáo và bản nộp theo mốc | `report/README.md`, `report/report-outline.md`; `report/bao-cao-2-tuan-2026-09-05.md` là `HISTORICAL_SUPERSEDED`, kết luận hiện hành ở `research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` và bản Word `_v2` |
+| Nghiên cứu RCA hiện hành: luật, kế hoạch, quyết định, phương pháp và kết quả | [D:/RCA-flashticket](D:/RCA-flashticket); bắt đầu từ AGENTS.md, docs/STATE.md, docs/MRP.md và docs/DECISIONS.md ở repo đó |
+| Sổ nguồn hệ thống và nguồn nghiên cứu lịch sử | `research/source-register.md`; nguồn RCA hiện hành do repo D:/RCA-flashticket quản lý |
+| Khung báo cáo và bản nộp theo mốc | `report/README.md`, `report/report-outline.md`; bản 05/09 và Word v2 là lịch sử; nguồn RCA mới ở repo D:/RCA-flashticket |
 | Baseline, phân vai và trạng thái thực hiện | `project/` |
 
 ## Quy tắc cập nhật
@@ -54,5 +52,5 @@ Thư mục này là nguồn sự thật cho quá trình phân tích, thiết k�
 - Chỉ tạo ADR cho quyết định có phương án cạnh tranh hoặc hệ quả kiến trúc đáng kể.
 - Hai bộ tài liệu chạy độc lập về **nhịp làm việc và cổng kiểm soát**, và **không chặn nhau**. Ranh giới viết theo **quyền quyết định, không phải quyền đọc** (`RES-028`, `RES-033`): bộ nghiên cứu **được nhận** `B4`, `B5` §5.1 và `B7` để dựng đồ thị phục vụ `DT18-NV2`, nhưng **không được** sửa một bất biến, ranh giới hay yêu cầu của bộ hệ thống. Hai bộ nối qua **đúng hai cửa**: `research-rca/R0-boi-canh-va-rang-buoc.md` §3 cho chiều nghiên cứu → hệ thống, và `project/lien-ket-rca.md` cho chiều ngược lại. Chi tiết trách nhiệm ở `AGENTS.md` mục 7.
 - **Mỗi gate từ `B9` tới `B16` phải đối chiếu `R0` §3 trước khi chốt** và ghi kết quả đối chiếu vào phần tự kiểm của mình. Ràng buộc nào không giữ được thì ghi `OPEN` kèm hậu quả, không bỏ im lặng.
-- **Bốn phiếu của bộ RCA trùng mã với Tầng A.** `A7`, `A8`, `A9` mang **hai nghĩa khác nhau** ở hai bộ — Tầng A: phương pháp nghiên cứu, ý nghĩa/đóng góp, bố cục/phân công; bộ RCA: khái niệm RCA, khảo sát bộ dữ liệu, độ đo thực nghiệm. **Trích từ ngoài `research-rca/` thì phải viết đường dẫn đầy đủ**, ví dụ `research-rca/A9-do-do-thuc-nghiem.md` §6 (`GOV-046`). Việc đổi mã sang `R1`–`R4` còn nợ tại `R0-OPEN-05`.
+- Hồ sơ RCA cũ A7–A10/E1/Task A–G đã gỡ khỏi bản làm việc; tra lịch sử qua `research-rca/README.md`. Các mã cũ trong hồ sơ nguồn/nghiệp vụ chỉ dùng để truy lịch sử, không là nguồn nghiên cứu hiện hành.
 - Không đưa bí mật, dữ liệu cá nhân hoặc log chưa khử nhạy cảm vào Git.

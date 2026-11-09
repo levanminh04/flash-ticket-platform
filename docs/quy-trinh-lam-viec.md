@@ -4,7 +4,7 @@
 ## ĐATN FlashTicket · PTIT
 ### *Tài liệu theo hằng ngày cho nhịp hệ thống. Ba tầng A/B/C là phần tra cứu chi tiết cho từng bước ở đây.*
 
-**Nhịp RCA riêng (22/09/2026):** theo [RCA Master Research Program](research-rca/MASTER-RESEARCH-PROGRAM.md) và [CURRENT-STATE](research-rca/CURRENT-STATE.md), cùng phục vụ DT18. Tasks D–G trên dữ liệu công khai không chờ FlashTicket; bước chuyển giao H nhận readiness qua hai cửa hiện hành. Bảy giai đoạn/gate hệ thống bên dưới không bị thay bởi roadmap RCA.
+**Nhịp RCA hiện hành (09/11/2026):** theo [MRP](D:/RCA-flashticket/docs/MRP.md), [STATE](D:/RCA-flashticket/docs/STATE.md) và [DECISIONS](D:/RCA-flashticket/docs/DECISIONS.md) tại repo RCA. Không dùng Master/Task A–G cũ làm lộ trình hiện tại. Hai cửa bàn giao giữ nguyên; bảy giai đoạn/gate hệ thống bên dưới không bị thay bởi roadmap RCA.
 
 > **Bản này không chứa lịch theo tuần.** Trình tự được điều khiển bằng **cổng chuyển giai đoạn** — điều kiện phải đạt để đi tiếp — chứ không bằng mốc thời gian. Lý do ở Phần 6.
 
@@ -36,7 +36,7 @@
 
 Mã chính thức của sản phẩm công việc: **`A1–A9` · `B1–B16` · `C1–C8`**. Tài liệu chủ **không đặt mã riêng**, chỉ sắp thứ tự. Bỏ hẳn cách gọi "Pha 4 bước 4.5".
 
-**Đính chính 2026-08-27:** dải mã của Tầng B nay là **`B1–B16`**. Ba phiếu `B17`–`B19` — cấu hình gom mẫu log, gọi mô hình ngôn ngữ, đánh giá trợ lý — đã được **gỡ khỏi Tầng B** theo `RES-034`: chúng là các bước của **cơ chế RCA**, thuộc nhịp làm việc của `docs/research-rca/`. `B16` (chuẩn logging) ở lại vì đó là việc kiến trúc thật của hệ thống.
+**Đính chính 2026-08-27:** dải mã của Tầng B nay là **`B1–B16`**. Ba phiếu `B17`–`B19` — cấu hình gom mẫu log, gọi mô hình ngôn ngữ, đánh giá trợ lý — đã được **gỡ khỏi Tầng B** theo `RES-034`: chúng là các bước của **cơ chế RCA**, hiện thuộc nhịp làm việc của repo `D:/RCA-flashticket`. `B16` (chuẩn logging) ở lại vì đó là việc kiến trúc thật của hệ thống.
 
 ## 0.3 Đọc theo thứ tự nào
 
@@ -107,7 +107,7 @@ Chỉ viết lý thuyết cần để hiểu quyết định và phép đánh gi
 
 Đề tài là **Xây dựng hệ thống bán vé theo kiến trúc phân tán có ứng dụng đồ thị phụ thuộc để giám sát và chẩn đoán sự cố** (`DT18-TEN`). Nhiệm vụ nguyên văn tại [nguồn 18/09](evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md); thư 22/08 giữ vai trò bằng chứng lịch sử.
 
-**Bảy giai đoạn dưới đây là nhịp của bộ tài liệu hệ thống** — nghiệp vụ bán vé và quản trị liên quan, phục vụ trực tiếp nhiệm vụ xây dựng và đánh giá hệ phân tán `DT18-NV1`. Bộ tài liệu RCA ở `docs/research-rca/` có nhịp làm việc và cổng kiểm soát riêng, **không** đi qua bảy giai đoạn này.
+**Bảy giai đoạn dưới đây là nhịp của bộ tài liệu hệ thống** — nghiệp vụ bán vé và quản trị liên quan, phục vụ trực tiếp nhiệm vụ xây dựng và đánh giá hệ phân tán `DT18-NV1`. Bộ tài liệu RCA ở repo `D:/RCA-flashticket` có nhịp làm việc và cổng kiểm soát riêng, **không** đi qua bảy giai đoạn này.
 
 Hai bộ gặp nhau ở đúng ba chỗ:
 
@@ -244,7 +244,7 @@ Hai bộ gặp nhau ở đúng ba chỗ:
 | Thí nghiệm đo các bất biến và thuộc tính chất lượng; đối chứng chỉ cho câu hỏi thật sự cần so sánh | B15 |
 | Phân tích các rủi ro/đánh đổi quan trọng xuất hiện trong kết quả | B15 |
 
-**Điều kiện sẵn sàng:** mỗi ASR có kết quả hoặc giải thích trung thực vì sao chưa đo được; giới hạn cỡ mẫu và môi trường được ghi rõ. Kết quả từng ca của **cơ chế chẩn đoán**, gồm cả ca sai và ca thất bại, được đo ở bộ tài liệu RCA theo `A9`.
+**Điều kiện sẵn sàng:** mỗi ASR có kết quả hoặc giải thích trung thực vì sao chưa đo được; giới hạn cỡ mẫu và môi trường được ghi rõ. Kết quả từng ca của **cơ chế chẩn đoán**, gồm cả ca sai và ca thất bại, được đo theo giao thức/SPEC và manifest trong repo `D:/RCA-flashticket`; không lấy phiếu A9 cũ làm protocol hiện hành.
 
 ---
 

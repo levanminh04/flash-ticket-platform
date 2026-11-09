@@ -1,10 +1,14 @@
 # Sổ quyết định dự án
 
+**Cập nhật nguồn RCA 09/11/2026:** nguồn RCA hiện hành là repo [D:/RCA-flashticket](D:/RCA-flashticket). Các đăng ký phân sổ RCA-* theo mốc tháng 9 bên dưới chỉ giữ lịch sử; không điều hành chương trình hiện tại. Hồ sơ đã gỡ khỏi bản làm việc xem tại [revision lịch sử](https://github.com/levanminh04/flash-ticket-platform/tree/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca). Cửa bàn giao vẫn là [R0](../research-rca/R0-boi-canh-va-rang-buoc.md) và [lien-ket-rca](lien-ket-rca.md).
+
 > **Hiện hành từ 18/09/2026:** tên và nhiệm vụ theo [DT18](../evidence/project-direction/2026-09-18-de-tai-va-nhiem-vu.md), nhóm và phạm vi phụ trách theo [roles.md](roles.md); `PRJ-025`–`PRJ-035`, `GOV-146` ở cuối sổ. Các dòng cũ giữ để truy lịch sử; không dùng phần đã bị thay thế làm ngữ cảnh hiện hành.
 
 Tài liệu này là bộ nhớ quyết định bền vững của đồ án. Lịch sử chat có thể cung cấp bằng chứng, nhưng không thay thế sổ này. Chỉ ghi một quyết định khi đã xác định rõ trạng thái, người chốt, gate và phạm vi ảnh hưởng.
 
-**Đăng ký phân sổ RCA — 22/09/2026:** [RESEARCH-DECISIONS.md](../research-rca/RESEARCH-DECISIONS.md) là nơi sở hữu nội dung nguyên tử **RCA-001–017**, do **Lê Văn Minh** xác nhận trong yêu cầu U22 “Finish Task C Phase 2 + Establish RCA Master Research Program”; nguồn/hash lưu trong phân sổ. Trạng thái **USER_CONFIRMED**, gate **Task C Phase 2**, phạm vi RQ/đóng góp/vai trò năng lực và ranh giới thực hiện RCA. Sổ dự án đăng ký ID/quyền nguồn bằng liên kết này, không chép lại mười bảy quyết định để tạo hai bản cạnh tranh. Contract áp dụng tại [C Phase 2](../research-rca/task-c-research-decision-lock.md); artifacts chịu tác động kê ở [ARTIFACT-MAP](../research-rca/ARTIFACT-MAP.md). Việc ghi lựa chọn C1 không phê duyệt thuật toán/proposal MyRCA cũ hoặc thay gate kiến trúc/hệ thống; các quyết định dự án còn lại giữ nguyên.
+**Đăng ký phân sổ RCA — 22/09/2026:** [RESEARCH-DECISIONS.md](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md) là nơi sở hữu nội dung nguyên tử **RCA-001–017**, do **Lê Văn Minh** xác nhận trong yêu cầu U22 “Finish Task C Phase 2 + Establish RCA Master Research Program”; nguồn/hash lưu trong phân sổ. Trạng thái **USER_CONFIRMED**, gate **Task C Phase 2**, phạm vi RQ/đóng góp/vai trò năng lực và ranh giới thực hiện RCA. Sổ dự án đăng ký ID/quyền nguồn bằng liên kết này, không chép lại mười bảy quyết định để tạo hai bản cạnh tranh. Contract áp dụng tại [C Phase 2](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/task-c-research-decision-lock.md); artifacts chịu tác động kê ở [ARTIFACT-MAP](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/ARTIFACT-MAP.md). Việc ghi lựa chọn C1 không phê duyệt thuật toán/proposal MyRCA cũ hoặc thay gate kiến trúc/hệ thống; các quyết định dự án còn lại giữ nguyên.
+
+**Bổ sung đăng ký phân sổ — 23/09/2026:** [RCA-018–021](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md) do Lê Văn Minh xác nhận trực tiếp trong TD-v1.1 reconciliation; trạng thái USER_CONFIRMED, gate làm rõ nguồn/phạm vi DT18. Nguồn nguyên văn và phạm vi từng xác nhận nằm trong phân sổ. Các xác nhận giữ tên hiện hành, đặt hướng dẫn cũ vào đúng bối cảnh, giữ giá trị nghiên cứu RCA và không giảm nhẹ FlashTicket. Không thay RCA-001–017, không duyệt thuật toán, dataset hoặc Task E. Artifacts chịu tác động: nguồn advisor23/09, Task D/handoff, Master, Task A§M, CURRENT-STATE và ARTIFACT-MAP.
 
 ## Trạng thái được phép
 
@@ -357,7 +361,6 @@ Tài liệu này là bộ nhớ quyết định bền vững của đồ án. L�
 | BIZ-156 | Không tạo yêu cầu hủy mới cho sự kiện đã bị hủy. | Nghiệp vụ | `USER_CONFIRMED` | Lê Văn Minh | Cùng xác nhận §5.1 ngày 2026-09-13. | 2026-09-13 | B6/B7/B8; B13 | B6, B7, B8, B13 | B12-OPEN-01 (phần sự kiện đã hủy) |
 | BIZ-157 | Có cả follow và unfollow organizer. | Nghiệp vụ | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-09-13: “5.2 có follow/ unfflow nhưng làm đơn giản”. | 2026-09-13 | B7/B8; B12/B13 | B7, B8, B12, B13 | B12-OPEN-02 (năng lực unfollow; chưa đóng chi tiết constraint/API) |
 | BIZ-158 | Đồng tiền sử dụng là VND. | Nghiệp vụ / dữ liệu | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-09-13: “5.4 chốt VND như bạn nói”. | 2026-09-13 | B12/B13 | B12, B13, SQL bốn service, Mongo validator và hợp đồng có số tiền | B12-OPEN-04 (chỉ phần đồng tiền) |
-| BIZ-159 | Admin xử lý mọi yêu cầu hoàn đã thất bại (cả bốn nguyên nhân của `UC-15`) bằng hai thao tác trong `UC-16`: thử lại trên cùng yêu cầu hoàn logic, hoặc ghi nhận đã hoàn ngoài hệ thống kèm người thao tác, thời điểm và mã tham chiếu; ghi nhận này là kết quả hoàn thành công duy nhất của khoản thu. | Nghiệp vụ | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-11-03: “mọi và cả 2 đi”, rồi “cập nhật luôn tôi là minh”, sau khi B6 phát hiện refund thất bại không có người xử lý trong khi `BIZ-052` chặn chi trả. Yêu cầu hoàn đã thất bại vẫn tính là đang xử lý đối với điều kiện chi trả cho tới khi được thử lại thành công hoặc ghi nhận ngoài hệ thống. | 2026-11-03 | B4/B6/B7/B8; B12/B13 | B4 `C03`, B6 §4.7, `B6-03`, B7 `INV-08`, B8 `FR-37a`/`FR-39a`, B12 `refunds`, `30-payment.sql`, B13 §3.1 | B6-OPEN-06 |
 | GOV-101 | Thực hiện follow/unfollow theo hướng đơn giản. | Ràng buộc thiết kế | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-09-13: “5.2 có follow/ unfflow nhưng làm đơn giản”. | 2026-09-13 | B12/B13 | B12, B13, Mongo validator/indexes | — |
 | GOV-102 | Tách rõ vòng đời đơn hàng, thanh toán và vé trong thiết kế. | Ràng buộc thiết kế | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-09-13: “5.3 đồng ý, càng tường minh càng tót”; §5.3 đã đề xuất phân biệt ba vòng đời. | 2026-09-13 | B12/B13/B14 | B12, B13, B14 | — |
 | GOV-103 | Giữ giới hạn thiết kế trong năm service nghiệp vụ chính hiện tại, không mở rộng quá mức. | Ràng buộc kiến trúc | `USER_CONFIRMED` | Lê Văn Minh | Nguyên văn ngày 2026-09-13: “giới hạn trong thiết kế 5 service chính hiện tại, không over”. | 2026-09-13 | B12–B14 trong kiến trúc B11-C đã duyệt | B12, B13, B14 | — |
@@ -513,63 +516,21 @@ Bản đồ tác động cho lượt ghi nhận: cập nhật metadata và đầ
 
 **Phần phân tích chưa được chốt:** cách ánh xạ toàn bộ nhiệm vụ mới vào ngưỡng tải, khả năng mở rộng, độ đo phát hiện, tập lỗi và giao diện kết quả là `OPEN` cho Minh cùng người phụ trách tại B15/B16 và bộ RCA. Các bản diễn giải A1–A6 được cập nhật để rà soát, không tự kế thừa phê duyệt bản cũ. `RES-049` chỉ còn áp cho dashboard vận hành/cảnh báo nâng cao; không được dùng để bỏ cơ chế giám sát hoặc giao diện minh họa kết quả mà DT18-NV2/NV3 đã yêu cầu. Đóng góp vẫn không được tuyên bố vượt bằng chứng.
 
-## Workspace trên máy hiện tại — 2026-09-27
 
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng hoặc trích dẫn yêu cầu | Ngày chốt | Gate áp dụng | File chịu ảnh hưởng | Thay thế quyết định |
+**Đăng ký phân sổ RCA — 26/09/2026:** RCA-022–042 trong [RESEARCH-DECISIONS](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md) do Lê Văn Minh xác nhận tại U26 mission. Phân sổ sở hữu nội dung nguyên tử; giữ nguyên RCA-001–021. Supersede đúng phạm vi prohibition development selection/calibration; runtime labels và final-test tuning vẫn cấm. C5 first-class, C1 primary; thuật toán TD-v1.2 vẫn CANDIDATE, human approval OPEN, Task E NOT STARTED / NOT AUTHORIZED. Nguồn/hash và impact/review/file inventory ở phân sổ, protocol và review packet. Không thay API/schema/kiến trúc/gate hệ thống hoặc cấp quyền commit/push.
+
+
+**Đăng ký phân sổ RCA — 27/09/2026:** [RCA-043–048](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md), USER_CONFIRMED bởi Lê Văn Minh, gate Task E development preflight; [nguồn U27](../evidence/project-direction/2026-09-27-rca-development-preflight.md). Cho phép scoped development và impact map đã duyệt, hoãn năm-reviewer assurance riêng cho bước này; giữ assurance formal, cấm final evaluation và tự đổi phạm vi. Phân sổ sở hữu statements nguyên tử; không phê duyệt thuật toán hoặc F/G/H/I.
+
+**Đăng ký continuation D/E — 27/09/2026:** [RCA-049–061](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md), USER_CONFIRMED bởi Lê Văn Minh tại [U27R](../evidence/project-direction/2026-09-27-rca-c5-amendment-and-e-resume.md). Cho phép phân tích/chọn/sửa hai quy tắc C5, amendment/review và tự động resume scoped E khi gate đạt; explicit approval cho impact map D/E, development acquisition và isolated comparator env. Phân sổ giữ lời xác nhận nguyên tử; exact agent-selected policy không USER_CONFIRMED. Giữ final60/F/G/H/I và app/API/schema/Primary RQ/dataset/phạm vi ngoài quyền sửa.
+
+**Đăng ký freeze TD-v1.3 / Task F — 28/09/2026:** [RCA-062–063](https://github.com/levanminh04/flash-ticket-platform/blob/98d5ad5546244e5e7e29b41dbef92d454f50a7ac/docs/research-rca/RESEARCH-DECISIONS.md), USER_CONFIRMED bởi Lê Văn Minh tại [U28F](../evidence/project-direction/2026-09-28-rca-td13-freeze-and-task-f-authorization.md). Phân sổ sở hữu hai statements nguyên tử: human-freeze exact executed TD-v1.3 (giữ documented limitations) và authorize Task F theo Master contract. Five-distinct-reviewer factual status vẫn OPEN; final60/G/H/I, method amendment, application/API/schema/Saga và commit/push không được cấp quyền.
+
+
+## Nguồn RCA và phạm vi dọn tài liệu — 09/11/2026
+
+| ID | Quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày | Phạm vi | Tạo tác chịu tác động | Thay thế |
 |---|---|---|---|---|---|---|---|---|---|
-| GOV-147 | Workspace chuẩn của đồ án trên máy hiện tại là `D:/DATN/flash-ticket-platform`. | Workspace local | `USER_CONFIRMED` | Người dùng phiên 2026-09-27 | “sửa giúp tôi các file agent, skill liên quan cho đúng link workspace chuẩn hiện tại của máy, link cũ là của máy người khác trên github push lên”; cwd của phiên là `D:/DATN/flash-ticket-platform`. | 2026-09-27 | Định tuyến workspace; không thay gate thiết kế | `AGENTS.md`, `$govern-capstone-work`, evaluation-cases, audit-governance | GOV-002/GOV-007 chỉ ở đường dẫn workspace trên máy hiện tại |
-| GOV-148 | Repo dự án cũ được người dùng cung cấp làm nguồn tham khảo là `https://github.com/levanminh04/flash-ticker-system`. | Nguồn tham khảo | `USER_CONFIRMED` | Người dùng phiên 2026-09-27 | “github.com/levanminh04/flash-ticker-system, đây là link repo dự án cũ (gộp nhiều lại thành core-service) có thể đọc ở đây để them khảo khi thực hiện flow theo skill đã tạo”. | 2026-09-27 | Nguồn legacy; quyền đọc vẫn theo gate COMPARISON | `AGENTS.md`, `$govern-capstone-work`, `$flash-ticket-flow-research` | Giả định đường dẫn checkout local `D:/Project/flash-ticket-system` trong hướng dẫn agent/skill |
-
-Các đường dẫn `D:/Project/` trong hồ sơ khảo sát và bản ghi lịch sử giữ nguyên để truy nguồn máy đã khảo sát; chúng không xác nhận thư mục tồn tại trên máy hiện tại. Việc cập nhật đường dẫn không thay ranh giới, bất biến, yêu cầu, kiến trúc hoặc gate cách ly legacy.
-
-## Đồng bộ sequence trong image — 2026-10-03
-
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng hoặc trích dẫn yêu cầu | Ngày chốt | Gate áp dụng | File chịu ảnh hưởng | Thay thế quyết định |
-|---|---|---|---|---|---|---|---|---|---|
-| GOV-149 | Luồng khởi tạo thanh toán là Frontend → Booking đóng băng đơn → yêu cầu Payment tạo thanh toán; Frontend poll QR/URL ở Payment. | Hợp đồng phối hợp | `USER_CONFIRMED` | Lê Văn Minh | “Áp dụng cả hai theo hình”, trả lời điểm (1) đã trình ngày 03/10; image/UseCase Đặt Vé/Đặt vé.png bước 15–37. | 2026-10-03 | B13/B14, chi tiết v0.2 chờ rà/duyệt | B13, B14, B14-01, B15, readiness, chỉ mục/trạng thái; bảng đối chiếu ảnh | GOV-144 chỉ ở hướng start trực tiếp Payment/freeze đầu tiên do Payment gọi trong B13/B14-v0.1 |
-| GOV-150 | Nhánh phát hành thành công đi Ticket → Booking ghi đơn COMPLETED → báo Payment kết thúc Saga. | Hợp đồng phối hợp | `USER_CONFIRMED` | Lê Văn Minh | “Áp dụng cả hai theo hình”, trả lời điểm (2) đã trình ngày 03/10; image/UseCase Đặt Vé/Đặt vé.png bước 57–66. | 2026-10-03 | B13/B14, chi tiết v0.2 chờ rà/duyệt | B13, B14, B14-01, B15, readiness, chỉ mục/trạng thái; bảng đối chiếu ảnh | GOV-144 chỉ ở hướng Ticket success → Payment → Booking và thứ tự Saga trước order của B13/B14-v0.1 |
-
-**Phạm vi câu hỏi đã trình:** Payment vẫn điều phối Saga; các rule hết hạn, hủy, hoàn tiền và xử lý lặp giữ nguyên vì hình không mô tả những nhánh đó. Không đổi ADR-002, ownership/schema hoặc số service/Saga. Xác nhận hai luồng không phê duyệt toàn văn B13/B14/B15/READY-v0.2 hoặc từng tên route/message/field do agent chọn. Các chi tiết mới là `CANDIDATE`, tài liệu sửa là `REVIEW_READY`; QR payment lưu độc lập là `OPEN` B13-OPEN-01, owner Tuấn/Minh. Không gộp những diễn giải này vào phát biểu USER_CONFIRMED ở bảng.
-
-Bản đồ tác động và đối chiếu từng bước: [2026-10-03-image-docs-comparison.md](../evidence/use-case-diagrams/2026-10-03-image-docs-comparison.md). Lượt này chỉ sửa tài liệu, không sửa code, DDL hoặc môi trường. Những sửa có sẵn về workspace ngày 27/09 được giữ nguyên.
-
-## Lựa chọn login theme Keycloak — 2026-10-03
-
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng |
-|---|---|---|---|---|---|---|---|---|
-| GOV-151 | Chọn mẫu 3, Ticket Orange, cho login theme Keycloak. | Giao diện login | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời nguyên văn “3” sau ba mẫu login FlashTicket; [thiết kế](../superpowers/specs/2026-10-03-keycloak-ticket-orange-design.md) | 2026-10-03 | Triển khai theme trong phạm vi PRJ-032; không duyệt lại kiến trúc/luồng xác thực | deploy/keycloak/themes/flash-ticket/login/, deploy/Note.md, spec theme |
-
-Chi tiết CSS, token, version cache và kiểm chứng do agent triển khai theo lựa chọn trên, không gộp thành nội dung người dùng đã xác nhận. Không thay chính sách đăng ký, reset password hoặc Require SSL; không suy màu login thành quyết định màu toàn frontend.
-
-## Email xác minh Keycloak local — 2026-10-04
-
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng |
-|---|---|---|---|---|---|---|---|---|
-| GOV-152 | Giữ Verify email khi cấu hình SMTP để khôi phục đăng nhập admin. | Cấu hình xác minh email | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời “Giữ Verify email, cấu hình SMTP” khi lựa chọn phương án khôi phục | 2026-10-04 | Realm master local; không suy thành chính sách mọi realm/production | Runtime master, deploy/Note.md |
-| GOV-153 | Dùng Gmail với App Password cho SMTP Keycloak. | Nhà cung cấp email | `USER_CONFIRMED` | Người dùng trong phiên dev/son | Trả lời “Gmail với App Password”, sau đó “đã điền” để áp dụng credentials trong .env | 2026-10-04 | Cấu hình SMTP local; không thêm SPI hoặc thay luồng xác thực | deploy/.env (secret, ignored), deploy/.env.example, runtime master, deploy/Note.md |
-
-FACT kiểm chứng: Gmail SMTP STARTTLS/auth thành công; SMTP runtime khớp .env; client recovery tạm đã xóa; Verify email vẫn bật. Email admin vẫn chưa verified, nên không ghi đăng nhập Admin Console đã hoàn tất. Cấu hình không thay username/password hoặc gỡ VERIFY_EMAIL của tài khoản.
-
-## Kênh admin quản lý user — 2026-10-07
-
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng | Thay thế |
-|---|---|---|---|---|---|---|---|---|---|
-| GOV-154 | Admin quản lý user qua giao diện FlashTicket gọi User Service. | Kênh quản lý user | USER_CONFIRMED | Người dùng phiên dev/son | Trả lời nguyên văn “Giao diện FlashTicket gọi User Service” khi chọn kênh admin cho spec cấu hình Keycloak. | 2026-10-07 | Kênh giao diện; chưa phê duyệt thao tác/field CRUD, scope/role, client hoặc code cụ thể | docs/superpowers/specs/2026-10-07-keycloak-identity-configuration-design.md; hợp đồng User Service khi được duyệt | — |
-
-Phương án provisioning, cơ chế loại quyền BUYER khỏi machine, bộ client/audience và quyền Admin API trong spec là CANDIDATE của agent; không gộp chúng vào phát biểu USER_CONFIRMED ở trên. Spec DRAFT không thay trạng thái B12/B13 hoặc cho phép triển khai runtime.
-
-## Phạm vi cấu hình Keycloak hiện tại — 2026-10-07
-
-| ID | Nội dung quyết định | Loại | Trạng thái | Người chốt | Bằng chứng | Ngày chốt | Gate/phạm vi | File chịu ảnh hưởng | Thay thế |
-|---|---|---|---|---|---|---|---|---|---|
-| GOV-155 | Phạm vi hiện tại chỉ ở Keycloak; chưa code hoặc sửa các service FlashTicket. | Phạm vi triển khai hiện tại | USER_CONFIRMED | Người dùng phiên dev/son | Nguyên văn: “pham vi hiện tại sẽ chỉ là ở keycloak thôi, chưa code hay sửa ở các service flashticket”. | 2026-10-07 | Task cấu hình Keycloak hiện tại; không bỏ yêu cầu tích hợp đã duyệt | docs/superpowers/specs/2026-10-07-keycloak-identity-configuration-design.md | — |
-
-Spec KC-ID-v0.2 nhận phạm vi này: nghiệm thu ở Keycloak, các phụ thuộc frontend/Gateway/User Service và service-to-service để tích hợp sau. Chi tiết client/role/scope và cách provisioning vẫn CANDIDATE; GOV-155 không phê duyệt spec hoặc runtime configuration. GOV-154 giữ nguyên đích kênh admin tương lai.
-
-## Luồng đặt vé theo ảnh đính kèm ClickUp — 2026-10-29
-
-| ID | Nội dung quyết định | Trạng thái | Người chốt / bằng chứng | Phạm vi / thay thế |
-|---|---|---|---|---|
-| GOV-156 | FE bắt đầu thanh toán tại Payment; Payment lấy PurchaseSnapshot từ Booking. Ticket báo success về Payment; Payment báo Booking commit order COMPLETED; nhận xác nhận rồi Payment mới hoàn tất Saga. | USER_CONFIRMED | User phiên dev/son: “update lại lại nghiệp vụ cho tôi follow theo ảnh”; [ảnh ClickUp 61 bước](../evidence/use-case-diagrams/2026-10-29-clickup-booking-flow.md) đã đọc trực tiếp | Thay hướng phối hợp start/result GOV-149/150 trong luồng này. B13/B14/B15-v0.3 REVIEW_READY; không duyệt route/DTO/freeze/QR, Java, DDL hoặc runtime. |
-| GOV-157 | Bỏ API freeze riêng; gộp kiểm đơn + cố định tiền + trả PurchaseSnapshot trong một POST nội bộ Payment → Booking. Áp voucher vào order là request riêng; sau freeze không đổi tiền. | USER_CONFIRMED | User trả lời “xác nhận” ngày 29/10/2026 sau đề xuất gộp POST và ví dụ cạnh tranh voucher/thanh toán | Bổ sung GOV-156, chốt hướng B13-OPEN-02; tên route/class/method/query/test còn cần spec/plan và gate Shop App. Không duyệt code/DDL/runtime. |
-| GOV-158 | Giữ order theo giá/vé đã lưu, không hủy/chặn chỉ vì config tăng version; cố định tổng tiền/voucher khi Payment yêu cầu snapshot. Giữ quy tắc khóa cấu hình thương mại từ gửi duyệt, xử lý event hủy/order hết hạn riêng. | USER_CONFIRMED | User “ok, đồng ý hướng này, update vào spec rồi viết plan cho tôi” sau nghiên cứu và xác nhận thời điểm cố định tiền ngày 29/10/2026 | Thay đề xuất chặn mọi khác version trong spec v0.1; spec v0.2, plan v0.1 là nháp khai báo PENDING. Không suy ra duyệt class/method/test hoặc runtime. |
+| GOV-147 | Nguồn chính của nghiên cứu RCA là repo D:/RCA-flashticket. | Nguồn sự thật RCA | USER_CONFIRMED | Lê Văn Minh | “nếu cần thì xóa luôn phần RCA docs cũ đó, dự án hiện tại mới là nguồn chính” trong chat 09/11/2026. | 2026-11-09 | Luật, kế hoạch, quyết định và đầu ra nghiên cứu RCA | AGENTS.md, R0, các chỉ dẫn RCA hiện hành | Hiệu lực điều hành hiện tại của hồ sơ RCA cũ tại docs/research-rca/ |
+| GOV-148 | Minh duyệt gói dọn đã trình: lưu diff năm tệp RCA chưa commit vào docs/archive/rca-v1-uncommitted-2026-11-09.patch; xóa 20 Markdown cũ, giữ và viết lại README/R0; cập nhật chỉ dẫn liên quan. | Phạm vi sửa tài liệu | USER_CONFIRMED | Lê Văn Minh | “duyệt sửa như đề xuất” trong chat 09/11/2026, sau bảng phạm vi dọn và vị trí patch. | 2026-11-09 | Chỉ tài liệu RCA, luật và chỉ dẫn liên quan; không cấp quyền commit/push | docs/research-rca/, AGENTS.md, chỉ mục/quy trình/báo cáo liên quan | Bộ RCA cũ trong bản làm việc |
+| GOV-149 | Gói dọn tài liệu RCA không được ảnh hưởng các file nghiệp vụ. | Ràng buộc phạm vi | USER_CONFIRMED | Lê Văn Minh | “không ảnh hưởng đến các file nghiệp vụ nhé” trong chat 09/11/2026. | 2026-11-09 | Giữ nguyên mã, cấu hình, tài liệu miền/nghiệp vụ, schema, API, service/Saga và bất biến | Toàn bộ file ngoài phạm vi dọn | — |
