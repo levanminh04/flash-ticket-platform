@@ -10,7 +10,7 @@
 |---|---|
 | Mẫu báo cáo, số chương, chuẩn trích dẫn và UML bắt buộc | Khung báo cáo, Tầng C |
 | Cách diễn giải mục tiêu/đối tượng/phạm vi theo nhiệm vụ mới | A1–A6 bản 18/09 đang REVIEW_READY |
-| Bộ dữ liệu và thiết kế đánh giá phù hợp | A8/A9/A10 của bộ RCA; các điểm OPEN do giảng viên sở hữu chưa tự đóng |
+| Bộ dữ liệu và thiết kế đánh giá phù hợp | MRP/SPEC và các điểm OPEN hiện hành tại repo D:/RCA-flashticket; câu hỏi gửi cô lấy từ bản báo cáo hiện hành đã được Minh duyệt, không dùng A8/A9/A10 cũ |
 
 ### Tin nhắn dự thảo
 

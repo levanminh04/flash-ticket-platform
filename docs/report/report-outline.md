@@ -24,7 +24,7 @@ Trình bày nhiệm vụ DT18; mục tiêu/bằng chứng theo A3-v0.7, câu h�
 
 Kiến trúc phân tán, bất biến/nhất quán, xử lý lặp và phối hợp giao dịch; quan hệ log–trace–metrics; đồ thị phụ thuộc và giới hạn suy luận nhân quả; nhóm phương pháp phát hiện/chẩn đoán và độ đo phù hợp. Chỉ đưa lý thuyết thực sự dùng.
 
-Nguồn RCA hiện hành (22/09/2026): [Task A evidence map](../research-rca/task-a-ban-do-bang-chung-doc-lap.md), [Task B capability](../research-rca/task-b-dataset-capability-summary.md), [C Phase 2 decision lock](../research-rca/task-c-research-decision-lock.md) và [Master Research Program](../research-rca/MASTER-RESEARCH-PROGRAM.md). Các phiếu `docs/research-rca/A7-khai-niem-rca.md`, `docs/research-rca/A8-khao-sat-dataset.md`, `docs/research-rca/A9-do-do-thuc-nghiem.md`, `docs/research-rca/A10-khao-sat-phuong-phap.md` và E1 giữ nguồn nền/lịch sử đúng phiên bản; không thay protocol Task D. Nguồn chung tại `docs/research/source-register.md`.
+Nguồn RCA hiện hành (09/11/2026): [MRP](D:/RCA-flashticket/docs/MRP.md), [STATE](D:/RCA-flashticket/docs/STATE.md), [DECISIONS](D:/RCA-flashticket/docs/DECISIONS.md) và hồ sơ task/báo cáo kèm manifest ở repo RCA. Hồ sơ A7–A10/E1/Task A–G đã gỡ khỏi bản làm việc, chỉ tra lịch sử qua [README RCA](../research-rca/README.md). Sổ nguồn hệ thống tại `docs/research/source-register.md` không thay nguồn nghiên cứu hiện hành.
 
 ## Phân tích và thiết kế hệ thống
 
@@ -38,7 +38,7 @@ Nút là dịch vụ/thành phần; cạnh gọi, trao đổi thông điệp ho�
 
 ## Giám sát và chẩn đoán
 
-Xác định vùng ảnh hưởng, phát hiện bất thường, xếp hạng thành phần khả nghi; chỉ rõ bằng chứng và giới hạn. C1 là câu hỏi chính đã khóa; cơ chế cụ thể sẽ đặc tả ở Task D, không lấy proposal MyRCA lịch sử làm phương pháp đã chọn. C3/C4 vẫn là chủ đề thiết kế/ablation hỗ trợ; detection và giải thích là năng lực bắt buộc, đánh giá theo ground truth thực có. Lớp giải thích kế thừa RES-034 nhận kết quả đã xếp hạng; quyền chỉ đọc được thực thi thật. Không cam kết bỏ tái hiện lỗi, không tự kết luận nguyên nhân cuối cùng, không tự sửa nghiệp vụ.
+Xác định vùng ảnh hưởng, phát hiện bất thường, xếp hạng thành phần khả nghi; chỉ rõ bằng chứng và giới hạn. Câu hỏi nghiên cứu, thiết kế, cấu hình và phạm vi kết luận lấy từ MRP/SPEC/quyết định và kết quả hiện hành ở repo RCA; không dùng C1/C3/C4 hoặc Task D của chương trình cũ để chốt phương pháp. Lớp giải thích nhận kết quả đã xếp hạng; quyền chỉ đọc được thực thi thật. Không cam kết bỏ tái hiện lỗi, không tự kết luận nguyên nhân cuối cùng, không tự sửa nghiệp vụ.
 
 ## Hiện thực và giao diện minh họa
 
@@ -60,7 +60,7 @@ Thành phần thực sự đã xây, tích hợp và kiểm; giao diện minh h�
 - Đối chứng cùng điều kiện và mức sàn phù hợp tập ứng viên; kiểm ảnh hưởng đồ thị và từng nguồn dữ liệu, không chọn cấu hình trên tập test cuối.
 - Phân tích kết quả hiệu quả, thất bại, thiếu dữ liệu; runtime/tài nguyên chỉ báo khi đã đo.
 
-Nguồn kết quả RCA về sau: run/manifest G/H/I và bảng claim-to-evidence Task J theo Master; hiện chưa nhận các task đó đã chạy. E1 là kiểm định lịch sử 990 dòng kết quả, không phải 990 sự cố FlashTicket và không chứng minh phương pháp hiện tại đã đạt. Không chấm operation-root/affected-node accuracy trên RE2-TT khi thiếu ground truth.
+Nguồn kết quả RCA là báo cáo, đính chính, file kết quả và manifest của từng task trong repo D:/RCA-flashticket; kiểm toàn vẹn và phạm vi quyết định trước khi trích. Tách dữ liệu công khai với FlashTicket, kết quả của bản khóa với kết quả sửa sau khi xem dữ liệu. Không dùng E1 hoặc lộ trình G/H/I/J cũ làm kết quả hiện hành; không chấm mức operation hoặc vùng khi thiếu nhãn tương ứng.
 
 ## Kết luận, giới hạn và đóng góp
 

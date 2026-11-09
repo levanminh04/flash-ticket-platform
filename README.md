@@ -6,7 +6,7 @@
 
 ## Nhóm và ưu tiên
 
-Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead giai đoạn đầu và phụ trách chính RCA. Phân công chi tiết chỉ lấy tại [phạm vi phụ trách](docs/project/roles.md).
+Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**. Phân công chi tiết chỉ lấy tại [phạm vi phụ trách](docs/project/roles.md).
 
 **Luồng chính chạy đúng → dữ liệu quan sát dùng được → thử tải/mô phỏng lỗi và RCA. Mobile là phần phụ, chỉ làm khi thực sự thừa thời gian.**
 
@@ -32,33 +32,9 @@ Nhóm gồm **Minh, Sơn, Tuấn, Tuyến**; Nhật đã rời nhóm. Minh lead 
 
 Mọi bí mật nằm ngoài Git. Các nguồn lịch sử giữ ngày và hiệu lực; không dùng tên/nhóm/phân công cũ thay nguồn 18/09.
 
-## Cấu hình môi trường local
+## Nguồn nghiên cứu RCA
 
-Mỗi ứng dụng có một file env riêng nằm cạnh source, tạo từ `.env.example` cùng thư mục:
-
-| File | Dùng cho |
-|---|---|
-| `infrastructure/{api-gateway,discovery-server}/.env` | Gateway, Eureka |
-| `services/{event,user,booking,payment,ticket}-service/.env` | Từng service nghiệp vụ |
-| `.env` ở thư mục gốc | Chỉ hạ tầng (PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak), frontend `VITE_*` và vài biến dùng chung |
-
-Người phụ trách service nào chỉ sửa `.env.example` của service đó. Mọi file `.env` thật bị Git
-bỏ qua; chỉ commit `.env.example`. Giá trị dùng chung (RabbitMQ, Keycloak) được lặp lại có chủ
-đích trong từng file để mỗi service chỉ thấy secret của chính nó.
-
-Spring không tự đọc `.env`; khi chạy từ IDE, nạp file `.env` của đúng service đó.
-`deploy/docker-compose.integration.local.yml` tự nạp từng file qua `env_file`.
-Compose hạ tầng chạy từ thư mục gốc vẫn truyền rõ `--env-file .env`, ví dụ:
-
-```powershell
-docker compose --env-file .env -f deploy/docker-compose.postgresql.yml up -d --wait postgres
-```
-
-Keycloak dùng chung trên server FT84 cho cả test và dev; không cần chạy Keycloak local.
-
-Mật khẩu kết nối ứng dụng (`<SERVICE>_DB_PASSWORD`) phải khớp mật khẩu quản trị
-được khởi tạo (`<SERVICE>_DB_ADMIN_PASSWORD`) trong cùng file. Thay đổi các biến
-khởi tạo không cập nhật tài khoản hoặc database đã tồn tại trong volume.
+Nguồn chính là [D:/RCA-flashticket](D:/RCA-flashticket): đọc [AGENTS](D:/RCA-flashticket/AGENTS.md), [STATE](D:/RCA-flashticket/docs/STATE.md), [MRP](D:/RCA-flashticket/docs/MRP.md) và [DECISIONS](D:/RCA-flashticket/docs/DECISIONS.md) tại đó. `docs/research-rca/` chỉ giữ [README](docs/research-rca/README.md) và [R0](docs/research-rca/R0-boi-canh-va-rang-buoc.md) làm cửa bàn giao; hồ sơ nghiên cứu cũ đã được gỡ theo phạm vi Minh duyệt 09/11/2026. Bản dọn không đổi nghiệp vụ hoặc thiết kế kỹ thuật.
 
 ## Build và CI
 
