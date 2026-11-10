@@ -1189,7 +1189,7 @@ class EventFlowTests {
 
   @Test
   void classificationMustStillBeFreshAfterWaitingForParentLockRollback() throws Exception {
-    var event = service.create("a", draft("Waiting cancellation"));
+    var event = publishForCancellation("Waiting cancellation");
     var locked = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     var read = new CountDownLatch(1);
@@ -1247,7 +1247,7 @@ class EventFlowTests {
                         post("/api/v1/organizer/events/" + event.eventId() + "/cancel")
                             .with(actor("a", "ORGANIZER"))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"rowVersion\":\"0\"}")));
+                            .content("{\"rowVersion\":\"" + event.rowVersion() + "\"}")));
         assertThat(read.await(5, TimeUnit.SECONDS)).isTrue();
         Thread.sleep(1200);
         release.countDown();
@@ -1260,7 +1260,7 @@ class EventFlowTests {
         holder.get(10, TimeUnit.SECONDS);
       }
     }
-    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo("0");
+    assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo(event.rowVersion());
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
