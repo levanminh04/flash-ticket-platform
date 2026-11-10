@@ -41,6 +41,12 @@ const collections = [
       ['_id', 'identitySubject', 'organizationName', 'shortDescription', 'status', 'createdAt', 'updatedAt', 'version'],
       {
         ...metadata, identitySubject: text, organizationName: text, shortDescription: text,
+        contactEmail: { bsonType: 'string', maxLength: 254, pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$' },
+        contactPhone: { bsonType: 'string', pattern: '^\\+84[0-9]{9,10}$' },
+        websiteUrl: { bsonType: 'string', maxLength: 500, pattern: '^https://\\S+$' },
+        socialPageUrl: { bsonType: 'string', maxLength: 500, pattern: '^https://\\S+$' },
+        headquartersAddress: { ...text, maxLength: 500 },
+        taxCode: { bsonType: 'string', pattern: '^[0-9]{10}([0-9]{2}|-?[0-9]{3})?$' },
         status: { enum: ['PENDING', 'ACTIVE', 'REJECTED'] },
         rejectionReason: text, decidedBySubject: text, decidedAt: date, roleGrant
       },
