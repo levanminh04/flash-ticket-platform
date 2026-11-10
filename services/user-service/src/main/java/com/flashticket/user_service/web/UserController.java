@@ -5,10 +5,10 @@ import static com.mongodb.client.model.Updates.unset;
 
 import com.flashticket.user_service.domain.UserModels.*;
 import com.flashticket.user_service.persistence.UserStore;
+import com.flashticket.user_service.service.OrganizerImages;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -16,7 +16,6 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import javax.imageio.ImageIO;
 import org.bson.conversions.Bson;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,9 +34,16 @@ public class UserController {
       @NotBlank @Size(max = 2000) String shortDescription) {}
 
   private final UserStore store;
+  private final OrganizerImages images;
 
   public UserController(UserStore store) {
+    this(store, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public UserController(UserStore store, OrganizerImages images) {
     this.store = store;
+    this.images = images;
   }
 
   @GetMapping("/api/v1/me")
@@ -83,50 +89,11 @@ public class UserController {
   @PutMapping(path = "/api/v1/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public UserProfile uploadAvatar(
       @AuthenticationPrincipal Jwt jwt, @RequestParam("file") MultipartFile file) {
-    if (file.isEmpty() || file.getSize() > 2 * 1024 * 1024) throw invalidAvatar();
-    try (var stream = new javax.imageio.stream.MemoryCacheImageInputStream(file.getInputStream())) {
-      var readers = ImageIO.getImageReaders(stream);
-      if (!readers.hasNext()) throw invalidAvatar();
-      var reader = readers.next();
-      try {
-        if (!List.of("jpeg", "png")
-            .contains(reader.getFormatName().toLowerCase(java.util.Locale.ROOT)))
-          throw invalidAvatar();
-        reader.setInput(stream, true, true);
-        if (reader.getWidth(0) > 2048 || reader.getHeight(0) > 2048) throw invalidAvatar();
-        var original = reader.read(0);
-        int size = Math.min(256, Math.min(original.getWidth(), original.getHeight()));
-        var avatar =
-            new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_RGB);
-        int side = Math.min(original.getWidth(), original.getHeight());
-        int x = (original.getWidth() - side) / 2;
-        int y = (original.getHeight() - side) / 2;
-        var graphics = avatar.createGraphics();
-        try {
-          graphics.drawImage(original, 0, 0, size, size, x, y, x + side, y + side, null);
-        } finally {
-          graphics.dispose();
-        }
-        var output = new java.io.ByteArrayOutputStream();
-        ImageIO.write(avatar, "jpeg", output);
-        String url =
-            "data:image/jpeg;base64,"
-                + java.util.Base64.getEncoder().encodeToString(output.toByteArray());
-        String subject = subject(jwt);
-        store.ensureUser(subject, displayName(jwt));
-        return withEmail(
-            store.updateProfile(subject, new ArrayList<>(List.of(set("avatarUrl", url)))), jwt);
-      } finally {
-        reader.dispose();
-      }
-    } catch (IOException ex) {
-      throw invalidAvatar();
-    }
-  }
-
-  private static UserException invalidAvatar() {
-    return new UserException(
-        400, "INVALID_AVATAR", "Use JPEG or PNG up to 2 MB and 2048 pixels per side");
+    String subject = subject(jwt);
+    store.ensureUser(subject, displayName(jwt));
+    String url = images.upload(file, "avatar");
+    return withEmail(
+        store.updateProfile(subject, new ArrayList<>(List.of(set("avatarUrl", url)))), jwt);
   }
 
   private static UserException invalidProfile() {

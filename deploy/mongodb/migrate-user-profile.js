@@ -15,7 +15,7 @@ Object.assign(schema.properties, {
   dateOfBirth: { bsonType: 'string', pattern: '^[0-9]{2}-[0-9]{2}-[0-9]{4}$' },
   address: { bsonType: 'string', maxLength: 500, pattern: '\\S' },
   phoneNumber: { bsonType: 'string', pattern: '^\\+84[0-9]{9}$' },
-  avatarUrl: { bsonType: 'string', maxLength: 100000, pattern: '^data:image/jpeg;base64,[A-Za-z0-9+/]+=*$' },
+  avatarUrl: { bsonType: 'string', maxLength: 2048, pattern: '^https://res\\.cloudinary\\.com/' },
 });
 const result = target.runCommand({ collMod: name, validator: info.options.validator });
 if (result.ok !== 1) throw new Error('Could not update the user profile validator.');

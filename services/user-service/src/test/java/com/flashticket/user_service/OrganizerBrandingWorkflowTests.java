@@ -128,4 +128,18 @@ class OrganizerBrandingWorkflowTests {
         .andExpect(status().isBadRequest());
     assertThat(UPLOADS).hasValue(0);
   }
+
+  @Test
+  void uploadAvatarSavesCloudinaryUrlInUserProfile() throws Exception {
+    mvc.perform(
+            multipart(org.springframework.http.HttpMethod.PUT, "/api/v1/me/avatar")
+                .file(image())
+                .with(
+                    jwt()
+                        .jwt(j -> j.subject("user-sub"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_BUYER"))))
+        .andExpect(status().isOk());
+    assertThat(store.user("user-sub").avatarUrl())
+        .isEqualTo("https://res.cloudinary.com/test/image/upload/image.png");
+  }
 }
