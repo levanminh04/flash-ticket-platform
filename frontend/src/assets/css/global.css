@@ -1,86 +1,3 @@
-:root {
-  /* Vàng là màu hành động; chữ trên nền trắng dùng biến ink đậm hơn. */
-  --brand: #cc9900;
-  --brand-hover: #dfb329;
-  --brand-active: #b88b00;
-  --brand-ink: #805c00;
-  --brand-soft: #fff4cc;
-  --brand-on-dark: #f4d773;
-  --on-brand: #1b1d21;
-  --primary: var(--brand);
-  --primary-light: var(--brand-soft);
-  --primary-dark: var(--brand-ink);
-  --canvas-dark: #1d1e22;
-  --surface-dark: #282a30;
-  --text-on-dark: #f8fafc;
-  --text-secondary-on-dark: #d1d3d8;
-  --border-dark: #5c606b;
-  --focus-ring: #805c00;
-  --disabled-surface: #e9e9e5;
-  --disabled-ink: #60646d;
-  --radius-card: 12px;
-  --radius-control: 8px;
-
-  /* Three-zone page gradients */
-  --page-gradient-discovery:
-    radial-gradient(circle at top center, rgba(92, 228, 155, 0.24), transparent 24%),
-    linear-gradient(
-      180deg,
-      #08281d 0%,
-      #16533a 34%,
-      #d8f4e4 70%,
-      #f8fafc 100%
-    );
-  --page-gradient-booking:
-    radial-gradient(circle at top right, rgba(45, 194, 117, 0.2), transparent 26%),
-    linear-gradient(
-      180deg,
-      #0a1d29 0%,
-      #135164 34%,
-      #d9f1ee 70%,
-      #f8fafc 100%
-    );
-  --page-gradient-account:
-    radial-gradient(circle at top left, rgba(45, 194, 117, 0.18), transparent 24%),
-    linear-gradient(
-      180deg,
-      #0f172a 0%,
-      #214e43 34%,
-      #e5f5ec 70%,
-      #f8fafc 100%
-    );
-
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
-
-  --bg-main: #f8fafc; /* Very light blue-gray */
-  --bg-card: #ffffff;
-  --bg-input: #f1f5f9;
-
-  --text-primary: #202126;
-  --text-secondary: #555b65;
-  --text-muted: #666b74;
-
-  --border: #e2e8f0; /* Slate 200 */
-
-  /* Smooth Radii */
-  --radius-sm: 12px;
-  --radius-md: 24px; /* Increased for softer "box" look */
-  --radius-lg: 32px;
-  --radius-full: 9999px; /* Pill shape */
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg:
-    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl:
-    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-
-  --font-family: "Inter", system-ui, -apple-system, sans-serif;
-}
-
 * {
   margin: 0;
   padding: 0;
@@ -183,11 +100,6 @@ a:hover {
   box-shadow: none;
   cursor: not-allowed;
   transform: none;
-}
-
-::selection {
-  background: var(--brand-soft);
-  color: var(--on-brand);
 }
 
 .btn-outline {

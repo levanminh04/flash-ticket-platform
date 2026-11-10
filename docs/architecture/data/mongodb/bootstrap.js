@@ -13,8 +13,8 @@ for (const collection of spec.collections) {
     validator: collection.validator, validationLevel: 'strict', validationAction: 'error'
   });
   if (result.ok !== 1) throw new Error(`Could not create ${collection.name}.`);
-  for (const { key, name, unique } of collection.indexes) {
-    db.getCollection(collection.name).createIndex(key, { name, unique });
+  for (const { key, ...options } of collection.indexes) {
+    db.getCollection(collection.name).createIndex(key, options);
   }
 }
 print(`Created ${spec.collections.length} candidate collections in ${databaseName}; no fixture data or credentials added.`);

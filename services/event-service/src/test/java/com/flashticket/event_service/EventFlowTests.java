@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.flashticket.event_service.api.CancellationCommands;
 import com.flashticket.event_service.api.EventCommands;
+import com.flashticket.event_service.api.EventViews;
 import com.flashticket.event_service.application.CancellationTransactions;
 import com.flashticket.event_service.application.EventService;
 import com.flashticket.event_service.integration.EventSummaries;
@@ -716,22 +717,45 @@ class EventFlowTests {
   }
 
   @Test
+  void organizerCancelsPendingApprovalWithoutPaymentSummary() throws Exception {
+    var event = service.create("a", draft("Pending cancellation"));
+    var submitted = service.submit(event.eventId(), "a", event.rowVersion());
+    mvc.perform(
+            post("/api/v1/organizer/events/" + submitted.eventId() + "/cancel")
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"" + submitted.rowVersion() + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("CANCELLED"));
+    verify(summaries, never()).financial(eq(submitted.eventId()), eq("a"), eq(true));
+  }
+
+  private EventViews.Owner publishForCancellation(String title) {
+    var created = service.create("a", draft(title));
+    var submitted = service.submit(created.eventId(), "a", created.rowVersion());
+    var approved =
+        service.approve(
+            created.eventId(), "admin", new EventCommands.Approval(submitted.rowVersion(), "0.1"));
+    return service.publish(created.eventId(), "a", approved.rowVersion());
+  }
+
+  @Test
   void directCancellationRequiresRealSummaryAndRechecksVersionAfterHttp() throws Exception {
-    var event = service.create("a", draft("Direct"));
+    var event = publishForCancellation("Direct");
     String path = "/api/v1/organizer/events/" + event.eventId() + "/cancel";
     mvc.perform(
             post(path)
                 .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"rowVersion\":\"0\"}"))
+                .content("{\"rowVersion\":\"" + event.rowVersion() + "\"}"))
         .andExpect(status().isServiceUnavailable());
-    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("DRAFT");
+    assertThat(service.readOwned(event.eventId(), "a").status()).isEqualTo("PUBLISHED");
     collected(event.eventId(), true);
     mvc.perform(
             post(path)
                 .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"rowVersion\":\"0\"}"))
+                .content("{\"rowVersion\":\"" + event.rowVersion() + "\"}"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CANCELLATION_REQUEST_REQUIRED"));
     collected(event.eventId(), false);
@@ -739,16 +763,16 @@ class EventFlowTests {
             post(path)
                 .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"rowVersion\":\"0\"}"))
+                .content("{\"rowVersion\":\"" + event.rowVersion() + "\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("CANCELLED"));
     mvc.perform(
             post(path)
                 .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"rowVersion\":\"0\"}"))
+                .content("{\"rowVersion\":\"" + event.rowVersion() + "\"}"))
         .andExpect(status().isOk());
-    var racing = service.create("a", draft("Race"));
+    var racing = publishForCancellation("Race");
     doAnswer(
             call -> {
               assertThat(
@@ -776,10 +800,10 @@ class EventFlowTests {
             post("/api/v1/organizer/events/" + racing.eventId() + "/cancel")
                 .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"rowVersion\":\"0\"}"))
+                .content("{\"rowVersion\":\"" + racing.rowVersion() + "\"}"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("STALE_EVENT_VERSION"));
-    assertThat(service.readOwned(racing.eventId(), "a").status()).isEqualTo("DRAFT");
+    assertThat(service.readOwned(racing.eventId(), "a").status()).isEqualTo("PUBLISHED");
   }
 
   @Test
@@ -789,8 +813,8 @@ class EventFlowTests {
         "UPDATE event_schema.tbl_events SET starts_at=now()-interval '1 hour',checkin_starts_at=now()-interval '1 hour' WHERE id=?",
         event.eventId());
     mvc.perform(
-            post("/api/v1/admin/events/" + event.eventId() + "/cancel")
-                .with(actor("admin", "ADMIN"))
+            post("/api/v1/organizer/events/" + event.eventId() + "/cancel")
+                .with(actor("a", "ORGANIZER"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rowVersion\":\"0\"}"))
         .andExpect(status().isConflict())

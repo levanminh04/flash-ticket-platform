@@ -28,7 +28,10 @@ const collections = [
   {
     name: 'users',
     validator: { $jsonSchema: closed(['_id', 'identitySubject', 'createdAt', 'updatedAt', 'version'], {
-      ...metadata, identitySubject: text, displayName: text
+      ...metadata, identitySubject: text, displayName: text, dateOfBirth: { bsonType: "string", pattern: "^[0-9]{2}-[0-9]{2}-[0-9]{4}$" },
+      address: { ...text, maxLength: 500 },
+      phoneNumber: { bsonType: "string", pattern: "^\\+84[0-9]{9}$" },
+      avatarUrl: { bsonType: "string", maxLength: 100000, pattern: "^data:image/jpeg;base64,[A-Za-z0-9+/]+=*$" }
     }) },
     indexes: [index({ identitySubject: 1 }, 'uq_users_identity_subject', true)]
   },
@@ -61,7 +64,11 @@ const collections = [
       }
     ) },
     indexes: [
-      index({ identitySubject: 1 }, 'uq_application_identity_subject', true),
+      {
+        ...index({ identitySubject: 1 }, 'uq_application_open_subject', true),
+        partialFilterExpression: { status: { $in: ['PENDING', 'ACTIVE'] } }
+      },
+      index({ identitySubject: 1, _id: 1 }, 'ix_application_subject_cursor'),
       index({ status: 1, createdAt: 1 }, 'ix_application_review_queue')
     ]
   },

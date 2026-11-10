@@ -1,959 +1,243 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import { useKeycloak } from "@react-keycloak/web";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
-import Chart from "react-apexcharts";
 import { Link } from "react-router-dom";
-import {
-  CalendarClock,
-  Edit,
-  Eye,
-  ImagePlus,
-  LoaderCircle,
-  Search,
-  Ticket,
-  Trash2,
-} from "lucide-react";
-import { ApexOptions } from "apexcharts";
-import { FaCalendarCheck, FaFileSignature } from "react-icons/fa6";
-import { CgPushUp } from "react-icons/cg";
-import { HiBadgeCheck } from "react-icons/hi";
-import { HiTicket } from "react-icons/hi2";
+import { Clock } from "lucide-react";
+import OrganizerLayout from "../../components/organizer/OrganizerLayout";
+import { organizerDashboardService, organizerEventStatuses, OrganizerSummary } from "../../services/organizerDashboardService";
+import { useOrganizerGate } from "./useOrganizerGate";
+import { confirmDestructiveAction } from "../../lib/swal";
 import { toast } from "react-toastify";
 import Swal from "sweetalert2";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
-import AppPagination from "../../components/common/AppPagination";
-import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import { confirmDestructiveAction } from "../../lib/swal";
-import {
-  organizerWorkspaceService,
-  OrganizerEventDetail,
-} from "../../services/organizerWorkspaceService";
-import { SpringPage } from "../../types/api";
-import {
-  formatDateTime,
-  getEventEstimatedRevenue,
-  getEventTicketCapacity,
-  getEventTicketsSold,
-} from "./organizerWorkspaceUtils";
-import { useOrganizerGate } from "./useOrganizerGate";
+import { cancellationService } from "../../services/cancellationService";
 
-const PAGE_SIZE = 10;
-const ANALYTICS_PAGE_SIZE = 100;
+type Action = "submit" | "publish" | "cancel";
 
-type EventListFilter = "all" | "published" | "draft" | "sold_out" | "cancelled";
-type EventStatusKey = "DRAFT" | "PUBLISHED" | "SOLD_OUT" | "CANCELLED" | "OTHER";
-type TranslationFn = (key: string) => string;
-
-const eventListFilters: Array<{ value: EventListFilter; label: string }> = [
-  { value: "all", label: "common.all" },
-  { value: "published", label: "status.published" },
-  { value: "draft", label: "status.draft" },
-  { value: "sold_out", label: "status.soldOut" },
-  { value: "cancelled", label: "status.cancelled" },
-];
-
-const eventStatusMeta: Record<EventStatusKey, { label: string; className: string }> = {
-  DRAFT: { label: "status.draft", className: "is-draft" },
-  PUBLISHED: { label: "status.published", className: "is-published" },
-  SOLD_OUT: { label: "status.soldOut", className: "is-sold-out" },
-  CANCELLED: { label: "status.cancelled", className: "is-cancelled" },
-  OTHER: { label: "status.other", className: "is-draft" },
-};
-
-function numberFormat(value: number | null | undefined, language: string): string {
-  return Number(value ?? 0).toLocaleString(language === "en" ? "en-US" : "vi-VN");
-}
-
-function currencyFormat(value: number, language: string): string {
-  return `${Math.round(value).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
-}
-
-function getEventStatus(status?: string): EventStatusKey {
-  if (
-    status === "DRAFT" ||
-    status === "PUBLISHED" ||
-    status === "SOLD_OUT" ||
-    status === "CANCELLED"
-  ) {
-    return status;
-  }
-  return "OTHER";
-}
-
-function getFilterStatus(filter: EventListFilter): EventStatusKey | null {
-  if (filter === "published") return "PUBLISHED";
-  if (filter === "draft") return "DRAFT";
-  if (filter === "sold_out") return "SOLD_OUT";
-  if (filter === "cancelled") return "CANCELLED";
-  return null;
-}
-
-function getEventStartTime(event: OrganizerEventDetail): number {
-  const value = event.schedule?.startDatetime;
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function getMonthLabel(time: number): string {
-  const date = new Date(time);
-  return `T${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
-}
-
-function getVenueLabel(event: OrganizerEventDetail, t: TranslationFn) {
-  if (event.isOnline) return t("organizerEvents.onlineEvent");
-  const parts = [
-    event.venue?.name,
-    event.venue?.address,
-    event.venue?.city,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : t("organizerEvents.noVenue");
-}
-
-function isPastDate(value?: string | null): boolean {
-  if (!value) return false;
-  const time = new Date(value).getTime();
-  return !Number.isNaN(time) && time < Date.now();
-}
-
-function isTicketSaleExpired(event: OrganizerEventDetail): boolean {
-  if (isPastDate(event.schedule?.saleEndDatetime)) return true;
-
-  const ticketSaleEnds =
-    event.ticketTypes
-      ?.map((ticketType) => ticketType.saleEndDatetime)
-      .filter(Boolean) ?? [];
-
-  return ticketSaleEnds.length > 0 && ticketSaleEnds.every((value) => isPastDate(value));
-}
-
-function getSetupItems(event: OrganizerEventDetail, t: TranslationFn) {
-  const items: Array<{ label: string; className: string }> = [];
-  if (!event.images?.length) {
-    items.push({ label: t("organizerEvents.missingImage"), className: "is-warning" });
-  }
-  if (!event.ticketTypes?.length) {
-    items.push({ label: t("organizerEvents.missingTicket"), className: "is-danger" });
-  }
-  if (isPastDate(event.schedule?.endDatetime)) {
-    items.push({ label: t("organizerEvents.eventTimeExpired"), className: "is-danger" });
-  }
-  if (isTicketSaleExpired(event)) {
-    items.push({ label: t("organizerEvents.ticketSaleExpired"), className: "is-warning" });
-  }
-  if (items.length === 0) {
-    items.push({
-      label: event.status === "PUBLISHED" ? t("organizerEvents.onSale") : t("organizerEvents.ready"),
-      className: "is-success",
-    });
-  }
-  return items;
-}
-
-function getEventOccupancy(event: OrganizerEventDetail): number {
-  const capacity = getEventTicketCapacity(event);
-  return capacity > 0
-    ? Math.min(Math.round((getEventTicketsSold(event) / capacity) * 100), 100)
-    : 0;
-}
-
-function pickEventCover(event: OrganizerEventDetail) {
-  return (
-    event.images?.find((image) => image.type === "BANNER")?.url ||
-    event.images?.find((image) => image.type === "POSTER")?.url ||
-    event.images?.find((image) => image.type === "THUMBNAIL")?.url ||
-    event.images?.find((image) => image.isPrimary)?.url ||
-    event.images?.[0]?.url ||
-    ""
-  );
-}
-
-function filterEvents(events: OrganizerEventDetail[], keyword: string) {
-  const normalizedKeyword = keyword.trim().toLowerCase();
-  if (!normalizedKeyword) return events;
-
-  return events.filter((event) => {
-    const values = [
-      event.title,
-      event.slug,
-      event.shortDescription,
-      event.venue?.name,
-      event.venue?.city,
-      event.status,
-    ];
-
-    return values.some((value) =>
-      String(value ?? "")
-        .toLowerCase()
-        .includes(normalizedKeyword),
-    );
+function EventList({ subject, issuer }: { subject: string; issuer?: string }) {
+  const { t, i18n } = useTranslation();
+  const { keycloak } = useKeycloak();
+  const client = useQueryClient();
+  const [status, setStatus] = useState<OrganizerSummary["status"] | "">("");
+  const [search, setSearch] = useState("");
+  const [message, setMessage] = useState<"success" | "error" | null>(null);
+  const scope = ["organizer-event-list", issuer, subject];
+  const events = useInfiniteQuery({
+    queryKey: [...scope, status],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => organizerDashboardService.events(pageParam, signal, status || undefined),
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    retry: false,
   });
-}
+  const mutation = useMutation({
+    mutationFn: ({ event, action }: { event: OrganizerSummary; action: Action }) =>
+      organizerDashboardService.transition(event.eventId, action, event.rowVersion),
+    onSuccess: async () => {
+      setMessage("success");
+      await Promise.all([
+        client.invalidateQueries({ queryKey: scope }),
+        client.invalidateQueries({ queryKey: ["organizer-dashboard-events", issuer, subject] }),
+      ]);
+    },
+    onError: () => {
+      setMessage("error");
+      void client.invalidateQueries({ queryKey: scope });
+    },
+  });
 
-async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
-  const firstPage = await organizerWorkspaceService.getMyEvents(
-    0,
-    ANALYTICS_PAGE_SIZE,
-    "createdAt,desc",
+  async function handleRequestCancellation(event: OrganizerSummary) {
+    const result = await Swal.fire({
+      title: t("organizerEvents.cancelRequestTitle", "Yêu cầu hủy sự kiện"),
+      html: `<p style="color: #64748b; font-size: 14px; margin-bottom: 12px;">Sự kiện: <strong>${event.title}</strong><br/>Vì sự kiện đã mở bán vé, yêu cầu hủy cần được Quản trị viên phê duyệt trước khi tiến hành hoàn tiền cho khán giả.</p>`,
+      input: "textarea",
+      inputLabel: t("organizerEvents.cancelRequestReasonLabel", "Lý do hủy sự kiện (bắt buộc):"),
+      inputPlaceholder: t("organizerEvents.cancelRequestPlaceholder", "Nhập lý do chi tiết (VD: Điều kiện thời tiết bất khả kháng, nghệ sĩ gặp sự cố sức khỏe...)..."),
+      showCancelButton: true,
+      confirmButtonText: t("organizerEvents.cancelRequestConfirm", "Gửi yêu cầu hủy"),
+      cancelButtonText: t("adminOrganizer.rejectCancel", "Hủy bỏ"),
+      confirmButtonColor: "#dc2626",
+      inputValidator: (val) => {
+        if (!val || !val.trim()) {
+          return t("organizerEvents.cancelRequestReasonRequired", "Vui lòng nhập lý do hủy sự kiện!");
+        }
+        return null;
+      },
+    });
+
+    if (result.isConfirmed && result.value) {
+      const reason = result.value.trim();
+      try {
+        await cancellationService.requestCancellation(event.eventId, event.rowVersion, reason);
+        toast.success(t("organizerEvents.cancelRequestSuccess", "Đã gửi yêu cầu hủy sự kiện tới Quản trị viên."));
+        void client.invalidateQueries({ queryKey: ["organizer-cancellation-requests-pending"] });
+        void client.invalidateQueries({ queryKey: scope });
+      } catch (err: unknown) {
+        const errCode = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+        if (errCode === "CANCELLATION_REQUEST_PENDING") {
+          toast.info(t("organizerEvents.alreadyPending", "Sự kiện này đã có yêu cầu hủy đang chờ Quản trị viên phê duyệt."));
+          void client.invalidateQueries({ queryKey: ["organizer-cancellation-requests-pending"] });
+          return;
+        }
+        if (errCode === "DIRECT_CANCELLATION_AVAILABLE") {
+          const directConfirm = await Swal.fire({
+            title: t("organizerEvents.directCancelTitle", "Sự kiện chưa có người mua vé"),
+            text: t("organizerEvents.directCancelText", "Sự kiện này chưa có khán giả nào mua vé nên không cần gửi Quản trị viên duyệt hoàn tiền. Bạn có muốn hủy trực tiếp sự kiện ngay bây giờ không?"),
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: t("eventsV1.cancel", "Hủy sự kiện ngay"),
+            cancelButtonText: t("adminOrganizer.rejectCancel", "Đóng"),
+            confirmButtonColor: "#dc2626",
+          });
+          if (directConfirm.isConfirmed) {
+            mutation.mutate({ event, action: "cancel" });
+          }
+          return;
+        }
+        const msg =
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          t("organizerEvents.cancelRequestFailed", "Không thể gửi yêu cầu hủy. Vui lòng thử lại.");
+        toast.error(msg);
+      }
+    }
+  }
+  const rows = events.data?.pages.flatMap(page => page.items) ?? [];
+  const visible = rows.filter(event => event.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+
+  const pendingRequestsQuery = useQuery({
+    queryKey: ["organizer-cancellation-requests-pending", rows.map((e) => e.eventId).join(",")],
+    queryFn: async () => {
+      const publishedEvents = rows.filter((e) => e.status === "PUBLISHED");
+      const results = await Promise.allSettled(
+        publishedEvents.map((e) => cancellationService.getOrganizerCancellationHistory(e.eventId, 5)),
+      );
+      const pendingSet = new Set<string>();
+      results.forEach((res, index) => {
+        if (res.status === "fulfilled") {
+          const hasPending = res.value.items?.some((req) => req.status === "PENDING");
+          if (hasPending) {
+            pendingSet.add(publishedEvents[index].eventId);
+          }
+        }
+      });
+      return pendingSet;
+    },
+    enabled: rows.some((e) => e.status === "PUBLISHED"),
+    staleTime: 10000,
+  });
+
+  const pendingCancellationEventIds = pendingRequestsQuery.data ?? new Set<string>();
+
+  async function act(event: OrganizerSummary, action: Action) {
+    if (mutation.isPending) return;
+    if (action === "cancel") {
+      if (Date.parse(event.startsAt) <= Date.now()) return;
+      const confirmed = await confirmDestructiveAction({
+        title: t("eventsV1.cancel"),
+        text: t("eventsV1.cancelConfirm", { title: event.title }),
+        confirmButtonText: t("eventsV1.cancel"),
+        cancelButtonText: t("adminOrganizer.rejectCancel"),
+      });
+      if (!confirmed) return;
+    }
+    if (!keycloak.authenticated || keycloak.tokenParsed?.sub !== subject) return;
+    setMessage(null);
+    mutation.mutate({ event, action });
+  }
+
+  return (
+    <section className="organizer-panel organizer-dashboard-card">
+      <div className="events-v1-controls">
+        <label>
+          <span>{t("adminOrganizer.status")}</span>
+          <select value={status} disabled={mutation.isPending} onChange={event => {
+            setStatus(event.target.value as typeof status);
+            setMessage(null);
+          }}>
+            <option value="">{t("eventsV1.all")}</option>
+            {organizerEventStatuses.map(value => <option key={value} value={value}>{t(`dashboardV1.status.${value}`)}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>{t("eventsV1.search")}</span>
+          <input value={search} onChange={event => setSearch(event.target.value)} type="search" />
+        </label>
+        <button type="button" className="btn btn-secondary" disabled={events.isFetching || mutation.isPending} onClick={() => void events.refetch()}>{t("paymentV1.refresh")}</button>
+      </div>
+      {message && <p role={message === "error" ? "alert" : "status"}>{t(`eventsV1.${message}`)}</p>}
+      {events.isPending && <p role="status">{t("organizerEvents.listLoading")}</p>}
+      {events.isError && <><p role="alert">{t("organizerEvents.loadFailed")}</p><button type="button" className="btn btn-secondary" disabled={events.isFetching} onClick={() => void (events.isFetchNextPageError ? events.fetchNextPage() : events.refetch())}>{t("profile.retry")}</button></>}
+      {events.data && <>
+        <p>{t(events.hasNextPage ? "dashboardV1.loadedCount" : "dashboardV1.totalCount", { count: rows.length })}</p>
+        {visible.length === 0 ? <p>{t("eventsV1.empty")}</p> : <div className="dashboard-table-wrap"><table className="dashboard-events-table">
+          <thead><tr>
+            <th scope="col">{t("dashboardV1.event")}</th>
+            <th scope="col">{t("adminOrganizer.status")}</th>
+            <th scope="col">{t("eventsV1.schedule")}</th>
+            <th scope="col">{t("eventsV1.mode")}</th>
+            <th scope="col">{t("adminOrganizer.tableActions")}</th>
+          </tr></thead>
+          <tbody>{visible.map(event => <tr key={event.eventId}>
+            <td>{event.title}</td>
+            <td>{t(`dashboardV1.status.${event.status}`)}</td>
+            <td><time dateTime={event.startsAt}>{new Date(event.startsAt).toLocaleString(i18n.resolvedLanguage)}</time><br /><time dateTime={event.endsAt}>{new Date(event.endsAt).toLocaleString(i18n.resolvedLanguage)}</time></td>
+            <td>{t(`eventsV1.${event.mode}`)}</td>
+            <td><div className="events-v1-actions">
+              {event.status === "PUBLISHED" && (
+                <>
+                  <Link className="btn btn-secondary" to={`/event/${event.eventId}`}>{t("organizerEvents.viewPublic")}</Link>
+                  {pendingCancellationEventIds.has(event.eventId) ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: "#fef3c7",
+                        color: "#92400e",
+                        border: "1px solid #fde68a",
+                      }}
+                    >
+                      <Clock size={14} />
+                      {t("organizerEvents.cancellationPending", "Đang chờ Admin duyệt hủy")}
+                    </span>
+                  ) : Date.parse(event.startsAt) > Date.now() ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ color: "#dc2626", borderColor: "#fca5a5" }}
+                      disabled={mutation.isPending || events.isFetching}
+                      onClick={() => void handleRequestCancellation(event)}
+                    >
+                      {t("organizerEvents.requestCancel", "Yêu cầu hủy sự kiện")}
+                    </button>
+                  ) : null}
+                </>
+              )}
+              {event.status === "DRAFT" && event.mode === "SEAT_MAP" && <Link className="btn btn-primary" to={`/organizer/events/${event.eventId}/configure-seating`}>Cấu hình sơ đồ</Link>}
+              {event.status === "DRAFT" && event.mode === "QUANTITY" && <button className="btn btn-primary" disabled={mutation.isPending || events.isFetching} onClick={() => void act(event, "submit")}>{t("eventsV1.submit")}</button>}
+              {event.status === "APPROVED" && <button className="btn btn-primary" disabled={mutation.isPending || events.isFetching} onClick={() => void act(event, "publish")}>{t("eventsV1.publish")}</button>}
+              {["DRAFT", "PENDING_APPROVAL", "APPROVED"].includes(event.status) && Date.parse(event.startsAt) > Date.now() && <button className="btn btn-secondary" disabled={mutation.isPending || events.isFetching} onClick={() => void act(event, "cancel")}>{t("eventsV1.cancel")}</button>}
+            </div></td>
+          </tr>)}</tbody>
+        </table></div>}
+        {events.hasNextPage && !events.isFetchNextPageError && <button type="button" className="btn btn-secondary" disabled={events.isFetching || mutation.isPending} onClick={() => void events.fetchNextPage()}>{t("adminOrganizer.loadMore")}</button>}
+      </>}
+    </section>
   );
-  const firstPageEvents = firstPage.content ?? [];
-
-  if (firstPage.totalPages <= 1) return firstPageEvents;
-
-  const remainingPages = await Promise.all(
-    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      organizerWorkspaceService.getMyEvents(
-        index + 1,
-        ANALYTICS_PAGE_SIZE,
-        "createdAt,desc",
-      ),
-    ),
-  );
-
-  return [
-    ...firstPageEvents,
-    ...remainingPages.flatMap((page) => page.content ?? []),
-  ];
 }
 
 export default function OrganizerEventsPage() {
+  const { t } = useTranslation();
   const { ready } = useOrganizerGate();
-  const { i18n, t } = useTranslation();
-  const language = i18n.resolvedLanguage || i18n.language;
-  const [keywordInput, setKeywordInput] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [pageData, setPageData] =
-    useState<SpringPage<OrganizerEventDetail> | null>(null);
-  const [allEvents, setAllEvents] = useState<OrganizerEventDetail[]>([]);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [searchResults, setSearchResults] = useState<
-    OrganizerEventDetail[] | null
-  >(null);
-  const [lightboxIndex, setLightboxIndex] = useState(-1);
-  const [lightboxSlides, setLightboxSlides] = useState<
-    Array<{ src: string; alt: string }>
-  >([]);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [publishingId, setPublishingId] = useState<string | null>(null);
-  const [eventListFilter, setEventListFilter] =
-    useState<EventListFilter>("all");
-  const [sorting, setSorting] = useState<SortingState>([]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (searchResults !== null) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await organizerWorkspaceService.getMyEvents(
-          currentPage,
-          PAGE_SIZE,
-          "createdAt,desc",
-        );
-        if (!cancelled) {
-          setPageData(data);
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error(t("organizerEvents.loadFailed"));
-          setPageData(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, currentPage, searchResults, t]);
-
-  useEffect(() => {
-    if (!ready) return;
-
-    let cancelled = false;
-
-    const loadAnalytics = async () => {
-      setAnalyticsLoading(true);
-      try {
-        const events = await getAllOrganizerEvents();
-        if (!cancelled) setAllEvents(events);
-      } catch {
-        if (!cancelled) {
-          setAllEvents([]);
-          toast.error(t("organizerEvents.analyticsLoadFailed"));
-        }
-      } finally {
-        if (!cancelled) setAnalyticsLoading(false);
-      }
-    };
-
-    void loadAnalytics();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, t]);
-
-  const baseEvents =
-    searchResults ??
-    (eventListFilter === "all" ? pageData?.content : allEvents) ??
-    [];
-
-  const filteredEvents = useMemo(() => {
-    const expectedStatus = getFilterStatus(eventListFilter);
-    if (!expectedStatus) return baseEvents;
-    return baseEvents.filter((event) => getEventStatus(event.status) === expectedStatus);
-  }, [baseEvents, eventListFilter]);
-
-  const pageCount =
-    searchResults || eventListFilter !== "all"
-      ? Math.ceil(filteredEvents.length / PAGE_SIZE)
-      : pageData?.totalPages ?? 0;
-
-  const displayedEvents =
-    searchResults || eventListFilter !== "all"
-      ? filteredEvents.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
-      : filteredEvents;
-
-  const eventFilterCounts = useMemo(() => {
-    const source = searchResults ?? allEvents;
-    return {
-      all: source.length || pageData?.totalElements || baseEvents.length,
-      published: source.filter((event) => getEventStatus(event.status) === "PUBLISHED").length,
-      draft: source.filter((event) => getEventStatus(event.status) === "DRAFT").length,
-      sold_out: source.filter((event) => getEventStatus(event.status) === "SOLD_OUT").length,
-      cancelled: source.filter((event) => getEventStatus(event.status) === "CANCELLED").length,
-    };
-  }, [allEvents, baseEvents.length, pageData?.totalElements, searchResults]);
-
-  const analytics = useMemo(() => {
-    const totalEvents = allEvents.length;
-    const publishedCount = allEvents.filter((event) => event.status === "PUBLISHED").length;
-    const draftCount = allEvents.filter((event) => event.status === "DRAFT").length;
-    const totalTicketsSold = allEvents.reduce(
-      (sum, event) => sum + getEventTicketsSold(event),
-      0,
-    );
-    const timelineItems = [
-      ...allEvents
-        .reduce((map, event) => {
-          const time = getEventStartTime(event);
-          if (time <= 0) return map;
-          const key = new Date(time).toISOString().slice(0, 7);
-          const existing = map.get(key);
-          if (existing) {
-            existing.count += 1;
-          } else {
-            map.set(key, { count: 1, label: getMonthLabel(time), time });
-          }
-          return map;
-        }, new Map<string, { count: number; label: string; time: number }>())
-        .values(),
-    ].sort((a, b) => a.time - b.time);
-
-    return {
-      totalEvents,
-      publishedCount,
-      draftCount,
-      totalTicketsSold,
-      timelineItems,
-    };
-  }, [allEvents]);
-
-  const timelineChartOptions = useMemo<ApexOptions>(
-    () => ({
-      chart: {
-        type: "area",
-        toolbar: { show: false },
-        fontFamily: "Inter, system-ui, sans-serif",
-      },
-      colors: ["#10B981"],
-      dataLabels: { enabled: false },
-      fill: {
-        type: "gradient",
-        gradient: {
-          shadeIntensity: 1,
-          opacityFrom: 0.22,
-          opacityTo: 0.02,
-          stops: [0, 100],
-        },
-      },
-      grid: { borderColor: "#e2e8f0", strokeDashArray: 4 },
-      markers: { size: 4, strokeWidth: 2, hover: { size: 6 } },
-      stroke: { width: 3, curve: "smooth", lineCap: "round" },
-      xaxis: {
-        categories: analytics.timelineItems.map((item) => item.label),
-        labels: { style: { colors: "#64748b", fontWeight: 600 } },
-      },
-      yaxis: {
-        labels: {
-          style: { colors: "#334155", fontWeight: 600 },
-          formatter: (value) => numberFormat(value, language),
-        },
-      },
-      tooltip: {
-        y: { formatter: (value) => t("organizerEvents.eventCount", { count: numberFormat(value, language) }) },
-      },
-    }),
-    [analytics.timelineItems, language, t],
-  );
-
-  const timelineSeries = useMemo(
-    () => [
-      {
-        name: t("organizerEvents.events"),
-        data: analytics.timelineItems.map((item) => item.count),
-      },
-    ],
-    [analytics.timelineItems, t],
-  );
-
-  const handleSearch = async (submitEvent: FormEvent<HTMLFormElement>) => {
-    submitEvent.preventDefault();
-    if (!ready) return;
-
-    const nextKeyword = keywordInput.trim();
-    if (!nextKeyword) {
-      setSearchResults(null);
-      setCurrentPage(0);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const totalElements = Math.max(
-        pageData?.totalElements ?? PAGE_SIZE,
-        PAGE_SIZE,
-      );
-      const allEventsPage = await organizerWorkspaceService.getMyEvents(
-        0,
-        totalElements,
-        "createdAt,desc",
-      );
-      setSearchResults(filterEvents(allEventsPage.content, nextKeyword));
-      setCurrentPage(0);
-    } catch {
-      toast.error(t("organizerEvents.searchFailed"));
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleDelete = useCallback(async (event: OrganizerEventDetail) => {
-    const confirmed = await confirmDestructiveAction({
-      title: t("organizer.deleteEventConfirm"),
-      text: t("organizer.deleteEventText"),
-      confirmButtonText: t("organizer.deleteEvent"),
-      cancelButtonText: t("organizer.deleteEventKeep"),
-    });
-    if (!confirmed) return;
-
-    setDeletingId(event.id);
-    try {
-      await organizerWorkspaceService.deleteEvent(event.id);
-      setPageData((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          content: current.content.filter((item) => item.id !== event.id),
-          totalElements: Math.max((current.totalElements ?? 1) - 1, 0),
-          numberOfElements: Math.max((current.numberOfElements ?? 1) - 1, 0),
-        };
-      });
-      setAllEvents((current) => current.filter((item) => item.id !== event.id));
-      setSearchResults((current) =>
-        current ? current.filter((item) => item.id !== event.id) : current,
-      );
-      toast.success(t("organizer.deleteEventSuccess"));
-    } catch {
-      toast.error(t("organizer.deleteEventFailed"));
-    } finally {
-      setDeletingId(null);
-    }
-  }, [t]);
-
-  const handlePublish = useCallback(async (event: OrganizerEventDetail) => {
-    const result = await Swal.fire({
-      icon: "question",
-      title: t("organizerEvents.publishConfirmTitle"),
-      text: t("organizerEvents.publishConfirmText"),
-      confirmButtonText: t("organizerEvents.publishConfirmYes"),
-      cancelButtonText: t("organizerEvents.publishConfirmNo"),
-      confirmButtonColor: "#16a34a",
-      cancelButtonColor: "#64748b",
-      showCancelButton: true,
-      reverseButtons: true,
-      focusCancel: true,
-      heightAuto: false,
-    });
-
-    if (!result.isConfirmed) {
-      toast.info(t("organizerEvents.publishCancelled"));
-      return;
-    }
-
-    setPublishingId(event.id);
-    try {
-      const nextEvent = await organizerWorkspaceService.publishEvent(event.id);
-      const replaceEvent = (item: OrganizerEventDetail) =>
-        item.id === nextEvent.id ? nextEvent : item;
-
-      setPageData((current) =>
-        current ? { ...current, content: current.content.map(replaceEvent) } : current,
-      );
-      setAllEvents((current) => current.map(replaceEvent));
-      setSearchResults((current) => current ? current.map(replaceEvent) : current);
-      toast.success(t("organizerEvents.publishSuccess"));
-    } catch {
-      toast.error(t("organizerEvents.publishFailed"));
-    } finally {
-      setPublishingId(null);
-    }
-  }, [t]);
-
-  const eventColumns = useMemo<ColumnDef<OrganizerEventDetail>[]>(
-    () => [
-      {
-        id: "event",
-        accessorFn: (event) => event.title,
-        header: t("organizerEvents.events"),
-        cell: ({ row }) => {
-          const event = row.original;
-          const coverUrl = pickEventCover(event);
-          const venueLabel = getVenueLabel(event, t);
-
-          return (
-            <div className="organizer-event-library-main">
-              {coverUrl ? (
-                <button
-                  type="button"
-                  className="organizer-event-library-cover"
-                  onClick={() => {
-                    setLightboxSlides([{ src: coverUrl, alt: event.title }]);
-                    setLightboxIndex(0);
-                  }}
-                  aria-label={t("organizerEvents.viewBanner", { title: event.title })}
-                >
-                  <img src={coverUrl} alt="" />
-                </button>
-              ) : (
-                <div className="organizer-event-library-cover-placeholder">
-                  <ImagePlus size={20} />
-                </div>
-              )}
-              <div>
-                <strong title={event.title}>{event.title}</strong>
-                <span title={venueLabel}>{venueLabel}</span>
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        id: "status",
-        accessorFn: (event) => getEventStatus(event.status),
-        header: t("ticketsPage.status"),
-        cell: ({ row }) => {
-          const status = getEventStatus(row.original.status);
-          const statusMeta = eventStatusMeta[status];
-
-          return (
-            <div>
-              <span
-                className={`organizer-hub-event-status organizer-event-library-status ${statusMeta.className}`}
-              >
-                {t(statusMeta.label)}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
-        id: "schedule",
-        accessorFn: (event) => getEventStartTime(event),
-        header: t("organizerEvents.schedule"),
-        cell: ({ row }) => {
-          const event = row.original;
-
-          return (
-            <div className="organizer-event-library-time">
-              <CalendarClock size={15} />
-              <div>
-                <span>{formatDateTime(event.schedule?.startDatetime)}</span>
-                <small>{formatDateTime(event.schedule?.endDatetime)}</small>
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        id: "ticketSales",
-        accessorFn: (event) => getEventTicketsSold(event),
-        header: t("organizerEvents.ticketSales"),
-        cell: ({ row }) => {
-          const event = row.original;
-          const ticketsSold = getEventTicketsSold(event);
-          const capacity = getEventTicketCapacity(event);
-          const occupancy = getEventOccupancy(event);
-
-          return (
-            <div className="organizer-event-library-sales">
-              <div>
-                <strong>
-                  {numberFormat(ticketsSold, language)} / {numberFormat(capacity, language)}
-                </strong>
-                <span>{occupancy}%</span>
-              </div>
-              <div className="organizer-event-library-progress">
-                <span style={{ width: `${occupancy}%` }} />
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        id: "revenue",
-        accessorFn: (event) => getEventEstimatedRevenue(event),
-        header: t("organizerHub.revenue"),
-        cell: ({ getValue }) => (
-          <div className="organizer-event-library-revenue">
-            {currencyFormat(Number(getValue()), language)}
-          </div>
-        ),
-      },
-      {
-        id: "setup",
-        header: t("organizerEvents.setup"),
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="organizer-event-library-setup">
-            {getSetupItems(row.original, t).map((item) => (
-              <span
-                key={item.label}
-                className={`organizer-event-library-chip ${item.className}`}
-              >
-                {item.label}
-              </span>
-            ))}
-          </div>
-        ),
-      },
-      {
-        id: "actions",
-        header: t("adminOrganizer.tableActions"),
-        enableSorting: false,
-        cell: ({ row }) => {
-          const event = row.original;
-          const status = getEventStatus(event.status);
-          const canDelete = getEventTicketsSold(event) === 0;
-
-          return (
-            <div className="organizer-event-library-actions">
-              {status === "PUBLISHED" && event.slug ? (
-                <Link
-                  className="organizer-event-library-icon-action is-public"
-                  to={`/event/${event.slug}`}
-                  title={t("organizerEvents.viewPublic")}
-                  aria-label={t("organizerEvents.viewPublicEvent", { title: event.title })}
-                >
-                  <Eye size={16} />
-                </Link>
-              ) : null}
-              {status === "DRAFT" ? (
-                <button
-                  type="button"
-                  className="organizer-event-library-icon-action is-publish"
-                  onClick={() => void handlePublish(event)}
-                  disabled={publishingId === event.id}
-                  title={t("organizerEvents.publishAction")}
-                  aria-label={t("organizerEvents.publishEventAria", { title: event.title })}
-                >
-                  {publishingId === event.id ? (
-                    <LoaderCircle size={16} className="spin" />
-                  ) : (
-                    <CgPushUp size={18} />
-                  )}
-                </button>
-              ) : null}
-              <Link
-                className="organizer-event-library-icon-action is-edit"
-                to={`/organizer/events/${event.id}/edit`}
-                title={t("organizerEvents.edit")}
-                aria-label={t("organizerEvents.editEvent", { title: event.title })}
-              >
-                <Edit size={16} />
-              </Link>
-              <button
-                type="button"
-                className="organizer-event-library-icon-action is-danger"
-                onClick={() => void handleDelete(event)}
-                disabled={!canDelete || deletingId === event.id}
-                title={
-                  canDelete
-                    ? t("organizer.deleteEvent")
-                    : t("organizerEvents.cannotDeleteSold")
-                }
-                aria-label={t("organizerEvents.deleteEventAria", { title: event.title })}
-              >
-                {deletingId === event.id ? (
-                  <LoaderCircle size={16} className="spin" />
-                ) : (
-                  <Trash2 size={16} />
-                )}
-              </button>
-            </div>
-          );
-        },
-      },
-    ],
-    [deletingId, handleDelete, handlePublish, language, publishingId, t],
-  );
-
-  const eventTable = useReactTable({
-    data: displayedEvents,
-    columns: eventColumns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    enableSortingRemoval: false,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
+  const { keycloak } = useKeycloak();
+  const subject = keycloak.tokenParsed?.sub;
   return (
-    <OrganizerLayout
-      title={t("organizerEvents.title")}
-      description={t("organizerEvents.description")}
-      actions={null}
-      className="organizer-events-page"
-    >
-      <section className="organizer-events-analytics">
-        <div className="organizer-events-stat-grid">
-          <article className="organizer-hub-kpi-card">
-            <span className="organizer-hub-kpi-icon organizer-events-stat-icon-total">
-              <FaCalendarCheck size={36} />
-            </span>
-            <div>
-              <span>{t("organizerProfile.totalEvents")}</span>
-              <strong>{numberFormat(analytics.totalEvents, language)}</strong>
-              <small>{t("organizerEvents.totalEventsDescription")}</small>
-            </div>
-          </article>
-          <article className="organizer-hub-kpi-card">
-            <span className="organizer-hub-kpi-icon organizer-events-stat-icon-published">
-              <HiBadgeCheck size={36} />
-            </span>
-            <div>
-              <span>{t("status.published")}</span>
-              <strong>{numberFormat(analytics.publishedCount, language)}</strong>
-              <small>{t("organizerEvents.publishedDescription")}</small>
-            </div>
-          </article>
-          <article className="organizer-hub-kpi-card">
-            <span className="organizer-hub-kpi-icon organizer-events-stat-icon-draft">
-              <FaFileSignature size={36} />
-            </span>
-            <div>
-              <span>{t("status.draft")}</span>
-              <strong>{numberFormat(analytics.draftCount, language)}</strong>
-              <small>{t("organizerEvents.draftDescription")}</small>
-            </div>
-          </article>
-          <article className="organizer-hub-kpi-card">
-            <span className="organizer-hub-kpi-icon organizer-events-stat-icon-tickets">
-              <HiTicket size={36} />
-            </span>
-            <div>
-              <span>{t("publicOrganizer.ticketsSold")}</span>
-              <strong>{numberFormat(analytics.totalTicketsSold, language)}</strong>
-              <small>{t("organizerEvents.ticketsSoldDescription")}</small>
-            </div>
-          </article>
-        </div>
-
-        {analyticsLoading ? (
-          <section className="organizer-panel organizer-empty-state">
-            <div className="loading-spinner" />
-            <p>{t("organizerEvents.timelineLoading")}</p>
-          </section>
-        ) : (
-          <article className="organizer-panel organizer-events-timeline-card">
-            <div className="organizer-events-timeline-heading">
-              <div>
-                <p className="organizer-dashboard-chart-title">{t("organizerEvents.timelineTitle")}</p>
-                <span>{t("organizerEvents.timelineDescription")}</span>
-              </div>
-            </div>
-            {analytics.timelineItems.length > 0 ? (
-              <Chart
-                options={timelineChartOptions}
-                series={timelineSeries}
-                type="area"
-                height={300}
-              />
-            ) : (
-              <div className="organizer-dashboard-empty-chart">
-                {t("organizerEvents.emptyTimeline")}
-              </div>
-            )}
-          </article>
-        )}
-      </section>
-
-      {loading || searching ? (
-        <section className="organizer-panel organizer-empty-state">
-          <div className="loading-spinner" />
-          <p>
-            {searching ? t("organizerEvents.searching") : t("organizerEvents.listLoading")}
-          </p>
-        </section>
-      ) : (
-        <section className="organizer-panel organizer-events-library-panel">
-          <div className="organizer-panel-heading-row organizer-events-list-heading">
-            <div>
-              <p className="organizer-dashboard-chart-title">{t("organizerEvents.listTitle")}</p>
-            </div>
-            <div className="organizer-events-list-actions">
-              <form className="organizer-events-list-search" onSubmit={handleSearch}>
-                <input
-                  value={keywordInput}
-                  onChange={(event) => setKeywordInput(event.target.value)}
-                  className="organizer-events-list-search-input"
-                  placeholder={t("organizerEvents.searchPlaceholder")}
-                />
-                <button
-                  type="submit"
-                  className="organizer-events-list-search-button"
-                  disabled={loading || searching}
-                  aria-label={t("organizerEvents.searchAria")}
-                >
-                  <Search size={14} />
-                </button>
-              </form>
-              <Link to="/organizer/events/new" className="organizer-events-add-button">
-                {t("organizerEvents.addEvent")}
-              </Link>
-            </div>
-          </div>
-
-          <div className="organizer-events-list-filter-row organizer-events-library-filters">
-            {eventListFilters.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                className={`organizer-events-filter-pill ${
-                  eventListFilter === filter.value ? "is-active" : ""
-                }`}
-                onClick={() => {
-                  setEventListFilter(filter.value);
-                  setCurrentPage(0);
-                }}
-              >
-                {t(filter.label)} {numberFormat(eventFilterCounts[filter.value], language)}
-              </button>
-            ))}
-          </div>
-
-          {displayedEvents.length === 0 ? (
-            <div className="organizer-event-library-empty">
-              <Ticket size={28} />
-              <p>
-                {pageData?.content?.length || allEvents.length
-                  ? t("organizerEvents.emptyFilter")
-                  : t("organizerEvents.emptyList")}
-              </p>
-            </div>
-          ) : (
-            <div className="organizer-event-library-table">
-              {eventTable.getHeaderGroups().map((headerGroup) => (
-                <div
-                  className="organizer-event-library-head"
-                  key={headerGroup.id}
-                >
-                  {headerGroup.headers.map((header) => (
-                    <span key={header.id}>
-                      {header.column.getCanSort() ? (
-                        <span className="organizer-event-library-sort-header">
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                          <button
-                            type="button"
-                            className="organizer-event-library-sort-button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            aria-label={`${flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )} sort`}
-                          >
-                            {{
-                              asc: "↑",
-                              desc: "↓",
-                            }[header.column.getIsSorted() as string] ?? "↓"}
-                          </button>
-                        </span>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
-                      )}
-                    </span>
-                  ))}
-                </div>
-              ))}
-              {eventTable.getRowModel().rows.map((row) => (
-                <article className="organizer-event-library-row" key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <div key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </div>
-                  ))}
-                </article>
-              ))}
-            </div>
-          )}
-
-          {displayedEvents.length > 0 ? (
-            <AppPagination
-              currentPage={currentPage}
-              pageCount={pageCount}
-              onPageChange={setCurrentPage}
-              pageRangeDisplayed={4}
-              marginPagesDisplayed={1}
-              showPageInfo={false}
-            />
-          ) : null}
-        </section>
-      )}
-
-      <Lightbox
-        open={lightboxIndex >= 0}
-        close={() => {
-          setLightboxIndex(-1);
-          setLightboxSlides([]);
-        }}
-        index={lightboxIndex >= 0 ? lightboxIndex : 0}
-        slides={lightboxSlides}
-      />
+    <OrganizerLayout title={t("organizer.eventManagement")} description={t("eventsV1.description")} className="organizer-hub-page organizer-events-page" hideTopBar
+      actions={<Link className="btn btn-primary" to="/organizer/events/new">{t("organizerHub.createEvent")}</Link>}>
+      {ready && subject && <EventList key={`${keycloak.tokenParsed?.iss}:${subject}`} subject={subject} issuer={keycloak.tokenParsed?.iss} />}
     </OrganizerLayout>
   );
 }

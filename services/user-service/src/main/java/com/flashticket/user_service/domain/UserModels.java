@@ -12,7 +12,15 @@ public final class UserModels {
     REJECTED
   }
 
-  public record UserProfile(String userId, String identitySubject, String displayName) {}
+  public record UserProfile(
+      String userId,
+      String identitySubject,
+      String displayName,
+      String email,
+      String dateOfBirth,
+      String address,
+      String phoneNumber,
+      String avatarUrl) {}
 
   public record RoleGrant(
       String operationId, String requestedBySubject, String status, Instant attemptedAt) {}

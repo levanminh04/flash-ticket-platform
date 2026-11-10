@@ -1,8 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CircleAlert, UsersRound } from "lucide-react";
-import { BsFillBuildingsFill } from "react-icons/bs";
-import { FaMapSigns } from "react-icons/fa";
+import {
+  Building2,
+  CircleAlert,
+  UsersRound,
+  Building2 as BsFillBuildingsFill,
+  Signpost as FaMapSigns,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import { venueService } from "../../services/venueService";

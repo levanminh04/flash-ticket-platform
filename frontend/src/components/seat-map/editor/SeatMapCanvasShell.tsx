@@ -1,13 +1,4 @@
-import {
-  Eye,
-  EyeOff,
-  MousePointer2,
-  Redo2,
-  RotateCcw,
-  Search,
-  Trash2,
-  Undo2,
-} from "lucide-react";
+import { Eye, EyeOff, MousePointer2, Redo2, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { useState } from "react";
 import SeatMapEditorCanvas from "./SeatMapEditorCanvas";
 import { SeatMapEditorDocument, SeatMapEditorViewport } from "./seatMapEditorTypes";
@@ -79,12 +70,6 @@ export default function SeatMapCanvasShell({
   onUndo,
 }: SeatMapCanvasShellProps) {
   const [resetViewKey, setResetViewKey] = useState(0);
-  const handleZoomIn = () => {
-    onViewportChange({
-      ...viewport,
-      scale: Math.min(4, viewport.scale * 1.15),
-    });
-  };
   const handleResetView = () => {
     setResetViewKey((current) => current + 1);
   };
@@ -109,10 +94,6 @@ export default function SeatMapCanvasShell({
           >
             {referenceImageVisible ? <EyeOff size={15} /> : <Eye size={15} />}
             {referenceImageVisible ? "Hide" : "Show"}
-          </button>
-          <button type="button" onClick={handleZoomIn}>
-            <Search size={15} />
-            Zoom
           </button>
           <button type="button" onClick={onUndo} disabled={!canUndo}>
             <Undo2 size={15} />
