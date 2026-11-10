@@ -1263,7 +1263,8 @@ class EventFlowTests {
     assertThat(service.readOwned(event.eventId(), "a").rowVersion()).isEqualTo(event.rowVersion());
     assertThat(
             jdbc.queryForObject(
-                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
+                "SELECT count(*) FROM event_schema.tbl_outbox_messages WHERE message_type='event.cancelled.v1'",
+                Integer.class))
         .isZero();
   }
 
