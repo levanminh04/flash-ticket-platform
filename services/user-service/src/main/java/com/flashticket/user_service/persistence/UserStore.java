@@ -107,12 +107,31 @@ public final class UserStore {
   }
 
   public Application apply(String subject, String name, String description) {
+    return apply(subject, name, description, null, null, null, null, null, null);
+  }
+
+  public Application apply(
+      String subject,
+      String name,
+      String description,
+      String contactEmail,
+      String contactPhone,
+      String websiteUrl,
+      String socialPageUrl,
+      String headquartersAddress,
+      String taxCode) {
     Document d =
         metadata()
             .append("identitySubject", subject)
             .append("organizationName", name)
             .append("shortDescription", description)
             .append("status", "PENDING");
+    if (contactEmail != null) d.append("contactEmail", contactEmail);
+    if (contactPhone != null) d.append("contactPhone", contactPhone);
+    if (websiteUrl != null) d.append("websiteUrl", websiteUrl);
+    if (socialPageUrl != null) d.append("socialPageUrl", socialPageUrl);
+    if (headquartersAddress != null) d.append("headquartersAddress", headquartersAddress);
+    if (taxCode != null) d.append("taxCode", taxCode);
     try {
       collection("organizer_applications").insertOne(d);
     } catch (MongoException ex) {
@@ -337,6 +356,12 @@ public final class UserStore {
         d.getString("identitySubject"),
         d.getString("organizationName"),
         d.getString("shortDescription"),
+        d.getString("contactEmail"),
+        d.getString("contactPhone"),
+        d.getString("websiteUrl"),
+        d.getString("socialPageUrl"),
+        d.getString("headquartersAddress"),
+        d.getString("taxCode"),
         ApplicationStatus.valueOf(d.getString("status")),
         d.getString("rejectionReason"),
         d.getString("decidedBySubject"),

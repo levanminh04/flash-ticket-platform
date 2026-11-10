@@ -31,7 +31,13 @@ public class UserController {
 
   public record Apply(
       @NotBlank @Size(max = 200) String organizationName,
-      @NotBlank @Size(max = 2000) String shortDescription) {}
+      @NotBlank @Size(max = 2000) String shortDescription,
+      @NotBlank @Size(max = 254) String contactEmail,
+      @NotBlank @Size(max = 20) String contactPhone,
+      @Size(max = 500) String websiteUrl,
+      @NotBlank @Size(max = 500) String socialPageUrl,
+      @NotBlank @Size(max = 500) String headquartersAddress,
+      @NotBlank @Size(max = 14) String taxCode) {}
 
   private final UserStore store;
   private final OrganizerImages images;
@@ -122,10 +128,41 @@ public class UserController {
   @PostMapping("/api/v1/organizer-applications")
   @ResponseStatus(HttpStatus.CREATED)
   public ApplicationView apply(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody Apply input) {
+    String email = input.contactEmail().strip().toLowerCase(java.util.Locale.ROOT);
+    if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))
+      throw invalidApplication();
+    String phone = input.contactPhone().strip().replaceAll("[ .-]", "");
+    if (!phone.matches(
+        "(?:0|\\+84)(?:2[0-9]{9}|(?:3[2-9]|5[25689]|7[06-9]|8[1-9]|9[0-9])[0-9]{7})"))
+      throw invalidApplication();
+    if (phone.startsWith("0")) phone = "+84" + phone.substring(1);
+    String website =
+        input.websiteUrl() == null || input.websiteUrl().isBlank()
+            ? null
+            : input.websiteUrl().strip();
+    if (website != null && !website.matches("^https://\\S+$")) throw invalidApplication();
+    String socialPage = input.socialPageUrl().strip();
+    if (!socialPage.matches("^https://\\S+$")) throw invalidApplication();
+    String address = input.headquartersAddress().strip();
+    String tax = input.taxCode().strip().replaceAll("\\s+", "");
+    if (!tax.matches("^[0-9]{10}([0-9]{2}|-?[0-9]{3})?$")) throw invalidApplication();
     String subject = subject(jwt);
     store.ensureUser(subject, displayName(jwt));
     return ApplicationView.of(
-        store.apply(subject, input.organizationName().strip(), input.shortDescription().strip()));
+        store.apply(
+            subject,
+            input.organizationName().strip(),
+            input.shortDescription().strip(),
+            email,
+            phone,
+            website,
+            socialPage,
+            address,
+            tax));
+  }
+
+  private static UserException invalidApplication() {
+    return new UserException(400, "INVALID_APPLICATION", "Invalid organizer application field");
   }
 
   @GetMapping("/api/v1/organizer-applications")

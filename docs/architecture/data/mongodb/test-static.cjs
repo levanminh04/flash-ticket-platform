@@ -18,6 +18,9 @@ assert.ok(users.indexes.some(i => i.unique && i.key.identitySubject === 1));
 assert.ok(!Object.hasOwn(users.validator.$jsonSchema.properties, 'email'));
 assert.ok(Object.hasOwn(users.validator.$jsonSchema.properties, 'avatarUrl'));
 const applications = spec.collections.find(c => c.name === 'organizer_applications');
+for (const field of ['contactEmail', 'contactPhone', 'websiteUrl', 'socialPageUrl', 'headquartersAddress', 'taxCode']) {
+  assert.ok(Object.hasOwn(applications.validator.$jsonSchema.properties, field));
+}
 const openApplicationIndex = applications.indexes.find(i => i.unique && i.key.identitySubject === 1);
 assert.deepEqual(openApplicationIndex?.partialFilterExpression, { status: { $in: ['PENDING', 'ACTIVE'] } });
 assert.equal(applications.indexes.filter(i => i.unique && i.key.identitySubject === 1).length, 1);

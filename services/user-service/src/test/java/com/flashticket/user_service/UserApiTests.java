@@ -140,25 +140,87 @@ class UserApiTests {
         .doesNotContainKeys("email", "roles", "_class");
   }
 
+  private static final String VALID_APPLICATION =
+      """
+      {
+        "organizationName":"Test org",
+        "shortDescription":"Description",
+        "contactEmail":"contact@testorg.vn",
+        "contactPhone":"0912345678",
+        "websiteUrl":"https://testorg.vn",
+        "socialPageUrl":"https://facebook.com/testorg",
+        "headquartersAddress":"123 Nguyễn Huệ, Quận 1, TP.HCM",
+        "taxCode":"0101234567"
+      }
+      """;
+
   @Test
   void duplicateApplicationIsConflictAndListIsOwnerFiltered() throws Exception {
-    String input = "{\"organizationName\":\"Test org\",\"shortDescription\":\"Description\"}";
     mvc.perform(
             post("/api/v1/organizer-applications")
                 .with(buyer("buyer-1"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(input))
+                .content(VALID_APPLICATION))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.status").value("PENDING"));
+        .andExpect(jsonPath("$.status").value("PENDING"))
+        .andExpect(jsonPath("$.contactEmail").value("contact@testorg.vn"))
+        .andExpect(jsonPath("$.contactPhone").value("+84912345678"))
+        .andExpect(jsonPath("$.websiteUrl").value("https://testorg.vn"))
+        .andExpect(jsonPath("$.socialPageUrl").value("https://facebook.com/testorg"))
+        .andExpect(jsonPath("$.headquartersAddress").value("123 Nguyễn Huệ, Quận 1, TP.HCM"))
+        .andExpect(jsonPath("$.taxCode").value("0101234567"));
     mvc.perform(
             post("/api/v1/organizer-applications")
                 .with(buyer("buyer-1"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(input))
+                .content(VALID_APPLICATION))
         .andExpect(status().isConflict());
     mvc.perform(get("/api/v1/organizer-applications").with(buyer("buyer-2")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items").isEmpty());
+  }
+
+  @Test
+  void applicationValidatesBusinessVerificationFieldsAndAllowsOptionalWebsite() throws Exception {
+    mvc.perform(
+            post("/api/v1/organizer-applications")
+                .with(buyer("buyer-1"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "organizationName":"Indie Live",
+                      "shortDescription":"Concert organizer",
+                      "contactEmail":"Indie@Live.vn",
+                      "contactPhone":"0987 654 321",
+                      "socialPageUrl":"https://facebook.com/indielive",
+                      "headquartersAddress":"Hà Nội",
+                      "taxCode":"001200012345"
+                    }
+                    """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.contactEmail").value("indie@live.vn"))
+        .andExpect(jsonPath("$.contactPhone").value("+84987654321"))
+        .andExpect(jsonPath("$.websiteUrl").isEmpty())
+        .andExpect(jsonPath("$.taxCode").value("001200012345"));
+    mvc.perform(
+            post("/api/v1/organizer-applications")
+                .with(buyer("buyer-2"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "organizationName":"Bad Tax Org",
+                      "shortDescription":"Description",
+                      "contactEmail":"contact@badtax.vn",
+                      "contactPhone":"0912345678",
+                      "socialPageUrl":"http://insecure-link.vn",
+                      "headquartersAddress":"Hà Nội",
+                      "taxCode":"12345"
+                    }
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_APPLICATION"));
   }
 
   @Test
@@ -168,7 +230,18 @@ class UserApiTests {
                 .with(buyer("buyer-1"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"organizationName\":\"Test org\",\"shortDescription\":\"Description\",\"identitySubject\":\"someone-else\"}"))
+                    """
+                    {
+                      "organizationName":"Test org",
+                      "shortDescription":"Description",
+                      "contactEmail":"contact@testorg.vn",
+                      "contactPhone":"0912345678",
+                      "socialPageUrl":"https://facebook.com/testorg",
+                      "headquartersAddress":"Hà Nội",
+                      "taxCode":"0101234567",
+                      "identitySubject":"someone-else"
+                    }
+                    """))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").exists())
         .andExpect(jsonPath("$.correlationId").exists());
@@ -215,8 +288,7 @@ class UserApiTests {
             post("/api/v1/organizer-applications")
                 .with(buyer("buyer-1"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    "{\"organizationName\":\"Test org\",\"shortDescription\":\"Description\"}"))
+                .content(VALID_APPLICATION))
         .andExpect(status().isCreated());
     String id = mongo.getCollection("tbl_organizer_applications").find().first().getString("_id");
     var admin =
@@ -279,8 +351,7 @@ class UserApiTests {
             post("/api/v1/organizer-applications")
                 .with(buyer("buyer-1"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    "{\"organizationName\":\"Organization\",\"shortDescription\":\"Description\"}"))
+                .content(VALID_APPLICATION))
         .andExpect(status().isCreated());
     String id = mongo.getCollection("tbl_organizer_applications").find().first().getString("_id");
     mvc.perform(get("/api/v1/organizer-applications/" + id).with(buyer("buyer-2")))
