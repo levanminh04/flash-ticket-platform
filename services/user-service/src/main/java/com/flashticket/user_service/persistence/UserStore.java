@@ -87,14 +87,22 @@ public final class UserStore {
     Document d = collection("users").find(eq("identitySubject", subject)).first();
     if (d == null) throw new UserException(404, "USER_NOT_FOUND", "User not found");
     return new UserProfile(
-        d.getString("_id"), d.getString("identitySubject"), d.getString("displayName"));
+        d.getString("_id"),
+        d.getString("identitySubject"),
+        d.getString("displayName"),
+        null,
+        d.getString("dateOfBirth"),
+        d.getString("address"),
+        d.getString("phoneNumber"),
+        d.getString("avatarUrl"));
   }
 
-  public UserProfile updateDisplayName(String subject, String name) {
-    collection("users")
-        .updateOne(
-            eq("identitySubject", subject),
-            combine(set("displayName", name), set("updatedAt", now()), inc("version", 1L)));
+  public UserProfile updateProfile(String subject, List<Bson> changes) {
+    if (!changes.isEmpty()) {
+      changes.add(set("updatedAt", now()));
+      changes.add(inc("version", 1L));
+      collection("users").updateOne(eq("identitySubject", subject), combine(changes));
+    }
     return user(subject);
   }
 

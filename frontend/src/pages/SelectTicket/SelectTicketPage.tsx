@@ -3,7 +3,18 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
-import { FaCalendarCheck, FaMapLocationDot } from "react-icons/fa6";
+import {
+  CalendarCheck as FaCalendarCheck,
+  MapPin as FaMapLocationDot,
+  ArrowLeft,
+  ChevronRight,
+  LoaderCircle,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  X,
+  Info,
+} from "lucide-react";
 import { eventService } from "../../services/eventService";
 import { bookingService } from "../../services/bookingService";
 import { hasRealmRole } from "../../lib/auth";
@@ -17,16 +28,7 @@ import {
   TicketType,
 } from "../../types/api";
 import BuyerSeatMapCanvas from "../../components/seat-map/runtime/BuyerSeatMapCanvas";
-import {
-  ArrowLeft,
-  ChevronRight,
-  LoaderCircle,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  X,
-  Info,
-} from "lucide-react";
+
 
 
 interface TicketSelection {
@@ -355,13 +357,17 @@ export default function SelectTicketPage() {
     [maxPerOrder, quantities, selectedStandingSectorId, sectorById, t, totalSelected, ticketTypes, availability],
   );
 
+  const hasStandingTickets = standingSectorTicketTypes.some(
+    (type) => (quantities[type.id] ?? 0) > 0,
+  );
+
   const handleSectorClick = useCallback(
     (sector: PublicSeatSector) => {
       if (getSectorType(sector) !== "STANDING") {
         return;
       }
 
-      const activeSectorId = selectedSeats[0]?.sectorId || selectedStandingSectorId;
+      const activeSectorId = selectedSeats[0]?.sectorId ?? (hasStandingTickets ? selectedStandingSectorId : null);
       if (activeSectorId && activeSectorId !== sector.id) {
         toast.warning(t("selectTicket.oneSectorOnly"), {
           toastId: "single-sector-limit",
@@ -382,7 +388,7 @@ export default function SelectTicketPage() {
       setSelectedStandingSectorId(sector.id);
       setStandingPopupSectorId(sector.id);
     },
-    [selectedSeats, selectedStandingSectorId, standingSectorTicketTypes, t],
+    [hasStandingTickets, selectedSeats, selectedStandingSectorId, standingSectorTicketTypes, t],
   );
 
   const clearStandingSectorSelection = useCallback(() => {
@@ -423,7 +429,7 @@ export default function SelectTicketPage() {
         return;
       }
 
-      const activeSectorId = selectedSeats[0]?.sectorId || selectedStandingSectorId;
+      const activeSectorId = selectedSeats[0]?.sectorId ?? (hasStandingTickets ? selectedStandingSectorId : null);
       if (activeSectorId && activeSectorId !== sector.id) {
         toast.warning(t("selectTicket.oneSectorOnly"), {
           toastId: "single-sector-limit",
@@ -455,6 +461,9 @@ export default function SelectTicketPage() {
         return;
       }
 
+      setSelectedStandingSectorId(null);
+      setStandingPopupSectorId(null);
+
       const displayLabel = sector.mapData?.code && seat.seatLabel
         ? `${String(sector.mapData.code)}-${seat.seatLabel}`
         : seat.seatLabel || `${seat.rowName || ""}${seat.seatNumber || ""}`;
@@ -473,7 +482,7 @@ export default function SelectTicketPage() {
         [ticketType.id]: (prev[ticketType.id] || 0) + 1,
       }));
     },
-    [maxPerOrder, quantities, selectedSeats, selectedStandingSectorId, t, ticketTypeById, ticketTypeBySectorId, totalSelected],
+    [hasStandingTickets, maxPerOrder, quantities, selectedSeats, selectedStandingSectorId, t, ticketTypeById, ticketTypeBySectorId, totalSelected],
   );
 
   const handleRemoveSeat = useCallback(
@@ -826,7 +835,6 @@ export default function SelectTicketPage() {
             <div className="sidebar-selected">
               <div className="booking-availability-note">
                 <span>{t("selectTicket.availabilityNotice")}</span>
-                <button type="button" onClick={() => void loadSelection()}>{t("selectTicket.refreshAvailability")}</button>
               </div>
               {submitError && !isModalOpen && <p role="alert" className="booking-submit-error">{submitError}</p>}
               <div className="selected-header">

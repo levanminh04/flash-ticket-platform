@@ -16,9 +16,11 @@ for (const c of spec.collections) {
 const users = spec.collections.find(c => c.name === 'users');
 assert.ok(users.indexes.some(i => i.unique && i.key.identitySubject === 1));
 assert.ok(!Object.hasOwn(users.validator.$jsonSchema.properties, 'email'));
-assert.ok(!Object.hasOwn(users.validator.$jsonSchema.properties, 'avatarUrl'));
+assert.ok(Object.hasOwn(users.validator.$jsonSchema.properties, 'avatarUrl'));
 const applications = spec.collections.find(c => c.name === 'organizer_applications');
-assert.ok(applications.indexes.some(i => i.unique && i.key.identitySubject === 1));
+const openApplicationIndex = applications.indexes.find(i => i.unique && i.key.identitySubject === 1);
+assert.deepEqual(openApplicationIndex?.partialFilterExpression, { status: { $in: ['PENDING', 'ACTIVE'] } });
+assert.equal(applications.indexes.filter(i => i.unique && i.key.identitySubject === 1).length, 1);
 const branches = applications.validator.$jsonSchema.oneOf;
 assert.ok(branches.find(b => b.properties.status.enum.includes('REJECTED')).required.includes('rejectionReason'));
 const active = branches.find(b => b.properties.status.enum.includes('ACTIVE'));

@@ -12,6 +12,11 @@ function rememberOrder(order: OrderView, scope: string) {
 }
 
 export const bookingService = {
+  getOrder: async (orderId: string, signal?: AbortSignal): Promise<OrderView | null> => {
+    const response = await axiosClient.get<OrderView | { orderId: string; status: "STUB" }>(`/api/v1/orders/${encodeURIComponent(orderId)}`, { signal });
+    return "status" in response.data ? null : response.data;
+  },
+
   getAvailability: async (eventId: string): Promise<Availability> => {
     const response = await axiosClient.get<Availability>(`/api/v1/events/${eventId}/availability`);
     return response.data;

@@ -1,9 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, Search, X } from "lucide-react";
-import { FaHome, FaUserAlt } from "react-icons/fa";
-import { CgLogOut } from "react-icons/cg";
+import {
+  ChevronDown,
+  Search,
+  X,
+  House as FaHome,
+  UserRound as FaUserAlt,
+  LogOut as CgLogOut,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   organizerService,

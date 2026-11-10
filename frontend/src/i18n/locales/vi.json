@@ -1,4 +1,80 @@
 {
+  "discovery": {
+    "viewCategories": "Xem tất cả danh mục",
+    "otherCategories": "Khác",
+    "title": "Âm nhạc, nghệ thuật, thể thao và <accent>hơn thế nữa</accent>",
+    "intro": "Tìm và đặt vé cho những sự kiện bạn mong đợi, từ concert, workshop đến sân khấu và triển lãm.",
+    "featured": "Sự kiện nổi bật",
+    "allVenues": "Xem tất cả địa điểm",
+    "from": "Từ {{amount}}",
+    "error": "Không tải được nội dung.",
+    "empty": "Chưa có nội dung để hiển thị.",
+    "promo": "Trải nghiệm FlashTicket <accent>mọi lúc, mọi nơi</accent>",
+    "promoMockup": "Bản minh họa · Chưa phát hành ứng dụng",
+    "promoBody": "Tải ứng dụng để khám phá sự kiện, đặt vé nhanh chóng và nhận thông báo về những sự kiện bạn quan tâm."
+  },
+  "adminEventReview": {
+    "title": "Duyệt sự kiện",
+    "details": "Xem chi tiết",
+    "fee": "Tỷ lệ phí từ 0 đến 1 (ví dụ 0.05 = 5%)",
+    "returnToDraft": "Trả về bản nháp",
+    "approveCancelSuccess": "Đã duyệt hủy sự kiện thành công. Tiến trình hoàn tiền tự động đã được khởi tạo.",
+    "approveCancelFailed": "Duyệt hủy sự kiện thất bại.",
+    "rejectCancelSuccess": "Đã từ chối yêu cầu hủy sự kiện.",
+    "rejectCancelFailed": "Từ chối yêu cầu hủy thất bại.",
+    "approveCancelConfirmTitle": "Xác nhận duyệt hủy sự kiện?",
+    "confirmApproveCancel": "Duyệt hủy sự kiện",
+    "rejectCancelConfirmTitle": "Từ chối yêu cầu hủy sự kiện",
+    "rejectReasonLabel": "Lý do từ chối (bắt buộc):",
+    "confirmRejectCancel": "Từ chối yêu cầu",
+    "rejectReasonRequired": "Vui lòng nhập lý do từ chối!"
+  },
+  "eventsV1": {
+    "all": "Tất cả trạng thái",
+    "search": "Tìm tên trong sự kiện đã tải",
+    "cancel": "Hủy sự kiện",
+    "cancelConfirm": "Hủy sự kiện “{{title}}”?",
+    "submit": "Gửi duyệt",
+    "publish": "Xuất bản",
+    "schedule": "Bắt đầu / kết thúc",
+    "mode": "Chế độ bán vé",
+    "QUANTITY": "Theo số lượng",
+    "SEAT_MAP": "Theo sơ đồ ghế",
+    "empty": "Không có sự kiện phù hợp trong phần đã tải.",
+    "success": "Đã cập nhật sự kiện.",
+    "error": "Thao tác chưa thành công. Danh sách đang được cập nhật lại. Hãy kiểm tra trạng thái sự kiện rồi thử lại.",
+    "description": "Theo dõi và thực hiện gửi duyệt, xuất bản, hủy sự kiện của bạn."
+  },
+  "dashboardV1": {
+    "organization": "Thông tin ban tổ chức",
+    "followers": "Người theo dõi",
+    "events": "Sự kiện của bạn",
+    "event": "Sự kiện",
+    "startsAt": "Thời gian bắt đầu",
+    "statistics": "Thống kê sự kiện",
+    "viewStatistics": "Xem thống kê",
+    "empty": "Chưa có sự kiện.",
+    "loadedCount": "Đã tải {{count}} sự kiện. Số liệu bên dưới tính trên phần đã tải.",
+    "totalCount": "Tổng cộng {{count}} sự kiện.",
+    "profileFailed": "Không tải được hồ sơ ban tổ chức.",
+    "statisticsFailed": "Chưa cập nhật được thống kê. Các số liệu còn hiển thị bên dưới thuộc lần tải thành công trước.",
+    "description": "Theo dõi sự kiện, số vé đã mua và số liệu tài chính của từng sự kiện.",
+    "purchasedTicketCount": "Số vé đã mua",
+    "validGross": "Tổng tiền hợp lệ",
+    "validRefunds": "Tiền hoàn hợp lệ",
+    "feeAmount": "Phí nền tảng",
+    "netAmount": "Số tiền ròng",
+    "salesAsOf": "Số liệu bán vé cập nhật lúc",
+    "financeAsOf": "Số liệu tài chính cập nhật lúc",
+    "status": {
+      "DRAFT": "Bản nháp",
+      "PENDING_APPROVAL": "Chờ phê duyệt",
+      "APPROVED": "Đã phê duyệt",
+      "PUBLISHED": "Đã xuất bản",
+      "REJECTED": "Bị từ chối",
+      "CANCELLED": "Đã hủy"
+    }
+  },
   "auth": {
     "redirecting": "Đang chuyển đến trang tài khoản…",
     "unavailable": "Chưa kết nối được trang tài khoản. Vui lòng thử lại sau.",
@@ -14,6 +90,9 @@
     "title": "Tài khoản"
   },
   "adminOrganizer": {
+    "loadFailed": "Không tải được danh sách đơn đăng ký.",
+    "loadMore": "Tải thêm",
+    "reasonTooLong": "Lý do từ chối tối đa 2.000 ký tự.",
     "approve": "Duyệt",
     "emailMissing": "Chưa có email",
     "headerDescription": "Kiểm tra hồ sơ buyer gửi lên và approve hoặc reject quyền organizer.",
@@ -200,7 +279,7 @@
       "pricing": "Chi phí minh bạch",
       "trust": "Dải tin cậy",
       "upcoming": "Sự kiện sắp diễn ra",
-      "venues": "Điểm đến thú vị"
+      "venues": "Địa điểm tổ chức nổi bật"
     },
     "sectionDescriptions": {
       "faq": "Giải đáp các câu hỏi thường gặp về dịch vụ sự kiện và vé.",
@@ -394,8 +473,9 @@
     "farthest": "Xa nhất"
   },
   "nav": {
+    "contact": "Liên hệ",
     "adminOrganizerReview": "Duyệt hồ sơ organizer",
-    "chatbotPrompt": "Các sự kiện nổi bật sắp diễn ra",
+    "chatbotPrompt": "Gợi ý từ AI",
     "chatbotPromptMusic": "Sự kiện âm nhạc sắp diễn ra",
     "chatbotPromptSport": "Sự kiện thể thao đang mở bán",
     "chatbotPromptWeekend": "Gợi ý sự kiện cuối tuần tại TP.HCM",
@@ -412,10 +492,17 @@
     "organizerPending": "Hồ sơ organizer đang chờ duyệt",
     "organizerWorkspace": "Quản lý sự kiện",
     "personalProfile": "Hồ sơ cá nhân",
-    "searchMoreEvents": "Xem thêm sự kiện",
-    "searchPlaceholder": "Tìm kiếm...",
+    "searchAllResults": "Xem tất cả kết quả cho \"{{keyword}}\"",
+    "searchPlaceholder": "Tìm sự kiện, nghệ sĩ, chương trình...",
+    "accountLabel": "Tài khoản",
+    "searchStatus": {
+      "pending": "Đang tìm sự kiện…",
+      "success": "Không có sự kiện phù hợp.",
+      "error": "Không tải được gợi ý tìm kiếm."
+    },
     "tickets": "Vé",
-    "venues": "Địa điểm"
+    "venues": "Địa điểm",
+    "adminRefunds": "Quản lý hoàn tiền"
   },
   "ordersPage": {
     "cancel": "Hủy",
@@ -444,6 +531,10 @@
     "total": "Tổng cộng"
   },
   "profile": {
+    "loginRequired": "Vui lòng đăng nhập để xem hồ sơ.",
+    "loadFailed": "Không tải được hồ sơ.",
+    "retry": "Thử lại",
+    "saving": "Đang lưu…",
     "active": "Đang hoạt động",
     "avatarFailed": "Upload avatar không thành công.",
     "avatarUpdated": "Đã cập nhật ảnh đại diện.",
@@ -547,6 +638,14 @@
     "resetMap": "Vừa khung sơ đồ"
   },
   "organizer": {
+    "organizationName": "Tên tổ chức",
+    "shortDescription": "Mô tả ngắn",
+    "applicationId": "Mã đơn đăng ký",
+    "applicationStatus": {
+      "PENDING": "Đang chờ duyệt",
+      "ACTIVE": "Đã duyệt",
+      "REJECTED": "Đã từ chối"
+    },
     "checkIn": "Check-in",
     "closeSidebar": "Đóng sidebar",
     "dashboard": "Dashboard",
@@ -606,6 +705,9 @@
     "viewPublicProfile": "Xem hồ sơ công khai"
   },
   "organizerProfile": {
+    "noLogo": "Chưa có logo",
+    "noBanner": "Chưa có banner",
+    "invalidImage": "Chọn ảnh PNG hoặc JPEG có dung lượng tối đa 2 MB.",
     "averageRating": "Đánh giá trung bình",
     "bannerFailed": "Không thể cập nhật banner lúc này.",
     "bannerUpdated": "Đã cập nhật banner ban tổ chức.",
@@ -716,7 +818,17 @@
     "totalEventsDescription": "Tất cả sự kiện trong workspace",
     "viewBanner": "Xem banner của {{title}}",
     "viewPublic": "Xem công khai",
-    "viewPublicEvent": "Xem công khai {{title}}"
+    "viewPublicEvent": "Xem công khai {{title}}",
+    "cancelRequestTitle": "Yêu cầu hủy sự kiện",
+    "cancelRequestReasonLabel": "Lý do hủy sự kiện (bắt buộc):",
+    "cancelRequestPlaceholder": "Nhập lý do chi tiết (VD: Điều kiện thời tiết bất khả kháng, nghệ sĩ gặp sự cố sức khỏe...)...",
+    "cancelRequestConfirm": "Gửi yêu cầu hủy",
+    "cancelRequestReasonRequired": "Vui lòng nhập lý do hủy sự kiện!",
+    "cancelRequestSuccess": "Đã gửi yêu cầu hủy sự kiện tới Quản trị viên.",
+    "cancelRequestFailed": "Không thể gửi yêu cầu hủy. Vui lòng thử lại.",
+    "requestCancel": "Yêu cầu hủy sự kiện",
+    "cancellationPending": "Đang chờ Admin duyệt hủy",
+    "alreadyPending": "Sự kiện này đã có yêu cầu hủy đang chờ Quản trị viên phê duyệt."
   },
   "workspaceNav": {
     "chooseSetupAria": "Cách tổ chức bán vé",
@@ -903,30 +1015,41 @@
     "visibility": "Hiển thị"
   },
   "checkIn": {
-    "checkedInAt": "Check-in lúc",
-    "confirm": "Xác nhận check-in",
-    "currentHistory": "Lịch sử phiên hiện tại",
-    "defaultLocation": "Cổng chính",
-    "description": "Quét mã QR soát vé.",
-    "emptyHistory": "Chưa có lịch sử check-in.",
-    "emptySession": "Chưa có lần quét nào trong phiên làm việc này.",
-    "failed": "Check-in thất bại. Kiểm tra QR data hoặc quyền organizer.",
-    "holderName": "Tên người sở hữu vé",
+    "title": "Soát vé (Check-in)",
+    "description": "Quét mã QR soát vé vào cửa sự kiện thời gian thực.",
+    "selectEvent": "Chọn sự kiện soát vé",
+    "selectEventPrompt": "-- Chọn sự kiện của bạn --",
+    "noEvents": "Không tìm thấy sự kiện nào của bạn.",
+    "eventRequired": "Vui lòng chọn sự kiện trước khi soát vé.",
+    "qrData": "Mã QR / Token vé",
+    "qrPlaceholder": "Dán hoặc quét mã QR (Token) của vé vào đây...",
+    "qrRequired": "Vui lòng nhập hoặc quét mã QR trước khi check-in.",
+    "qrTooLong": "Mã QR quá dài (tối đa 4096 ký tự).",
+    "confirm": "Xác nhận Check-in",
     "latestResult": "Kết quả lần quét gần nhất",
-    "location": "Điểm check-in",
-    "locationPlaceholder": "Ví dụ: Cổng A, Bàn VIP, Khu backstage",
-    "locationRequired": "Nhập vị trí cổng check-in.",
-    "locationTooLong": "Vị trí cổng check-in không được vượt quá 100 ký tự.",
-    "qrData": "QR data",
-    "qrPlaceholder": "Dán hoặc quét chuỗi QR data của vé tại đây",
-    "qrRequired": "Nhập hoặc quét QR data trước khi check-in.",
-    "qrTooLong": "QR data quá dài, vui lòng kiểm tra lại mã vé.",
-    "scannedLocation": "Nơi quét",
-    "seat": "Ghế",
-    "success": "Check-in thành công.",
-    "ticketCode": "Mã vé",
-    "ticketType": "Loại vé",
-    "title": "Check-in vé"
+    "currentHistory": "Lịch sử quét trong phiên",
+    "emptyHistory": "Chưa có lượt quét nào trong phiên làm việc này.",
+    "emptySession": "Vui lòng chọn sự kiện và quét mã QR để kiểm tra vé.",
+    "ticketId": "Mã vé",
+    "attemptId": "Mã lần kiểm tra",
+    "processedAt": "Thời điểm xử lý",
+    "status": "Kết quả",
+    "validAdmission": "HỢP LỆ - Cho phép vào cửa",
+    "deniedAdmission": "TỪ CHỐI - Không được vào cửa",
+    "clearHistory": "Xóa lịch sử phiên",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép!",
+    "results": {
+      "SUCCESS": "Hợp lệ - Check-in thành công",
+      "EVENT_CANCELLED": "Sự kiện đã bị hủy - Vé không còn hiệu lực",
+      "ALREADY_USED": "Vé đã qua cửa - Vé đã được check-in trước đó",
+      "VOID": "Vé vô hiệu hóa - Vé đã bị hủy hoặc thu hồi",
+      "WRONG_EVENT": "Sai sự kiện - Mã vé này thuộc sự kiện khác",
+      "OUTSIDE_WINDOW": "Ngoài khung giờ - Chưa tới hoặc đã quá giờ check-in",
+      "UNKNOWN_QR": "QR không tồn tại - Mã vé không hợp lệ",
+      "NOT_EVENT_OWNER": "Không có quyền - Bạn không phải ban tổ chức sở hữu sự kiện này",
+      "NOT_ISSUED": "Vé chưa hoàn tất phát hành"
+    }
   },
   "seatMap": {
     "assignWholeSector": "Gán cả khu",
@@ -1171,6 +1294,7 @@
     "ISSUANCE_FAILED": "Phát vé chưa thành công"
   },
   "paymentV1": {
+    "noAttempt": "Chưa ghi nhận lần thanh toán nào",
     "pay": "Thanh toán bằng VNPay",
     "checkPayment": "Xem trạng thái thanh toán",
     "redirectNotice": "Bạn sẽ được chuyển đến VNPay. Kết quả được xác nhận từ máy chủ sau thanh toán.",
@@ -1233,5 +1357,72 @@
     "PROCESSING": "Đang hoàn tiền",
     "SUCCEEDED": "Đã hoàn tiền",
     "FAILED": "Hoàn tiền chưa thành công"
+  },
+  "adminRefunds": {
+    "title": "Quản trị Hoàn tiền",
+    "description": "Theo dõi, thử lại lệnh hoàn tiền qua cổng VNPay hoặc ghi nhận hoàn tiền thủ công ngoài hệ thống.",
+    "eventLookupTitle": "Tra cứu tiến độ hoàn tiền theo Sự kiện",
+    "eventInputPlaceholder": "Nhập mã sự kiện (Event UUID)...",
+    "searchBtn": "Tra cứu",
+    "loadingProgress": "Đang tải dữ liệu tiến độ sự kiện...",
+    "eventNotFound": "Không tìm thấy dữ liệu hoàn tiền cho sự kiện này (hoặc sự kiện chưa từng bị hủy).",
+    "tabs": {
+      "FAILED": "Thất bại (Cần xử lý)",
+      "PENDING": "Chờ gửi cổng",
+      "PROCESSING": "Đang xử lý",
+      "SUCCEEDED": "Đã hoàn thành"
+    },
+    "states": {
+      "FAILED": "Thất bại (Cần xử lý)",
+      "PENDING": "Chờ gửi cổng",
+      "PROCESSING": "Đang xử lý",
+      "SUCCEEDED": "Đã hoàn thành"
+    },
+    "reasons": {
+      "EVENT_CANCELLED": "Hủy sự kiện",
+      "LATE_PAYMENT": "Thanh toán muộn / hết hạn",
+      "TICKET_ISSUANCE_FAILED": "Lỗi phát vé",
+      "DUPLICATE_PAYMENT": "Thanh toán trùng"
+    },
+    "table": {
+      "refundId": "Mã hoàn tiền",
+      "orderId": "Mã đơn hàng",
+      "amount": "Số tiền",
+      "reason": "Lý do hoàn",
+      "status": "Trạng thái",
+      "createdAt": "Thời gian tạo",
+      "actions": "Thao tác"
+    },
+    "actions": {
+      "retry": "Thử lại",
+      "manual": "Hoàn thủ công",
+      "completed": "Đã xong",
+      "autoProcessing": "Hệ thống tự xử lý"
+    },
+    "stats": {
+      "selected": "Tổng đơn chọn hoàn",
+      "refunded": "Đã hoàn thành",
+      "pending": "Đang xử lý",
+      "needsAttention": "Cần can thiệp (Lỗi)"
+    },
+    "retrySuccess": "Thử lại yêu cầu hoàn thành công.",
+    "retryFailed": "Thử lại thất bại.",
+    "manualSettlementTitle": "Ghi nhận hoàn tiền thủ công",
+    "externalReferenceLabel": "Mã tham chiếu ngân hàng / giao dịch ngoài",
+    "confirmSettlement": "Xác nhận đã hoàn tiền",
+    "cancel": "Hủy bỏ",
+    "refRequired": "Vui lòng nhập mã tham chiếu giao dịch ngoài!",
+    "refTooLong": "Mã tham chiếu tối đa 120 ký tự.",
+    "manualSettlementSuccess": "Ghi nhận hoàn tiền ngoài hệ thống thành công.",
+    "manualSettlementFailed": "Ghi nhận thất bại.",
+    "copied": "Đã sao chép mã!",
+    "loadingList": "Đang tải danh sách yêu cầu hoàn tiền...",
+    "loadFailed": "Không thể tải danh sách hoàn tiền. Vui lòng thử lại sau.",
+    "retryBtn": "Tải lại",
+    "emptyList": "Không có yêu cầu hoàn tiền nào ở trạng thái này.",
+    "prevBtn": "Trang trước",
+    "nextBtn": "Trang sau",
+    "accessDeniedTitle": "Truy cập bị từ chối",
+    "accessDeniedDesc": "Bạn cần đăng nhập với tài khoản có quyền Quản trị viên (ADMIN) để xem trang này."
   }
 }

@@ -84,7 +84,7 @@ spring:
               uri: lb://user-service
               order: 40
               predicates:
-                - Path=/api/v1/me,/api/v1/organizers/**,/api/v1/organizer-applications/**,/api/v1/admin/organizer-applications/**
+                - Path=/api/v1/me,/api/v1/me/avatar,/api/v1/organizers/**,/api/v1/organizer-applications/**,/api/v1/admin/organizer-applications/**
               filters:
                 - name: RequestRateLimiter
                   args:

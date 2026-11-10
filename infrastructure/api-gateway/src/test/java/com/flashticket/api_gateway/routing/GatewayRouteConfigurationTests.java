@@ -77,6 +77,7 @@ class GatewayRouteConfigurationTests {
     "POST, /api/v1/admin/organizer-applications/id-1/approve, lb://user-service",
     "POST, /api/v1/admin/organizer-applications/id-1/reject, lb://user-service",
     "PUT, /api/v1/me, lb://user-service",
+    "PUT, /api/v1/me/avatar, lb://user-service",
     "GET, /api/v1/me, lb://user-service",
     "POST, /api/v1/organizer-applications, lb://user-service",
     "GET, /api/v1/organizer-applications, lb://user-service",

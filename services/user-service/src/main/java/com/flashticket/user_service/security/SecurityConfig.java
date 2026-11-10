@@ -44,7 +44,7 @@ public class SecurityConfig {
                     .hasRole("INTERNAL_SERVICE")
                     .requestMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")
-                    .requestMatchers("/api/v1/me")
+                    .requestMatchers("/api/v1/me", "/api/v1/me/avatar")
                     .hasAnyRole("BUYER", "ORGANIZER", "ADMIN")
                     .requestMatchers(
                         "/api/v1/organizer-applications/**",

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Group, Line, Path, Rect } from "react-konva";
-import { MdOutlineEventSeat } from "react-icons/md";
+import { Armchair as MdOutlineEventSeat } from "lucide-react";
 
 interface SeatRendererProps {
   id: string;

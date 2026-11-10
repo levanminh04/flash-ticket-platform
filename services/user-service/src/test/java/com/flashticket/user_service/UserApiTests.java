@@ -252,6 +252,28 @@ class UserApiTests {
   }
 
   @Test
+  void profileExtrasRoundTripAndRejectInvalidDate() throws Exception {
+    mvc.perform(
+            put("/api/v1/me")
+                .with(buyer("buyer-1"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"dateOfBirth\":\"29-02-2000\",\"phoneNumber\":\"0912345678\",\"address\":\"Hà Nội\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.phoneNumber").value("+84912345678"));
+    mvc.perform(
+            put("/api/v1/me")
+                .with(buyer("buyer-1"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"dateOfBirth\":\"29-02-2001\"}"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/me").with(buyer("buyer-1")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.dateOfBirth").value("29-02-2000"))
+        .andExpect(jsonPath("$.address").value("Hà Nội"));
+  }
+
+  @Test
   void applicationDetailsAreHiddenFromOtherBuyer() throws Exception {
     mvc.perform(
             post("/api/v1/organizer-applications")

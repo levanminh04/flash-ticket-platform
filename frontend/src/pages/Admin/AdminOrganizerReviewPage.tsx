@@ -1,99 +1,64 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useKeycloak } from "@react-keycloak/web";
-import { useMemo, useState } from "react";
-import { CheckCircle2, LoaderCircle, ShieldAlert, XCircle } from "lucide-react";
+import { useState } from "react";
+import { LoaderCircle, ShieldAlert } from "lucide-react";
 import { toast } from "react-toastify";
 import Swal from "sweetalert2";
 import { useTranslation } from "react-i18next";
 import { hasRealmRole } from "../../lib/auth";
-import { OrganizerProfile, organizerService } from "../../services/organizerService";
+import { OrganizerApplication, organizerService } from "../../services/organizerService";
 
-const statusOptions = ["PENDING", "ACTIVE", "REJECTED", "SUSPENDED"];
+type Status = OrganizerApplication["status"];
+const statuses: Status[] = ["PENDING", "ACTIVE", "REJECTED"];
 
-export default function AdminOrganizerReviewPage() {
+function ApplicationReview({ subject }: { subject: string }) {
   const { t } = useTranslation();
-  const { keycloak, initialized } = useKeycloak();
+  const { keycloak } = useKeycloak();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState("PENDING");
-  const isAdmin = hasRealmRole(keycloak.tokenParsed, "ADMIN");
-
-  const statusLabels = useMemo<Record<string, string>>(
-    () => ({
-      PENDING: t("adminOrganizer.statusPending"),
-      ACTIVE: t("adminOrganizer.statusActive"),
-      REJECTED: t("adminOrganizer.statusRejected"),
-      SUSPENDED: t("adminOrganizer.statusSuspended"),
-    }),
-    [t],
-  );
-
-  const organizersQuery = useQuery({
-    queryKey: ["admin-organizers", status],
-    queryFn: () => organizerService.getAdminOrganizers(status, 0, 20),
-    enabled: initialized && keycloak.authenticated && isAdmin,
+  const [status, setStatus] = useState<Status>("PENDING");
+  const queryScope = ["admin-organizer-applications", subject];
+  const applications = useInfiniteQuery({
+    queryKey: [...queryScope, status],
+    queryFn: ({ pageParam, signal }) => organizerService.getAdminApplications(status, pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    retry: false,
   });
+  const rows = applications.data?.pages.flatMap(page => page.items) ?? [];
 
-  const verifyMutation = useMutation({
-    mutationFn: ({
-      organizerProfileId,
-      approved,
-      rejectionReason,
-    }: {
-      organizerProfileId: string;
-      approved: boolean;
-      rejectionReason?: string;
-    }) =>
-      organizerService.verifyOrganizer(organizerProfileId, {
-        approved,
-        rejectionReason: rejectionReason?.trim() || null,
-      }),
+  const decision = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      reason === undefined ? organizerService.approveApplication(id) : organizerService.rejectApplication(id, reason),
     onSuccess: () => {
       toast.success(t("adminOrganizer.updateSuccess"));
-      void queryClient.invalidateQueries({ queryKey: ["admin-organizers"] });
+      return queryClient.invalidateQueries({ queryKey: queryScope });
     },
     onError: () => {
       toast.error(t("adminOrganizer.updateFailed"));
+      void queryClient.invalidateQueries({ queryKey: queryScope });
     },
   });
 
-  const rejectOrganizer = async (profile: OrganizerProfile) => {
-    const { value: rejectionReason } = await Swal.fire({
+  async function reject(application: OrganizerApplication) {
+    const result = await Swal.fire({
       title: t("adminOrganizer.rejectTitle"),
       input: "textarea",
       inputLabel: t("adminOrganizer.rejectReason"),
       inputPlaceholder: t("adminOrganizer.rejectPlaceholder"),
+      inputAttributes: { maxlength: "2000" },
       showCancelButton: true,
       confirmButtonText: t("adminOrganizer.rejectConfirm"),
       cancelButtonText: t("adminOrganizer.rejectCancel"),
-      confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#94a3b8",
-      inputValidator: (value) => {
-        if (!value || !value.trim()) {
-          return t("adminOrganizer.rejectRequired");
-        }
-        return null;
+      inputValidator: value => {
+        const reason = value.trim();
+        if (!reason) return t("adminOrganizer.rejectRequired");
+        return reason.length > 2000 ? t("adminOrganizer.reasonTooLong") : null;
       },
     });
-
-    if (rejectionReason) {
-      verifyMutation.mutate({
-        organizerProfileId: profile.id,
-        approved: false,
-        rejectionReason: rejectionReason.trim(),
-      });
+    if (result.isConfirmed && result.value && keycloak.authenticated &&
+        keycloak.tokenParsed?.sub === subject && hasRealmRole(keycloak.tokenParsed, "ADMIN")) {
+      decision.mutate({ id: application.id, reason: result.value.trim() });
     }
-  };
-
-  if (initialized && (!keycloak.authenticated || !isAdmin)) {
-    return (
-      <main className="admin-organizer-page">
-        <section className="admin-organizer-state">
-          <ShieldAlert size={42} />
-          <h1>{t("adminOrganizer.noAccessTitle")}</h1>
-          <p>{t("adminOrganizer.noAccessDescription")}</p>
-        </section>
-      </main>
-    );
   }
 
   return (
@@ -104,98 +69,103 @@ export default function AdminOrganizerReviewPage() {
             <h1>{t("adminOrganizer.headerTitle")}</h1>
             <p>{t("adminOrganizer.headerDescription")}</p>
           </div>
-
           <label>
             <span>{t("adminOrganizer.status")}</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {statusLabels[option] || option}
-                </option>
+            <select value={status} onChange={event => setStatus(event.target.value as Status)}>
+              {statuses.map(value => (
+                <option key={value} value={value}>{t(`organizer.applicationStatus.${value}`)}</option>
               ))}
             </select>
           </label>
         </div>
 
-        {organizersQuery.isLoading ? (
-          <div className="admin-organizer-loading">
-            <LoaderCircle size={20} className="spin" />
+        {applications.isPending && (
+          <div className="admin-organizer-loading" role="status">
+            <LoaderCircle size={20} className="spin" aria-hidden="true" />
             {t("adminOrganizer.loading")}
           </div>
-        ) : (
+        )}
+        {applications.isError && (
+          <div className="admin-organizer-state">
+            <p role="alert">{t("adminOrganizer.loadFailed")}</p>
+            <button className="btn btn-secondary" type="button" disabled={applications.isFetching}
+              onClick={() => void (applications.isFetchNextPageError ? applications.fetchNextPage() : applications.refetch())}>
+              {t("profile.retry")}
+            </button>
+          </div>
+        )}
+        {applications.data && (
           <div className="admin-organizer-table-wrap">
             <table className="admin-organizer-table">
               <thead>
                 <tr>
-                  <th>{t("adminOrganizer.tableName")}</th>
-                  <th>Slug</th>
-                  <th>{t("profile.phone")}</th>
-                  <th>Email</th>
-                  <th>{t("adminOrganizer.publicChannel")}</th>
-                  <th>{t("adminOrganizer.tableActions")}</th>
+                  <th scope="col">{t("adminOrganizer.tableName")}</th>
+                  <th scope="col">{t("organizer.shortDescription")}</th>
+                  <th scope="col">{t("adminOrganizer.status")}</th>
+                  <th scope="col">{t("adminOrganizer.tableActions")}</th>
                 </tr>
               </thead>
               <tbody>
-                {(organizersQuery.data?.content || []).map((profile) => (
-                  <tr key={profile.id}>
+                {rows.map(application => (
+                  <tr key={application.id}>
+                    <td><strong>{application.organizationName}</strong></td>
+                    <td>{application.shortDescription}</td>
                     <td>
-                      <strong>{profile.name}</strong>
-                    </td>
-                    <td>
-                      <span>{profile.slug ? `/${profile.slug}` : t("adminOrganizer.slugMissing")}</span>
-                    </td>
-                    <td>
-                      <span>{profile.phone || t("adminOrganizer.phoneMissing")}</span>
-                    </td>
-                    <td>
-                      <span>{profile.email || t("adminOrganizer.emailMissing")}</span>
-                    </td>
-                    <td>
-                      {profile.websiteUrl ? (
-                        <a href={profile.websiteUrl} target="_blank" rel="noreferrer">
-                          {profile.websiteUrl}
-                        </a>
-                      ) : (
-                        <span>{t("adminOrganizer.websiteMissing")}</span>
+                      {t(`organizer.applicationStatus.${application.status}`)}
+                      {application.rejectionReason && (
+                        <p>{t("adminOrganizer.rejectReason")}: {application.rejectionReason}</p>
                       )}
                     </td>
                     <td>
-                      <div className="admin-organizer-actions">
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          disabled={verifyMutation.isPending || status !== "PENDING"}
-                          onClick={() =>
-                            verifyMutation.mutate({
-                              organizerProfileId: profile.id,
-                              approved: true,
-                            })
-                          }
-                        >
-                          <CheckCircle2 size={16} />
-                          {t("adminOrganizer.approve")}
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          type="button"
-                          disabled={verifyMutation.isPending || status !== "PENDING"}
-                          onClick={() => rejectOrganizer(profile)}
-                        >
-                          <XCircle size={16} />
-                          {t("adminOrganizer.reject")}
-                        </button>
-                      </div>
+                      {application.status === "PENDING" && (
+                        <div className="admin-organizer-actions">
+                          <button className="btn btn-primary" type="button" disabled={decision.isPending}
+                            onClick={() => decision.mutate({ id: application.id })}>
+                            {t("adminOrganizer.approve")}
+                          </button>
+                          <button className="btn btn-secondary" type="button" disabled={decision.isPending}
+                            onClick={() => void reject(application)}>
+                            {t("adminOrganizer.reject")}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
-                {organizersQuery.data?.content?.length === 0 ? (
-                  <tr>
-                    <td colSpan={6}>{t("adminOrganizer.noRows")}</td>
-                  </tr>
-                ) : null}
+                {rows.length === 0 && <tr><td colSpan={4}>{t("adminOrganizer.noRows")}</td></tr>}
               </tbody>
             </table>
+            {applications.hasNextPage && !applications.isFetchNextPageError && (
+              <button className="btn btn-secondary" type="button" disabled={applications.isFetching}
+                onClick={() => void applications.fetchNextPage()}>
+                {t(applications.isFetchingNextPage ? "adminOrganizer.loading" : "adminOrganizer.loadMore")}
+              </button>
+            )}
           </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+export default function AdminOrganizerReviewPage() {
+  const { t } = useTranslation();
+  const { keycloak, initialized } = useKeycloak();
+  const subject = keycloak.tokenParsed?.sub;
+
+  if (initialized && keycloak.authenticated && subject && hasRealmRole(keycloak.tokenParsed, "ADMIN")) {
+    return <ApplicationReview key={subject} subject={subject} />;
+  }
+
+  return (
+    <main className="admin-organizer-page">
+      <section className="admin-organizer-state">
+        {!initialized ? <p role="status">{t("adminOrganizer.loading")}</p> : (
+          <>
+            <ShieldAlert size={42} aria-hidden="true" />
+            <h1>{t("adminOrganizer.noAccessTitle")}</h1>
+            <p>{t("adminOrganizer.noAccessDescription")}</p>
+          </>
         )}
       </section>
     </main>

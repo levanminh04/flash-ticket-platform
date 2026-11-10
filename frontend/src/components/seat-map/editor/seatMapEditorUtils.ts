@@ -410,7 +410,7 @@ function normalizeSeats(
         x,
         y,
         inventoryStatus: seat.inventoryStatus,
-        hidden: false,
+        hidden: seat.isActive === false,
         manualAdjusted: false,
       };
     })
