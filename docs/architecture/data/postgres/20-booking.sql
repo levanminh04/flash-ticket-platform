@@ -156,6 +156,7 @@ CREATE UNIQUE INDEX promotion_one_active_per_reservation_uq ON promotion_usages(
 CREATE UNIQUE INDEX promotion_one_active_per_buyer_uq ON promotion_usages(promotion_id, buyer_subject) WHERE state IN ('HELD','USED');
 CREATE INDEX orders_buyer_idx ON orders(buyer_subject, created_at);
 CREATE INDEX orders_event_idx ON orders(event_id, created_at);
+CREATE INDEX orders_created_at_idx ON orders(created_at);
 CREATE INDEX orders_expiry_idx ON orders(expires_at);
 CREATE INDEX reservations_expiry_idx ON reservations(expires_at) WHERE state = 'HELD';
 CREATE INDEX allocations_item_idx ON reservation_allocations(order_item_id, order_id, event_id);

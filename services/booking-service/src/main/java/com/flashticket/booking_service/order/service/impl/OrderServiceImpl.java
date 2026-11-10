@@ -7,9 +7,16 @@ import com.flashticket.booking_service.dto.message.BookingIssuanceResult;
 import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.dto.message.OrderCompleted;
 import com.flashticket.booking_service.dto.message.PaymentDecision;
+import com.flashticket.booking_service.dto.projection.OrderStateTotals;
+import com.flashticket.booking_service.dto.projection.TicketTypeStateTotals;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
+import com.flashticket.booking_service.dto.response.EventSalesStatisticsPage;
+import com.flashticket.booking_service.dto.response.OrderPage;
 import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.dto.response.SalesStatisticsChartView;
+import com.flashticket.booking_service.dto.response.SalesStatisticsSummaryView;
+import com.flashticket.booking_service.dto.response.SalesSummaryView;
 import com.flashticket.booking_service.dto.snapshot.PurchaseSnapshot;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.dto.snapshot.SeatSelectionSnapshot;
@@ -21,14 +28,17 @@ import com.flashticket.booking_service.enums.OrderState;
 import com.flashticket.booking_service.enums.PromotionUsageState;
 import com.flashticket.booking_service.enums.ReservationState;
 import com.flashticket.booking_service.enums.ResourceKind;
+import com.flashticket.booking_service.enums.SalesGrouping;
 import com.flashticket.booking_service.enums.SeatState;
 import com.flashticket.booking_service.enums.SectorType;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.mapper.MappingValueConverter;
 import com.flashticket.booking_service.mapper.OrderMapper;
 import com.flashticket.booking_service.mapper.OutboxMessageMapper;
 import com.flashticket.booking_service.messaging.repository.InboxMessageRepository;
 import com.flashticket.booking_service.messaging.repository.OutboxMessageRepository;
+import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.IdempotencyRequestRepository;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
@@ -42,19 +52,341 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.resilience.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
+  private static final List<EventState> SALES_EVENT_STATES =
+      List.of(EventState.PUBLISHED, EventState.CANCELLED);
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public SalesStatisticsSummaryView getSalesStatisticsSummary(
+      String organizerSubject, LocalDate from, LocalDate to) {
+    var filter = resolveSalesStatisticsFilter(organizerSubject, from, to);
+    var orderTotals =
+        organizerSubject == null
+            ? orderRepository.sumSystemOrderTotalsByState(
+                filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES)
+            : orderRepository.sumOrganizerOrderTotalsByState(
+                organizerSubject, filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES);
+    var ticketTotals =
+        organizerSubject == null
+            ? orderRepository.sumSystemTicketTotalsByState(
+                filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES)
+            : orderRepository.sumOrganizerTicketTotalsByState(
+                organizerSubject, filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES);
+    var ordersByState = new EnumMap<OrderState, OrderStateTotals>(OrderState.class);
+    for (var row : orderTotals) ordersByState.put(row.getState(), row);
+    var ticketsByState = new EnumMap<OrderState, Long>(OrderState.class);
+    for (var row : ticketTotals) ticketsByState.put(row.getState(), row.getTicketCount());
+    var byState = new ArrayList<SalesSummaryView.StateSales>();
+    long soldOrders = 0;
+    long soldTickets = 0;
+    var soldSubtotal = BigDecimal.ZERO;
+    var soldDiscount = BigDecimal.ZERO;
+    var soldRevenue = BigDecimal.ZERO;
+    for (var state : OrderState.values()) {
+      var row = ordersByState.get(state);
+      long orderCount = row == null ? 0 : row.getOrderCount();
+      long ticketCount = ticketsByState.getOrDefault(state, 0L);
+      var subtotal = row == null ? BigDecimal.ZERO : row.getSubtotal();
+      var discount = row == null ? BigDecimal.ZERO : row.getDiscount();
+      var total = row == null ? BigDecimal.ZERO : row.getTotal();
+      // Tổng nhiều đơn có thể vượt precision của một đơn; không dùng converter giới hạn 19 chữ số.
+      byState.add(
+          new SalesSummaryView.StateSales(
+              state,
+              orderCount,
+              ticketCount,
+              subtotal.toPlainString(),
+              discount.toPlainString(),
+              total.toPlainString()));
+      if (SOLD_ORDER_STATES.contains(state)) {
+        soldOrders += orderCount;
+        soldTickets += ticketCount;
+        soldSubtotal = soldSubtotal.add(subtotal);
+        soldDiscount = soldDiscount.add(discount);
+        soldRevenue = soldRevenue.add(total);
+      }
+    }
+    return new SalesStatisticsSummaryView(
+        filter.from,
+        filter.to,
+        organizerSubject,
+        SALES_SUMMARY_ZONE.getId(),
+        filter.asOf,
+        Currency.VND,
+        soldOrders,
+        soldTickets,
+        soldSubtotal.toPlainString(),
+        soldDiscount.toPlainString(),
+        soldRevenue.toPlainString(),
+        byState);
+  }
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public SalesStatisticsChartView getSalesStatisticsChart(
+      String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
+    if (groupBy == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    var filter = resolveSalesStatisticsFilter(organizerSubject, from, to);
+    // Hai query cho toàn khoảng, không query riêng từng ngày/tuần/tháng.
+    var orderTotals =
+        organizerSubject == null
+            ? orderRepository.sumSystemDailyOrderSales(
+                filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES, SOLD_ORDER_STATES)
+            : orderRepository.sumOrganizerDailyOrderSales(
+                organizerSubject,
+                filter.fromInclusive,
+                filter.toExclusive,
+                SALES_EVENT_STATES,
+                SOLD_ORDER_STATES);
+    var ticketTotals =
+        organizerSubject == null
+            ? orderRepository.sumSystemDailyTicketSales(
+                filter.fromInclusive, filter.toExclusive, SALES_EVENT_STATES, SOLD_ORDER_STATES)
+            : orderRepository.sumOrganizerDailyTicketSales(
+                organizerSubject,
+                filter.fromInclusive,
+                filter.toExclusive,
+                SALES_EVENT_STATES,
+                SOLD_ORDER_STATES);
+    var counts = new HashMap<LocalDate, Long>();
+    var tickets = new HashMap<LocalDate, Long>();
+    var revenue = new HashMap<LocalDate, BigDecimal>();
+    for (var row : orderTotals) {
+      var period = getSalesPeriodStart(LocalDate.parse(row.getDay()), groupBy);
+      counts.merge(period, row.getOrderCount(), Long::sum);
+      revenue.merge(period, row.getRevenue(), BigDecimal::add);
+    }
+    for (var row : ticketTotals) {
+      var period = getSalesPeriodStart(LocalDate.parse(row.getDay()), groupBy);
+      tickets.merge(period, row.getTicketCount(), Long::sum);
+    }
+    var items = new ArrayList<SalesStatisticsChartView.PeriodSales>();
+    var period = getSalesPeriodStart(filter.from, groupBy);
+    while (!period.isAfter(filter.to)) {
+      var next =
+          switch (groupBy) {
+            case DAY -> period.plusDays(1);
+            case WEEK -> period.plusWeeks(1);
+            case MONTH -> period.plusMonths(1);
+          };
+      items.add(
+          new SalesStatisticsChartView.PeriodSales(
+              period,
+              next.minusDays(1),
+              counts.getOrDefault(period, 0L),
+              tickets.getOrDefault(period, 0L),
+              revenue.getOrDefault(period, BigDecimal.ZERO).toPlainString()));
+      period = next;
+    }
+    return new SalesStatisticsChartView(
+        filter.from,
+        filter.to,
+        organizerSubject,
+        SALES_SUMMARY_ZONE.getId(),
+        filter.asOf,
+        Currency.VND,
+        groupBy,
+        items);
+  }
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public EventSalesStatisticsPage getEventSalesStatistics(
+      String organizerSubject,
+      LocalDate from,
+      LocalDate to,
+      int page,
+      int size,
+      String sortBy,
+      Sort.Direction direction) {
+    if (page < 0
+        || size < 1
+        || size > 100
+        || (long) page * size > Integer.MAX_VALUE
+        || direction == null
+        || sortBy == null
+        || !List.of("soldOrderCount", "soldTicketCount", "soldRevenue").contains(sortBy))
+      throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    var filter = resolveSalesStatisticsFilter(organizerSubject, from, to);
+    var pageable = PageRequest.of(page, size, Sort.by(direction, sortBy).and(Sort.by("eventId")));
+    boolean rankByTickets = sortBy.equals("soldTicketCount");
+    // Xếp hạng toàn bộ snapshot đủ điều kiện trước LIMIT/OFFSET; left join giữ sự kiện số liệu 0.
+    org.springframework.data.domain.Page<Object[]> ranks;
+    if (rankByTickets) {
+      ranks =
+          organizerSubject == null
+              ? orderRepository.findSystemEventTicketSales(
+                  filter.fromInclusive,
+                  filter.toExclusive,
+                  SALES_EVENT_STATES,
+                  SOLD_ORDER_STATES,
+                  pageable)
+              : orderRepository.findOrganizerEventTicketSales(
+                  organizerSubject,
+                  filter.fromInclusive,
+                  filter.toExclusive,
+                  SALES_EVENT_STATES,
+                  SOLD_ORDER_STATES,
+                  pageable);
+    } else {
+      ranks =
+          organizerSubject == null
+              ? orderRepository.findSystemEventOrderSales(
+                  filter.fromInclusive,
+                  filter.toExclusive,
+                  SALES_EVENT_STATES,
+                  SOLD_ORDER_STATES,
+                  pageable)
+              : orderRepository.findOrganizerEventOrderSales(
+                  organizerSubject,
+                  filter.fromInclusive,
+                  filter.toExclusive,
+                  SALES_EVENT_STATES,
+                  SOLD_ORDER_STATES,
+                  pageable);
+    }
+    var items = new ArrayList<EventSalesStatisticsPage.EventSales>();
+    if (ranks.hasContent()) {
+      var eventIds = ranks.getContent().stream().map(row -> (UUID) row[0]).toList();
+      var counts = new HashMap<UUID, Long>();
+      var tickets = new HashMap<UUID, Long>();
+      var revenue = new HashMap<UUID, BigDecimal>();
+      for (var row : ranks) {
+        var id = (UUID) row[0];
+        if (rankByTickets) tickets.put(id, ((Number) row[1]).longValue());
+        else {
+          counts.put(id, ((Number) row[1]).longValue());
+          revenue.put(id, (BigDecimal) row[2]);
+        }
+      }
+      // Chỉ bổ sung metric còn thiếu cho ID trang, không join item vào query tiền.
+      if (rankByTickets) {
+        for (var row :
+            orderRepository.sumOrderSalesByEventIds(
+                eventIds, filter.fromInclusive, filter.toExclusive, SOLD_ORDER_STATES)) {
+          counts.put(row.getEventId(), row.getSoldOrderCount());
+          revenue.put(row.getEventId(), row.getSoldRevenue());
+        }
+      } else {
+        for (var row :
+            orderRepository.sumTicketSalesByEventIds(
+                eventIds, filter.fromInclusive, filter.toExclusive, SOLD_ORDER_STATES))
+          tickets.put(row.getEventId(), row.getSoldTicketCount());
+      }
+      var snapshots = new HashMap<UUID, EventSalesSnapshot>();
+      for (var snapshot : eventSalesSnapshotRepository.findAllById(eventIds))
+        snapshots.put(snapshot.getEventId(), snapshot);
+      for (var id : eventIds) {
+        var snapshot = snapshots.get(id);
+        items.add(
+            new EventSalesStatisticsPage.EventSales(
+                id,
+                snapshot.getConfigurationSnapshot().eventTitle(),
+                snapshot.getOrganizerSubject(),
+                snapshot.getEventStatus(),
+                counts.getOrDefault(id, 0L),
+                tickets.getOrDefault(id, 0L),
+                revenue.getOrDefault(id, BigDecimal.ZERO).toPlainString()));
+      }
+    }
+    return new EventSalesStatisticsPage(
+        filter.from,
+        filter.to,
+        organizerSubject,
+        SALES_SUMMARY_ZONE.getId(),
+        filter.asOf,
+        Currency.VND,
+        items,
+        page,
+        size,
+        ranks.getTotalElements(),
+        ranks.getTotalPages());
+  }
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public SalesSummaryView getEventSalesStatistics(
+      String organizerSubject, UUID eventId, LocalDate from, LocalDate to) {
+    var filter = resolveSalesStatisticsFilter(organizerSubject, from, to);
+    // Outer transaction qua proxy đã tạo snapshot RR; giữ nguyên default của API summary cũ.
+    return getSalesSummary(organizerSubject, eventId, filter.from, filter.to);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getSalesEventOrganizerSubject(UUID eventId, String viewerSubject, boolean admin) {
+    if (eventId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    return eventSalesSnapshotRepository
+        .findSalesOrganizerSubjectByEventId(eventId, SALES_EVENT_STATES)
+        .filter(owner -> admin || owner.equals(viewerSubject))
+        .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+  }
+
+  private SalesStatisticsFilter resolveSalesStatisticsFilter(
+      String organizerSubject, LocalDate from, LocalDate to) {
+    if (organizerSubject != null && organizerSubject.isBlank())
+      throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    var asOf = orderRepository.currentDatabaseTime();
+    var today = LocalDate.ofInstant(asOf, SALES_SUMMARY_ZONE);
+    var requestedFrom = from == null ? today.withDayOfMonth(1) : from;
+    var requestedTo = to == null ? today : to;
+    if (requestedFrom.isAfter(requestedTo))
+      throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+    try {
+      return new SalesStatisticsFilter(
+          organizerSubject,
+          requestedFrom,
+          requestedTo,
+          requestedFrom.atStartOfDay(SALES_SUMMARY_ZONE).toInstant(),
+          requestedTo.plusDays(1).atStartOfDay(SALES_SUMMARY_ZONE).toInstant(),
+          asOf);
+    } catch (java.time.DateTimeException | ArithmeticException exception) {
+      throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+    }
+  }
+
+  private LocalDate getSalesPeriodStart(LocalDate day, SalesGrouping groupBy) {
+    return switch (groupBy) {
+      case DAY -> day;
+      case WEEK -> day.minusDays(day.getDayOfWeek().getValue() - 1L);
+      case MONTH -> day.withDayOfMonth(1);
+    };
+  }
+
+  @lombok.Getter
+  @lombok.AllArgsConstructor
+  private static final class SalesStatisticsFilter {
+    private final String organizerSubject;
+    private final LocalDate from;
+    private final LocalDate to;
+    private final Instant fromInclusive;
+    private final Instant toExclusive;
+    private final Instant asOf;
+  }
+
+  // Ranh giới "ngày" của sales summary tính theo giờ Việt Nam, DB vẫn lưu Instant UTC.
+  private static final ZoneId SALES_SUMMARY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+  private static final List<OrderState> SOLD_ORDER_STATES =
+      List.of(OrderState.ISSUING, OrderState.COMPLETED);
+
   private final OrderRepository orderRepository;
   private final IdempotencyRequestRepository idempotencyRequestRepository;
   private final OrderMapper orderMapper;
@@ -72,6 +404,7 @@ public class OrderServiceImpl implements OrderService {
   private final OutboxMessageMapper outboxMessageMapper;
   private final PromotionInventoryRepository promotionInventoryRepository;
   private final ApplicationEventPublisher applicationEventPublisher;
+  private final MappingValueConverter mappingValueConverter;
 
   @Value("${booking.reservation.hold-duration}")
   private Duration reservationHoldDuration;
@@ -179,6 +512,8 @@ public class OrderServiceImpl implements OrderService {
     lockedOrder.setLifecycleState(OrderState.CANCELLED);
     lockedOrder.setUpdatedAt(orderRepository.currentDatabaseTime());
     orderRepository.save(lockedOrder);
+    applicationEventPublisher.publishEvent(
+        new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     // Toàn bộ release và order commit cùng nhau; lỗi commit đi ra worker để retry.
   }
 
@@ -193,6 +528,142 @@ public class OrderServiceImpl implements OrderService {
             .findByIdAndBuyerSubject(orderId, buyerSubject)
             .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     return orderMapper.toView(order);
+  }
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public OrderPage getOrders(String buyerSubject, OrderState state, int page, int size) {
+    // Id/count và chi tiết cùng snapshot để đơn đổi state giữa hai query vẫn khớp bộ lọc.
+    if (buyerSubject == null || buyerSubject.isBlank())
+      throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+    // Giới hạn kích thước trang 1..100 theo B13 §9.
+    if (page < 0 || size < 1 || size > 100) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    var pageRequest =
+        PageRequest.of(
+            page,
+            size,
+            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+    var orderIdPage = orderRepository.findOrderIdsByBuyerSubject(buyerSubject, state, pageRequest);
+    var orderViews = new ArrayList<OrderView>();
+    if (orderIdPage.hasContent()) {
+      var orderById = new HashMap<UUID, Order>();
+      for (Order order : orderRepository.findWithItemsByIdIn(orderIdPage.getContent()))
+        orderById.put(order.getId(), order);
+      // Query nạp theo id không giữ thứ tự => sắp lại theo trang id của bước 1.
+      for (UUID orderId : orderIdPage.getContent())
+        orderViews.add(orderMapper.toView(orderById.get(orderId)));
+    }
+    return new OrderPage(
+        orderViews,
+        orderIdPage.getNumber(),
+        orderIdPage.getSize(),
+        orderIdPage.getTotalElements(),
+        orderIdPage.getTotalPages());
+  }
+
+  @Override
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public SalesSummaryView getSalesSummary(
+      String organizerSubject, UUID eventId, LocalDate from, LocalDate to) {
+    // Số đơn/tiền và số vé cùng snapshot dù transaction khác đang cập nhật đơn.
+    if (organizerSubject == null || organizerSubject.isBlank())
+      throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+    if (eventId == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+    // Event của organizer khác trả giống event không tồn tại để không lộ eventId của người khác.
+    var storedSnapshot =
+        eventSalesSnapshotRepository
+            .findById(eventId)
+            .filter(snapshot -> organizerSubject.equals(snapshot.getOrganizerSubject()))
+            .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+    var asOf = orderRepository.currentDatabaseTime();
+    var requestedFrom =
+        from != null
+            ? from
+            : LocalDate.ofInstant(storedSnapshot.getSaleStartsAt(), SALES_SUMMARY_ZONE);
+    var requestedTo = to != null ? to : LocalDate.ofInstant(asOf, SALES_SUMMARY_ZONE);
+    if (requestedFrom.isAfter(requestedTo))
+      throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+    // Lọc theo thời điểm tạo đơn: [from 00:00, to+1 00:00) giờ VN.
+    var fromInclusive = requestedFrom.atStartOfDay(SALES_SUMMARY_ZONE).toInstant();
+    var toExclusive = requestedTo.plusDays(1).atStartOfDay(SALES_SUMMARY_ZONE).toInstant();
+
+    var orderTotalsByState = new EnumMap<OrderState, OrderStateTotals>(OrderState.class);
+    for (OrderStateTotals orderTotals :
+        orderRepository.sumOrderTotalsByState(eventId, fromInclusive, toExclusive))
+      orderTotalsByState.put(orderTotals.getState(), orderTotals);
+    var ticketCountByState = new EnumMap<OrderState, Long>(OrderState.class);
+    var soldQuantityByTicketTypeId = new LinkedHashMap<UUID, Long>();
+    var soldLineSubtotalByTicketTypeId = new HashMap<UUID, BigDecimal>();
+    var ticketTypeNameById = new HashMap<UUID, String>();
+    for (TicketTypeStateTotals ticketTypeTotals :
+        orderRepository.sumTicketTypeTotalsByState(eventId, fromInclusive, toExclusive)) {
+      ticketCountByState.merge(
+          ticketTypeTotals.getState(), ticketTypeTotals.getQuantity(), Long::sum);
+      if (!SOLD_ORDER_STATES.contains(ticketTypeTotals.getState())) continue;
+      // ISSUING và COMPLETED của cùng loại vé gộp thành một dòng đã bán.
+      soldQuantityByTicketTypeId.merge(
+          ticketTypeTotals.getTicketTypeId(), ticketTypeTotals.getQuantity(), Long::sum);
+      soldLineSubtotalByTicketTypeId.merge(
+          ticketTypeTotals.getTicketTypeId(), ticketTypeTotals.getLineSubtotal(), BigDecimal::add);
+      ticketTypeNameById.putIfAbsent(
+          ticketTypeTotals.getTicketTypeId(), ticketTypeTotals.getTicketTypeName());
+    }
+
+    var byState = new ArrayList<SalesSummaryView.StateSales>();
+    long soldOrderCount = 0;
+    long soldTicketCount = 0;
+    var soldSubtotal = BigDecimal.ZERO;
+    var soldDiscount = BigDecimal.ZERO;
+    var soldRevenue = BigDecimal.ZERO;
+    // Trả đủ mọi trạng thái, trạng thái không có đơn trả 0 để FE theo dõi được.
+    for (OrderState state : OrderState.values()) {
+      var orderTotals = orderTotalsByState.get(state);
+      long orderCount = orderTotals == null ? 0 : orderTotals.getOrderCount();
+      long ticketCount = ticketCountByState.getOrDefault(state, 0L);
+      var subtotal = orderTotals == null ? BigDecimal.ZERO : orderTotals.getSubtotal();
+      var discount = orderTotals == null ? BigDecimal.ZERO : orderTotals.getDiscount();
+      var total = orderTotals == null ? BigDecimal.ZERO : orderTotals.getTotal();
+      byState.add(
+          new SalesSummaryView.StateSales(
+              state,
+              orderCount,
+              ticketCount,
+              mappingValueConverter.toMoney(subtotal),
+              mappingValueConverter.toMoney(discount),
+              mappingValueConverter.toMoney(total)));
+      if (SOLD_ORDER_STATES.contains(state)) {
+        soldOrderCount += orderCount;
+        soldTicketCount += ticketCount;
+        soldSubtotal = soldSubtotal.add(subtotal);
+        soldDiscount = soldDiscount.add(discount);
+        soldRevenue = soldRevenue.add(total);
+      }
+    }
+    var byTicketType = new ArrayList<SalesSummaryView.TicketTypeSales>();
+    for (var soldQuantity : soldQuantityByTicketTypeId.entrySet())
+      byTicketType.add(
+          new SalesSummaryView.TicketTypeSales(
+              soldQuantity.getKey(),
+              ticketTypeNameById.get(soldQuantity.getKey()),
+              soldQuantity.getValue(),
+              mappingValueConverter.toMoney(
+                  soldLineSubtotalByTicketTypeId.get(soldQuantity.getKey()))));
+
+    return new SalesSummaryView(
+        eventId,
+        storedSnapshot.getConfigurationSnapshot().eventTitle(),
+        requestedFrom,
+        requestedTo,
+        SALES_SUMMARY_ZONE.getId(),
+        asOf,
+        Currency.VND,
+        soldOrderCount,
+        soldTicketCount,
+        mappingValueConverter.toMoney(soldSubtotal),
+        mappingValueConverter.toMoney(soldDiscount),
+        mappingValueConverter.toMoney(soldRevenue),
+        byState,
+        byTicketType);
   }
 
   @Override
@@ -295,6 +766,8 @@ public class OrderServiceImpl implements OrderService {
     lockedOrder.setLifecycleState(OrderState.CANCELLED);
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
+    applicationEventPublisher.publishEvent(
+        new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     // Proxy commit xong mới trả về controller; lỗi flush/commit phải đi ra ngoài.
     return orderMapper.toView(lockedOrder);
   }
@@ -388,6 +861,8 @@ public class OrderServiceImpl implements OrderService {
             : OrderState.EXPIRED);
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
+    applicationEventPublisher.publishEvent(
+        new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     // Lỗi flush/commit phải đi ra service proxy để worker nhận lỗi sau rollback.
   }
 
@@ -443,6 +918,8 @@ public class OrderServiceImpl implements OrderService {
     if (previousState != lockedOrder.getLifecycleState()) {
       lockedOrder.setUpdatedAt(processedAt);
       orderRepository.save(lockedOrder);
+      applicationEventPublisher.publishEvent(
+          new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     }
     if (completed && !cancelled) enqueueOrderCompleted(message, processedAt);
     persistIssuanceResultReceipt(message, payloadHash, processedAt);
@@ -811,6 +1288,7 @@ public class OrderServiceImpl implements OrderService {
       return replayed;
     }
     validatePaymentSnapshot(lockedOrder, message.data());
+    OrderState previousState = lockedOrder.getLifecycleState();
     PaymentDecision decision;
     if (lockedOrder.getAcceptedChargeId() != null) {
       // Charge đã nhận phải được phân xử trước deadline, không đổi ACCEPTED thành LATE.
@@ -833,6 +1311,9 @@ public class OrderServiceImpl implements OrderService {
           settlePendingPayment(lockedOrder, storedReservation, storedSnapshot, message.data());
     }
     persistPaymentDecision(message, payloadHash, decision);
+    if (previousState != lockedOrder.getLifecycleState())
+      applicationEventPublisher.publishEvent(
+          new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     return decision;
   }
 
@@ -1305,6 +1786,8 @@ public class OrderServiceImpl implements OrderService {
     lockedOrder.setPaymentSnapshotVersion(1L);
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
+    applicationEventPublisher.publishEvent(
+        new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     return frozen;
   }
 
@@ -1488,6 +1971,8 @@ public class OrderServiceImpl implements OrderService {
       throw new BusinessException(ErrorCode.PURCHASE_LIMIT_EXCEEDED);
 
     order = orderRepository.save(order);
+    // Listener chỉ đổi generation nếu toàn bộ tạo đơn commit thành công.
+    applicationEventPublisher.publishEvent(new BuyerOrdersChangedEvent(order.getBuyerSubject()));
     Reservation reservation = new Reservation();
     reservation.setOrder(order);
     reservation.setEventId(order.getEventId());

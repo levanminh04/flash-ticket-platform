@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -21,6 +22,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 /** Cấu hình xác thực JWT và quyền truy cập API của Booking. */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
   /** Áp dụng JWT stateless, phân quyền từng nhóm API và nối xử lý lỗi Security. */
@@ -45,6 +47,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/v1/orders/**")
                     .hasRole("BUYER")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/organizer/events/*/sales-summary")
+                    .hasRole("ORGANIZER")
                     .requestMatchers("/internal/v1/**")
                     .hasRole("INTERNAL_SERVICE")
                     .requestMatchers("/actuator/**")

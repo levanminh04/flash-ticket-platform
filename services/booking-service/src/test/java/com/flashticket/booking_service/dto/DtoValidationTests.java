@@ -102,7 +102,7 @@ class DtoValidationTests {
             new PaymentRequestAccepted(ORDER, MESSAGE, NOW),
             new Problem(
                 "ERROR", "Error", EVENT, List.of(new Problem.Violation("selection", "INVALID"))),
-            new OrderPage(List.of(), null),
+            new OrderPage(List.of(), 0, 10, 0, 0),
             new Availability(
                 EVENT,
                 "1",
@@ -162,7 +162,7 @@ class DtoValidationTests {
         new PaymentRequestAccepted(null, MESSAGE, NOW),
         new Problem(" ", "Error", EVENT, List.of()),
         new Problem("ERROR", "Error", EVENT, List.of(new Problem.Violation("", "INVALID"))),
-        new OrderPage(Arrays.asList((OrderView) null), null),
+        new OrderPage(Arrays.asList((OrderView) null), 0, 10, 1, 1),
         new Availability(EVENT, "0", NOW, List.of(), List.of(), List.of()),
         new Availability.TicketTypeAvailability(TICKET, "-1"),
         new Availability.SectorAvailability(SECTOR, SectorType.SEATED, "9223372036854775808"),

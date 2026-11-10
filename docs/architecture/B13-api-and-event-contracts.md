@@ -52,7 +52,8 @@ Danh sách `code` không dùng làm enum mở cho trạng thái DB. Mỗi nhóm 
 | POST `/orders` | Booking / BUYER | `CreateOrder` → 201 `OrderView` | Một transaction giữ tất cả nguồn cung/hạn mức và tạo đơn; không nhận giá từ FE |
 | POST `/orders/{orderId}/promotion` | Booking / chủ đơn | `{code:string}` → `OrderView` | Chỉ khi còn giữ chỗ, chưa freeze, chưa có mã; giữ lượt cùng hạn đơn |
 | POST `/orders/{orderId}/cancel` | Booking / chủ đơn | `{}` → `OrderView` | Chỉ PENDING_PAYMENT còn giữ chỗ; sau chấp nhận tiền không cho buyer hủy. Retry CANCELLED trả trạng thái hiện có |
-| GET `/orders` | Booking / BUYER | `{items:OrderView[],nextCursor:string|null}` | Danh sách của subject đã xác thực, phân trang theo §9; không nhận userId để đổi chủ truy vấn |
+| GET `/orders?page&size&state` | Booking / BUYER | `{items:OrderView[],page:number,size:number,totalElements:number,totalPages:number}` | Danh sách của subject đã xác thực, phân trang offset (size 1..100 theo §9, mới nhất trước), `state` tùy chọn; không nhận userId để đổi chủ truy vấn. Đổi từ cursor sang offset theo contract Booking API 2026-11-09 |
+| GET `/organizer/events/{eventId}/sales-summary?from&to` | Booking / ORGANIZER chủ event | `SalesSummaryView` (spec trên) | Ownership theo `event_sales_snapshots.organizer_subject`; lọc theo `orders.created_at`, ngày giờ VN; đủ 6 OrderState; "đã bán" = ISSUING+COMPLETED; cache TTL 30s |
 | GET `/orders/{orderId}` | Booking / chủ đơn | `OrderView` | `ISSUING` không đổi thành COMPLETED vì trang Return báo thành công |
 | POST `/orders/{orderId}/payment-attempts` | Payment / chủ đơn | `{provider:'VNPAY'}` → `PaymentStart` | Route kỹ thuật CANDIDATE cho nhãn POST payment(orderId) bước 16; Payment lấy snapshot từ Booking, lưu snapshot + attempt rồi trả dữ liệu thanh toán. Không đi qua API start của Booking |
 | GET `/orders/{orderId}/payment` | Payment / chủ đơn | `PaymentView` | Truy vấn bổ trợ khi cần phục hồi/theo dõi; không phải bước poll bắt buộc trong ảnh. Không freeze, tạo attempt hoặc gọi cổng qua GET |
@@ -413,3 +414,17 @@ Sau khi nhận payload v1, validate toàn bộ DTO và tính nhất quán rồi 
 ## Phụ lục đối chiếu R0 và phép thử độc lập — 2026-09-14
 
 Qua cửa project/lien-ket-rca.md, đối chiếu R0-v0.5 §3 các mục 4/5/6 ở mức CANDIDATE: B13 có envelope/correlation/traceparent và tên service thống nhất. Việc không đứt trace trên broker/worker/callback vẫn phải chạy kiểm B15/B16; chưa kết luận đạt runtime. Tạo tác thuộc bộ hệ thống, nguồn hình thành liệt kê ở header và quyết định trong thân bài; nguồn RCA chỉ ở phụ lục đối chiếu này, không sinh API, service hoặc bất biến. GOV-144 không nâng trạng thái của R0.
+
+## 11. Thống kê bán vé dùng chung (2026-11-10)
+
+Booking sở hữu bảy GET: `/api/v1/admin/sales/summary`, `/admin/sales/chart`, `/admin/events/sales-statistics` (ADMIN), `/organizers/{organizerSubject}/sales/summary`, `/organizers/{organizerSubject}/sales/chart`, `/organizers/{organizerSubject}/events/sales-statistics` (ADMIN hoặc đúng ORGANIZER), `/events/{eventId}/sales-statistics` (ADMIN hoặc owner event). Các path rút gọn cũng có prefix /api/v1.
+
+Contract đầy đủ và ví dụ: [Thống kê dùng chung](../api-documentation-frontend.md#thống-kê-bán-vé-dùng-chung--2026-11-10). From/to mặc định đầu tháng/hôm nay giờ VN, lọc Order.createdAt. Snapshot PUBLISHED/CANCELLED gồm dòng 0; sold=ISSUING+COMPLETED; state hiện tại, không ledger lịch sử. Chart DAY/WEEK/MONTH; bảng sort doanh số toàn tập trước page. Tiền chuỗi VND; trả thẳng DTO. API summary organizer cũ giữ default ngày mở bán.
+
+Quyền role/owner kiểm trước cache hit. Cache TTL30s, fail-open Redis, không cache lỗi nghiệp vụ, chưa singleflight/invalidation. Mỗi report nhiều query dùng read-only REPEATABLE_READ. Query biểu đồ là ngoại lệ PostgreSQL timezone/to_char + Hibernate GROUP BY biểu thức đã được user duyệt; các query còn lại dùng Spring Data JPA/JPQL, không Criteria/EM/native mới. Không thêm cột; I1 index orders_created_at_idx(created_at).
+
+## 12. Cache GET orders của buyer (2026-11-10)
+
+GET /api/v1/orders giữ nguyên response/params/quyền BUYER. Booking cache theo subject JWT + state/page/size, data TTL24h; generation namespace đổi sau commit trên mọi luồng thay đổi OrderView (tạo, hủy/hết hạn, nhận tiền, phát vé, voucher, freeze). Replays/no-op không invalidate, rollback không đổi generation. RedisService hiện có được tái sử dụng; không thêm query/schema hoặc broker message.
+
+BuyerOrdersChangedEvent là event Spring nội bộ, không phải envelope RabbitMQ hoặc public event liên service. Listener @TransactionalEventListener(AFTER_COMMIT) synchronous, không durable; Redis lỗi/process chết sau commit có thể để cache cũ tới khi payload hết TTL. Metadata generation không TTL, data cũ tự hết hạn; reader cũ không ghi namespace mới. [Contract key/config và giới hạn](../api-documentation-frontend.md#cache-danh-sách-đơn-buyer--2026-11-10).

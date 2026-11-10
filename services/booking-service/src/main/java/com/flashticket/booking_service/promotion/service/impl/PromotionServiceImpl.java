@@ -8,6 +8,7 @@ import com.flashticket.booking_service.entity.PromotionUsage;
 import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.exception.*;
 import com.flashticket.booking_service.mapper.OrderMapper;
+import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
@@ -17,6 +18,7 @@ import java.math.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class PromotionServiceImpl implements PromotionService {
   private final EventSalesSnapshotRepository eventSalesSnapshotRepository;
   private final ReservationRepository reservationRepository;
   private final OrderMapper orderMapper;
+  private final ApplicationEventPublisher applicationEventPublisher;
 
   @Value("${booking.reservation.lock-timeout}")
   private String reservationLockTimeout;
@@ -145,6 +148,8 @@ public class PromotionServiceImpl implements PromotionService {
     promotionUsageRepository.save(usage);
     promotionInventoryRepository.save(lockedPromotion);
     orderRepository.save(lockedOrder);
+    applicationEventPublisher.publishEvent(
+        new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     return orderMapper.toView(lockedOrder);
   }
 

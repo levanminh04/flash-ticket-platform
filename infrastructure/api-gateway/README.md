@@ -31,6 +31,7 @@ Lượt coding Event bước5–7 chưa recreate/deploy container Gateway.
 | POST | `/api/v1/orders/{orderId}/promotion` | booking-service; BUYER |
 | POST | `/api/v1/orders/{orderId}/cancel` | booking-service; BUYER |
 | POST | `/api/v1/orders/{orderId}/payment-attempts` | booking-service; BUYER |
+| GET | `/api/v1/organizer/events/{eventId}/sales-summary` | booking-service; ORGANIZER (route `booking` order 20 đứng trước route `event` order 50) |
 
 GET `/api/v1/orders/{orderId}/payment` vẫn vào Payment. Theo
 [B13](../../docs/architecture/B13-api-and-event-contracts.md), Booking tiếp nhận
@@ -77,3 +78,13 @@ Với JDK 21, tại thư mục này chạy `.\mvnw.cmd -B -ntp verify`.
 `GatewayHttpTests` chạy Gateway thật trên random port, JWT ký RSA và HTTP downstream
 fixture; thay thế Eureka/Redis để kiểm route, security, header, lỗi và timeout.
 Đây không phải nghiệm thu end-to-end với Keycloak/Redis và API Booking nghiệp vụ thật.
+
+## Route thống kê bán vé (2026-11-10)
+
+Bảy GET reporting được khai báo path cụ thể trên route Booking order 20, trước User order 40 và Event order 50:
+
+- /api/v1/admin/sales/summary, /api/v1/admin/sales/chart, /api/v1/admin/events/sales-statistics.
+- /api/v1/organizers/{subject}/sales/summary, /api/v1/organizers/{subject}/sales/chart, /api/v1/organizers/{subject}/events/sales-statistics.
+- /api/v1/events/{eventId}/sales-statistics.
+
+Booking kiểm role bằng method security và owner trước cache, kể cả gọi HTTP thẳng Booking. Các API organizer/profile và event khác vẫn route như cũ. [Contract và param](../../docs/api-documentation-frontend.md#thống-kê-bán-vé-dùng-chung--2026-11-10). Gateway tests: 112 passed, gồm 7 case mới.

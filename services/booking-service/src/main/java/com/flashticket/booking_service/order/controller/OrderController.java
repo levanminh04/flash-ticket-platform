@@ -2,9 +2,12 @@ package com.flashticket.booking_service.order.controller;
 
 import com.flashticket.booking_service.dto.request.ApplyPromotionRequest;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
+import com.flashticket.booking_service.dto.response.OrderPage;
 import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.enums.OrderState;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.order.service.BuyerOrdersCacheService;
 import com.flashticket.booking_service.order.service.OrderService;
 import com.flashticket.booking_service.promotion.service.PromotionService;
 import jakarta.validation.Valid;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,6 +33,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
   private final OrderService orderService;
   private final PromotionService promotionService;
+  private final BuyerOrdersCacheService buyerOrdersCacheService;
+
+  @GetMapping
+  public ResponseEntity<OrderPage> getOrders(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) OrderState state,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
+    return ResponseEntity.ok(
+        buyerOrdersCacheService.getOrders(jwt.getSubject(), state, page, size));
+  }
 
   @GetMapping("/{orderId}")
   public ResponseEntity<OrderView> getOrder(
