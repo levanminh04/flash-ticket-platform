@@ -31,7 +31,7 @@ const collections = [
       ...metadata, identitySubject: text, displayName: text, dateOfBirth: { bsonType: "string", pattern: "^[0-9]{2}-[0-9]{2}-[0-9]{4}$" },
       address: { ...text, maxLength: 500 },
       phoneNumber: { bsonType: "string", pattern: "^\\+84[0-9]{9}$" },
-      avatarUrl: { bsonType: "string", maxLength: 100000, pattern: "^data:image/jpeg;base64,[A-Za-z0-9+/]+=*$" }
+      avatarUrl: { bsonType: "string", maxLength: 2048, pattern: "^https://res\\.cloudinary\\.com/" }
     }) },
     indexes: [index({ identitySubject: 1 }, 'uq_users_identity_subject', true)]
   },
