@@ -17,6 +17,7 @@ import com.flashticket.booking_service.dto.request.ApplyPromotionRequest;
 import com.flashticket.booking_service.dto.request.CreateOrderRequest;
 import com.flashticket.booking_service.dto.request.OrderSelection;
 import com.flashticket.booking_service.dto.response.OrderView;
+import com.flashticket.booking_service.dto.response.SalesSummaryView;
 import com.flashticket.booking_service.dto.snapshot.*;
 import com.flashticket.booking_service.entity.*;
 import com.flashticket.booking_service.entity.Order;
@@ -30,7 +31,9 @@ import com.flashticket.booking_service.messaging.BookingRabbitErrorHandler;
 import com.flashticket.booking_service.messaging.SalesConfigurationListener;
 import com.flashticket.booking_service.order.EventCancellationWorker;
 import com.flashticket.booking_service.order.OrderExpiryWorker;
+import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.OrderRepository;
+import com.flashticket.booking_service.order.service.BuyerOrdersCacheService;
 import com.flashticket.booking_service.order.service.OrderService;
 import com.flashticket.booking_service.order.service.impl.OrderServiceImpl;
 import com.flashticket.booking_service.redis.service.RedisService;
@@ -40,6 +43,8 @@ import java.nio.file.*;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.*;
 import org.awaitility.Awaitility;
@@ -99,6 +104,7 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(initializers = BookingPersistenceIT.BookingConfigInitializer.class)
 @Import({
+  BuyerOrdersCacheService.class,
   AvailabilityCacheService.class,
   RedisService.class,
   AvailabilityServiceImpl.class,
@@ -254,6 +260,9 @@ class BookingPersistenceIT {
   @Autowired PlatformTransactionManager transactionManager;
   @Autowired ApplicationEventPublisher applicationEventPublisher;
   @Autowired AvailabilityCacheService availabilityCacheService;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+  BuyerOrdersCacheService buyerOrdersCacheService;
 
   @MockitoBean(answers = org.mockito.Answers.RETURNS_DEEP_STUBS)
   StringRedisTemplate availabilityRedisTemplate;
@@ -10941,7 +10950,11 @@ class BookingPersistenceIT {
           if (outcome.equals("failed") || outcome.equals("event-committed")) {
             org.mockito.Mockito.clearInvocations(values);
             var purchase = orderService.preparePurchaseSnapshot("cache-buyer", order.getOrderId());
-            org.mockito.Mockito.verifyNoInteractions(values);
+            // Freeze đổi cache buyer, nhưng không đổi inventory/cache ghế.
+            org.mockito.Mockito.verify(values, org.mockito.Mockito.never())
+                .set(
+                    org.mockito.ArgumentMatchers.eq(generationKey),
+                    org.mockito.ArgumentMatchers.anyString());
             orderVersion = purchase.sourceOrderVersion();
             var decision =
                 orderService.acceptPayment(
@@ -11214,8 +11227,1128 @@ class BookingPersistenceIT {
     }
   }
 
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void listsBuyerOrdersNewestFirstWithTotals() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
+      String buyer = "buyer-list-" + UUID.randomUUID();
+      var oldest =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 1));
+      var middle =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 2));
+      var newest =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 3));
+      orderService.createOrder("other-buyer", UUID.randomUUID(), createOrderRequest(config, 1));
+      // Đặt created_at khác nhau để thứ tự trang không phụ thuộc tốc độ chạy test.
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at=created_at - interval '3 hours' where id=?",
+          oldest.getOrderId());
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at=created_at - interval '2 hours' where id=?",
+          middle.getOrderId());
+
+      var firstPage = orderService.getOrders(buyer, null, 0, 2);
+      assertThat(firstPage.getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(newest.getOrderId(), middle.getOrderId());
+      assertThat(firstPage.getItems().getFirst().getItems().getFirst().getQuantity()).isEqualTo(3);
+      assertThat(firstPage.getItems().getFirst().getTotal()).isEqualTo("300");
+      assertThat(firstPage.getPage()).isZero();
+      assertThat(firstPage.getSize()).isEqualTo(2);
+      assertThat(firstPage.getTotalElements()).isEqualTo(3);
+      assertThat(firstPage.getTotalPages()).isEqualTo(2);
+      assertThat(orderService.getOrders(buyer, null, 1, 2).getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(oldest.getOrderId());
+      var pastLastPage = orderService.getOrders(buyer, null, 5, 2);
+      assertThat(pastLastPage.getItems()).isEmpty();
+      assertThat(pastLastPage.getTotalElements()).isEqualTo(3);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void filtersBuyerOrdersByStateAndOwner() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
+      String buyer = "buyer-filter-" + UUID.randomUUID();
+      var pending =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 1));
+      var cancelled =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 1));
+      orderService.cancelOrder(buyer, cancelled.getOrderId());
+
+      assertThat(orderService.getOrders(buyer, OrderState.CANCELLED, 0, 10).getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(cancelled.getOrderId());
+      assertThat(orderService.getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10).getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(pending.getOrderId());
+      assertThat(orderService.getOrders(buyer, null, 0, 10).getTotalElements()).isEqualTo(2);
+      assertThat(orderService.getOrders("buyer-without-orders", null, 0, 10).getItems()).isEmpty();
+
+      // Transaction khác hủy đơn sau khi lấy id nhưng trước khi nạp chi tiết.
+      var writer = new TransactionTemplate(transactionManager);
+      writer.setPropagationBehavior(Propagation.REQUIRES_NEW.value());
+      var repositoryCalls =
+          org.mockito.Mockito.mockingDetails(orders).getMockCreationSettings().getDefaultAnswer();
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                writer.executeWithoutResult(
+                    status -> orderService.cancelOrder(buyer, pending.getOrderId()));
+                // Giữ delegate của spy để query vẫn chạy qua Spring Data proxy thật.
+                return repositoryCalls.answer(call);
+              })
+          .when(orders)
+          .findWithItemsByIdIn(List.of(pending.getOrderId()));
+      assertThat(orderService.getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10).getItems())
+          .extracting(OrderView::getState)
+          .containsExactly(OrderState.PENDING_PAYMENT);
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  pending.getOrderId()))
+          .isEqualTo("CANCELLED");
+      // Lần gọi mới phải thấy transaction hủy đã commit.
+      assertThat(orderService.getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10).getItems())
+          .isEmpty();
+      for (int[] paging : List.of(new int[] {-1, 10}, new int[] {0, 0}, new int[] {0, 101}))
+        assertThatThrownBy(() -> orderService.getOrders(buyer, null, paging[0], paging[1]))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+      assertThatThrownBy(() -> orderService.getOrders(" ", null, 0, 10))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
+    } finally {
+      org.mockito.Mockito.reset(orders);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void summarizesEventSalesByStateWithinVietnamDateRange() {
+    try {
+      var vietnam = ZoneId.of("Asia/Ho_Chi_Minh");
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
+      Instant now =
+          jdbc.queryForObject("select clock_timestamp()", java.sql.Timestamp.class).toInstant();
+      var today = LocalDate.ofInstant(now, vietnam);
+      // Đơn ISSUING (1 vé) và COMPLETED (2 vé) đi qua luồng nhận tiền thật.
+      for (String state : List.of("ISSUING", "COMPLETED")) {
+        String buyer = "sales-" + state + "-" + UUID.randomUUID();
+        var order =
+            orderService.createOrder(
+                buyer,
+                UUID.randomUUID(),
+                createOrderRequest(config, state.equals("ISSUING") ? 1 : 2));
+        var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+        orderService.acceptPayment(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                frozen.sourceOrderVersion(),
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                new AcceptPayment(
+                    order.getOrderId(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    frozen.total(),
+                    frozen.currency(),
+                    frozen.sourceOrderVersion())));
+        // Đơn đã ISSUING có accepted_charge_id nên đổi sang COMPLETED hợp lệ theo DDL.
+        if (state.equals("COMPLETED"))
+          jdbc.update(
+              "update booking_schema.tbl_orders set lifecycle_state='COMPLETED', created_at=? where id=?",
+              java.sql.Timestamp.from(today.atStartOfDay(vietnam).toInstant()),
+              order.getOrderId());
+      }
+      String pendingBuyer = "sales-pending-" + UUID.randomUUID();
+      var pending =
+          orderService.createOrder(pendingBuyer, UUID.randomUUID(), createOrderRequest(config, 3));
+      String cancelledBuyer = "sales-cancelled-" + UUID.randomUUID();
+      var cancelled =
+          orderService.createOrder(
+              cancelledBuyer, UUID.randomUUID(), createOrderRequest(config, 1));
+      orderService.cancelOrder(cancelledBuyer, cancelled.getOrderId());
+      // Đơn tạo 23:59:59 hôm qua giờ VN nằm ngoài khoảng chỉ có hôm nay.
+      var yesterdayOrder =
+          orderService.createOrder(
+              "sales-yesterday-" + UUID.randomUUID(),
+              UUID.randomUUID(),
+              createOrderRequest(config, 4));
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at=? where id=?",
+          java.sql.Timestamp.from(today.atStartOfDay(vietnam).toInstant().minusSeconds(1)),
+          yesterdayOrder.getOrderId());
+
+      // Tiền/số đơn đã đọc; transaction khác hủy đơn trước query đếm vé.
+      var writer = new TransactionTemplate(transactionManager);
+      writer.setPropagationBehavior(Propagation.REQUIRES_NEW.value());
+      var repositoryCalls =
+          org.mockito.Mockito.mockingDetails(orders).getMockCreationSettings().getDefaultAnswer();
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                writer.executeWithoutResult(
+                    status -> orderService.cancelOrder(pendingBuyer, pending.getOrderId()));
+                return repositoryCalls.answer(call);
+              })
+          .when(orders)
+          .sumTicketTypeTotalsByState(
+              config.eventId(),
+              today.atStartOfDay(vietnam).toInstant(),
+              today.plusDays(1).atStartOfDay(vietnam).toInstant());
+      var summary = orderService.getSalesSummary("organizer", config.eventId(), today, today);
+
+      assertThat(summary.getEventTitle()).isEqualTo("Concert");
+      assertThat(summary.getFrom()).isEqualTo(today);
+      assertThat(summary.getTo()).isEqualTo(today);
+      assertThat(summary.getTimeZone()).isEqualTo("Asia/Ho_Chi_Minh");
+      assertThat(summary.getByState())
+          .extracting(
+              SalesSummaryView.StateSales::getState,
+              SalesSummaryView.StateSales::getOrderCount,
+              SalesSummaryView.StateSales::getTicketCount,
+              SalesSummaryView.StateSales::getTotal)
+          .containsExactly(
+              tuple(OrderState.PENDING_PAYMENT, 1L, 3L, "300"),
+              tuple(OrderState.ISSUING, 1L, 1L, "100"),
+              tuple(OrderState.COMPLETED, 1L, 2L, "200"),
+              tuple(OrderState.CANCELLED, 1L, 1L, "100"),
+              tuple(OrderState.EXPIRED, 0L, 0L, "0"),
+              tuple(OrderState.ISSUANCE_FAILED, 0L, 0L, "0"));
+      assertThat(summary.getSoldOrderCount()).isEqualTo(2);
+      assertThat(summary.getSoldTicketCount()).isEqualTo(3);
+      assertThat(summary.getSoldSubtotal()).isEqualTo("300");
+      assertThat(summary.getSoldDiscount()).isEqualTo("0");
+      assertThat(summary.getSoldRevenue()).isEqualTo("300");
+      assertThat(summary.getByTicketType())
+          .extracting(
+              SalesSummaryView.TicketTypeSales::getTicketTypeId,
+              SalesSummaryView.TicketTypeSales::getTicketTypeName,
+              SalesSummaryView.TicketTypeSales::getSoldQuantity,
+              SalesSummaryView.TicketTypeSales::getLineSubtotal)
+          .containsExactly(
+              tuple(config.ticketTypes().getFirst().ticketTypeId(), "Standard", 3L, "300"));
+      assertThat(
+              jdbc.queryForObject(
+                  "select lifecycle_state from booking_schema.tbl_orders where id=?",
+                  String.class,
+                  pending.getOrderId()))
+          .isEqualTo("CANCELLED");
+      // Lần gọi mới thấy đơn đã hủy; mở rộng sang hôm qua còn một đơn chờ thanh toán.
+      assertThat(
+              orderService
+                  .getSalesSummary("organizer", config.eventId(), today.minusDays(1), today)
+                  .getByState()
+                  .getFirst()
+                  .getOrderCount())
+          .isEqualTo(1);
+      assertThatThrownBy(
+              () ->
+                  orderService.getSalesSummary(
+                      "organizer", config.eventId(), today, today.minusDays(1)))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.INVALID_DATE_RANGE));
+    } finally {
+      org.mockito.Mockito.reset(orders);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void defaultsSalesSummaryRangeFromSaleStartToToday() {
+    try {
+      var vietnam = ZoneId.of("Asia/Ho_Chi_Minh");
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
+      orderService.createOrder(
+          "default-range-" + UUID.randomUUID(), UUID.randomUUID(), createOrderRequest(config, 1));
+      // Đơn trước ngày mở bán không thuộc khoảng mặc định.
+      var beforeSaleStart =
+          orderService.createOrder(
+              "default-range-" + UUID.randomUUID(),
+              UUID.randomUUID(),
+              createOrderRequest(config, 1));
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at=created_at - interval '3 days' where id=?",
+          beforeSaleStart.getOrderId());
+
+      var summary = orderService.getSalesSummary("organizer", config.eventId(), null, null);
+
+      assertThat(summary.getFrom()).isEqualTo(LocalDate.ofInstant(config.saleStartsAt(), vietnam));
+      assertThat(summary.getTo()).isEqualTo(LocalDate.ofInstant(summary.getAsOf(), vietnam));
+      assertThat(summary.getByState().getFirst().getState()).isEqualTo(OrderState.PENDING_PAYMENT);
+      assertThat(summary.getByState().getFirst().getOrderCount()).isEqualTo(1);
+      assertThat(summary.getSoldOrderCount()).isZero();
+      assertThat(summary.getByTicketType()).isEmpty();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void hidesSalesSummaryOfOtherOrganizer() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
+      for (UUID eventId : List.of(config.eventId(), UUID.randomUUID()))
+        assertThatThrownBy(
+                () -> orderService.getSalesSummary("other-organizer", eventId, null, null))
+            .isInstanceOfSatisfying(
+                BusinessException.class,
+                error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.EVENT_NOT_FOUND));
+      assertThatThrownBy(() -> orderService.getSalesSummary(" ", config.eventId(), null, null))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void summarizesSystemAndOrganizerSalesStatistics() {
+    try {
+      var config =
+          seedOrderCreationConfiguration(
+              SalesMode.SEAT_MAP, SectorType.STANDING, 50, 20, "owner-a");
+      var other = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "owner-b");
+      var day = LocalDate.parse("2020-01-15");
+      for (int n = 0; n < 3; n++) {
+        String buyer = "stats-" + UUID.randomUUID();
+        var selected = n == 2 ? other : config;
+        var request =
+            n == 2
+                ? createOrderRequest(selected, 1)
+                : new CreateOrderRequest(
+                    config.eventId(),
+                    "buyer@example.com",
+                    new OrderSelection.StandingSelection(
+                        config.sectors().getFirst().sectorId(),
+                        List.of(
+                            new OrderSelection.QuantityItem(
+                                config.ticketTypes().get(0).ticketTypeId(), 2),
+                            new OrderSelection.QuantityItem(
+                                config.ticketTypes().get(1).ticketTypeId(), 1))));
+        var order = orderService.createOrder(buyer, UUID.randomUUID(), request);
+        var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+        orderService.acceptPayment(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                frozen.sourceOrderVersion(),
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                new AcceptPayment(
+                    order.getOrderId(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    frozen.total(),
+                    frozen.currency(),
+                    frozen.sourceOrderVersion())));
+
+        jdbc.update(
+            "update booking_schema.tbl_orders set created_at=?, lifecycle_state=? where id=?",
+            java.sql.Timestamp.from(day.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()),
+            n == 0 ? "COMPLETED" : "ISSUING",
+            order.getOrderId());
+      }
+      var pending =
+          orderService.createOrder(
+              "pending-stats", UUID.randomUUID(), createOrderRequest(config, 1));
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at=? where id=?",
+          java.sql.Timestamp.from(day.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()),
+          pending.getOrderId());
+      var own = orderService.getSalesStatisticsSummary("owner-a", day, day);
+      assertThat(own.getSoldOrderCount()).isEqualTo(2);
+      assertThat(own.getSoldTicketCount()).isEqualTo(6);
+      assertThat(own.getSoldSubtotal()).isEqualTo("800");
+      assertThat(own.getSoldRevenue()).isEqualTo("800");
+      assertThat(own.getByState()).hasSize(OrderState.values().length);
+      assertThat(own.getByState())
+          .filteredOn(row -> row.getState() == OrderState.PENDING_PAYMENT)
+          .singleElement()
+          .satisfies(
+              row -> {
+                assertThat(row.getOrderCount()).isEqualTo(1);
+                assertThat(row.getTicketCount()).isEqualTo(1);
+              });
+      var system = orderService.getSalesStatisticsSummary(null, day, day);
+      assertThat(system.getSoldOrderCount()).isEqualTo(3);
+      assertThat(system.getSoldTicketCount()).isEqualTo(7);
+      assertThat(system.getSoldRevenue()).isEqualTo("900");
+      // Fixture tổng hợp lớn: mỗi đơn vẫn trong numeric(19,0), tổng hai đơn vượt 19 chữ số.
+      // Chỉ sửa bảng trong container test; đây không phải kiểm thử lại luồng áp voucher/payment.
+      jdbc.update(
+          "update booking_schema.tbl_orders set subtotal=9000000000000000000, discount=100, total=8999999999999999900 where event_id=? and lifecycle_state in ('ISSUING','COMPLETED')",
+          config.eventId());
+      var large = orderService.getSalesStatisticsSummary("owner-a", day, day);
+      assertThat(large.getSoldSubtotal()).isEqualTo("18000000000000000000");
+      assertThat(large.getSoldDiscount()).isEqualTo("200");
+      assertThat(large.getSoldRevenue()).isEqualTo("17999999999999999800");
+      assertThat(orderService.getSalesStatisticsSummary("nobody", day, day).getSoldRevenue())
+          .isEqualTo("0");
+      var defaults = orderService.getSalesStatisticsSummary("owner-a", null, null);
+      assertThat(defaults.getFrom()).isEqualTo(defaults.getTo().withDayOfMonth(1));
+      assertThatThrownBy(() -> orderService.getSalesStatisticsSummary(null, day.plusDays(1), day))
+          .isInstanceOf(BusinessException.class);
+      assertThatThrownBy(
+              () -> orderService.getSalesStatisticsSummary(null, LocalDate.MAX, LocalDate.MAX))
+          .isInstanceOf(BusinessException.class);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void groupsSalesChartsByVietnamCalendar() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "chart-owner");
+      var instants =
+          List.of(
+              Instant.parse("2019-12-31T16:59:59Z"),
+              Instant.parse("2019-12-31T17:00:00Z"),
+              Instant.parse("2020-01-01T17:00:00Z"));
+      for (var created : instants) {
+        String buyer = "chart-" + UUID.randomUUID();
+        var order =
+            orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 2));
+        var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+        orderService.acceptPayment(
+            new Envelope<>(
+                UUID.randomUUID(),
+                "booking.accept-payment.v1",
+                1,
+                order.getOrderId(),
+                frozen.sourceOrderVersion(),
+                Instant.now(),
+                UUID.randomUUID(),
+                null,
+                null,
+                new AcceptPayment(
+                    order.getOrderId(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    frozen.total(),
+                    frozen.currency(),
+                    frozen.sourceOrderVersion())));
+
+        jdbc.update(
+            "update booking_schema.tbl_orders set created_at=? where id=?",
+            java.sql.Timestamp.from(created),
+            order.getOrderId());
+      }
+      var from = LocalDate.parse("2019-12-31");
+      var to = LocalDate.parse("2020-01-03");
+      var daily = orderService.getSalesStatisticsChart("chart-owner", from, to, SalesGrouping.DAY);
+      assertThat(daily.getItems())
+          .extracting(item -> item.getSoldOrderCount())
+          .containsExactly(1L, 1L, 1L, 0L);
+      assertThat(daily.getItems())
+          .extracting(item -> item.getSoldTicketCount())
+          .containsExactly(2L, 2L, 2L, 0L);
+      assertThat(daily.getItems())
+          .extracting(item -> item.getSoldRevenue())
+          .containsExactly("200", "200", "200", "0");
+      var week = orderService.getSalesStatisticsChart("chart-owner", from, to, SalesGrouping.WEEK);
+      assertThat(week.getItems())
+          .singleElement()
+          .satisfies(
+              item -> {
+                assertThat(item.getPeriodStart()).isEqualTo(LocalDate.parse("2019-12-30"));
+                assertThat(item.getPeriodEnd()).isEqualTo(LocalDate.parse("2020-01-05"));
+                assertThat(item.getSoldOrderCount()).isEqualTo(3);
+              });
+      var month = orderService.getSalesStatisticsChart(null, from, to, SalesGrouping.MONTH);
+      assertThat(month.getItems())
+          .extracting(item -> item.getSoldOrderCount())
+          .containsExactly(1L, 2L);
+      assertThat(
+              orderService.getSalesStatisticsChart("empty", from, to, SalesGrouping.DAY).getItems())
+          .allSatisfy(item -> assertThat(item.getSoldOrderCount()).isZero());
+      assertThat(
+              orderService
+                  .getSalesStatisticsChart(
+                      "chart-owner", from.plusDays(1), from.plusDays(1), SalesGrouping.DAY)
+                  .getItems())
+          .singleElement()
+          .satisfies(item -> assertThat(item.getSoldOrderCount()).isEqualTo(1));
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void ranksEventSalesStatisticsWithZeroRows() {
+    try {
+      var first = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "rank-owner");
+      var second = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "rank-owner");
+      var zero = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "rank-owner");
+      var zeroTie = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "rank-owner");
+      var other = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "other-rank");
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+          zero.eventId());
+      var day = LocalDate.parse("2020-02-01");
+      for (var config : List.of(first, second, other)) {
+        int repeats = config == first ? 2 : 1;
+        for (int n = 0; n < repeats; n++) {
+          String buyer = "rank-" + UUID.randomUUID();
+          var order =
+              orderService.createOrder(
+                  buyer, UUID.randomUUID(), createOrderRequest(config, config == second ? 3 : 1));
+          var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+          orderService.acceptPayment(
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "booking.accept-payment.v1",
+                  1,
+                  order.getOrderId(),
+                  frozen.sourceOrderVersion(),
+                  Instant.now(),
+                  UUID.randomUUID(),
+                  null,
+                  null,
+                  new AcceptPayment(
+                      order.getOrderId(),
+                      UUID.randomUUID(),
+                      UUID.randomUUID(),
+                      frozen.total(),
+                      frozen.currency(),
+                      frozen.sourceOrderVersion())));
+
+          jdbc.update(
+              "update booking_schema.tbl_orders set created_at=? where id=?",
+              java.sql.Timestamp.from(day.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()),
+              order.getOrderId());
+        }
+      }
+      for (String sort : List.of("soldRevenue", "soldOrderCount", "soldTicketCount")) {
+        var high = sort.equals("soldOrderCount") ? first.eventId() : second.eventId();
+        var desc =
+            orderService.getEventSalesStatistics(
+                "rank-owner",
+                day,
+                day,
+                0,
+                1,
+                sort,
+                org.springframework.data.domain.Sort.Direction.DESC);
+        assertThat(desc.getTotalElements()).isEqualTo(4);
+        assertThat(desc.getTotalPages()).isEqualTo(4);
+        assertThat(desc.getItems())
+            .singleElement()
+            .satisfies(row -> assertThat(row.getEventId()).isEqualTo(high));
+        var asc =
+            orderService.getEventSalesStatistics(
+                "rank-owner",
+                day,
+                day,
+                0,
+                10,
+                sort,
+                org.springframework.data.domain.Sort.Direction.ASC);
+        var zeroIds =
+            List.of(zero.eventId(), zeroTie.eventId()).stream()
+                .sorted(java.util.Comparator.comparing(UUID::toString))
+                .toList();
+        assertThat(asc.getItems().subList(0, 2))
+            .extracting(row -> row.getEventId())
+            .containsExactlyElementsOf(zeroIds);
+        var nextPage =
+            orderService.getEventSalesStatistics(
+                "rank-owner",
+                day,
+                day,
+                1,
+                1,
+                sort,
+                org.springframework.data.domain.Sort.Direction.ASC);
+        assertThat(nextPage.getItems())
+            .singleElement()
+            .satisfies(row -> assertThat(row.getEventId()).isEqualTo(zeroIds.get(1)));
+        assertThat(asc.getItems().getFirst().getSoldRevenue()).isEqualTo("0");
+        assertThat(asc.getItems())
+            .extracting(row -> row.getEventId())
+            .doesNotContain(other.eventId());
+        assertThat(asc.getItems())
+            .filteredOn(row -> row.getEventId().equals(second.eventId()))
+            .singleElement()
+            .satisfies(
+                row -> {
+                  assertThat(row.getSoldOrderCount()).isEqualTo(1);
+                  assertThat(row.getSoldTicketCount()).isEqualTo(3);
+                  assertThat(row.getSoldRevenue()).isEqualTo("300");
+                });
+        var system =
+            orderService.getEventSalesStatistics(
+                null, day, day, 0, 100, sort, org.springframework.data.domain.Sort.Direction.DESC);
+        assertThat(system.getItems())
+            .extracting(row -> row.getEventId())
+            .contains(other.eventId(), zero.eventId());
+      }
+      assertThat(
+              orderService
+                  .getEventSalesStatistics(
+                      "rank-owner",
+                      day,
+                      day,
+                      10,
+                      10,
+                      "soldRevenue",
+                      org.springframework.data.domain.Sort.Direction.DESC)
+                  .getItems())
+          .isEmpty();
+      assertThat(
+              orderService
+                  .getEventSalesStatistics(
+                      "missing",
+                      day,
+                      day,
+                      0,
+                      10,
+                      "soldRevenue",
+                      org.springframework.data.domain.Sort.Direction.DESC)
+                  .getTotalElements())
+          .isZero();
+      for (int size : List.of(0, 101))
+        assertThatThrownBy(
+                () ->
+                    orderService.getEventSalesStatistics(
+                        null,
+                        day,
+                        day,
+                        0,
+                        size,
+                        "soldRevenue",
+                        org.springframework.data.domain.Sort.Direction.DESC))
+            .isInstanceOf(BusinessException.class);
+      assertThatThrownBy(
+              () ->
+                  orderService.getEventSalesStatistics(
+                      null,
+                      day,
+                      day,
+                      Integer.MAX_VALUE,
+                      100,
+                      "soldRevenue",
+                      org.springframework.data.domain.Sort.Direction.DESC))
+          .isInstanceOf(BusinessException.class);
+      assertThatThrownBy(
+              () ->
+                  orderService.getEventSalesStatistics(
+                      null,
+                      day,
+                      day,
+                      0,
+                      10,
+                      "bad",
+                      org.springframework.data.domain.Sort.Direction.DESC))
+          .isInstanceOf(BusinessException.class);
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void resolvesEventSalesOwnerForAdminAndOrganizer() {
+    try {
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "detail-owner");
+      assertThat(orderService.getSalesEventOrganizerSubject(config.eventId(), "admin", true))
+          .isEqualTo("detail-owner");
+      assertThat(
+              orderService.getSalesEventOrganizerSubject(config.eventId(), "detail-owner", false))
+          .isEqualTo("detail-owner");
+      assertThatThrownBy(
+              () -> orderService.getSalesEventOrganizerSubject(config.eventId(), "other", false))
+          .isInstanceOf(BusinessException.class);
+      assertThatThrownBy(
+              () -> orderService.getSalesEventOrganizerSubject(UUID.randomUUID(), "admin", true))
+          .isInstanceOf(BusinessException.class);
+      var detail =
+          orderService.getEventSalesStatistics("detail-owner", config.eventId(), null, null);
+      assertThat(detail.getFrom()).isEqualTo(detail.getTo().withDayOfMonth(1));
+      var legacy = orderService.getSalesSummary("detail-owner", config.eventId(), null, null);
+      assertThat(legacy.getFrom())
+          .isEqualTo(LocalDate.ofInstant(config.saleStartsAt(), ZoneId.of("Asia/Ho_Chi_Minh")));
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+          config.eventId());
+      assertThat(orderService.getSalesEventOrganizerSubject(config.eventId(), "admin", true))
+          .isEqualTo("detail-owner");
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void keepsSalesStatisticsConsistentAcrossConcurrentUpdates() {
+    try {
+      var config =
+          seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20, "concurrent-owner");
+      var order =
+          orderService.createOrder(
+              "stats-concurrent-buyer", UUID.randomUUID(), createOrderRequest(config, 2));
+      var day = LocalDate.ofInstant(orders.currentDatabaseTime(), ZoneId.of("Asia/Ho_Chi_Minh"));
+      var from = day.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+      var to = day.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+      var writer = new TransactionTemplate(transactionManager);
+      writer.setPropagationBehavior(Propagation.REQUIRES_NEW.value());
+      var delegate =
+          org.mockito.Mockito.mockingDetails(orders).getMockCreationSettings().getDefaultAnswer();
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                writer.executeWithoutResult(
+                    status ->
+                        orderService.cancelOrder("stats-concurrent-buyer", order.getOrderId()));
+                return delegate.answer(call);
+              })
+          .when(orders)
+          .sumOrganizerTicketTotalsByState(
+              "concurrent-owner", from, to, List.of(EventState.PUBLISHED, EventState.CANCELLED));
+      var old = orderService.getSalesStatisticsSummary("concurrent-owner", day, day);
+      assertThat(old.getByState())
+          .filteredOn(row -> row.getState() == OrderState.PENDING_PAYMENT)
+          .singleElement()
+          .satisfies(
+              row -> {
+                assertThat(row.getOrderCount()).isEqualTo(1);
+                assertThat(row.getTicketCount()).isEqualTo(2);
+              });
+      org.mockito.Mockito.reset(orders);
+      var fresh = orderService.getSalesStatisticsSummary("concurrent-owner", day, day);
+      assertThat(fresh.getByState())
+          .filteredOn(row -> row.getState() == OrderState.CANCELLED)
+          .singleElement()
+          .satisfies(
+              row -> {
+                assertThat(row.getOrderCount()).isEqualTo(1);
+                assertThat(row.getTicketCount()).isEqualTo(2);
+              });
+    } finally {
+      org.mockito.Mockito.reset(orders);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void invalidatesBuyerOrdersCacheAfterCommitButNotRollback() {
+    try {
+
+      Map<String, String> redis = new HashMap<>();
+      var cacheValues = availabilityRedisTemplate.opsForValue();
+      org.mockito.Mockito.when(cacheValues.get(org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.get(call.getArgument(0)));
+      org.mockito.Mockito.when(
+              cacheValues.setIfAbsent(
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.putIfAbsent(call.getArgument(0), call.getArgument(1)) == null);
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.any(Duration.class));
+      String prefix =
+          (String)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  buyerOrdersCacheService, "keyPrefix");
+
+      String buyer = "cache-commit-buyer";
+      String generationKey =
+          prefix
+              + java.util.Base64.getUrlEncoder()
+                  .withoutPadding()
+                  .encodeToString(buyer.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+              + ":generation";
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 10);
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems()).isEmpty();
+      buyerOrdersCacheService.getOrders(buyer, null, 0, 10);
+      org.mockito.Mockito.verify(orders)
+          .findOrderIdsByBuyerSubject(
+              org.mockito.ArgumentMatchers.eq(buyer),
+              org.mockito.ArgumentMatchers.isNull(),
+              org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class));
+      String emptyGeneration = redis.get(generationKey);
+      var transaction = new TransactionTemplate(transactionManager);
+      UUID key = UUID.randomUUID();
+      var request = createOrderRequest(config, 2);
+      var created =
+          transaction.execute(
+              status -> {
+                var order = orderService.createOrder(buyer, key, request);
+                // Không invalidation trước commit, dù service đã publish event trong transaction.
+                assertThat(redis.get(generationKey)).isEqualTo(emptyGeneration);
+                return order;
+              });
+      assertThat(created).isNotNull();
+      assertThat(redis.get(generationKey)).isNotEqualTo(emptyGeneration);
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(created.getOrderId());
+      String committedGeneration = redis.get(generationKey);
+      orderService.createOrder(buyer, key, request);
+      assertThat(redis.get(generationKey)).isEqualTo(committedGeneration);
+      org.mockito.Mockito.clearInvocations(buyerOrdersCacheService);
+      assertThatThrownBy(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        orderService.createOrder(
+                            buyer, UUID.randomUUID(), createOrderRequest(config, 1));
+                        assertThat(redis.get(generationKey)).isEqualTo(committedGeneration);
+                        throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                      }))
+          .isInstanceOf(BusinessException.class);
+      assertThat(redis.get(generationKey)).isEqualTo(committedGeneration);
+      org.mockito.Mockito.verify(buyerOrdersCacheService, org.mockito.Mockito.never())
+          .invalidateBuyerOrdersCache(
+              org.mockito.ArgumentMatchers.any(BuyerOrdersChangedEvent.class));
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getTotalElements())
+          .isEqualTo(1);
+      assertThat(orderService.getOrders(buyer, null, 0, 10).getTotalElements()).isEqualTo(1);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void invalidatesBuyerOrdersCacheWhenOrderStateChanges() {
+    Object target =
+        org.springframework.test.util.AopTestUtils.getUltimateTargetObject(orderService);
+    Object previousDuration =
+        org.springframework.test.util.ReflectionTestUtils.getField(
+            target, "reservationHoldDuration");
+    try {
+
+      Map<String, String> redis = new HashMap<>();
+      var cacheValues = availabilityRedisTemplate.opsForValue();
+      org.mockito.Mockito.when(cacheValues.get(org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.get(call.getArgument(0)));
+      org.mockito.Mockito.when(
+              cacheValues.setIfAbsent(
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.putIfAbsent(call.getArgument(0), call.getArgument(1)) == null);
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.any(Duration.class));
+      String prefix =
+          (String)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  buyerOrdersCacheService, "keyPrefix");
+
+      for (String scenario :
+          List.of("buyer-cancel", "event-cancel", "expiry", "success", "failure")) {
+        String buyer = "cache-state-" + scenario;
+        String generationKey =
+            prefix
+                + java.util.Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(buyer.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                + ":generation";
+        var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 10);
+        if (scenario.equals("expiry"))
+          org.springframework.test.util.ReflectionTestUtils.setField(
+              target, "reservationHoldDuration", Duration.ofSeconds(2));
+        var order =
+            orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 2));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+            target, "reservationHoldDuration", previousDuration);
+        buyerOrdersCacheService.getOrders(buyer, null, 0, 10);
+        buyerOrdersCacheService.getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10);
+        String before = redis.get(generationKey);
+        OrderState expected;
+        if (scenario.equals("buyer-cancel")) {
+          orderService.cancelOrder(buyer, order.getOrderId());
+          expected = OrderState.CANCELLED;
+          String after = redis.get(generationKey);
+          orderService.cancelOrder(buyer, order.getOrderId());
+          assertThat(redis.get(generationKey)).isEqualTo(after);
+        } else if (scenario.equals("event-cancel")) {
+          // Fixture sự kiện đã hủy; kiểm đúng đường ghi của worker hủy đơn.
+          jdbc.update(
+              "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id=?",
+              config.eventId());
+          orderService.cancelOrderForEventCancellation(order.getOrderId());
+          expected = OrderState.CANCELLED;
+          String after = redis.get(generationKey);
+          orderService.cancelOrderForEventCancellation(order.getOrderId());
+          assertThat(redis.get(generationKey)).isEqualTo(after);
+        } else if (scenario.equals("expiry")) {
+          Awaitility.await()
+              .atMost(Duration.ofSeconds(10))
+              .until(
+                  () ->
+                      Boolean.TRUE.equals(
+                          jdbc.queryForObject(
+                              "select clock_timestamp() >= expires_at from booking_schema.tbl_orders where id=?",
+                              Boolean.class,
+                              order.getOrderId())));
+          orderService.expireOrder(order.getOrderId());
+          expected = OrderState.EXPIRED;
+          String after = redis.get(generationKey);
+          orderService.expireOrder(order.getOrderId());
+          assertThat(redis.get(generationKey)).isEqualTo(after);
+        } else {
+          var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+          buyerOrdersCacheService.getOrders(buyer, null, 0, 10);
+          before = redis.get(generationKey);
+          UUID chargeId = UUID.randomUUID();
+          var accept =
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  "booking.accept-payment.v1",
+                  1,
+                  order.getOrderId(),
+                  frozen.sourceOrderVersion(),
+                  Instant.now(),
+                  order.getOrderId(),
+                  null,
+                  null,
+                  new AcceptPayment(
+                      order.getOrderId(),
+                      chargeId,
+                      UUID.randomUUID(),
+                      frozen.total(),
+                      frozen.currency(),
+                      frozen.sourceOrderVersion()));
+          orderService.acceptPayment(accept);
+          assertThat(redis.get(generationKey)).isNotEqualTo(before);
+          assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+              .singleElement()
+              .satisfies(item -> assertThat(item.getState()).isEqualTo(OrderState.ISSUING));
+          String acceptedGeneration = redis.get(generationKey);
+          orderService.acceptPayment(accept);
+          // Message mới cùng charge cũng không sửa đơn hoặc invalidate.
+          orderService.acceptPayment(with(accept, "messageId", UUID.randomUUID()));
+          assertThat(redis.get(generationKey)).isEqualTo(acceptedGeneration);
+          boolean completed = scenario.equals("success");
+          var result =
+              new Envelope<>(
+                  UUID.randomUUID(),
+                  completed ? "ticket.issued.v1" : "booking.issuance-failed.v1",
+                  1,
+                  order.getOrderId(),
+                  frozen.sourceOrderVersion(),
+                  Instant.now(),
+                  order.getOrderId(),
+                  null,
+                  null,
+                  new BookingIssuanceResult(
+                      order.getOrderId(),
+                      chargeId,
+                      UUID.randomUUID(),
+                      completed
+                          ? BookingIssuanceResult.State.COMPLETED
+                          : BookingIssuanceResult.State.FAILED,
+                      completed ? 2 : 0,
+                      completed ? null : "REJECTED"));
+          before = redis.get(generationKey);
+          orderService.processBookingIssuanceResult(result);
+          expected = completed ? OrderState.COMPLETED : OrderState.ISSUANCE_FAILED;
+          assertThat(redis.get(generationKey)).isNotEqualTo(before);
+          String after = redis.get(generationKey);
+          orderService.processBookingIssuanceResult(result);
+          assertThat(redis.get(generationKey)).isEqualTo(after);
+        }
+        assertThat(redis.get(generationKey)).isNotEqualTo(before);
+        assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+            .singleElement()
+            .satisfies(item -> assertThat(item.getState()).isEqualTo(expected));
+        assertThat(
+                buyerOrdersCacheService
+                    .getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10)
+                    .getItems())
+            .isEmpty();
+      }
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          target, "reservationHoldDuration", previousDuration);
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void invalidatesBuyerOrdersCacheWhenOrderPriceOrFreezeChanges() {
+    try {
+
+      Map<String, String> redis = new HashMap<>();
+      var cacheValues = availabilityRedisTemplate.opsForValue();
+      org.mockito.Mockito.when(cacheValues.get(org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.get(call.getArgument(0)));
+      org.mockito.Mockito.when(
+              cacheValues.setIfAbsent(
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.anyString()))
+          .thenAnswer(call -> redis.putIfAbsent(call.getArgument(0), call.getArgument(1)) == null);
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+      org.mockito.Mockito.doAnswer(
+              call -> {
+                redis.put(call.getArgument(0), call.getArgument(1));
+                return null;
+              })
+          .when(cacheValues)
+          .set(
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.any(Duration.class));
+      String prefix =
+          (String)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  buyerOrdersCacheService, "keyPrefix");
+
+      String buyer = "cache-price-buyer";
+      String generationKey =
+          prefix
+              + java.util.Base64.getUrlEncoder()
+                  .withoutPadding()
+                  .encodeToString(buyer.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+              + ":generation";
+      var base = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 10);
+      var promotion =
+          new PromotionConfig(
+              UUID.randomUUID(),
+              "SAVE",
+              Instant.now().minusSeconds(60),
+              Instant.now().plusSeconds(3600),
+              "10",
+              1,
+              new PromotionConfig.FixedDiscount("FIXED", "10"));
+      var config = with(with(base, "promotions", List.of(promotion)), "sourceConfigVersion", "2");
+      salesService.synchronizeSalesConfiguration(
+          new Envelope<>(
+              UUID.randomUUID(),
+              "event.sales-configured.v1",
+              1,
+              config.eventId(),
+              "2",
+              Instant.now(),
+              UUID.randomUUID(),
+              null,
+              null,
+              config));
+      var order = orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 2));
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+          .singleElement()
+          .satisfies(item -> assertThat(item.getTotal()).isEqualTo("200"));
+      String beforePromotion = redis.get(generationKey);
+      promotionService.applyPromotionToOrder(
+          buyer, order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      assertThat(redis.get(generationKey)).isNotEqualTo(beforePromotion);
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+          .singleElement()
+          .satisfies(
+              item -> {
+                assertThat(item.getDiscount()).isEqualTo("10");
+                assertThat(item.getTotal()).isEqualTo("190");
+                assertThat(item.getPaymentFrozenAt()).isNull();
+              });
+      String promotedGeneration = redis.get(generationKey);
+      promotionService.applyPromotionToOrder(
+          buyer, order.getOrderId(), new ApplyPromotionRequest("SAVE"));
+      assertThat(redis.get(generationKey)).isEqualTo(promotedGeneration);
+      var frozen = orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+      assertThat(redis.get(generationKey)).isNotEqualTo(promotedGeneration);
+      assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems())
+          .singleElement()
+          .satisfies(
+              item -> {
+                assertThat(item.getPaymentFrozenAt()).isEqualTo(frozen.frozenAt());
+                assertThat(item.getTotal()).isEqualTo("190");
+              });
+      String frozenGeneration = redis.get(generationKey);
+      orderService.preparePurchaseSnapshot(buyer, order.getOrderId());
+      assertThat(redis.get(generationKey)).isEqualTo(frozenGeneration);
+
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
   private SalesConfiguration seedOrderCreationConfiguration(
       SalesMode mode, SectorType sectorType, long capacity, int purchaseLimit) {
+    return seedOrderCreationConfiguration(mode, sectorType, capacity, purchaseLimit, "organizer");
+  }
+
+  private SalesConfiguration seedOrderCreationConfiguration(
+      SalesMode mode,
+      SectorType sectorType,
+      long capacity,
+      int purchaseLimit,
+      String organizerSubject) {
     Instant now =
         jdbc.queryForObject("select clock_timestamp()", java.sql.Timestamp.class).toInstant();
     UUID eventId = UUID.randomUUID();
@@ -11257,7 +12390,7 @@ class BookingPersistenceIT {
         new SalesConfiguration(
             1,
             eventId,
-            "organizer",
+            organizerSubject,
             "1",
             SalesConfiguration.EventStatus.PUBLISHED,
             "Concert",

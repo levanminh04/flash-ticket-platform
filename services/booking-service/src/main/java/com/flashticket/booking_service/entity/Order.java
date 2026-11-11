@@ -19,7 +19,14 @@ import lombok.Setter;
 @Table(
     name = "tbl_orders",
     schema = "booking_schema",
-    indexes = @Index(name = "tbl_orders_expiry_idx", columnList = "lifecycle_state,expires_at,id"))
+    // orders_buyer_idx/orders_event_idx trùng tên DDL chuẩn 20-booking.sql để ddl-auto không tạo
+    // trùng.
+    indexes = {
+      @Index(name = "tbl_orders_expiry_idx", columnList = "lifecycle_state,expires_at,id"),
+      @Index(name = "orders_buyer_idx", columnList = "buyer_subject,created_at"),
+      @Index(name = "orders_event_idx", columnList = "event_id,created_at"),
+      @Index(name = "orders_created_at_idx", columnList = "created_at")
+    })
 @Getter
 @Setter
 @NoArgsConstructor

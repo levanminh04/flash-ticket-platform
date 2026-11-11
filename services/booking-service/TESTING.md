@@ -1189,3 +1189,141 @@ Output: `target/advice-only-verify.log` (local build artifact).
 JDK 23 compiled for Java 21; the Java 21 Enforcer gate was explicitly skipped.
 Tests used local fixtures/loopback servers; no deployed DB, broker, Keycloak or
 RCA collector was exercised. The RCA publishing/integration pipeline remains deferred.
+
+## Buyer order list and organizer sales summary — 2026-11-09
+
+Contract: [Booking API](../../docs/api-documentation-frontend.md).
+`GET /api/v1/orders` uses offset paging with a two-step deferred join (ids page + count,
+then `left join fetch items` by id). `GET /api/v1/organizer/events/{id}/sales-summary`
+checks ownership on `event_sales_snapshots.organizer_subject`, filters `orders.created_at`
+by Asia/Ho_Chi_Minh days and is cached in Redis for 30s (TTL only, no event invalidation).
+
+Verification on 2026-11-09 (branch `dev/son`, JDK 23 compiling for Java 21, Enforcer
+explicitly skipped because no JDK 21 is installed on this machine):
+
+- `rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" test`: **407 passed**, 0 failures.
+- `rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" -DskipTests verify`: Spotless clean,
+  **0 SpotBugs findings**, BUILD SUCCESS.
+- New `BookingPersistenceIT` methods on Testcontainers PostgreSQL 17:
+  `listsBuyerOrdersNewestFirstWithTotals`, `filtersBuyerOrdersByStateAndOwner`,
+  `summarizesEventSalesByStateWithinVietnamDateRange`,
+  `defaultsSalesSummaryRangeFromSaleStartToToday`, `hidesSalesSummaryOfOtherOrganizer`:
+  **5 passed**. Related existing methods `selectsExpiredPendingOrderIdsWithBoundedCursor`,
+  `allEntityTableNamesResolveInTheCheckedInSchema`,
+  `allTwelveRepositoriesReadTheirPersistedEntityAfterClearingTheContext`,
+  `skipsUnexpiredAndTerminalOrdersDuringExpiry`, `createsQuantityOrderAndHoldsTicketTypeInventory`,
+  `seatedOrderGroupsItemsAndHoldsIndividualSeats` passed.
+- The full `BookingPersistenceIT` suite was **not** run (machine had ~1.2 GB free commit
+  memory). IT runs needed tooling flags `-Dsurefire.useManifestOnlyJar=false` (failsafe's
+  manifest JAR in C: temp could not reference D: classpath, so Mockito could not self-attach)
+  and `-DargLine="-Xms64m -Xmx512m"` (paging file too small). No application config was
+  overridden.
+- Observed pre-existing order dependence: `selectsExpiredPendingOrderIdsWithBoundedCursor`
+  fails when run after `createsQuantityOrderAndHoldsTicketTypeInventory` /
+  `seatedOrderGroupsItemsAndHoldsIndividualSeats`, because those tests do not truncate and
+  `findExpiredOrderIds` is not scoped by event. It passes alone; unrelated to this change.
+- API Gateway `rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" test`: **105 passed**,
+  including the new booking route rows for `GET /api/v1/orders` and sales summary.
+- No runtime check against deployed Booking/Redis/Keycloak was done.
+
+### Consistent read snapshots — review follow-up, 2026-11-09
+
+`OrderServiceImpl.getOrders` and `getSalesSummary` now use read-only
+`REPEATABLE_READ`, following `AvailabilityServiceImpl.getAvailability`.
+Extended the existing `filtersBuyerOrdersByStateAndOwner` and
+`summarizesEventSalesByStateWithinVietnamDateRange` tests; no new Java methods.
+The repository spy only schedules a real `REQUIRES_NEW` cancellation transaction
+between the reader's queries, then delegates the original query to Spring Data.
+Assertions check the API result, the committed cancellation, and a fresh read.
+
+Before the annotation change, both cases failed on PostgreSQL 17: a PENDING filter
+returned CANCELLED, and the summary counted one pending order with money but zero
+tickets. After the change, both retained a consistent snapshot while the writer
+committed successfully; the following read saw the cancellation.
+
+Verification command from this service directory:
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" "-Dsurefire.useManifestOnlyJar=false" "-DargLine=-Xms64m -Xmx512m" "-Dit.test=BookingPersistenceIT#listsBuyerOrdersNewestFirstWithTotals+filtersBuyerOrdersByStateAndOwner+summarizesEventSalesByStateWithinVietnamDateRange+defaultsSalesSummaryRangeFromSaleStartToToday+hidesSalesSummaryOfOtherOrganizer" -Pintegration verify
+```
+
+Result: **407 unit/WebMvc tests and 5 selected PostgreSQL IT passed**, zero
+failures/errors/skips; Spotless passed and SpotBugs check reported 0 findings.
+Logs: `target/read-snapshot-red.log`, `target/read-snapshot-verify.log`;
+pre-fix report preserved at `target/read-snapshot-red.xml`.
+JDK 23 compiled for Java 21 with Enforcer explicitly skipped. Full IT and checks
+against deployed services were not run. Docker Desktop was started for these
+disposable Testcontainers fixtures.
+
+## Shared sales statistics — verified 2026-11-10
+
+Contract: [Shared sales statistics](../../docs/api-documentation-frontend.md#thống-kê-bán-vé-dùng-chung--2026-11-10).
+API: [contract](../../docs/api-documentation-frontend.md#thống-kê-bán-vé-dùng-chung--2026-11-10).
+
+- Booking: **418 unit/WebMvc tests passed**, including five cache tests and six new controller tests. Covers ADMIN vs owner vs other organizer, malformed binding, default/explicit params and owner lookup before event cache.
+- **Five focused BookingPersistenceIT tests passed**, real PostgreSQL17/Rabbit4.3.6 Testcontainers: summarizesSystemAndOrganizerSalesStatistics, groupsSalesChartsByVietnamCalendar, ranksEventSalesStatisticsWithZeroRows, resolvesEventSalesOwnerForAdminAndOrganizer, keepsSalesStatisticsConsistentAcrossConcurrentUpdates.
+- Chart queries execute through Hibernate7.4.5, not mocked aggregate responses; tests cover Vietnam midnight, year crossing, daily/weekly/monthly grouping and zero periods. Ranking covers all three metrics in both directions, global/owner scope, zero/cancelled events, count and out-of-range pages.
+- Concurrent-update test commits a real cancellation in REQUIRES_NEW between summary queries. Existing request sees matching order/ticket state totals, next request sees cancellation. This is a consistency test, not a load test.
+- Summary large-amount/discount assertions added and rerun separately: **1/1 passed**. Each fixture order fits numeric(19,0), the aggregate exceeds19digits without using the per-order money converter. This does not reverify the voucher/payment workflow.
+- First Booking verify ran418tests successfully but found one SpotBugs nullability warning in authority comparison. Fixed with literal-first equals; subsequent34controller tests, Spotless check and SpotBugs (**0 findings**) passed.
+- Ranking tie/offset assertions added and rerun separately: **1/1 passed**; two zero-sales events retain eventId ASC for all metrics, including page=1,size=1. Evidence: target/sales-rank-it-verified.log.
+- Gateway: **112 tests passed**, including seven new route cases. Separate verify passed Spotless and SpotBugs (0 findings).
+- JDK23.0.1, release21; Enforcer skipped explicitly because this machine uses23. No datasource/Redis runtime overrides. Testcontainers supplies isolated dependencies under existing test configuration; business DB84 is not used for the IT.
+- Server84 index I1 created CONCURRENTLY after checking duplicates, valid/ready verified. Application user lacked DDL permission; executed as postgres in container over verified ft84 SSH without altering grants. Actual57row EXPLAIN preferred seqscan, as expected for a tiny table. No business rows changed.
+- Postman local ignored collection has seven GET requests in Booking; global uses adminAccessToken, organizer/event uses userAccessToken with ORGANIZER role, set organizerSubject to the JWT owner. Owner APIs also accept an ADMIN token.
+
+Commands (from Booking, all tooling flags explicit):
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" "-Dsurefire.useManifestOnlyJar=false" "-DargLine=-Xms64m -Xmx512m" verify
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" "-DskipTests" test-compile
+rtk proxy .\mvnw.cmd -B -ntp "-Dsurefire.useManifestOnlyJar=false" "-DargLine=-Xms64m -Xmx512m" "-Dit.test=BookingPersistenceIT#summarizesSystemAndOrganizerSalesStatistics+groupsSalesChartsByVietnamCalendar+ranksEventSalesStatisticsWithZeroRows+resolvesEventSalesOwnerForAdminAndOrganizer+keepsSalesStatisticsConsistentAcrossConcurrentUpdates" failsafe:integration-test failsafe:verify
+```
+
+Do not pass skipTests to the failsafe invocation: skipped tests are not validation.
+Logs are under Booking target/sales-*.log and Gateway target/sales-gateway-*.log.
+Known limits: no live new-API deployment/HTTP load measurements, no stampede prevention or event invalidation, Redis TTL begins after load, default-date keys may cross midnight for the remaining TTL.
+
+## Buyer order list cache — verified 2026-11-10
+
+[API contract](../../docs/api-documentation-frontend.md#cache-danh-sách-đơn-buyer--2026-11-10).
+GET /api/v1/orders caches OrderPage per authenticated buyer + state/page/size.
+Payload TTL24h; generation key has no TTL. All changing order/price/freeze paths publish
+BuyerOrdersChangedEvent inside their transaction. A synchronous AFTER_COMMIT listener
+changes the buyer generation; rollback/replay/no-op does not invalidate.
+
+Validation:
+
+- **424 unit/WebMvc tests passed**,0fail/error/skip. Includes6new BuyerOrdersCacheServiceTests.
+- **3 new BookingPersistenceIT tests passed**: invalidatesBuyerOrdersCacheAfterCommitButNotRollback,
+  invalidatesBuyerOrdersCacheWhenOrderStateChanges,invalidatesBuyerOrdersCacheWhenOrderPriceOrFreezeChanges.
+  Real PostgreSQL17/Rabbit4.3.6 Testcontainers and Spring transactions/listener; RedisService
+  is real with a mocked StringRedisTemplate backed by test key maps.
+- **4 existing IT regressions passed across runs**: listsBuyerOrdersNewestFirstWithTotals,
+  filtersBuyerOrdersByStateAndOwner,salesConfigurationAndCancellationInvalidateAvailabilityCache,
+  inventoryWritersInvalidateAvailabilityForAllSalesModes.
+- Inventory regression initially failed because its blanket no-Redis assertion after freeze
+  also rejected the newly required buyer invalidation. Narrowed the existing assertion to
+  forbid writes to the exact availability generation key; buyer invalidation is independently
+  verified by the new price/freeze test. Rerun passed1/1, without new Java declarations.
+- **Spotless clean; SpotBugs0**. git diff --check has no whitespace errors.
+- JDK23.0.1,release21,Enforcer explicitly skipped for lifecycle commands. No runtime DB/Redis
+  configuration overrides; test dependencies use existing Testcontainers setup.
+
+Commands run from Booking (tooling flags only):
+
+```powershell
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" "-Dsurefire.useManifestOnlyJar=false" "-DargLine=-Xms64m -Xmx512m" verify
+rtk proxy .\mvnw.cmd -B -ntp "-Denforcer.skip=true" spotless:apply test-compile
+rtk proxy .\mvnw.cmd -B -ntp "-Dsurefire.useManifestOnlyJar=false" "-DargLine=-Xms64m -Xmx512m" "-Dit.test=BookingPersistenceIT#invalidatesBuyerOrdersCacheAfterCommitButNotRollback+invalidatesBuyerOrdersCacheWhenOrderStateChanges+invalidatesBuyerOrdersCacheWhenOrderPriceOrFreezeChanges" failsafe:integration-test failsafe:verify
+```
+
+Evidence logs under target: buyer-orders-cache-unit.log, buyer-orders-cache-it.log,
+buyer-orders-cache-verify.log,buyer-orders-cache-regression-it.log,
+buyer-orders-cache-inventory-regression-verified.log.
+
+Known limits: no durable invalidation or singleflight; a missed post-commit invalidation can
+leave old payloads until TTL expiry, possibly close to24h. Old readers retain their original
+generation when writing but may return their old snapshot to that request. No new metadata
+fields/batch snapshot query were added to OrderView by this cache change. No live-API deploy,
+business DB84 writes,commit or push.

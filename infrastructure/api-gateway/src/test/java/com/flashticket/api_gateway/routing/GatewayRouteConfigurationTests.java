@@ -40,6 +40,13 @@ class GatewayRouteConfigurationTests {
   /** Toàn bộ endpoint công khai (/api/v1/**) của 5 service, trích từ controller. */
   @ParameterizedTest(name = "{0} {1} -> {2}")
   @CsvSource({
+    "GET, /api/v1/admin/sales/summary, lb://booking-service",
+    "GET, /api/v1/admin/sales/chart, lb://booking-service",
+    "GET, /api/v1/admin/events/sales-statistics, lb://booking-service",
+    "GET, /api/v1/organizers/owner/sales/summary, lb://booking-service",
+    "GET, /api/v1/organizers/owner/sales/chart, lb://booking-service",
+    "GET, /api/v1/organizers/owner/events/sales-statistics, lb://booking-service",
+    "GET, /api/v1/events/id-1/sales-statistics, lb://booking-service",
     "GET, /api/v1/admin/cancellation-requests, lb://event-service",
     "POST, /api/v1/admin/cancellation-requests/id-1/approve, lb://event-service",
     "POST, /api/v1/admin/cancellation-requests/id-1/reject, lb://event-service",
@@ -90,6 +97,8 @@ class GatewayRouteConfigurationTests {
     "PUT, /api/v1/organizers/id-1/follow, lb://user-service",
     "GET, /api/v1/events/id-1/availability, lb://booking-service",
     "POST, /api/v1/orders, lb://booking-service",
+    "GET, /api/v1/orders, lb://booking-service",
+    "GET, /api/v1/organizer/events/id-1/sales-summary, lb://booking-service",
     "POST, /api/v1/orders/id-1/cancel, lb://booking-service",
     "POST, /api/v1/orders/id-1/promotion, lb://booking-service",
     "POST, /api/v1/admin/events/id-1/payout, lb://payment-service",

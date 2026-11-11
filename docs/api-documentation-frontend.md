@@ -276,6 +276,47 @@ sequenceDiagram
 * **Request Body**: `{}` (Bắt buộc object JSON rỗng).
 * **Success Response (200 OK)**: Trả về `OrderView` với trạng thái `state: "CANCELLED"`.
 
+#### 5. Danh sách đơn hàng của buyer (List My Orders)
+* **Method & Path**: `GET /api/v1/orders?page=0&size=10&state=COMPLETED`
+* **Auth**: Role `ROLE_BUYER`. Luôn lọc theo `sub` trong JWT, không nhận buyerId.
+* **Query**: `page` ≥ 0 (mặc định 0), `size` 1..100 (mặc định 10), `state` tùy chọn (`PENDING_PAYMENT|ISSUING|COMPLETED|CANCELLED|EXPIRED|ISSUANCE_FAILED`). Sắp xếp mới nhất trước (`createdAt desc`).
+* **Success Response (200 OK)**: mỗi phần tử `items[]` đúng là `OrderView` của `GET /api/v1/orders/{orderId}` (có `items[].seats` lấy từ snapshot lúc mua).
+```json
+{
+  "items": [ { "orderId": "…", "eventId": "…", "state": "COMPLETED", "total": "900000", "items": [ … ] } ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 37,
+  "totalPages": 4
+}
+```
+* **Lỗi**: `400 INVALID_REQUEST` (page/size/state sai), `401`, `403` (không có role BUYER).
+
+#### 6. Thống kê bán vé theo sự kiện cho organizer (Sales Summary)
+* **Method & Path**: `GET /api/v1/organizer/events/{eventId}/sales-summary?from=2026-11-01&to=2026-11-09`
+* **Auth**: Role `ROLE_ORGANIZER`, chỉ chủ sự kiện.
+* **Query**: `from`, `to` dạng `yyyy-MM-dd`, ngày theo giờ Việt Nam. Thiếu `from` → ngày mở bán; thiếu `to` → hôm nay. Lọc theo **thời điểm tạo đơn**.
+* **Cache**: Booking cache kết quả 30 giây; dùng `asOf` để hiển thị "cập nhật lúc".
+* **Success Response (200 OK)**:
+```json
+{
+  "eventId": "…", "eventTitle": "Concert A",
+  "from": "2026-11-01", "to": "2026-11-09", "timeZone": "Asia/Ho_Chi_Minh",
+  "asOf": "2026-11-09T08:00:00Z", "currency": "VND",
+  "soldOrderCount": 12, "soldTicketCount": 30,
+  "soldSubtotal": "3000000", "soldDiscount": "100000", "soldRevenue": "2900000",
+  "byState": [
+    {"state": "PENDING_PAYMENT", "orderCount": 2, "ticketCount": 3, "subtotal": "300000", "discount": "0", "total": "300000"}
+  ],
+  "byTicketType": [
+    {"ticketTypeId": "…", "ticketTypeName": "VIP", "soldQuantity": 10, "lineSubtotal": "2000000"}
+  ]
+}
+```
+  * `byState` luôn đủ 6 trạng thái, trạng thái không có đơn trả 0.
+  * `sold…` = `ISSUING` + `COMPLETED`. `byTicketType` chỉ tính đơn đã bán, tiền trước giảm giá.
+* **Lỗi**: `404 EVENT_NOT_FOUND` (không có hoặc không phải sự kiện của mình), `400 INVALID_DATE_RANGE` (`from > to`), `400 INVALID_REQUEST` (ngày sai định dạng), `401`, `403`.
+
 ---
 
 ### PHẦN II: PAYMENT SERVICE (Thanh Toán & Cổng VNPay)
@@ -555,7 +596,7 @@ Qua rà soát code trong thư mục `frontend/src/services/`, hiện có một s
 | :--- | :--- | :--- | :--- |
 | `paymentService.ts` | `POST /api/payments/initiate` | `POST /api/v1/payments` | Đổi sang `/api/v1/payments`, truyền header `Idempotency-Key` và body `{ orderId, clientIp }`. |
 | `paymentService.ts` | `GET /api/payments/status/${orderId}` | `GET /api/v1/orders/{orderId}/payment` | Đổi sang `/api/v1/orders/{orderId}/payment`, unwrap response từ `ApiResponse<PaymentView>`. |
-| `orderService.ts` | `GET /api/orders/my-orders` | `GET /api/v1/orders` (hoặc `TicketService /tickets`) | Đơn hàng tra cứu theo `GET /api/v1/orders/{orderId}`, vé tra cứu qua `GET /api/v1/orders/{orderId}/tickets`. |
+| `orderService.ts` | `GET /api/orders/my-orders` | `GET /api/v1/orders?page=&size=&state=` | Đã có danh sách đơn phân trang (PHẦN I mục 5); response `{items,page,size,totalElements,totalPages}`, item là `OrderView`. Vé vẫn tra qua `GET /api/v1/orders/{orderId}/tickets`. |
 | `ticketService.ts` | `GET /api/tickets/my-tickets` | `GET /api/v1/orders/{orderId}/tickets` | Backend thiết kế danh sách vé theo từng `orderId`, lấy QR qua `GET /api/v1/tickets/{ticketId}/qr`. |
 | `userService.ts` | `PUT /api/users/me/profile` | `PUT /api/v1/me` | Backend nhận body `{ displayName }` tại `PUT /api/v1/me`. |
 | `userService.ts` | `POST /api/users/me/avatar` | `/api/v1/organizers/me/logo` | Dành cho tài khoản Organizer upload logo/banner thương hiệu. |
@@ -567,3 +608,63 @@ Qua rà soát code trong thư mục `frontend/src/services/`, hiện có một s
 2. Để Frontend hoạt động đồng bộ hoàn toàn:
    * Hãy merge nhánh `origin/dev/tuan` và `origin/dev/tuyen` vào `dev/son` (hoặc `main`) để gom đủ implementation của `event-service`, `user-service` và `ticket-service`.
    * Cập nhật các hàm trong `frontend/src/services/` khớp theo bảng đối chiếu ở Mục 5.
+
+## Thống kê bán vé dùng chung — 2026-11-10
+
+Bảy endpoint GET do Booking xử lý, gọi riêng phần giao diện cần. Response trả trực tiếp JSON, không bọc thêm `data`.
+
+| Path (sau /api/v1) | Quyền / phạm vi | Response |
+|---|---|---|
+| /admin/sales/summary | ADMIN, mọi organizer | SalesStatisticsSummaryView |
+| /admin/sales/chart | ADMIN, mọi organizer | SalesStatisticsChartView |
+| /admin/events/sales-statistics | ADMIN, mọi sự kiện đủ điều kiện | EventSalesStatisticsPage |
+| /organizers/{organizerSubject}/sales/summary | ADMIN hoặc ORGANIZER có subject JWT trùng path | SalesStatisticsSummaryView |
+| /organizers/{organizerSubject}/sales/chart | ADMIN hoặc ORGANIZER có subject JWT trùng path | SalesStatisticsChartView |
+| /organizers/{organizerSubject}/events/sales-statistics | ADMIN hoặc đúng ORGANIZER | EventSalesStatisticsPage |
+| /events/{eventId}/sales-statistics | ADMIN hoặc ORGANIZER sở hữu event | SalesSummaryView hiện có |
+
+- Chung: `from?`, `to?` ISO `yyyy-MM-dd`, bao gồm cả hai ngày, mặc định đầu tháng hiện tại / hôm nay tại `Asia/Ho_Chi_Minh`. Lọc **thời điểm tạo đơn**, không phải ngày thanh toán hoặc ngày tổ chức.
+- Chart: thêm `groupBy=DAY|WEEK|MONTH`, mặc định DAY. Tuần bắt đầu thứ Hai; tháng bắt đầu ngày 1; trả cả kỳ 0. `periodStart/periodEnd` là kỳ lịch đầy đủ, số liệu chỉ tính phần giao với from/to. Không query riêng từng kỳ.
+- Bảng: `page=0`, `size=10` (1..100), `sortBy=soldRevenue|soldOrderCount|soldTicketCount`, `direction=DESC|ASC` (mặc định DESC). Xếp hạng toàn tập trước phân trang; hòa thì eventId ASC. Có dòng 0 và sự kiện CANCELLED chưa từng công bố.
+- Phạm vi: snapshot Booking có status hiện tại PUBLISHED hoặc CANCELLED; không lưu lịch sử công bố mới. Đã bán = ISSUING + COMPLETED. Các trạng thái là trạng thái hiện tại của đơn trong khoảng tạo đơn, không phải sổ doanh thu lịch sử.
+- Tiền: chuỗi số nguyên VND. `soldRevenue` sau giảm giá; `soldSubtotal` trước giảm; `soldDiscount` tiền giảm.
+- Metadata summary/chart/page: `from,to,organizerSubject,timeZone,asOf,currency`; subject null khi toàn hệ thống. Tên organizer do frontend lấy từ User, không trả kèm ở Booking.
+- Summary: `soldOrderCount,soldTicketCount,soldSubtotal,soldDiscount,soldRevenue,byState[]`; mỗi state có `state,orderCount,ticketCount,subtotal,discount,total`, luôn đủ sáu state.
+- Chart: `groupBy,items[]`; mỗi item có `periodStart,periodEnd,soldOrderCount,soldTicketCount,soldRevenue`.
+- Bảng: `items,page,size,totalElements,totalPages`; mỗi item có `eventId,eventTitle,organizerSubject,eventStatus,soldOrderCount,soldTicketCount,soldRevenue`.
+- Detail: dùng SalesSummaryView của API organizer cũ, có `byTicketType[]`; API mới mặc định đầu tháng. API `/organizer/events/{eventId}/sales-summary` cũ vẫn mặc định ngày mở bán.
+- Lỗi: 400 INVALID_DATE_RANGE / INVALID_REQUEST hoặc sai kiểu tham số; 401 thiếu JWT; 403 sai role/organizer path; 404 EVENT_NOT_FOUND khi event không đủ điều kiện hoặc không thuộc owner. Role/owner lấy từ JWT và DB, không nhận từ query.
+- Cache riêng TTL 30 giây qua `BOOKING_SALES_STATISTICS_CACHE_TTL` và `BOOKING_SALES_STATISTICS_CACHE_KEY_PREFIX`; quyền được kiểm trước cả hit, event hit vẫn query owner. `asOf` giữ nguyên trên hit; Redis lỗi fallback DB; không cache lỗi nghiệp vụ. TTL <= 0 tắt cache.
+- Cache chỉ theo TTL, chưa chống miss đồng thời/invalidation; load chậm có thể ghi sau load mới hơn. Key ngày mặc định có thể giữ response ngày trước qua nửa đêm tới hết TTL. Không coi độ cũ dữ liệu luôn <=30 giây.
+- DB: mỗi báo cáo nhiều query dùng transaction read-only REPEATABLE_READ; không khóa hàng để báo cáo. Query tiền tách query item để tránh nhân tổng.
+- Ngoại lệ E1 đã duyệt: chart dùng Spring Data `@Query` không native, gọi PostgreSQL `timezone/to_char` và GROUP BY biểu thức qua Hibernate. Không portable sang DB khác nếu giữ nguyên query.
+- Index I1: `orders_created_at_idx(created_at)` trong entity và DDL chuẩn. Server84 đã tạo CONCURRENTLY, valid/ready; bảng thực tế nhỏ vẫn có thể được planner chọn seq scan. Không thêm cột.
+
+Ví dụ chart `GET /api/v1/organizers/owner/sales/chart?from=2026-11-01&to=2026-11-02&groupBy=DAY`:
+
+```json
+{
+  "from": "2026-11-01", "to": "2026-11-02", "organizerSubject": "owner",
+  "timeZone": "Asia/Ho_Chi_Minh", "asOf": "2026-11-10T15:00:00Z",
+  "currency": "VND", "groupBy": "DAY",
+  "items": [
+    {"periodStart": "2026-11-01", "periodEnd": "2026-11-01", "soldOrderCount": 2, "soldTicketCount": 3, "soldRevenue": "500000"},
+    {"periodStart": "2026-11-02", "periodEnd": "2026-11-02", "soldOrderCount": 0, "soldTicketCount": 0, "soldRevenue": "0"}
+  ]
+}
+```
+
+## Cache danh sách đơn buyer — 2026-11-10
+
+`GET /api/v1/orders?state=&page=0&size=10` dùng Redis cache-aside theo subject JWT + state/page/size. Giữ nguyên OrderPage/OrderView và phân trang; chỉ cache trang được yêu cầu. BUYER authentication/authorization vẫn chạy trước lookup.
+
+- Data TTL mặc định **24 giờ** (`BOOKING_BUYER_ORDERS_CACHE_TTL=PT24H`); TTL <=0 bypass cache. Prefix `BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX` mặc định `flash-ticket:dev:booking:buyer-orders:v1:`.
+- Subject được encode Base64 URL UTF8, không dùng token/email. Ví dụ buyer-123 → YnV5ZXItMTIz.
+- Metadata key: `{prefix}{encodedBuyer}:generation` → UUID hiện tại, không TTL.
+- Data key: `{prefix}{encodedBuyer}:data:{generation}:state:ALL:page:0:size:10` → JSON OrderPage, TTL86400s. Lọc state dùng đúng enum thay ALL.
+- Sau khi tạo đơn mới hoặc đơn thay đổi, đổi generation **sau commit DB** để mọi trang/bộ lọc của buyer hết hiệu lực. Các key payload cũ tự hết TTL; không quét Redis, không xóa cache buyer khác.
+- Invalidate khi tạo mới, buyer hủy, worker hủy do event, hết hạn, nhận tiền/chuyển ISSUING hoặc thanh toán muộn chuyển EXPIRED/CANCELLED, phát vé COMPLETED/ISSUANCE_FAILED, áp voucher và freeze thanh toán. Replay/no-op không đổi dữ liệu không invalidate.
+- GET miss gọi OrderService proxy, giữ transaction REPEATABLE_READ hiện tại, kết thúc DB transaction trước Redis SET. Reader giữ generation lấy trước khi đọc DB nên không ghi vào namespace mới sau invalidation.
+- Redis đọc/xóa lỗi fallback DB và bỏ ghi cache; JSON hỏng xóa best effort; Redis ghi/invalidate lỗi được log, không giả rollback DB đã commit. Không cache lỗi DB/nghiệp vụ; cache trang rỗng hợp lệ.
+- Giới hạn: chưa durable invalidation hoặc singleflight; nếu Redis lỗi hoặc process dừng sau DB commit trước listener, cache cũ có thể còn gần24giờ. Reader đang chạy có thể trả snapshot cũ cho chính request đó. TTL tính từ SET, không cam kết độ cũ dữ liệu luôn <=24giờ. Metadata generation giữ một key nhỏ/buyer; payload cũ được dọn bằng TTL.
+- Không thêm cột/index/query trong task cache này. Các field eventTitle/eventStartsAt/createdAt và batch snapshot đã thảo luận chưa được thêm vào OrderView trong thay đổi cache.
