@@ -3,8 +3,13 @@ services:
     image: ${IMAGE:?image digest required}
     command: [start, --import-realm]
     env_file: ../env/keycloak.env
+    environment:
+      KC_LOG_CONSOLE_OUTPUT: json
+      KC_LOG_CONSOLE_INCLUDE_TRACE: "true"
+      KC_TRACING_ENABLED: "true"
+      KC_TRACING_SERVICE_NAME: keycloak
     restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 1536m
     stop_grace_period: 30s
     ports:
       - "0.0.0.0:8080:8080"
@@ -17,6 +22,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+        labels: com.docker.compose.service
 
 networks:
   infra:
