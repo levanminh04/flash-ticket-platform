@@ -28,7 +28,10 @@ const collections = [
   {
     name: 'users',
     validator: { $jsonSchema: closed(['_id', 'identitySubject', 'createdAt', 'updatedAt', 'version'], {
-      ...metadata, identitySubject: text, displayName: text
+      ...metadata, identitySubject: text, displayName: text, dateOfBirth: { bsonType: "string", pattern: "^[0-9]{2}-[0-9]{2}-[0-9]{4}$" },
+      address: { ...text, maxLength: 500 },
+      phoneNumber: { bsonType: "string", pattern: "^\\+84[0-9]{9}$" },
+      avatarUrl: { bsonType: "string", maxLength: 2048, pattern: "^https://res\\.cloudinary\\.com/" }
     }) },
     indexes: [index({ identitySubject: 1 }, 'uq_users_identity_subject', true)]
   },
@@ -38,6 +41,12 @@ const collections = [
       ['_id', 'identitySubject', 'organizationName', 'shortDescription', 'status', 'createdAt', 'updatedAt', 'version'],
       {
         ...metadata, identitySubject: text, organizationName: text, shortDescription: text,
+        contactEmail: { bsonType: 'string', maxLength: 254, pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$' },
+        contactPhone: { bsonType: 'string', pattern: '^\\+84[0-9]{9,10}$' },
+        websiteUrl: { bsonType: 'string', maxLength: 500, pattern: '^https://\\S+$' },
+        socialPageUrl: { bsonType: 'string', maxLength: 500, pattern: '^https://\\S+$' },
+        headquartersAddress: { ...text, maxLength: 500 },
+        taxCode: { bsonType: 'string', pattern: '^[0-9]{10}([0-9]{2}|-?[0-9]{3})?$' },
         status: { enum: ['PENDING', 'ACTIVE', 'REJECTED'] },
         rejectionReason: text, decidedBySubject: text, decidedAt: date, roleGrant
       },
@@ -61,7 +70,11 @@ const collections = [
       }
     ) },
     indexes: [
-      index({ identitySubject: 1 }, 'uq_application_identity_subject', true),
+      {
+        ...index({ identitySubject: 1 }, 'uq_application_open_subject', true),
+        partialFilterExpression: { status: { $in: ['PENDING', 'ACTIVE'] } }
+      },
+      index({ identitySubject: 1, _id: 1 }, 'ix_application_subject_cursor'),
       index({ status: 1, createdAt: 1 }, 'ix_application_review_queue')
     ]
   },

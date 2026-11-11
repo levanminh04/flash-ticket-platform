@@ -32,6 +32,7 @@ public final class OrganizerImages {
   private final String apiKey;
   private final String apiSecret;
   private final String folder;
+  private final String avatarFolder;
   private final int maxBytes;
   private final long maxPixels;
 
@@ -41,11 +42,13 @@ public final class OrganizerImages {
       @Value("${user.images.api-key:}") String apiKey,
       @Value("${user.images.api-secret:}") String apiSecret,
       @Value("${user.images.folder:flash-ticket/organizers}") String folder,
+      @Value("${user.images.avatar-folder:flash-ticket/avatars}") String avatarFolder,
       @Value("${user.images.max-bytes:2097152}") int maxBytes,
       @Value("${user.images.max-pixels:16000000}") long maxPixels,
       @Value("${user.images.timeout:5s}") Duration timeout) {
     if ((!cloud.isEmpty() && !cloud.matches("[A-Za-z0-9_-]+"))
         || !folder.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*")
+        || !avatarFolder.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*")
         || maxBytes < 1
         || maxPixels < 1
         || timeout.isZero()
@@ -55,6 +58,7 @@ public final class OrganizerImages {
     this.apiKey = apiKey;
     this.apiSecret = apiSecret;
     this.folder = folder;
+    this.avatarFolder = avatarFolder;
     this.maxBytes = maxBytes;
     this.maxPixels = maxPixels;
     var factory =
@@ -64,7 +68,7 @@ public final class OrganizerImages {
   }
 
   public String upload(MultipartFile file, String kind) {
-    if (!kind.equals("logo") && !kind.equals("banner")) throw invalid();
+    if (!kind.equals("logo") && !kind.equals("banner") && !kind.equals("avatar")) throw invalid();
     byte[] bytes = validate(file);
     if (cloud.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) throw unavailable();
     var form = new LinkedMultiValueMap<String, Object>();
@@ -76,7 +80,7 @@ public final class OrganizerImages {
             return "image";
           }
         });
-    form.add("folder", folder);
+    form.add("folder", kind.equals("avatar") ? avatarFolder : folder);
     form.add("public_id", kind + "_" + UUID.randomUUID());
     form.add("overwrite", "false");
     try {

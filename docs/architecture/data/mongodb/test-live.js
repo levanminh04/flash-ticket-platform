@@ -48,6 +48,9 @@ rejectCode(() => db.organizer_applications.updateOne({ _id: id(10) }, { $set: { 
 rejectCode(() => db.organizer_applications.updateOne({ _id: id(10) }, { $set: { roleGrant: { operationId: id(12), status: 'CONFIRMED', attemptedAt: now } } }), 121);
 db.organizer_applications.updateOne({ _id: id(10) }, { $set: { status: 'ACTIVE', decidedBySubject: 'fixture-admin', decidedAt: now, roleGrant: { operationId: id(12), status: 'CONFIRMED', attemptedAt: now, confirmedAt: now } } });
 db.organizer_applications.insertOne({ ...application, _id: id(13), identitySubject: 'fixture-rejected', status: 'REJECTED', decidedBySubject: 'fixture-admin', decidedAt: now, rejectionReason: 'Synthetic rejection' });
+db.organizer_applications.insertOne({ ...application, _id: id(14), identitySubject: 'fixture-rejected' });
+rejectCode(() => db.organizer_applications.insertOne({ ...application, _id: id(15), identitySubject: 'fixture-rejected' }), 11000);
+rejectCode(() => db.organizer_applications.insertOne({ ...application, _id: id(16) }), 11000);
 db.organizer_profiles.insertOne({ _id: id(20), identitySubject: 'fixture-buyer', sourceApplicationId: id(10), sourceVersion: NumberInt(1), organizationName: 'Fixture Organization', shortDescription: 'Synthetic test', status: 'ACTIVE', refreshedAt: now });
 rejectCode(() => db.organizer_profiles.insertOne({ _id: id(21), identitySubject: 'fixture-nonactive', sourceApplicationId: id(13), sourceVersion: NumberInt(0), organizationName: 'Fixture Organization', shortDescription: 'Synthetic test', status: 'PENDING', refreshedAt: now }), 121);
 db.user_follows.insertOne({ _id: id(30), buyerSubject: 'fixture-buyer', organizerSubject: 'fixture-organizer', createdAt: now });

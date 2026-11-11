@@ -1,6 +1,5 @@
 import axiosClient from "../lib/axiosClient";
 import { gatewayFallbackClient, userDirectClient } from "../lib/internalServiceClients";
-import { SpringPage } from "../types/api";
 
 export type OrganizerImageType =
   | "BANNER"
@@ -8,6 +7,8 @@ export type OrganizerImageType =
   | "SEAT_MAP"
   | "GALLERY"
   | "THUMBNAIL";
+
+import { ticketService, CheckInResult } from "./ticketService";
 
 export interface OrganizerEventImage {
   id: string;
@@ -25,14 +26,7 @@ export interface OrganizerEventImage {
   isDeleted?: boolean | null;
 }
 
-export interface CheckInResponse {
-  success: boolean;
-  ticketCode: string;
-  holderName: string;
-  ticketTypeName: string;
-  seatLabel: string;
-  checkedInAt: string;
-}
+export type CheckInResponse = CheckInResult;
 
 export interface OrganizerProfile {
   id: string;
@@ -54,14 +48,21 @@ export interface OrganizerProfile {
 }
 
 export interface ApplyOrganizerPayload {
-  organizerName: string;
-  organizerType: "INDIVIDUAL" | "COMPANY" | "NONPROFIT" | "GOVERNMENT";
-  description?: string | null;
-  websiteUrl?: string | null;
-  contactEmail: string;
-  contactPhone: string;
-  taxCode?: string | null;
-  representativeName?: string | null;
+  organizationName: string;
+  shortDescription: string;
+}
+
+export interface OrganizerApplication {
+  id: string;
+  identitySubject: string;
+  organizationName: string;
+  shortDescription: string;
+  status: "PENDING" | "ACTIVE" | "REJECTED";
+  rejectionReason: string | null;
+  decidedBySubject: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  version: string;
 }
 
 export interface FollowResponse {
@@ -69,11 +70,6 @@ export interface FollowResponse {
   organizerName: string;
   isFollowing: boolean;
   followerCount: number;
-}
-
-export interface VerifyOrganizerPayload {
-  approved: boolean;
-  rejectionReason?: string | null;
 }
 
 export interface OrganizerEventImageUpdatePayload {
@@ -101,19 +97,6 @@ async function userServiceDelete<TResponse>(path: string): Promise<TResponse> {
     return response.data;
   } catch {
     const response = await userDirectClient.delete<TResponse>(path);
-    return response.data;
-  }
-}
-
-async function userServicePut<TResponse, TPayload>(
-  path: string,
-  payload: TPayload,
-): Promise<TResponse> {
-  try {
-    const response = await gatewayFallbackClient.put<TResponse>(path, payload);
-    return response.data;
-  } catch {
-    const response = await userDirectClient.put<TResponse>(path, payload);
     return response.data;
   }
 }
@@ -151,13 +134,10 @@ async function uploadOrganizerProfileImage(
 }
 
 export const organizerService = {
-  applyForOrganizer: async (
-    payload: ApplyOrganizerPayload,
-  ): Promise<OrganizerProfile> =>
-    userServicePost<OrganizerProfile, ApplyOrganizerPayload>(
-      "/api/organizers/apply",
-      payload,
-    ),
+  applyForOrganizer: async (payload: ApplyOrganizerPayload): Promise<OrganizerApplication> => {
+    const response = await axiosClient.post<OrganizerApplication>("/api/v1/organizer-applications", payload);
+    return response.data;
+  },
 
   followOrganizer: async (organizerProfileId: string): Promise<FollowResponse> =>
     userServicePost<FollowResponse, undefined>(
@@ -185,36 +165,32 @@ export const organizerService = {
     }
   },
 
-  getAdminOrganizers: async (
-    status = "PENDING",
-    page = 0,
-    size = 20,
-  ): Promise<SpringPage<OrganizerProfile>> => {
-    const params = { status, page, size };
-
-    try {
-      const response = await gatewayFallbackClient.get<SpringPage<OrganizerProfile>>(
-        "/api/admin/organizers",
-        { params },
-      );
-      return response.data;
-    } catch {
-      const response = await userDirectClient.get<SpringPage<OrganizerProfile>>(
-        "/api/admin/organizers",
-        { params },
-      );
-      return response.data;
-    }
+  getAdminApplications: async (
+    status: OrganizerApplication["status"],
+    cursor: string | null,
+    signal?: AbortSignal,
+  ) => {
+    const response = await axiosClient.get<{ items: OrganizerApplication[]; nextCursor: string | null }>(
+      "/api/v1/admin/organizer-applications",
+      { params: { status, size: 20, cursor: cursor ?? undefined }, signal },
+    );
+    return response.data;
   },
 
-  verifyOrganizer: async (
-    organizerProfileId: string,
-    payload: VerifyOrganizerPayload,
-  ): Promise<OrganizerProfile> =>
-    userServicePut<OrganizerProfile, VerifyOrganizerPayload>(
-      `/api/admin/organizers/${encodeURIComponent(organizerProfileId)}/verify`,
-      payload,
-    ),
+  approveApplication: async (id: string) => {
+    const response = await axiosClient.post<OrganizerApplication>(
+      `/api/v1/admin/organizer-applications/${encodeURIComponent(id)}/approve`,
+    );
+    return response.data;
+  },
+
+  rejectApplication: async (id: string, reason: string) => {
+    const response = await axiosClient.post<OrganizerApplication>(
+      `/api/v1/admin/organizer-applications/${encodeURIComponent(id)}/reject`,
+      { reason },
+    );
+    return response.data;
+  },
 
   getPublicOrganizerBySlug: async (slug: string): Promise<OrganizerProfile> => {
     const path = `/api/organizers/public/${encodeURIComponent(slug)}`;
@@ -305,16 +281,9 @@ export const organizerService = {
   },
 
   checkInTicket: async (
-    qrData: string,
-    location: string,
-  ): Promise<CheckInResponse> => {
-    const response = await axiosClient.post<CheckInResponse>(
-      "/api/tickets/checkin",
-      {
-        qrData,
-        location,
-      },
-    );
-    return response.data;
+    eventId: string,
+    qrToken: string,
+  ): Promise<CheckInResult> => {
+    return ticketService.checkIn(eventId, qrToken);
   },
 };

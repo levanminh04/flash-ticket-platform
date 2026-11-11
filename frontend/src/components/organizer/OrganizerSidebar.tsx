@@ -1,18 +1,19 @@
 import { NavLink } from "react-router-dom";
-import { IconType } from "react-icons";
-import { BiSolidCategoryAlt } from "react-icons/bi";
+import type { ComponentType } from "react";
 import {
-  FaCalendarAlt,
-  FaUserAlt,
-} from "react-icons/fa";
-import { IoQrCodeSharp } from "react-icons/io5";
+  LayoutGrid as BiSolidCategoryAlt,
+  CalendarDays as FaCalendarAlt,
+  UserRound as FaUserAlt,
+  QrCode as IoQrCodeSharp,
+  type LucideProps as IconProps,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 const navItems: Array<{
   to: string;
   labelKey: string;
   descriptionKey: string;
-  icon: IconType;
+  icon: ComponentType<IconProps>;
   end?: boolean;
 }> = [
   {

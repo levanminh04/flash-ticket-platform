@@ -6,7 +6,7 @@ Thư mục này chứa khung nội dung của quyển báo cáo và các bản b
 |---|---|---|
 | `report-outline.md` | Khung nội dung sống | Dẫn đường cho nội dung quyển báo cáo cuối; chưa khóa số chương trước khi có mẫu ĐATN hiện hành |
 | `bao-cao-2-tuan-2026-09-05.md` | `HISTORICAL_SUPERSEDED` | Giữ dấu vết bản đầu; không dùng các kết luận chưa hiệu chỉnh |
-| `../research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md` | Nguồn nghiên cứu hiện hành, `REVIEW_READY` | Kiểm định 11 CSV/990 dòng kết quả, mâu thuẫn, tính khả thi và cổng chấp nhận MyRCA |
+| [Repo RCA hiện hành](D:/RCA-flashticket) | Nguồn nghiên cứu chính | Đọc STATE/MRP/DECISIONS, báo cáo task và manifest tại repo đó; hồ sơ A7–A10/E1/Task A–G cũ chỉ tra trong lịch sử Git |
 | `C:/Users/84583/Downloads/BaoCao_KhaoSat_RCA_v2.docx` | Bản Word v2 cần rà lại tên/nhiệm vụ/phân công trước khi dùng hiện hành; đợt này không sửa file Word | Bản giao tiếp cho nhóm/giảng viên; không ghi đè bản Word gốc |
 
 ## Quy tắc sử dụng

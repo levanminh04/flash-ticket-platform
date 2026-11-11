@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
-import "../../assets/css/booking-step-indicator.css";
+import "./booking-step-indicator.css";
 
 export type BookingStepState = "active" | "completed" | "inactive";
 

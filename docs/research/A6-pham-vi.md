@@ -21,7 +21,7 @@ Không dùng khung cũ “Vòng 1 đo sâu, Vòng 2 chỉ cần chạy được�
 
 ### 1.1 Dữ liệu
 
-RE2 vẫn là lựa chọn nội bộ hiện hành (`RES-022`), có metric/log/trace; RE3 là hướng đánh giá tiếp theo chưa mặc định đã chạy. Không dùng một bộ metric-only để tuyên bố kiểm được toàn bộ cơ chế đa nguồn. Năng lực thực sự của dataset/adapter đọc tại `docs/research-rca/A8-khao-sat-dataset.md` và kết quả kiểm định tại `docs/research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md`.
+RE2 vẫn là lựa chọn nội bộ hiện hành (`RES-022`), có metric/log/trace; RE3 là hướng đánh giá tiếp theo chưa mặc định đã chạy. Không dùng một bộ metric-only để tuyên bố kiểm được toàn bộ cơ chế đa nguồn. Năng lực thực sự của dataset/adapter đọc tại `docs/git 98d5ad5:docs/research-rca/A8-khao-sat-dataset.md` và kết quả kiểm định tại `docs/git 98d5ad5:docs/research-rca/E1-kiem-dinh-rcaeval-va-kha-thi-myrca.md`.
 
 ### 1.2 Giới hạn kết luận
 

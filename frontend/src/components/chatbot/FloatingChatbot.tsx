@@ -18,8 +18,8 @@ import {
   SendHorizontal,
   Ticket,
   X,
+  Bot as RiRobot2Fill,
 } from "lucide-react";
-import { RiRobot2Fill } from "react-icons/ri";
 import { useTranslation } from "react-i18next";
 import { chatService } from "../../services/chatService";
 

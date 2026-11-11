@@ -290,7 +290,7 @@ export default function SeatMapEditorCanvas({
       return;
     }
 
-    const fitKey = `${document.width}x${document.height}:${resetViewKey}`;
+    const fitKey = `${document.width}x${document.height}:${viewportSize.width}x${viewportSize.height}:${resetViewKey}`;
     if (lastFitKeyRef.current === fitKey) {
       return;
     }
@@ -299,8 +299,9 @@ export default function SeatMapEditorCanvas({
     const horizontalPadding = 56;
     const topPadding = 96;
     const availableWidth = Math.max(viewportSize.width - horizontalPadding * 2, 320);
+    const availableHeight = viewportSize.height - topPadding - 24;
     const nextScale = clamp(
-      availableWidth / document.width,
+      Math.min(availableWidth / document.width, availableHeight / document.height),
       MIN_SCALE,
       MAX_SCALE,
     );

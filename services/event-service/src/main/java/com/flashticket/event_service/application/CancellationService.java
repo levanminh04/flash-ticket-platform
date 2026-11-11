@@ -5,6 +5,7 @@ import com.flashticket.event_service.domain.ContractRules;
 import com.flashticket.event_service.integration.EventSummaries;
 import com.flashticket.event_service.persistence.CancellationRepository;
 import com.flashticket.event_service.web.EventProblem;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,9 @@ public class CancellationService {
     var event = events.readOwned(id, actor);
     if ("CANCELLED".equals(event.status())) return event;
     version(event, expected);
+    if (!Instant.now().isBefore(event.startsAt()))
+      throw EventProblem.conflict("EVENT_ALREADY_STARTED");
+    if (!"PUBLISHED".equals(event.status())) return transactions.cancel(id, actor, expected, true);
     var summary = summaries.financial(id, actor, true);
     if (Boolean.TRUE.equals(summary.hasCollectedOrders()))
       throw EventProblem.conflict("CANCELLATION_REQUEST_REQUIRED");

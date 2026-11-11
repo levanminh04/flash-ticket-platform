@@ -1,0 +1,113 @@
+:root {
+  /* Vàng là màu hành động; chữ trên nền trắng dùng biến ink đậm hơn. */
+  --brand: #cc9900;
+  --brand-hover: #dfb329;
+  --brand-active: #b88b00;
+  --brand-ink: #805c00;
+  --brand-soft: #fff4cc;
+  --brand-on-dark: #f4d773;
+  --on-brand: #1b1d21;
+  --primary: var(--brand);
+  --primary-light: var(--brand-soft);
+  --primary-dark: var(--brand-ink);
+  --canvas-dark: #1d1e22;
+  --surface-dark: #282a30;
+  --text-on-dark: #f8fafc;
+  --text-secondary-on-dark: #d1d3d8;
+  --border-dark: #5c606b;
+  --focus-ring: var(--brand-ink);
+  --disabled-surface: #e9e9e5;
+  --disabled-ink: #60646d;
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  /* Three-zone page gradients */
+  --page-gradient-discovery:
+    radial-gradient(circle at top center, rgba(92, 228, 155, 0.24), transparent 24%),
+    linear-gradient(
+      180deg,
+      #08281d 0%,
+      #16533a 34%,
+      #d8f4e4 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-booking:
+    radial-gradient(circle at top right, rgba(45, 194, 117, 0.2), transparent 26%),
+    linear-gradient(
+      180deg,
+      #0a1d29 0%,
+      #135164 34%,
+      #d9f1ee 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-account:
+    radial-gradient(circle at top left, rgba(45, 194, 117, 0.18), transparent 24%),
+    linear-gradient(
+      180deg,
+      #0f172a 0%,
+      #214e43 34%,
+      #e5f5ec 70%,
+      #f8fafc 100%
+    );
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  --bg-main: #f8fafc; /* Very light blue-gray */
+  --bg-card: #ffffff;
+  --bg-input: #f1f5f9;
+
+  --text-primary: #202126;
+  --text-secondary: #555b65;
+  --text-muted: #666b74;
+
+  --border: #e2e8f0; /* Slate 200 */
+
+  /* Smooth Radii */
+  --radius-sm: 12px;
+  --radius-md: 24px; /* Increased for softer "box" look */
+  --radius-lg: 32px;
+  --radius-full: 9999px; /* Pill shape */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  --font-family: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Tailwind primary palette. */
+  --brand-scale-50: #fff9e6;
+  --brand-scale-100: var(--brand-soft);
+  --brand-scale-200: #ffe18a;
+  --brand-scale-300: #f5cb4f;
+  --brand-scale-400: var(--brand-hover);
+  --brand-scale-500: var(--brand);
+  --brand-scale-600: #946b00;
+  --brand-scale-700: var(--brand-ink);
+  --brand-scale-800: #614700;
+  --brand-scale-900: #493600;
+
+  /* Light surfaces used by the public discovery pages. */
+  --surface-subtle: #f7f8fa;
+  --discovery-sky-start: #e5edf9;
+  --discovery-sky-middle: #f1f5fc;
+  --text-strong: #15171a;
+  --text-subtle: #565e69;
+  --border-subtle: #e5e7eb;
+  --surface-footer: #17191d;
+  --radius-panel: 14px;
+  --motion-fast: 180ms ease;
+
+  /* Type scale. */
+  --text-caption-size: 0.75rem;
+  --text-small-size: 0.875rem;
+  --text-body-size: 1rem;
+  --text-heading-sm-size: clamp(1.15rem, 2vw, 1.55rem);
+  --text-heading-size: clamp(1.45rem, 2.65vw, 2rem);
+  --text-display-size: clamp(2.05rem, 4.35vw, 4.25rem);
+}
