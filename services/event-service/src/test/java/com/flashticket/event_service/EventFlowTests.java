@@ -1342,7 +1342,7 @@ class EventFlowTests {
     mvc.perform(get("/api/v1/events/" + eventId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.title").value("Revised HTTP"))
-        .andExpect(jsonPath("$.organizerSubject").doesNotExist());
+        .andExpect(jsonPath("$.organizerSubject").value("http-owner"));
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
@@ -1454,7 +1454,7 @@ class EventFlowTests {
     mvc.perform(get("/api/v1/events/" + created.eventId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ticketTypes[0].unitPrice").value("100005"))
-        .andExpect(jsonPath("$.organizerSubject").doesNotExist())
+        .andExpect(jsonPath("$.organizerSubject").value("organizer-a"))
         .andExpect(jsonPath("$.feeRate").doesNotExist());
     var sales =
         json.readTree(
