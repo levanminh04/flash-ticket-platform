@@ -91,6 +91,12 @@ jobs:
         run: $MVN -B -ntp verify
         working-directory: ${{ inputs.path }}
 
+      - name: Validate B16 application log records
+        if: ${{ inputs.name != 'keycloak' }}
+        run: |
+          python3 -m pip install --disable-pip-version-check -r deploy/observability/requirements.txt
+          python3 deploy/observability/verify_logs.py "${{ inputs.path }}/target/b16-log-samples.jsonl"
+
       - name: Upload Maven reports
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -100,6 +106,7 @@ jobs:
             ${{ inputs.path }}/target/surefire-reports/**
             ${{ inputs.path }}/target/failsafe-reports/**
             ${{ inputs.path }}/target/site/jacoco/**
+            ${{ inputs.path }}/target/b16-log-samples.jsonl
           if-no-files-found: ignore
           retention-days: 7
 

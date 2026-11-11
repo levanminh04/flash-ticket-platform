@@ -23,6 +23,8 @@ while IFS= read -r f; do
   if [[ -z $f || $f == *.md || $f == .env.example || $f == */.env.example ]]; then continue; fi
   while IFS=$'\t' read -r name path; do
     if [[ $f == "$path"/* ]]; then build[$name]=1; fi
+    # Shared log contract/checks affect the seven Spring applications.
+    if [[ $f == deploy/observability/* && $name != keycloak && $name != frontend ]]; then build[$name]=1; fi
     if [[ $f == "deploy/app/$name.yml" ]]; then recreate[$name]=1; fi
     if [[ $f == deploy/app/_common.yml || $f == deploy/scripts/deploy-service.sh ]]; then recreate[$name]=1; fi
   done < <(jq -r '.services[] | [.name, .path] | @tsv' "$registry")
