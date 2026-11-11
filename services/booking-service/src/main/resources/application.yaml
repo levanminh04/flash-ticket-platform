@@ -5,6 +5,15 @@ booking:
   availability-cache:
     ttl: ${BOOKING_AVAILABILITY_CACHE_TTL:PT15M}
     key-prefix: ${BOOKING_AVAILABILITY_CACHE_KEY_PREFIX:flash-ticket:dev:booking:availability:v2:}
+  sales-summary-cache:
+    ttl: ${BOOKING_SALES_SUMMARY_CACHE_TTL:PT30S}
+    key-prefix: ${BOOKING_SALES_SUMMARY_CACHE_KEY_PREFIX:flash-ticket:dev:booking:sales-summary:v1:}
+  sales-statistics-cache:
+    ttl: ${BOOKING_SALES_STATISTICS_CACHE_TTL:PT30S}
+    key-prefix: ${BOOKING_SALES_STATISTICS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:sales-statistics:v1:}
+  buyer-orders-cache:
+    ttl: ${BOOKING_BUYER_ORDERS_CACHE_TTL:PT24H}
+    key-prefix: ${BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:buyer-orders:v1:}
   event-cancellation:
     enabled: true
     poll-interval: PT5S

@@ -2,16 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
-import {
-  Eye,
-  ImagePlus,
-  LoaderCircle,
-  Edit,
-  Search,
-  Trash2,
-  X,
-} from "lucide-react";
-import { FaEdit } from "react-icons/fa";
+import { Eye, ImagePlus, LoaderCircle, Edit, Search, Trash2, X, Pencil as FaEdit } from "lucide-react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import { useDropzone } from "react-dropzone";

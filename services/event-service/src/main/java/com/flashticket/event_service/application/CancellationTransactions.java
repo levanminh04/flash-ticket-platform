@@ -49,7 +49,7 @@ public class CancellationTransactions {
     if ("CANCELLED".equals(event.status())) return EventViews.owner(event);
     version(event, expected);
     Instant decision = beforeStart(event);
-    if (owner) summaryFresh(summaryAsOf, decision);
+    if (owner && "PUBLISHED".equals(event.status())) summaryFresh(summaryAsOf, decision);
     if (owner && requests.pending(id)) throw EventProblem.conflict("CANCELLATION_REQUEST_PENDING");
     cancelEvent(event, actor, decision);
     if (!owner) requests.approvePending(id, actor, decision);

@@ -60,7 +60,7 @@ spring:
               uri: lb://booking-service
               order: 20
               predicates:
-                - Path=/api/v1/events/*/availability,/api/v1/orders/**
+                - Path=/api/v1/events/*/availability,/api/v1/orders/**,/api/v1/organizer/events/*/sales-summary,/api/v1/admin/sales/summary,/api/v1/admin/sales/chart,/api/v1/admin/events/sales-statistics,/api/v1/organizers/*/sales/summary,/api/v1/organizers/*/sales/chart,/api/v1/organizers/*/events/sales-statistics,/api/v1/events/*/sales-statistics
               filters:
                 - name: RequestRateLimiter
                   args:
@@ -84,7 +84,7 @@ spring:
               uri: lb://user-service
               order: 40
               predicates:
-                - Path=/api/v1/me,/api/v1/organizers/**,/api/v1/organizer-applications/**,/api/v1/admin/organizer-applications/**
+                - Path=/api/v1/me,/api/v1/me/avatar,/api/v1/organizers/**,/api/v1/organizer-applications/**,/api/v1/admin/organizer-applications/**
               filters:
                 - name: RequestRateLimiter
                   args:

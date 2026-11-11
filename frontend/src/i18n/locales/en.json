@@ -1,4 +1,80 @@
 {
+  "discovery": {
+    "viewCategories": "View all categories",
+    "otherCategories": "Other",
+    "title": "Music, art, sports and <accent>so much more</accent>",
+    "intro": "Find and book the events you look forward to, from concerts and workshops to theatre and exhibitions.",
+    "featured": "Featured events",
+    "allVenues": "View all venues",
+    "from": "From {{amount}}",
+    "error": "This content could not be loaded.",
+    "empty": "There is nothing to show yet.",
+    "promo": "Experience FlashTicket <accent>anytime, anywhere</accent>",
+    "promoMockup": "Visual mockup · App not released",
+    "promoBody": "Download the app to discover events, book tickets quickly, and get notified about events you care about."
+  },
+  "adminEventReview": {
+    "title": "Review events",
+    "details": "View details",
+    "fee": "Fee rate from 0 to 1 (e.g. 0.05 = 5%)",
+    "returnToDraft": "Return to draft",
+    "approveCancelSuccess": "Event cancellation approved. Automated refund process has started.",
+    "approveCancelFailed": "Failed to approve event cancellation.",
+    "rejectCancelSuccess": "Event cancellation request rejected.",
+    "rejectCancelFailed": "Failed to reject cancellation request.",
+    "approveCancelConfirmTitle": "Confirm Event Cancellation Approval?",
+    "confirmApproveCancel": "Approve Cancellation",
+    "rejectCancelConfirmTitle": "Reject Event Cancellation Request",
+    "rejectReasonLabel": "Rejection Reason (Required):",
+    "confirmRejectCancel": "Reject Request",
+    "rejectReasonRequired": "Please enter a rejection reason!"
+  },
+  "eventsV1": {
+    "all": "All statuses",
+    "search": "Search titles in loaded events",
+    "cancel": "Cancel event",
+    "cancelConfirm": "Cancel “{{title}}”?",
+    "submit": "Submit for approval",
+    "publish": "Publish",
+    "schedule": "Starts / ends",
+    "mode": "Sales mode",
+    "QUANTITY": "Quantity",
+    "SEAT_MAP": "Seat map",
+    "empty": "No matching events in the loaded results.",
+    "success": "Event updated.",
+    "error": "The action failed. The list is being refreshed. Please check the event status and try again.",
+    "description": "View your events and manage approval, publication and cancellation."
+  },
+  "dashboardV1": {
+    "organization": "Organization",
+    "followers": "Followers",
+    "events": "Your events",
+    "event": "Event",
+    "startsAt": "Starts at",
+    "statistics": "Event statistics",
+    "viewStatistics": "View statistics",
+    "empty": "No events found.",
+    "loadedCount": "Loaded {{count}} events. Counts below cover loaded events.",
+    "totalCount": "Total {{count}} events.",
+    "profileFailed": "Could not load the organizer profile.",
+    "statisticsFailed": "Statistics could not be refreshed. Any figures below are from the previous successful update.",
+    "description": "Manage your events and view their sales and financial statistics.",
+    "purchasedTicketCount": "Purchased tickets",
+    "validGross": "Gross amount",
+    "validRefunds": "Refunds",
+    "feeAmount": "Platform fee",
+    "netAmount": "Net amount",
+    "salesAsOf": "Sales updated at",
+    "financeAsOf": "Finance updated at",
+    "status": {
+      "DRAFT": "Draft",
+      "PENDING_APPROVAL": "Pending approval",
+      "APPROVED": "Approved",
+      "PUBLISHED": "Published",
+      "REJECTED": "Rejected",
+      "CANCELLED": "Cancelled"
+    }
+  },
   "auth": {
     "redirecting": "Opening your account page…",
     "unavailable": "The account page is unavailable. Please try again later.",
@@ -14,6 +90,9 @@
     "title": "Account"
   },
   "adminOrganizer": {
+    "loadFailed": "Could not load organizer applications.",
+    "loadMore": "Load more",
+    "reasonTooLong": "The rejection reason must be at most 2,000 characters.",
     "approve": "Approve",
     "emailMissing": "No email yet",
     "headerDescription": "Review buyer-submitted profiles and approve or reject organizer access.",
@@ -200,7 +279,7 @@
       "pricing": "Transparent pricing",
       "trust": "Trust strip",
       "upcoming": "Upcoming events",
-      "venues": "Interesting venues"
+      "venues": "Featured venues"
     },
     "sectionDescriptions": {
       "faq": "Answers to common questions about events and ticketing.",
@@ -394,8 +473,9 @@
     "farthest": "Farthest"
   },
   "nav": {
+    "contact": "Contact",
     "adminOrganizerReview": "Review organizer applications",
-    "chatbotPrompt": "Featured upcoming events",
+    "chatbotPrompt": "AI suggestions",
     "chatbotPromptMusic": "Upcoming music events",
     "chatbotPromptSport": "Sports events on sale",
     "chatbotPromptWeekend": "Weekend event ideas in Ho Chi Minh City",
@@ -412,10 +492,17 @@
     "organizerPending": "Organizer application pending review",
     "organizerWorkspace": "Event management",
     "personalProfile": "Personal profile",
-    "searchMoreEvents": "View more events",
-    "searchPlaceholder": "Search...",
+    "searchAllResults": "See all results for \"{{keyword}}\"",
+    "searchPlaceholder": "Find events, artists, shows...",
+    "accountLabel": "Account",
+    "searchStatus": {
+      "pending": "Searching events…",
+      "success": "No matching events.",
+      "error": "Search suggestions could not be loaded."
+    },
     "tickets": "Tickets",
-    "venues": "Venues"
+    "venues": "Venues",
+    "adminRefunds": "Refund Management"
   },
   "ordersPage": {
     "cancel": "Cancel",
@@ -444,6 +531,10 @@
     "total": "Total"
   },
   "profile": {
+    "loginRequired": "Sign in to view your profile.",
+    "loadFailed": "Could not load your profile.",
+    "retry": "Try again",
+    "saving": "Saving…",
     "active": "Active",
     "avatarFailed": "Avatar upload failed.",
     "avatarUpdated": "Profile photo updated.",
@@ -547,6 +638,14 @@
     "resetMap": "Fit map to view"
   },
   "organizer": {
+    "organizationName": "Organization name",
+    "shortDescription": "Short description",
+    "applicationId": "Application ID",
+    "applicationStatus": {
+      "PENDING": "Pending review",
+      "ACTIVE": "Approved",
+      "REJECTED": "Rejected"
+    },
     "checkIn": "Check-in",
     "closeSidebar": "Close sidebar",
     "dashboard": "Dashboard",
@@ -606,6 +705,9 @@
     "viewPublicProfile": "View public profile"
   },
   "organizerProfile": {
+    "noLogo": "No logo yet",
+    "noBanner": "No banner yet",
+    "invalidImage": "Choose a PNG or JPEG image up to 2 MB.",
     "averageRating": "Average rating",
     "bannerFailed": "Unable to update the organizer banner right now.",
     "bannerUpdated": "Organizer banner updated.",
@@ -716,7 +818,17 @@
     "totalEventsDescription": "All events in the workspace",
     "viewBanner": "View banner for {{title}}",
     "viewPublic": "View public",
-    "viewPublicEvent": "View public page for {{title}}"
+    "viewPublicEvent": "View public page for {{title}}",
+    "cancelRequestTitle": "Request Event Cancellation",
+    "cancelRequestReasonLabel": "Cancellation Reason (Required):",
+    "cancelRequestPlaceholder": "Enter details (e.g., Force majeure, artist health issues...)...",
+    "cancelRequestConfirm": "Submit Cancellation Request",
+    "cancelRequestReasonRequired": "Please provide a reason for cancelling the event!",
+    "cancelRequestSuccess": "Cancellation request submitted to Admin successfully.",
+    "cancelRequestFailed": "Failed to submit cancellation request. Please try again.",
+    "requestCancel": "Request Cancellation",
+    "cancellationPending": "Pending Admin Approval",
+    "alreadyPending": "A cancellation request for this event is already pending Admin approval."
   },
   "workspaceNav": {
     "chooseSetupAria": "Ticket sales setup mode",
@@ -903,30 +1015,41 @@
     "visibility": "Visibility"
   },
   "checkIn": {
-    "checkedInAt": "Checked in at",
-    "confirm": "Confirm check-in",
-    "currentHistory": "Current session history",
-    "defaultLocation": "Main gate",
-    "description": "Scan ticket QR codes for admission.",
-    "emptyHistory": "No check-in history yet.",
-    "emptySession": "No scans in this working session yet.",
-    "failed": "Check-in failed. Please check the QR data or organizer permission.",
-    "holderName": "Ticket holder name",
-    "latestResult": "Latest scan result",
-    "location": "Check-in point",
-    "locationPlaceholder": "Example: Gate A, VIP desk, Backstage area",
-    "locationRequired": "Enter the check-in gate location.",
-    "locationTooLong": "Check-in gate location cannot exceed 100 characters.",
-    "qrData": "QR data",
-    "qrPlaceholder": "Paste or scan the ticket QR data string here",
-    "qrRequired": "Enter or scan QR data before check-in.",
-    "qrTooLong": "QR data is too long. Please check the ticket code again.",
-    "scannedLocation": "Scan location",
-    "seat": "Seat",
-    "success": "Check-in successful.",
-    "ticketCode": "Ticket code",
-    "ticketType": "Ticket type",
-    "title": "Ticket check-in"
+    "title": "Ticket Check-in",
+    "description": "Real-time QR code ticket scanning and admission control.",
+    "selectEvent": "Select Event to Check-in",
+    "selectEventPrompt": "-- Choose your event --",
+    "noEvents": "No events found.",
+    "eventRequired": "Please select an event before checking in tickets.",
+    "qrData": "Ticket QR / Token",
+    "qrPlaceholder": "Paste or scan ticket QR token here...",
+    "qrRequired": "Please enter or scan a QR code before checking in.",
+    "qrTooLong": "QR code is too long (maximum 4096 characters).",
+    "confirm": "Confirm Check-in",
+    "latestResult": "Latest Scan Result",
+    "currentHistory": "Session Scan History",
+    "emptyHistory": "No scans recorded in this working session yet.",
+    "emptySession": "Please select an event and scan a QR code to verify admission.",
+    "ticketId": "Ticket ID",
+    "attemptId": "Attempt ID",
+    "processedAt": "Processed At",
+    "status": "Result",
+    "validAdmission": "VALID - Admission Granted",
+    "deniedAdmission": "DENIED - Admission Rejected",
+    "clearHistory": "Clear Session History",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "results": {
+      "SUCCESS": "Valid - Check-in Successful",
+      "EVENT_CANCELLED": "Event Cancelled - Ticket is no longer valid",
+      "ALREADY_USED": "Already Used - Ticket was previously checked in",
+      "VOID": "Void - Ticket has been cancelled or revoked",
+      "WRONG_EVENT": "Wrong Event - Ticket belongs to another event",
+      "OUTSIDE_WINDOW": "Outside Window - Check-in window is not active",
+      "UNKNOWN_QR": "Invalid QR - Ticket code not found in system",
+      "NOT_EVENT_OWNER": "Permission Denied - You do not own this event",
+      "NOT_ISSUED": "Ticket issuance has not completed"
+    }
   },
   "seatMap": {
     "assignWholeSector": "Assign whole section",
@@ -1171,6 +1294,7 @@
     "ISSUANCE_FAILED": "Ticket issuance unsuccessful"
   },
   "paymentV1": {
+    "noAttempt": "No payment attempt recorded",
     "pay": "Pay with VNPay",
     "checkPayment": "View payment status",
     "redirectNotice": "You will continue to VNPay. The server confirms the result after payment.",
@@ -1233,5 +1357,72 @@
     "PROCESSING": "Refund processing",
     "SUCCEEDED": "Refund completed",
     "FAILED": "Refund unsuccessful"
+  },
+  "adminRefunds": {
+    "title": "Refund Management",
+    "description": "Monitor, retry refunds via VNPay gateway or record manual settlements outside the system.",
+    "eventLookupTitle": "Lookup Event Refund Progress",
+    "eventInputPlaceholder": "Enter Event UUID...",
+    "searchBtn": "Lookup",
+    "loadingProgress": "Loading event refund progress...",
+    "eventNotFound": "No refund data found for this event (or event was never cancelled).",
+    "tabs": {
+      "FAILED": "Failed (Needs Action)",
+      "PENDING": "Pending Gateway",
+      "PROCESSING": "Processing",
+      "SUCCEEDED": "Succeeded"
+    },
+    "states": {
+      "FAILED": "Failed (Needs Action)",
+      "PENDING": "Pending Gateway",
+      "PROCESSING": "Processing",
+      "SUCCEEDED": "Succeeded"
+    },
+    "reasons": {
+      "EVENT_CANCELLED": "Event Cancelled",
+      "LATE_PAYMENT": "Late / Expired Payment",
+      "TICKET_ISSUANCE_FAILED": "Ticket Issuance Failed",
+      "DUPLICATE_PAYMENT": "Duplicate Payment"
+    },
+    "table": {
+      "refundId": "Refund ID",
+      "orderId": "Order ID",
+      "amount": "Amount",
+      "reason": "Reason",
+      "status": "Status",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "actions": {
+      "retry": "Retry",
+      "manual": "Manual Settle",
+      "completed": "Completed",
+      "autoProcessing": "Auto processing"
+    },
+    "stats": {
+      "selected": "Selected Orders",
+      "refunded": "Refunded",
+      "pending": "Pending",
+      "needsAttention": "Needs Attention (Error)"
+    },
+    "retrySuccess": "Refund retry initiated successfully.",
+    "retryFailed": "Refund retry failed.",
+    "manualSettlementTitle": "Manual Settlement Record",
+    "externalReferenceLabel": "External bank reference / transaction ID",
+    "confirmSettlement": "Confirm Refund Settled",
+    "cancel": "Cancel",
+    "refRequired": "Please enter an external transaction reference!",
+    "refTooLong": "Reference must be 120 characters or fewer.",
+    "manualSettlementSuccess": "Manual refund settled successfully.",
+    "manualSettlementFailed": "Manual settlement failed.",
+    "copied": "ID copied to clipboard!",
+    "loadingList": "Loading refund requests...",
+    "loadFailed": "Failed to load refund requests. Please try again later.",
+    "retryBtn": "Retry",
+    "emptyList": "No refund requests in this state.",
+    "prevBtn": "Previous",
+    "nextBtn": "Next",
+    "accessDeniedTitle": "Access Denied",
+    "accessDeniedDesc": "You need an account with ADMIN role to access this page."
   }
 }

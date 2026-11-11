@@ -1,5 +1,4 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
@@ -7,7 +6,6 @@ import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasSh
 import SeatMapRightSidebar from "../../components/seat-map/editor/SeatMapRightSidebar";
 import {
   buildDefaultSeatLayoutConfig,
-  buildSeatMapPublishPayload,
   createEditorDraftKey,
   exportEditorDocument,
   importEditorDocument,
@@ -15,11 +13,8 @@ import {
 } from "../../components/seat-map/editor/seatMapEditorUtils";
 import { useSeatMapEditorState } from "../../components/seat-map/editor/useSeatMapEditorState";
 import {
-  OrganizerEventDetail,
-  OrganizerEventLayout,
   OrganizerPublicTicketType,
   OrganizerSeatMap,
-  organizerWorkspaceService,
 } from "../../services/organizerWorkspaceService";
 import {
   SeatMapEditorDocument,
@@ -31,34 +26,12 @@ import {
   asNumber,
   polarToCartesian,
 } from "../../components/seat-map/shared/sectorPathUtils";
-import { summarizeSeatMap } from "./organizerWorkspaceUtils";
+import { editorSeatMap, editorTickets, readSeatMapOwner, saveSeatMapOwner } from "../../services/organizerSeatMapV1";
 import { useOrganizerGate } from "./useOrganizerGate";
 import {
   dispatchOrganizerWorkflowDirty,
   dispatchOrganizerWorkflowSaveResult,
 } from "./organizerWorkflowEvents";
-
-function buildEditorSource(
-  seatMap: OrganizerSeatMap | null,
-  layout: OrganizerEventLayout | null,
-): OrganizerSeatMap | null {
-  if (seatMap) {
-    return seatMap;
-  }
-
-  if (!layout) {
-    return null;
-  }
-
-  return {
-    layoutId: layout.id,
-    backgroundImageUrl: layout.backgroundImageUrl,
-    backgroundWidth: layout.backgroundWidth,
-    backgroundHeight: layout.backgroundHeight,
-    mapConfig: layout.mapConfig,
-    sectors: [],
-  };
-}
 
 type SeatLayoutFieldKey =
   | "rows"
@@ -256,21 +229,7 @@ function normalizeSeatLayoutValue(rawValue: string, minimum: number) {
   return Math.max(minimum, parsedValue);
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-const PUBLISH_CONFIRM_RETRY_ATTEMPTS = 3;
-const PUBLISH_CONFIRM_RETRY_DELAY_MS = 1000;
 const PROTECTED_SEAT_STATUSES = new Set(["RESERVED", "SOLD"]);
-
-function dispatchWorkflowSeatMapSaveStatus(eventId: string | undefined, saving: boolean) {
-  window.document.dispatchEvent(
-    new CustomEvent("organizer-workflow-seat-map-save-status", {
-      detail: { eventId, saving },
-    }),
-  );
-}
 
 function getTicketTypeSectorId(ticketType: { eventSectorId?: string | null; sectorId?: string | null }) {
   return ticketType.eventSectorId || ticketType.sectorId || "";
@@ -301,22 +260,27 @@ function getRequestErrorMessage(error: unknown) {
     return data;
   }
 
-  return response?.status ? `Request failed with status ${response.status}.` : "Request failed.";
+  if (response?.status) {
+    return `Không lưu được sơ đồ (HTTP ${response.status}).`;
+  }
+
+  return error instanceof Error
+    ? `Không lưu được sơ đồ. ${error.message}`
+    : "Không lưu được sơ đồ.";
 }
 
 export default function OrganizerSeatMapPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const isSectorSetupPhase = searchParams.get("phase") === "sectors";
   const { ready } = useOrganizerGate();
-  const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(null);
+  const [eventDetail, setEventDetail] = useState<Awaited<ReturnType<typeof readSeatMapOwner>> | null>(null);
+  const editorDraftId = eventDetail ? `${eventDetail.eventId}:${eventDetail.rowVersion}` : undefined;
   const [organizerTicketTypes, setOrganizerTicketTypes] = useState<OrganizerPublicTicketType[]>([]);
-  const [layout, setLayout] = useState<OrganizerEventLayout | null>(null);
   const [seatMap, setSeatMap] = useState<OrganizerSeatMap | null>(null);
   const [loading, setLoading] = useState(true);
-  const [, setPublishing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [seatLayoutInputs, setSeatLayoutInputs] = useState<Record<SeatLayoutFieldKey, string>>(DEFAULT_LAYOUT_INPUTS);
   const [, setUnsavedChanges] = useState(false);
@@ -334,26 +298,20 @@ export default function OrganizerSeatMapPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [nextEvent, nextLayout, nextSeatMap, nextTicketTypes] = await Promise.all([
-          organizerWorkspaceService.getMyEvent(eventId),
-          organizerWorkspaceService.getLayout(eventId),
-          organizerWorkspaceService.getSeatMap(eventId),
-          organizerWorkspaceService.getTicketTypes(eventId),
-        ]);
-
+        const nextEvent = await readSeatMapOwner(eventId);
+        if (nextEvent.mode !== "SEAT_MAP" || nextEvent.status !== "DRAFT") throw new Error("Chỉ sửa được sơ đồ của bản nháp SEAT_MAP.");
         if (!cancelled) {
           setEventDetail(nextEvent);
-          setOrganizerTicketTypes(nextTicketTypes);
-          setLayout(nextLayout);
-          setSeatMap(nextSeatMap);
+          setOrganizerTicketTypes(editorTickets(nextEvent));
+          setSeatMap(editorSeatMap(nextEvent));
           setUnsavedChanges(false);
-          if (isSectorSetupPhase && (nextSeatMap?.sectors?.length ?? 0) > 0) {
+          if (isSectorSetupPhase && (nextEvent.seatMap?.sectors.length ?? 0) > 0) {
             dispatchOrganizerWorkflowSaveResult(true);
           }
         }
       } catch {
         if (!cancelled) {
-          toast.error("Cannot load seat map editor data.");
+          toast.error("Không tải được sơ đồ của bản nháp.");
         }
       } finally {
         if (!cancelled) {
@@ -369,8 +327,8 @@ export default function OrganizerSeatMapPage() {
     };
   }, [eventId, isSectorSetupPhase, ready]);
 
-  const editorSource = useMemo(() => buildEditorSource(seatMap, layout), [layout, seatMap]);
-  const ticketTypes = organizerTicketTypes.length ? organizerTicketTypes : eventDetail?.ticketTypes ?? [];
+  const editorSource = seatMap;
+  const ticketTypes = organizerTicketTypes;
   const ticketTypeById = useMemo(
     () => new Map(ticketTypes.map((ticketType) => [ticketType.id, ticketType] as const)),
     [ticketTypes],
@@ -447,7 +405,7 @@ export default function OrganizerSeatMapPage() {
     updateSeatLayout,
     updateShape,
     updateSeat,
-  } = useSeatMapEditorState(eventId, editorSource);
+  } = useSeatMapEditorState(editorDraftId, editorSource);
 
   useEffect(() => {
     if (!document) {
@@ -846,18 +804,11 @@ export default function OrganizerSeatMapPage() {
   };
 
   const handlePublish = async () => {
-    if (!eventId || !document) {
+    if (!eventId || !document || publishing) {
       return;
     }
 
     const publishDocument = fitSeatMapDocumentToContent(document);
-    const expectedSummary = {
-      sectorCount: publishDocument.shapes.filter((shape) => shape.visible !== false).length,
-      activeSeatCount: publishDocument.shapes
-        .filter((shape) => shape.visible !== false)
-        .reduce((total, shape) => total + shape.seats.filter((seat) => seat.hidden !== true).length, 0),
-    };
-
     const documentValidationMessage = validateSeatMapDocumentForPublish(publishDocument);
     if (documentValidationMessage) {
       toast.error(documentValidationMessage);
@@ -912,7 +863,7 @@ export default function OrganizerSeatMapPage() {
           .filter((seat) => seat.hidden !== true && !seat.ticketTypeId)
           .map((seat) => ({ shape, seat })),
       )[0];
-    if (unassignedSeat) {
+    if (!isSectorSetupPhase && unassignedSeat) {
       toast.error(
         `Ghế "${unassignedSeat.seat.label}" trong khu "${unassignedSeat.shape.name}" cần chọn seat type trước khi publish.`,
       );
@@ -934,109 +885,19 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    const fetchPublishedSeatMap = async () => {
-      const publishedSeatMap = await organizerWorkspaceService.getSeatMap(eventId);
-      if (!publishedSeatMap) {
-        return null;
-      }
-
-      const publishedSummary = summarizeSeatMap(publishedSeatMap);
-      const looksUpdated =
-        publishedSummary.sectorCount === expectedSummary.sectorCount &&
-        publishedSummary.activeSeatCount === expectedSummary.activeSeatCount;
-
-      return looksUpdated ? publishedSeatMap : null;
-    };
-
-    const refetchPublishedSeatMap = async () => {
-      for (let attempt = 0; attempt < PUBLISH_CONFIRM_RETRY_ATTEMPTS; attempt += 1) {
-        await wait(PUBLISH_CONFIRM_RETRY_DELAY_MS);
-        const publishedSeatMap = await fetchPublishedSeatMap();
-        if (publishedSeatMap) {
-          return publishedSeatMap;
-        }
-      }
-
-      return null;
-    };
-
+    if (!eventDetail) return;
     setPublishing(true);
     try {
-      const payload = buildSeatMapPublishPayload(publishDocument, {
-        name: layout?.name ?? "Seat map",
-        backgroundPublicId: layout?.backgroundPublicId,
-        mapConfig: layout?.mapConfig,
-      });
-
-      const payloadSectorCount = payload.sectors?.length ?? 0;
-      if (publishDocument.shapes.length > 0 && payloadSectorCount === 0) {
-        console.error("Seat map publish aborted because payload sectors are empty.", {
-          documentShapeCount: publishDocument.shapes.length,
-          expectedSummary,
-          payload,
-        });
-        toast.error("Publish aborted: editor has sectors but request payload is empty.");
-        return;
-      }
-
-      console.info("Publishing seat map.", {
-        documentShapeCount: publishDocument.shapes.length,
-        visibleShapeCount: expectedSummary.sectorCount,
-        payloadSectorCount,
-        payloadActiveSeatCount: payload.sectors?.reduce(
-          (total, sector) => total + (sector.seats ?? []).filter((seat) => seat.isActive !== false).length,
-          0,
-        ),
-      });
-
-      const publishedResponse = await organizerWorkspaceService.publishSeatMap(eventId, payload);
-      let publishedSeatMap: OrganizerSeatMap | null = publishedResponse;
-
-      const responseSummary = summarizeSeatMap(publishedResponse);
-      const responseLooksUpdated =
-        responseSummary.sectorCount === expectedSummary.sectorCount &&
-        responseSummary.activeSeatCount === expectedSummary.activeSeatCount;
-
-      if (!responseLooksUpdated) {
-        publishedSeatMap = await fetchPublishedSeatMap();
-      }
-
-      if (!publishedSeatMap) {
-        publishedSeatMap = await refetchPublishedSeatMap();
-      }
-
-      if (!publishedSeatMap) {
-        console.warn("Seat map publish response did not match editor state.", {
-          expectedSummary,
-          responseSummary,
-          payloadSectorCount,
-          responseSectorCount: publishedResponse.sectors?.length ?? 0,
-          response: publishedResponse,
-        });
-        toast.warning("Publish completed, but the server response does not include the expected sectors. Draft kept locally.");
-        return;
-      }
-
-      window.localStorage.removeItem(createEditorDraftKey(eventId));
-      const seatMapPublished = !isSectorSetupPhase;
-      if (seatMapPublished) {
-        sessionStorage.setItem(`organizer-seat-map-published:${eventId}`, "true");
-      } else {
-        sessionStorage.removeItem(`organizer-seat-map-published:${eventId}`);
-      }
-      window.document.dispatchEvent(
-        new CustomEvent("organizer-seat-map-published-updated", {
-          detail: { eventId, published: seatMapPublished },
-        }),
-      );
+      const saved = await saveSeatMapOwner(eventDetail, publishDocument);
+      window.localStorage.removeItem(createEditorDraftKey(editorDraftId ?? eventId));
       ignoreNextDocumentChangeRef.current = true;
-      setSeatMap(publishedSeatMap);
+      setEventDetail(saved);
+      setSeatMap(editorSeatMap(saved));
+      setOrganizerTicketTypes(editorTickets(saved));
       setUnsavedChanges(false);
       dispatchOrganizerWorkflowSaveResult(true);
-      toast.success(seatMapPublished ? t("workspaceNav.saveToDatabaseSuccess") : "Seat map published.");
-      if (seatMapPublished) {
-        navigate("/organizer/events");
-      }
+      toast.success("Đã lưu sơ đồ.");
+      navigate(`/organizer/events/${eventId}/configure-seating?step=${isSectorSetupPhase ? "pricing" : "review"}`);
     } catch (error) {
       dispatchOrganizerWorkflowSaveResult(false);
       const status = (error as { response?: { status?: number } })?.response?.status;
@@ -1050,21 +911,6 @@ export default function OrganizerSeatMapPage() {
       setPublishing(false);
     }
   };
-
-  useEffect(() => {
-    const handleSave = async () => {
-      dispatchWorkflowSeatMapSaveStatus(eventId, true);
-      try {
-        await handlePublish();
-      } finally {
-        dispatchWorkflowSeatMapSaveStatus(eventId, false);
-      }
-    };
-    window.document.addEventListener("organizer-save-event", handleSave);
-    return () => {
-      window.document.removeEventListener("organizer-save-event", handleSave);
-    };
-  }, [document, eventId, isSectorSetupPhase, layout, navigate, publishedSectorIds, t, ticketTypeById, ticketTypes]);
 
   const handleExportJson = () => {
     if (!document || !eventId) {
@@ -1122,11 +968,11 @@ export default function OrganizerSeatMapPage() {
       return;
     }
     if (!publishedSectorIds.has(shapeId)) {
-      toast.error("Hãy publish sector này trước khi tạo loại vé cho khu đó.");
+      toast.error("Hãy lưu khu vực trước khi tạo loại vé cho khu đó.");
       return;
     }
 
-    navigate(`/organizer/events/${eventId}/ticket-types?mode=SEAT_MAP&sectorId=${shapeId}&create=1`);
+    navigate(`/organizer/events/${eventId}/configure-seating?step=pricing`);
   };
 
   return (
@@ -1135,12 +981,13 @@ export default function OrganizerSeatMapPage() {
       description={
         isSectorSetupPhase
           ? "Tạo các khu vực đứng hoặc ngồi trước khi cấu hình loại vé."
-          : "Sinh ghế, gán loại vé và publish sơ đồ hoàn thiện cho người mua."
+          : "Sinh ghế, gán loại vé và lưu sơ đồ để gửi duyệt."
       }
-      actions={null}
+      actions={<>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate(`/organizer/events/${eventId}/configure-seating`)}>Quay lại cấu hình</button>
+        <button type="button" className="btn btn-primary" disabled={loading || !document || publishing} onClick={() => void handlePublish()}>Lưu sơ đồ</button>
+      </>}
       hideTopBar
-      showWorkflowNav={Boolean(eventId)}
-      eventId={eventId}
       className="organizer-seat-map-page"
     >
       <div className="seat-map-editor-shell">
@@ -1148,11 +995,11 @@ export default function OrganizerSeatMapPage() {
         {loading ? (
           <section className="organizer-panel organizer-empty-state">
             <div className="loading-spinner" />
-            <p>Loading seat map editor...</p>
+            <p>Đang tải trình vẽ sơ đồ…</p>
           </section>
         ) : !document ? (
           <section className="organizer-panel organizer-empty-state">
-            <p>This event does not have a layout or seat map yet. Create a layout before editing seats.</p>
+            <p>Không mở được trình vẽ. Hãy quay lại bản nháp rồi thử lại.</p>
           </section>
         ) : (
           <main className="seat-map-editor-main">

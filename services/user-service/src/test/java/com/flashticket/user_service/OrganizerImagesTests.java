@@ -36,6 +36,7 @@ class OrganizerImagesTests {
         "fixture-key",
         "fixture-secret",
         "flash-ticket/organizers",
+        "flash-ticket/avatars",
         maxBytes,
         maxPixels,
         Duration.ofSeconds(2));
@@ -63,6 +64,28 @@ class OrganizerImagesTests {
     var file = new MockMultipartFile("file", "../../untrusted.png", "image/png", png(2, 2));
     assertThat(storage(builder, 1024, 16).upload(file, "logo"))
         .isEqualTo("https://res.cloudinary.com/test/image/upload/logo.png");
+    assertThat(calls).hasValue(1);
+  }
+
+  @Test
+  void uploadsAvatarImageBytesToAvatarsFolderAndReturnsSecureUrl() throws Exception {
+    AtomicInteger calls = new AtomicInteger();
+    var builder =
+        RestClient.builder()
+            .requestInterceptor(
+                (request, body, execution) -> {
+                  calls.incrementAndGet();
+                  assertThat(request.getURI().toString())
+                      .isEqualTo("https://api.cloudinary.com/v1_1/test/image/upload");
+                  assertThat(new String(body, StandardCharsets.ISO_8859_1))
+                      .contains("flash-ticket/avatars", "avatar_");
+                  return response(
+                      "{\"secure_url\":\"https://res.cloudinary.com/test/image/upload/avatar.png\"}",
+                      HttpStatus.OK);
+                });
+    var file = new MockMultipartFile("file", "my-avatar.png", "image/png", png(2, 2));
+    assertThat(storage(builder, 1024, 16).upload(file, "avatar"))
+        .isEqualTo("https://res.cloudinary.com/test/image/upload/avatar.png");
     assertThat(calls).hasValue(1);
   }
 

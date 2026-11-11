@@ -1,10 +1,12 @@
 package com.flashticket.ticket_service.qr;
 
 import com.google.zxing.BinaryBitmap;
+import com.google.zxing.DecodeHintType;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 import java.io.ByteArrayInputStream;
+import java.util.Map;
 import javax.imageio.ImageIO;
 
 public final class QrImageAssertions {
@@ -14,9 +16,11 @@ public final class QrImageAssertions {
     var image = ImageIO.read(new ByteArrayInputStream(png));
     int width = image.getWidth(), height = image.getHeight();
     var pixels = image.getRGB(0, 0, width, height, null, 0, width);
+    // PNG tạo trực tiếp, không xoay/méo: tránh dò nhầm hoa văn dữ liệu thành góc QR.
     return new QRCodeReader()
         .decode(
-            new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(width, height, pixels))))
+            new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(width, height, pixels))),
+            Map.of(DecodeHintType.PURE_BARCODE, true))
         .getText();
   }
 }

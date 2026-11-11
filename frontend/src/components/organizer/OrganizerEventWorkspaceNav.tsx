@@ -4,8 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import Swal from "sweetalert2";
 import { toast } from "react-toastify";
-import { GiTicket } from "react-icons/gi";
-import { LuTicketsPlane } from "react-icons/lu";
+import { Ticket as GiTicket, TicketsPlane as LuTicketsPlane } from "lucide-react";
 import { organizerService } from "../../services/organizerService";
 import { organizerWorkspaceService } from "../../services/organizerWorkspaceService";
 import {

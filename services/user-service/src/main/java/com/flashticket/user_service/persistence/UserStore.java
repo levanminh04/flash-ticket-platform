@@ -87,24 +87,51 @@ public final class UserStore {
     Document d = collection("users").find(eq("identitySubject", subject)).first();
     if (d == null) throw new UserException(404, "USER_NOT_FOUND", "User not found");
     return new UserProfile(
-        d.getString("_id"), d.getString("identitySubject"), d.getString("displayName"));
+        d.getString("_id"),
+        d.getString("identitySubject"),
+        d.getString("displayName"),
+        null,
+        d.getString("dateOfBirth"),
+        d.getString("address"),
+        d.getString("phoneNumber"),
+        d.getString("avatarUrl"));
   }
 
-  public UserProfile updateDisplayName(String subject, String name) {
-    collection("users")
-        .updateOne(
-            eq("identitySubject", subject),
-            combine(set("displayName", name), set("updatedAt", now()), inc("version", 1L)));
+  public UserProfile updateProfile(String subject, List<Bson> changes) {
+    if (!changes.isEmpty()) {
+      changes.add(set("updatedAt", now()));
+      changes.add(inc("version", 1L));
+      collection("users").updateOne(eq("identitySubject", subject), combine(changes));
+    }
     return user(subject);
   }
 
   public Application apply(String subject, String name, String description) {
+    return apply(subject, name, description, null, null, null, null, null, null);
+  }
+
+  public Application apply(
+      String subject,
+      String name,
+      String description,
+      String contactEmail,
+      String contactPhone,
+      String websiteUrl,
+      String socialPageUrl,
+      String headquartersAddress,
+      String taxCode) {
     Document d =
         metadata()
             .append("identitySubject", subject)
             .append("organizationName", name)
             .append("shortDescription", description)
             .append("status", "PENDING");
+    if (contactEmail != null) d.append("contactEmail", contactEmail);
+    if (contactPhone != null) d.append("contactPhone", contactPhone);
+    if (websiteUrl != null) d.append("websiteUrl", websiteUrl);
+    if (socialPageUrl != null) d.append("socialPageUrl", socialPageUrl);
+    if (headquartersAddress != null) d.append("headquartersAddress", headquartersAddress);
+    if (taxCode != null) d.append("taxCode", taxCode);
     try {
       collection("organizer_applications").insertOne(d);
     } catch (MongoException ex) {
@@ -329,6 +356,12 @@ public final class UserStore {
         d.getString("identitySubject"),
         d.getString("organizationName"),
         d.getString("shortDescription"),
+        d.getString("contactEmail"),
+        d.getString("contactPhone"),
+        d.getString("websiteUrl"),
+        d.getString("socialPageUrl"),
+        d.getString("headquartersAddress"),
+        d.getString("taxCode"),
         ApplicationStatus.valueOf(d.getString("status")),
         d.getString("rejectionReason"),
         d.getString("decidedBySubject"),

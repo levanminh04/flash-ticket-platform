@@ -80,6 +80,7 @@ public final class EventViews {
 
   public record Public(
       UUID eventId,
+      String organizerSubject,
       String title,
       String description,
       Instant startsAt,
@@ -151,6 +152,7 @@ public final class EventViews {
   public static Public publicView(EventData event) {
     return new Public(
         event.id(),
+        event.organizer(),
         event.title(),
         event.description(),
         event.startsAt(),

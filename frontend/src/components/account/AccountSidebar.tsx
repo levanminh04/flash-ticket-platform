@@ -1,7 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { FaUserLarge } from "react-icons/fa6";
-import { ImTicket } from "react-icons/im";
-import { HiMiniShoppingBag } from "react-icons/hi2";
+import {
+  UserRound as FaUserLarge,
+  Ticket as ImTicket,
+  ShoppingBag as HiMiniShoppingBag,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export default function AccountSidebar() {

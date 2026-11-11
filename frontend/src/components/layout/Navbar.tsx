@@ -1,22 +1,26 @@
-﻿// File: src/components/layout/Navbar.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+// File: src/components/layout/Navbar.tsx
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import {
+  ArrowRight,
   ChevronDown,
   Clock3,
-  Home,
+  CalendarDays,
+  Music4,
+  Trophy,
+  Ticket,
   LayoutDashboard,
   LogIn,
   LogOut,
+  RotateCcw,
   Search,
   ShoppingBag,
   UserPlus,
   UserRound,
   X,
+  Sparkles,
 } from "lucide-react";
-import { HiTicket } from "react-icons/hi2";
-import { RiAccountCircleFill, RiShoppingBag3Fill } from "react-icons/ri";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
 import { confirmDestructiveAction } from "../../lib/swal";
@@ -113,7 +117,11 @@ const Navbar = () => {
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchStatus, setSearchStatus] = useState<"pending" | "success" | "error">("pending");
   const [searchSuggestions, setSearchSuggestions] = useState<EventSummary[]>([]);
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const promptMenuRef = useRef<HTMLDetailsElement>(null);
@@ -127,14 +135,6 @@ const Navbar = () => {
   const isOrganizer = hasOrganizerTokenRole || hasOrganizerProfileRole;
   const isAdmin = hasRealmRole(keycloak?.tokenParsed, "ADMIN");
   const hasOrganizerApplication = Boolean(profile?.organizerProfileId);
-  const canEditHomePage =
-    isOrganizer ||
-    isAdmin ||
-    hasRealmRole(keycloak?.tokenParsed, "admin") ||
-    hasRealmRole(keycloak?.tokenParsed, "ADIM") ||
-    hasRealmRole(keycloak?.tokenParsed, "adim") ||
-    hasRealmRole(keycloak?.tokenParsed, "organizer");
-  const isOrganizerWorkspace = isOrganizer && location.pathname.startsWith("/organizer");
   const quickPrompts = useMemo(
     () => [
       t("nav.chatbotPromptMusic"),
@@ -149,26 +149,14 @@ const Navbar = () => {
     `${profile?.firstName || ""} ${profile?.lastName || ""}`.trim() ||
     (keycloak.tokenParsed?.name as string | undefined) ||
     `${keycloak.tokenParsed?.given_name || ""} ${keycloak.tokenParsed?.family_name || ""}`.trim() ||
-    keycloak.tokenParsed?.preferred_username ||
+    (keycloak.tokenParsed?.preferred_username as string | undefined) ||
     "User"
   ).trim();
 
-  const accountEmail =
-    profile?.email ?? (keycloak.tokenParsed?.email as string | undefined) ?? "";
+  const avatarSrc = avatarBroken ? undefined : profile?.avatarUrl;
+  const avatarInitials = accountName.trim().split(/\s+/).slice(0, 2)
+    .map(word => Array.from(word)[0]).join("").toLocaleUpperCase();
 
-  const usernameRaw =
-    (keycloak.tokenParsed?.preferred_username as string | undefined) ||
-    (accountEmail.includes("@") ? accountEmail.split("@")[0] : "") ||
-    accountName.replace(/\s+/g, ".").toLowerCase();
-
-  const defaultAvatar = useMemo(() => {
-    const defaultAvatarSeed = encodeURIComponent(usernameRaw || "flashticket-user");
-    return `https://api.dicebear.com/7.x/initials/svg?seed=${defaultAvatarSeed}&backgroundColor=f59e0b,c084fc,34d399,60a5fa&fontWeight=700`;
-  }, [usernameRaw]);
-
-  const avatarSrc = !avatarBroken
-    ? profile?.avatarUrl || defaultAvatar
-    : defaultAvatar;
 
   const handleLogout = async () => {
     const confirmed = await confirmDestructiveAction({
@@ -188,11 +176,6 @@ const Navbar = () => {
     window.dispatchEvent(new CustomEvent(CHATBOT_PROMPT_EVENT, { detail: prompt }));
     promptMenuRef.current?.removeAttribute("open");
     promptMenuRef.current?.querySelector("summary")?.focus();
-  };
-
-  const requireLogin = () => {
-    sessionStorage.setItem(LOGIN_TOAST_KEY, "1");
-    void keycloak?.login();
   };
 
   const handleLogin = () => {
@@ -245,6 +228,8 @@ const Navbar = () => {
       return;
     }
 
+    setSearchStatus("pending");
+    setSearchSuggestions([]);
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
@@ -265,9 +250,12 @@ const Navbar = () => {
           upcoming = getUpcomingSuggestions(fallbackPage.content, keyword);
         }
 
-        if (!cancelled) setSearchSuggestions(upcoming);
+        if (!cancelled) {
+          setSearchSuggestions(upcoming);
+          setSearchStatus("success");
+        }
       } catch {
-        if (!cancelled) setSearchSuggestions([]);
+        if (!cancelled) setSearchStatus("error");
       }
     }, 250);
 
@@ -277,8 +265,35 @@ const Navbar = () => {
     };
   }, [searchTerm]);
 
+  const searchUrl = searchTerm.trim() ? `/search?search=${encodeURIComponent(searchTerm.trim())}` : "/search";
   const shouldShowSearchSuggestions =
-    isSearchFocused && searchTerm.trim().length >= 2 && searchSuggestions.length > 0;
+    isSearchFocused && searchTerm.trim().length >= 2;
+
+  useLayoutEffect(() => {
+    const dropdown = searchDropdownRef.current;
+    const searchBar = dropdown?.parentElement;
+    if (!dropdown || !searchBar) return;
+
+    const fitDropdown = () => {
+      const availableWidth = document.documentElement.clientWidth - searchBar.getBoundingClientRect().left - 16;
+      dropdown.style.setProperty("--search-dropdown-available", Math.max(0, availableWidth) + "px");
+    };
+
+    fitDropdown();
+    window.addEventListener("resize", fitDropdown);
+    const observer = new ResizeObserver(fitDropdown);
+    observer.observe(searchBar);
+    return () => {
+      window.removeEventListener("resize", fitDropdown);
+      observer.disconnect();
+    };
+  }, [shouldShowSearchSuggestions]);
+
+  useEffect(() => {
+    if (shouldShowSearchSuggestions && activeSuggestion >= 0) {
+      document.getElementById("nav-search-option-" + activeSuggestion)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeSuggestion, shouldShowSearchSuggestions]);
 
   useEffect(() => {
     if (!showAuthPopup || isAuthenticated) return;
@@ -310,11 +325,20 @@ const Navbar = () => {
   useEffect(() => {
     accountMenuRef.current?.removeAttribute("open");
     promptMenuRef.current?.removeAttribute("open");
+    setIsSearchFocused(false);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (location.pathname !== "/" || location.hash !== "#discovery-promo-title") return;
+    document.getElementById("discovery-promo-title")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      block: "start",
+    });
+  }, [location.pathname, location.hash, location.key]);
 
   return (
     <>
-    <nav className="navbar" aria-label={t("nav.home")}>
+    <nav className="navbar discovery-navbar" data-discovery-header={location.pathname === "/" || location.pathname === "/search" ? true : undefined} aria-label={t("nav.home")}>
       <div className="container nav-container">
         <div className="nav-left">
           <Link
@@ -322,11 +346,15 @@ const Navbar = () => {
             className="logo"
             style={{ transition: "none" }}
           >
-            <span className="logo-flash">Flash</span>
-            <span className="logo-ticket">Ticket</span>
+            <img className="nav-brand-cat" src="/icons/icons8-black-cat.png" alt="" width={32} height={32} />
+            <span>FlashTicket</span>
           </Link>
         </div>
 
+        <div className="discovery-nav-links">
+          <Link to="/search" aria-current={location.pathname === "/search" ? "page" : location.pathname.startsWith("/event/") ? "location" : undefined}>{t("nav.events")}</Link>
+          <Link to="/#discovery-promo-title">{t("nav.contact")}</Link>
+        </div>
         <div className="nav-center">
           <form
             className="search-bar"
@@ -335,72 +363,97 @@ const Navbar = () => {
             autoComplete="off"
             onSubmit={(e) => {
               e.preventDefault();
-              const searchStr = searchTerm.trim();
-
-              if (searchStr) {
-                window.location.href = `/search?search=${encodeURIComponent(searchStr)}`;
-              } else {
-                window.location.href = "/search";
-              }
+              const selected = shouldShowSearchSuggestions ? searchSuggestions[activeSuggestion] : undefined;
+              setIsSearchFocused(false);
+              setActiveSuggestion(-1);
+              navigate(selected ? `/event/${selected.slug || selected.id}` : searchUrl);
             }}
-            onFocus={() => setIsSearchFocused(true)}
+            onFocus={() => {
+              promptMenuRef.current?.removeAttribute("open");
+              setIsSearchFocused(true);
+            }}
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 setIsSearchFocused(false);
+                setActiveSuggestion(-1);
               }
             }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Escape" && shouldShowSearchSuggestions) {
+                event.preventDefault();
                 event.currentTarget.querySelector("input")?.focus();
                 setIsSearchFocused(false);
+                setActiveSuggestion(-1);
+              }
+              if (event.target instanceof HTMLInputElement && searchTerm.trim().length >= 2 &&
+                  (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                event.preventDefault();
+                setIsSearchFocused(true);
+                const count = searchSuggestions.length;
+                if (count) setActiveSuggestion(index => event.key === "ArrowDown"
+                  ? (index + 1) % count
+                  : index <= 0 ? count - 1 : index - 1);
               }
             }}
           >
             <input
               name="search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={shouldShowSearchSuggestions}
+              aria-controls={shouldShowSearchSuggestions ? "nav-search-options" : undefined}
+              aria-activedescendant={shouldShowSearchSuggestions && searchSuggestions[activeSuggestion] ? `nav-search-option-${activeSuggestion}` : undefined}
               aria-label={t("common.search")}
               type="text"
               className="search-input"
               placeholder={t("nav.searchPlaceholder")}
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                setActiveSuggestion(-1);
+                setIsSearchFocused(true);
+                setSearchTerm(event.target.value);
+              }}
             />
             <button type="submit" className="search-submit" aria-label={t("common.search")}>
               <Search className="search-icon" size={18} />
             </button>
 
             {shouldShowSearchSuggestions ? (
-              <div className="search-suggestion-dropdown">
-                {searchSuggestions.map((event) => (
-                  <div className="search-suggestion-item" key={event.id}>
+              <div className="search-suggestion-dropdown" ref={searchDropdownRef}>
+                {searchStatus !== "success" || !searchSuggestions.length ? (
+                  <p className="nav-search-status" role="status">{t(`nav.searchStatus.${searchStatus}`)}</p>
+                ) : null}
+                <div id="nav-search-options" role="listbox" aria-label={t("common.search")}>
+                  {searchSuggestions.map((event, index) => (
                     <Link
+                      key={event.id}
+                      id={`nav-search-option-${index}`}
+                      role="option"
+                      aria-selected={activeSuggestion === index}
+                      tabIndex={-1}
                       to={`/event/${event.slug || event.id}`}
                       className="search-suggestion-main"
+                      onClick={() => {
+                        setActiveSuggestion(-1);
+                        setIsSearchFocused(false);
+                      }}
                     >
-                      <img
-                        src={getSuggestionImage(event)}
-                        alt={event.title}
-                        className="search-suggestion-thumb"
-                      />
+                      <img src={getSuggestionImage(event)} alt="" className="search-suggestion-thumb" />
                       <span className="search-suggestion-copy">
                         <strong>{event.title}</strong>
                         <small>{formatSuggestionDate(event, i18n.resolvedLanguage || "vi", t("common.updating"))}</small>
                       </span>
+                      <ArrowRight size={16} aria-hidden="true" />
                     </Link>
-                    <Link
-                      to={`/event/${event.slug || event.id}`}
-                      className="search-suggestion-view"
-                    >
-                      {t("common.view")}
-                    </Link>
-                  </div>
-                ))}
-
-                <Link
-                  to={`/search?search=${encodeURIComponent(searchTerm.trim())}`}
-                  className="search-suggestion-more"
-                >
-                  {t("nav.searchMoreEvents")}
+                  ))}
+                </div>
+                <Link to={searchUrl} className="search-suggestion-more" onClick={() => {
+                  setActiveSuggestion(-1);
+                  setIsSearchFocused(false);
+                }}>
+                  <span>{t("nav.searchAllResults", { keyword: searchTerm.trim() })}</span>
+                  <ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </div>
             ) : null}
@@ -409,6 +462,9 @@ const Navbar = () => {
           <details
             className="nav-prompt-dropdown"
             ref={promptMenuRef}
+            onToggle={(event) => {
+              if (event.currentTarget.open) setIsSearchFocused(false);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.currentTarget.open = false;
@@ -416,62 +472,31 @@ const Navbar = () => {
               }
             }}
           >
-            <summary className="nav-prompt-trigger">
-              <span>{t("nav.chatbotPrompt")}</span>
+            <summary className="nav-prompt-trigger" aria-label={t("nav.chatbotPrompt")}>
+              <Sparkles className="nav-prompt-ai-icon" size={19} aria-hidden="true" />
+              <span className="nav-prompt-label">{t("nav.chatbotPrompt")}</span>
               <ChevronDown size={15} />
             </summary>
             <div className="nav-prompt-menu">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="nav-prompt-item"
-                  onClick={() => handleQuickPrompt(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
+              {quickPrompts.map((prompt, index) => {
+                const Icon = [Music4, CalendarDays, Trophy][index];
+                return (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="nav-prompt-item"
+                    onClick={() => handleQuickPrompt(prompt)}
+                  >
+                    <Icon size={18} aria-hidden="true" />
+                    {prompt}
+                  </button>
+                );
+              })}
             </div>
           </details>
         </div>
 
         <div className="nav-right nav-actions">
-          <Link
-            to="/my-tickets"
-            className="nav-quick-link"
-            aria-label={t("nav.myTickets")}
-            title={t("nav.myTickets")}
-            onClick={(event) => {
-              if (isAuthenticated) return;
-              event.preventDefault();
-              requireLogin();
-            }}
-          >
-            <HiTicket size={20} />
-            <span>
-              <strong>{t("nav.tickets")}</strong>
-              <small>{t("nav.myTickets")}</small>
-            </span>
-          </Link>
-
-          <Link
-            to="/my-orders"
-            className="nav-quick-link"
-            aria-label={t("nav.myOrders")}
-            title={t("nav.myOrders")}
-            onClick={(event) => {
-              if (isAuthenticated) return;
-              event.preventDefault();
-              requireLogin();
-            }}
-          >
-            <RiShoppingBag3Fill size={20} />
-            <span>
-              <strong>{t("nav.orders")}</strong>
-              <small>{t("nav.history")}</small>
-            </span>
-          </Link>
-
           {!initialized ? (
             <div className="nav-account-placeholder" aria-hidden="true" />
           ) : !isAuthenticated ? (
@@ -486,10 +511,10 @@ const Navbar = () => {
                 aria-label={t("auth.signIn")}
                 title={t("auth.signIn")}
               >
-                <RiAccountCircleFill size={20} />
+                <UserRound size={20} />
                 <span>
                   <strong>{t("auth.signIn")}</strong>
-                  <small>{t("auth.account")}</small>
+
                 </span>
               </button>
             </>
@@ -504,14 +529,14 @@ const Navbar = () => {
                 }
               }}
             >
-              <summary className="account-trigger" aria-label={t("nav.myAccount")} title={accountName}>
-                <img
-                  src={avatarSrc}
-                  alt={accountName}
-                  className="nav-avatar"
-                  onError={() => setAvatarBroken(true)}
-                />
-                <span className="nav-account-label">{accountName}</span>
+              <summary className="account-trigger" aria-label={t("nav.accountLabel")} title={accountName}>
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="" className="nav-avatar"
+                    onError={() => setAvatarBroken(true)} />
+                ) : (
+                  <span className="nav-avatar nav-avatar-initials" aria-hidden="true">{avatarInitials}</span>
+                )}
+                <span className="nav-account-label">{t("nav.accountLabel")}</span>
                 <ChevronDown className="account-trigger-chevron" size={16} />
               </summary>
 
@@ -520,18 +545,15 @@ const Navbar = () => {
                   <UserRound size={17} />
                   {t("nav.personalProfile")}
                 </Link>
-                {!isOrganizerWorkspace ? (
-                  <>
-                    <Link to="/my-tickets" className="dropdown-item">
-                      <HiTicket size={17} />
-                      {t("nav.myTickets")}
-                    </Link>
-                    <Link to="/my-orders" className="dropdown-item">
-                      <ShoppingBag size={17} />
-                      {t("nav.myOrders")}
-                    </Link>
-                  </>
-                ) : null}
+                <Link to="/my-tickets" className="dropdown-item">
+                  <Ticket size={17} />
+                  {t("nav.myTickets")}
+                </Link>
+                <Link to="/my-orders" className="dropdown-item">
+                  <ShoppingBag size={17} />
+                  {t("nav.myOrders")}
+                </Link>
+                <hr />
                 {isOrganizer ? (
                   <Link to="/organizer" className="dropdown-item">
                     <LayoutDashboard size={17} />
@@ -548,16 +570,22 @@ const Navbar = () => {
                     {t("nav.organizerApply")}
                   </Link>
                 )}
+                {isAdmin && (
+                  <Link to="/admin/events" className="dropdown-item">
+                    <LayoutDashboard size={17} />
+                    {t("adminEventReview.title")}
+                  </Link>
+                )}
                 {isAdmin ? (
                   <Link to="/admin/organizers" className="dropdown-item">
                     <LayoutDashboard size={17} />
                     {t("nav.adminOrganizerReview")}
                   </Link>
                 ) : null}
-                {canEditHomePage ? (
-                  <Link to="/?editHome=1" className="dropdown-item">
-                    <Home size={17} />
-                    {t("nav.editHome")}
+                {isAdmin ? (
+                  <Link to="/admin/refunds" className="dropdown-item">
+                    <RotateCcw size={17} />
+                    {t("nav.adminRefunds", "Quản lý hoàn tiền")}
                   </Link>
                 ) : null}
                 <hr />

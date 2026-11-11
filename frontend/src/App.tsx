@@ -15,7 +15,9 @@ import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
 import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
 import ChatbotPage from "./pages/Chatbot/ChatbotPage";
 import VenuesPage from "./pages/Venues/VenuesPage";
+import AdminEventReviewPage from "./pages/Admin/AdminEventReviewPage";
 import AdminOrganizerReviewPage from "./pages/Admin/AdminOrganizerReviewPage";
+import AdminRefundsPage from "./pages/Admin/AdminRefundsPage";
 import OrganizerApplyPage from "./pages/Organizer/OrganizerApplyPage";
 import PublicOrganizerPage from "./pages/Organizer/PublicOrganizerPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
@@ -23,6 +25,8 @@ import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
 import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
 import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
 import OrganizerEventsPage from "./pages/Organizer/OrganizerEventsPage";
+import OrganizerEventSeatingPage from "./pages/Organizer/OrganizerEventSeatingPage";
+import OrganizerEventCreatePage from "./pages/Organizer/OrganizerEventCreatePage";
 import OrganizerEventEditorPage from "./pages/Organizer/OrganizerEventEditorPage";
 import OrganizerTicketTypesPage from "./pages/Organizer/OrganizerTicketTypesPage";
 import OrganizerLayoutPage from "./pages/Organizer/OrganizerLayoutPage";
@@ -85,7 +89,9 @@ function AppRoutes() {
           <Route path="/event/:slug" element={<EventDetailPage />} />
           <Route path="/organizers/apply" element={<OrganizerApplyPage />} />
           <Route path="/organizers/:slug" element={<PublicOrganizerPage />} />
+          <Route path="/admin/events" element={<AdminEventReviewPage />} />
           <Route path="/admin/organizers" element={<AdminOrganizerReviewPage />} />
+          <Route path="/admin/refunds" element={<AdminRefundsPage />} />
           <Route path="/events/:slug/book" element={<SelectTicketPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/payment-result" element={<PaymentResultPage />} />
@@ -98,7 +104,7 @@ function AppRoutes() {
           <Route path="/organizer/events" element={<OrganizerEventsPage />} />
           <Route
             path="/organizer/events/new"
-            element={<OrganizerEventEditorPage />}
+            element={<OrganizerEventCreatePage />}
           />
           <Route
             path="/organizer/events/:eventId/edit"
@@ -116,6 +122,7 @@ function AppRoutes() {
             path="/organizer/events/:eventId/layout"
             element={<OrganizerLayoutPage />}
           />
+          <Route path="/organizer/events/:eventId/configure-seating" element={<OrganizerEventSeatingPage />} />
           <Route
             path="/organizer/events/:eventId/seat-map"
             element={<OrganizerSeatMapPage />}

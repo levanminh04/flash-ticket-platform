@@ -1,0 +1,16 @@
+.discovery-footer-shell { width: min(100% - clamp(32px, 9vw, 112px), 1240px); margin-inline: auto; }
+.discovery-footer :is(h2, p) { margin: 0; }
+.discovery-footer a { text-decoration: none; }
+.discovery-footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.discovery-footer { background: var(--surface-footer); color: var(--bg-card); padding-block: 32px 18px; }
+.discovery-footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 24px; }
+.discovery-footer-grid > div { display: grid; align-content: start; justify-items: start; gap: 8px; }
+.discovery-footer h2 { font-size: var(--text-small-size); letter-spacing: 0; color: var(--brand-scale-200); }
+.discovery-footer p, .discovery-footer a { font-size: var(--text-small-size); color: #d1d5db; }
+.discovery-footer .discovery-brand { font-size: 1.4rem; color: white; letter-spacing: -.05em; font-weight: 800; }
+.discovery-footer .discovery-copyright { margin-top: 24px; padding-top: 14px; border-top: 1px solid #ffffff30; }
+
+@media (max-width: 620px) {
+  .discovery-footer-grid { grid-template-columns: 1fr 1fr; }
+  .discovery-footer-grid > :first-child { grid-column: 1 / -1; }
+}

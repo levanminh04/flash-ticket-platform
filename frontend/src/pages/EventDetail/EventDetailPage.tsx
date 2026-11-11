@@ -1,8 +1,11 @@
 ﻿import { CSSProperties, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { LoaderCircle } from "lucide-react";
-import { FaCalendarAlt, FaMapMarkedAlt } from "react-icons/fa";
-import { IoTicketSharp } from "react-icons/io5";
+import {
+  LoaderCircle,
+  CalendarDays as FaCalendarAlt,
+  MapPinned as FaMapMarkedAlt,
+  Ticket as IoTicketSharp,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { categoryService } from "../../services/categoryService";
 import { eventService } from "../../services/eventService";
