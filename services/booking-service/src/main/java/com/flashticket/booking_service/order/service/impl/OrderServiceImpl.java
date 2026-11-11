@@ -29,6 +29,7 @@ import com.flashticket.booking_service.mapper.OrderMapper;
 import com.flashticket.booking_service.mapper.OutboxMessageMapper;
 import com.flashticket.booking_service.messaging.repository.InboxMessageRepository;
 import com.flashticket.booking_service.messaging.repository.OutboxMessageRepository;
+import com.flashticket.booking_service.observability.BusinessTelemetry;
 import com.flashticket.booking_service.order.repository.IdempotencyRequestRepository;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
@@ -176,7 +177,7 @@ public class OrderServiceImpl implements OrderService {
       reservationRepository.save(storedReservation);
     } else throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
     // Hủy event không chờ expiry; giữ accepted/frozen để đối chiếu khoản thu đến trễ.
-    lockedOrder.setLifecycleState(OrderState.CANCELLED);
+    transition(lockedOrder, OrderState.CANCELLED);
     lockedOrder.setUpdatedAt(orderRepository.currentDatabaseTime());
     orderRepository.save(lockedOrder);
     // Toàn bộ release và order commit cùng nhau; lỗi commit đi ra worker để retry.
@@ -292,7 +293,7 @@ public class OrderServiceImpl implements OrderService {
     allocations.forEach(a -> a.setState(ReservationState.RELEASED));
     storedReservation.setState(ReservationState.RELEASED);
     reservationRepository.save(storedReservation);
-    lockedOrder.setLifecycleState(OrderState.CANCELLED);
+    transition(lockedOrder, OrderState.CANCELLED);
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
     // Proxy commit xong mới trả về controller; lỗi flush/commit phải đi ra ngoài.
@@ -382,7 +383,8 @@ public class OrderServiceImpl implements OrderService {
     allocations.forEach(a -> a.setState(ReservationState.RELEASED));
     storedReservation.setState(ReservationState.RELEASED);
     reservationRepository.save(storedReservation);
-    lockedOrder.setLifecycleState(
+    transition(
+        lockedOrder,
         storedSnapshot.getEventStatus() == EventState.CANCELLED
             ? OrderState.CANCELLED
             : OrderState.EXPIRED);
@@ -435,9 +437,9 @@ public class OrderServiceImpl implements OrderService {
     if (!completed && previousState != OrderState.ISSUANCE_FAILED) {
       // Trả purchased/used, kể cả event đóng bán/hủy; không chạy lại khi FAILED đã commit.
       releaseResourcesAfterIssuanceFailure(lockedOrder);
-      lockedOrder.setLifecycleState(cancelled ? OrderState.CANCELLED : OrderState.ISSUANCE_FAILED);
+      transition(lockedOrder, cancelled ? OrderState.CANCELLED : OrderState.ISSUANCE_FAILED);
     } else if (completed && previousState == OrderState.ISSUING) {
-      lockedOrder.setLifecycleState(cancelled ? OrderState.CANCELLED : OrderState.COMPLETED);
+      transition(lockedOrder, cancelled ? OrderState.CANCELLED : OrderState.COMPLETED);
     }
     Instant processedAt = orderRepository.currentDatabaseTime();
     if (previousState != lockedOrder.getLifecycleState()) {
@@ -1025,11 +1027,11 @@ public class OrderServiceImpl implements OrderService {
     } else if (storedUsage != null && storedUsage.getState() != PromotionUsageState.RELEASED)
       throw new BusinessException(ErrorCode.RESERVATION_DATA_CONFLICT);
     if (accepted) {
-      lockedOrder.setLifecycleState(OrderState.ISSUING);
+      transition(lockedOrder, OrderState.ISSUING);
       lockedOrder.setAcceptedChargeId(requestedPayment.chargeId());
       lockedOrder.setAcceptedAt(decisionAt);
     } else if (lockedOrder.getLifecycleState() == OrderState.PENDING_PAYMENT) {
-      lockedOrder.setLifecycleState(cancelled ? OrderState.CANCELLED : OrderState.EXPIRED);
+      transition(lockedOrder, cancelled ? OrderState.CANCELLED : OrderState.EXPIRED);
     }
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
@@ -1305,6 +1307,8 @@ public class OrderServiceImpl implements OrderService {
     lockedOrder.setPaymentSnapshotVersion(1L);
     lockedOrder.setUpdatedAt(decisionAt);
     orderRepository.save(lockedOrder);
+    BusinessTelemetry.committed(
+        "freeze", lockedOrder.getId(), "UNFROZEN", "FROZEN", "PURCHASE_SNAPSHOT_FROZEN");
     return frozen;
   }
 
@@ -1517,6 +1521,8 @@ public class OrderServiceImpl implements OrderService {
     receipt.setCreatedAt(decisionAt);
     // Version null => INSERT; trùng key không ghi đè receipt của request khác.
     idempotencyRequestRepository.save(receipt);
+    BusinessTelemetry.committed(
+        "reserve", order.getId(), "ABSENT", order.getLifecycleState(), "RESERVATION_HELD");
     return orderMapper.toView(order);
   }
 
@@ -1760,5 +1766,21 @@ public class OrderServiceImpl implements OrderService {
       case SEAT -> allocation.setSeatId(resourceId);
     }
     reservation.addAllocation(allocation);
+  }
+
+  private static void transition(Order order, OrderState after) {
+    OrderState before = order.getLifecycleState();
+    order.setLifecycleState(after);
+    if (before != after)
+      BusinessTelemetry.committed(
+          after == OrderState.ISSUING
+              ? "accept-payment"
+              : after == OrderState.EXPIRED
+                  ? "expire-release"
+                  : after == OrderState.CANCELLED ? "cancel-release" : "issuance-result",
+          order.getId(),
+          before,
+          after,
+          after.name());
   }
 }

@@ -9,6 +9,6 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public final class OrderPage {
-  @NotNull @Valid private final List<@NotNull @Valid OrderView> items;
+  @NotNull private final List<@NotNull @Valid OrderView> items;
   private final String nextCursor;
 }

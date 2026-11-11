@@ -3,6 +3,7 @@ package com.flashticket.ticket_service.application;
 import com.flashticket.ticket_service.contract.TicketContracts;
 import com.flashticket.ticket_service.contract.TicketContracts.*;
 import com.flashticket.ticket_service.contract.TicketSagaMessages;
+import com.flashticket.ticket_service.observability.BusinessTelemetry;
 import com.flashticket.ticket_service.qr.QrTokens;
 import com.flashticket.ticket_service.web.*;
 import com.flashticket.ticket_service.web.TicketViews.*;
@@ -304,6 +305,18 @@ public class TicketService implements TicketOperations {
                 new IssuanceResult(
                     command.orderId(), command.chargeId(), issuance.id(), "FAILED", 0, code);
           }
+          BusinessTelemetry.committed(
+              "issuance",
+              Map.of(
+                  "orderId",
+                  command.orderId().toString(),
+                  "correlationId",
+                  command.orderId().toString(),
+                  "issuanceId",
+                  result.issuanceId().toString()),
+              issuance.state(),
+              result.state(),
+              result.failureCode() == null ? "TICKETS_ISSUED" : result.failureCode());
           appendResult(message, result);
           inbox("ticket.issuance", message, result);
           return null;
@@ -608,6 +621,18 @@ public class TicketService implements TicketOperations {
                   new CheckInResult(id, eventId, ticketId, result, success, at), false);
             });
     if (outcome.conflict()) throw new TicketProblem(409, "IDEMPOTENCY_CONFLICT");
+    BusinessTelemetry.committed(
+        "check-in",
+        Map.of(
+            "eventId",
+            eventId.toString(),
+            "correlationId",
+            correlation.toString(),
+            "outcome",
+            outcome.result().succeeded() ? "SUCCESS" : "REJECTED"),
+        "REQUESTED",
+        outcome.result().result(),
+        outcome.result().result());
     return outcome.result();
   }
 

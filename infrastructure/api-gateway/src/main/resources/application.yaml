@@ -109,9 +109,23 @@ flashticket:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 logging:
+  charset:
+    console: UTF-8
+  level:
+    root: WARN
+    com.flashticket: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.netflix: WARN
+    io.lettuce: WARN
+    org.apache: WARN
   structured:
     format:
       console: logstash
+    json:
+      customizer: com.flashticket.api_gateway.observability.LogFields
+      stacktrace:
+        printer: com.flashticket.api_gateway.observability.SafeStackTracePrinter
 
 management:
   endpoints:
