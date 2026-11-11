@@ -1,0 +1,12 @@
+# Controls still require FT_FAULTS_ENABLED=true and a fresh, private lease file.
+spring:
+  main:
+    banner-mode: off
+ft:
+  rca:
+    http:
+      # Route nhận lỗi; đổi đường dẫn API thì chỉ sửa ở đây.
+      method: GET
+      pattern: "/api/v1/orders/{orderId}"
+      variable: orderId
+      subject: true

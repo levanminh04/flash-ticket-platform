@@ -127,3 +127,6 @@ docs/projectd
 /deploy/postgres/backups/
 /.playwright-mcp/
 /deploy/keycloak/postman/RESET-TEST-RESULTS.md
+
+# Private fault controls and retained verification outputs.
+/.local/rca-test/
