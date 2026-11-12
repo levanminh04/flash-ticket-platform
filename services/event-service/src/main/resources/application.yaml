@@ -75,7 +75,6 @@ event:
   read-model:
     enabled: ${EVENT_READ_MODEL_ENABLED:false}
     payment-base-url: ${EVENT_PAYMENT_BASE_URL:}
-    booking-base-url: ${EVENT_BOOKING_BASE_URL:}
     connect-timeout: ${EVENT_READ_CONNECT_TIMEOUT:2s}
     response-timeout: ${EVENT_READ_RESPONSE_TIMEOUT:5s}
     cancellation-max-age: ${EVENT_CANCELLATION_SUMMARY_MAX_AGE:30s}
