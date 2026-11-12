@@ -13,7 +13,7 @@ services:
     network_mode: host
     command:
       - http
-      - http://127.0.0.1:8083
+      - ${NGROK_UPSTREAM:-http://127.0.0.1:8083}
       - --url=https://${NGROK_DOMAIN:?NGROK_DOMAIN missing in env/payment-service.env}
       - --config=/etc/ngrok.yml
     environment:

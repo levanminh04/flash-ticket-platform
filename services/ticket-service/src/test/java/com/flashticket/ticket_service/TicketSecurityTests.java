@@ -80,6 +80,16 @@ class TicketSecurityTests {
 
   @Autowired MockMvc mvc;
 
+  @Test
+  void permitsOnlyGetKubernetesProbePathsWithoutJwt() throws Exception {
+    for (String path : List.of("/actuator/health/liveness", "/actuator/health/readiness")) {
+      mvc.perform(get(path)).andExpect(status().isOk());
+      mvc.perform(post(path)).andExpect(status().isUnauthorized());
+    }
+    mvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+  }
+
   private String token(String role) throws Exception {
     return token(
         KEY, ISSUER, "flash-ticket-api", 300, "subject-test", Map.of("roles", List.of(role)));
@@ -217,6 +227,8 @@ class TicketSecurityTests {
       "/internal/v1/orders/{id}/issuance",
       "/internal/v1/unknown",
       "/actuator/health",
+      "/actuator/health/liveness",
+      "/actuator/health/readiness",
       "/actuator/env"
     })
     Map<String, Boolean> read() {

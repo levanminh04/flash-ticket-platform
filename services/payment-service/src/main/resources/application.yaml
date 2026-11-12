@@ -62,6 +62,7 @@ spring:
 
 payment:
   booking:
+    discovery-enabled: ${PAYMENT_BOOKING_DISCOVERY_ENABLED:false}
     base-url: ${BOOKING_SERVICE_URL:http://localhost:8082}
     snapshot-path: /internal/v1/orders/{orderId}/purchase-snapshot
     connect-timeout: PT3S

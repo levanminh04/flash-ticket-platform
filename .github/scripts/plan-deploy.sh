@@ -16,9 +16,13 @@ if [[ ${EVENT_NAME:-} == push ]]; then
 else
   action=${ACTION:-}; service=${SERVICE:-}
   [[ $action == deploy || $action == restart || $action == rollback ]] || die "unknown action '$action'"
-  if [[ $service == all ]]; then
+  if [[ $service == all || $service == k8s ]]; then
     [[ $action != rollback ]] || die "rollback needs exactly one service"
-    selected=$(jq -c '.services' "$registry")
+    if [[ $service == k8s ]]; then
+      selected=$(jq -c '[.services[] | select(.runtime == "k8s")]' "$registry")
+    else
+      selected=$(jq -c '.services' "$registry")
+    fi
   else
     selected=$(jq -c --arg s "$service" '[.services[] | select(.name == $s)]' "$registry")
     [[ $selected != '[]' ]] || die "unknown service '$service'"

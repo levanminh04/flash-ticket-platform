@@ -37,6 +37,10 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                     .requestMatchers("/api/v1/organizer/**")
                     .hasRole("ORGANIZER")
+                    // Chỉ hai GET probe cho kubelet; health tổng vẫn cần role nội bộ.
+                    .requestMatchers(
+                        HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness")
+                    .permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                     .hasRole("INTERNAL_SERVICE")
                     .anyRequest()

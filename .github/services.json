@@ -1,13 +1,13 @@
 {
   "services": [
-    {"name": "discovery-server", "path": "infrastructure/discovery-server", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "api-gateway", "path": "infrastructure/api-gateway", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "user-service", "path": "services/user-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "event-service", "path": "services/event-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "ticket-service", "path": "services/ticket-service", "kind": "maven", "mvn": "./mvnw", "postgres": true, "rabbitmq": false},
-    {"name": "booking-service", "path": "services/booking-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": true},
-    {"name": "payment-service", "path": "services/payment-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false},
-    {"name": "keycloak", "path": "services/keycloak-spi", "kind": "maven", "mvn": "mvn", "postgres": false, "rabbitmq": false},
-    {"name": "frontend", "path": "frontend", "kind": "node", "mvn": "", "postgres": false, "rabbitmq": false}
+    {"name": "discovery-server", "path": "infrastructure/discovery-server", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "api-gateway", "path": "infrastructure/api-gateway", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "user-service", "path": "services/user-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "event-service", "path": "services/event-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "ticket-service", "path": "services/ticket-service", "kind": "maven", "mvn": "./mvnw", "postgres": true, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "booking-service", "path": "services/booking-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": true, "runtime": "k8s"},
+    {"name": "payment-service", "path": "services/payment-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
+    {"name": "keycloak", "path": "services/keycloak-spi", "kind": "maven", "mvn": "mvn", "postgres": false, "rabbitmq": false, "runtime": "compose"},
+    {"name": "frontend", "path": "frontend", "kind": "node", "mvn": "", "postgres": false, "rabbitmq": false, "runtime": "compose"}
   ]
 }

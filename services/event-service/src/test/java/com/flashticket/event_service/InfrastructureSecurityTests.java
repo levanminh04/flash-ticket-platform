@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(
     properties = {
+      "management.endpoint.health.probes.enabled=true",
       "spring.security.oauth2.client.registration.internal.provider=keycloak",
       "spring.security.oauth2.client.registration.internal.client-id=internal-service",
       "spring.security.oauth2.client.registration.internal.client-secret=isolated-test-secret",
@@ -31,6 +32,18 @@ import org.springframework.test.web.servlet.MockMvc;
 class InfrastructureSecurityTests {
   @Autowired MockMvc mvc;
   @MockitoBean JwtDecoder decoder;
+
+  @Test
+  void permitsKubernetesProbesWithoutJwtAndKeepsOtherEndpointsProtected() throws Exception {
+    mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+    mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
+    mvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                "/actuator/health/liveness"))
+        .andExpect(status().isUnauthorized());
+  }
 
   @Test
   void anonymousRequestGetsBearerChallengeEvenWhenHtmlIsAccepted() throws Exception {

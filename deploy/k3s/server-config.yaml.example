@@ -1,0 +1,7 @@
+node-name: ft84
+node-ip: 172.31.41.236
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+flannel-backend: vxlan
+write-kubeconfig-mode: '0600'
+secrets-encryption: true

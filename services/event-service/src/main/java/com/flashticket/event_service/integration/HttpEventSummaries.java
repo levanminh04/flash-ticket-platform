@@ -8,7 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Instant;
 import java.util.UUID;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,7 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class HttpEventSummaries implements EventSummaries {
   private final EventReadProperties properties;
-  private final DiscoveryClient discovery;
+  private final LoadBalancerClient loadBalancer;
   private final InternalAccessToken tokens;
   private final JsonMapper json;
   private final RestClient http;
@@ -28,11 +28,11 @@ public class HttpEventSummaries implements EventSummaries {
           "Intentionally shares Spring-managed beans; no dependency accessor is exposed.")
   public HttpEventSummaries(
       EventReadProperties properties,
-      DiscoveryClient discovery,
+      LoadBalancerClient loadBalancer,
       InternalAccessToken tokens,
       JsonMapper json) {
     this.properties = properties;
-    this.discovery = discovery;
+    this.loadBalancer = loadBalancer;
     this.tokens = tokens;
     this.json = json;
     var factory =
@@ -140,11 +140,12 @@ public class HttpEventSummaries implements EventSummaries {
   private URI origin(String service, URI configured) {
     if (configured != null) return configured;
     try {
-      var instances = discovery.getInstances(service);
-      if (instances.isEmpty()) throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
-      return instances.getFirst().getUri();
+      // Chọn lại instance cho mỗi lượt đọc; không giữ cố định instance đầu registry.
+      var instance = loadBalancer.choose(service);
+      if (instance == null) throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
+      return instance.getUri();
     } catch (RuntimeException error) {
-      // Discovery is an external dependency; never leak its implementation error or cause.
+      // Lỗi registry/LoadBalancer không được lộ chi tiết hạ tầng ra response.
       throw new EventProblem(503, "UPSTREAM_UNAVAILABLE", null);
     }
   }

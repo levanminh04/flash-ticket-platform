@@ -21,11 +21,14 @@ fi
 declare -A build recreate
 while IFS= read -r f; do
   if [[ -z $f || $f == *.md || $f == .env.example || $f == */.env.example ]]; then continue; fi
-  while IFS=$'\t' read -r name path; do
+  while IFS=$'\t' read -r name path runtime; do
     if [[ $f == "$path"/* ]]; then build[$name]=1; fi
-    if [[ $f == "deploy/app/$name.yml" ]]; then recreate[$name]=1; fi
-    if [[ $f == deploy/app/_common.yml || $f == deploy/scripts/deploy-service.sh ]]; then recreate[$name]=1; fi
-  done < <(jq -r '.services[] | [.name, .path] | @tsv' "$registry")
+    if [[ $runtime == k8s ]]; then
+      if [[ $f == "deploy/k8s/$name/"*.yaml || $f == deploy/k8s/namespace.yaml || $f == deploy/scripts/deploy-k8s-service.sh ]]; then recreate[$name]=1; fi
+    else
+      if [[ $f == "deploy/app/$name.yml" || $f == deploy/app/_common.yml || $f == deploy/scripts/deploy-service.sh ]]; then recreate[$name]=1; fi
+    fi
+  done < <(jq -r '.services[] | [.name, .path, .runtime] | @tsv' "$registry")
 done <<< "$files"
 
 for name in "${!build[@]}"; do unset "recreate[$name]"; done # a rebuilt service is redeployed anyway
