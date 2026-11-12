@@ -6,8 +6,6 @@ import java.util.UUID;
 public interface EventSummaries {
   Financial financial(UUID event, String organizer, boolean requireFresh);
 
-  Sales sales(UUID event, String organizer);
-
   record Financial(
       Integer schemaVersion,
       UUID eventId,
@@ -19,11 +17,4 @@ public interface EventSummaries {
       String validRefunds,
       String feeAmount,
       String netAmount) {}
-
-  record Sales(
-      Integer schemaVersion,
-      UUID eventId,
-      String organizerSubject,
-      String asOf,
-      String purchasedTicketCount) {}
 }

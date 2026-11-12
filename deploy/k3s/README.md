@@ -26,7 +26,8 @@ cũ. Kiểm thử từ máy ngoài khi có listener tạm trên private IP xác 
 cổng bị chặn. PostgreSQL/MongoDB đã thêm private binding, giữ localhost và giữ
 đúng image/volume; kiểm từ Pod bằng credential thật thành công.
 Thiếu các rule node-to-node 6443,
-8472/UDP, 10250 và PostgreSQL 5432 cho thiết kế nhiều node; bổ sung trước join.
+8472/UDP, 10250 cho thiết kế nhiều node; bổ sung trước join. Nếu worker dùng SG
+khác, bổ sung đúng SG đó vào nguồn các rule dependency trước khi schedule app.
 
 Vào **EC2 → Instances → máy 52.64.237.84 → Security → Security groups →
 sg-002103a96c5f83da4**. Gửi danh sách **Inbound rules và Outbound rules**,

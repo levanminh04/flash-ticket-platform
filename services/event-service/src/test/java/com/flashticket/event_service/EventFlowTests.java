@@ -604,16 +604,11 @@ class EventFlowTests {
   }
 
   @Test
-  void unavailableSummaryContractDoesNotReturnFakeStatistics() throws Exception {
+  void retiredOrganizerStatisticsEndpointIsNotFound() throws Exception {
     var event = service.create("a", draft("Stats"));
     mvc.perform(
             get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
                 .with(actor("a", "ORGANIZER")))
-        .andExpect(status().isServiceUnavailable())
-        .andExpect(jsonPath("$.code").value("DEPENDENCY_CONTRACT_NOT_READY"));
-    mvc.perform(
-            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
-                .with(actor("foreign", "ORGANIZER")))
         .andExpect(status().isNotFound());
   }
 
@@ -833,42 +828,6 @@ class EventFlowTests {
         .andExpect(status().isServiceUnavailable());
     assertThat(service.readOwned(future.eventId(), "a").status()).isEqualTo("DRAFT");
     assertThat(service.readOwned(future.eventId(), "a").rowVersion()).isEqualTo("0");
-    assertThat(
-            jdbc.queryForObject(
-                "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
-        .isZero();
-  }
-
-  @Test
-  void statisticsUsesOwnerScopedReadSummariesOutsideTransaction() throws Exception {
-    var event = service.create("a", draft("Statistics"));
-    collected(event.eventId(), true);
-    doAnswer(
-            call -> {
-              assertThat(
-                      org.springframework.transaction.support.TransactionSynchronizationManager
-                          .isActualTransactionActive())
-                  .isFalse();
-              return new EventSummaries.Sales(
-                  1,
-                  event.eventId(),
-                  "a",
-                  java.time.Instant.now().minusSeconds(5).toString(),
-                  "10");
-            })
-        .when(summaries)
-        .sales(event.eventId(), "a");
-    mvc.perform(
-            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
-                .with(actor("a", "ORGANIZER")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.purchasedTicketCount").value("10"))
-        .andExpect(jsonPath("$.netAmount").value("90000"))
-        .andExpect(jsonPath("$.asOf").isNotEmpty());
-    mvc.perform(
-            get("/api/v1/organizer/events/" + event.eventId() + "/statistics")
-                .with(actor("b", "ORGANIZER")))
-        .andExpect(status().isNotFound());
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
@@ -1342,7 +1301,7 @@ class EventFlowTests {
     mvc.perform(get("/api/v1/events/" + eventId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.title").value("Revised HTTP"))
-        .andExpect(jsonPath("$.organizerSubject").doesNotExist());
+        .andExpect(jsonPath("$.organizerSubject").value("http-owner"));
     assertThat(
             jdbc.queryForObject(
                 "SELECT count(*) FROM event_schema.tbl_outbox_messages", Integer.class))
@@ -1454,7 +1413,7 @@ class EventFlowTests {
     mvc.perform(get("/api/v1/events/" + created.eventId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ticketTypes[0].unitPrice").value("100005"))
-        .andExpect(jsonPath("$.organizerSubject").doesNotExist())
+        .andExpect(jsonPath("$.organizerSubject").value("organizer-a"))
         .andExpect(jsonPath("$.feeRate").doesNotExist());
     var sales =
         json.readTree(

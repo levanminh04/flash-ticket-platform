@@ -81,26 +81,6 @@ public class HttpEventSummaries implements EventSummaries {
     }
   }
 
-  @Override
-  public Sales sales(UUID event, String organizer) {
-    var result =
-        read("booking-service", properties.bookingBaseUrl(), event, "sales-summary", Sales.class);
-    try {
-      scope(
-          result.schemaVersion(),
-          result.eventId(),
-          result.organizerSubject(),
-          result.asOf(),
-          event,
-          organizer);
-      ContractRules.unsigned(result.purchasedTicketCount(), "purchasedTicketCount", true);
-      return result;
-    } catch (EventProblem error) {
-      if (error.status() == 503) throw error;
-      throw invalid();
-    }
-  }
-
   private <T> T read(String service, URI configured, UUID event, String resource, Class<T> type) {
     if (!properties.enabled()) throw new EventProblem(503, "DEPENDENCY_CONTRACT_NOT_READY", null);
     URI origin = origin(service, configured);
