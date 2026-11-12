@@ -52,3 +52,9 @@ vnpay:
   return-url: https://example.test/api/v1/payments/vnpay/return
   ipn-url: https://example.test/api/v1/payments/vnpay/ipn
   app-return-url: flash-ticket://payment-return
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true

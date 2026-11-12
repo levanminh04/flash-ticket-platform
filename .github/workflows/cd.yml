@@ -11,13 +11,17 @@ on:
         options: [deploy, restart, rollback]
         default: deploy
       service:
-        description: 'Service name from .github/services.json, or "all" (not allowed for rollback)'
+        description: 'Service name, "all", or "k8s" (groups not allowed for rollback)'
         type: string
         required: true
       image_digest:
         description: "sha256:<64 hex>, rollback only"
         type: string
         required: false
+      publish_only:
+        description: Verify/build/publish images for bootstrap without deploying to 84
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -65,10 +69,12 @@ jobs:
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
       kind: ${{ matrix.service.kind }}
+      runtime: ${{ matrix.service.runtime }}
       postgres: ${{ matrix.service.postgres }}
       rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}
       image_digest: ${{ matrix.service.image_digest }}
+      publish_only: ${{ inputs.publish_only || false }}
     secrets: inherit
 
   rest:
@@ -89,8 +95,10 @@ jobs:
       path: ${{ matrix.service.path }}
       mvn: ${{ matrix.service.mvn }}
       kind: ${{ matrix.service.kind }}
+      runtime: ${{ matrix.service.runtime }}
       postgres: ${{ matrix.service.postgres }}
       rabbitmq: ${{ matrix.service.rabbitmq }}
       mode: ${{ matrix.service.mode }}
       image_digest: ${{ matrix.service.image_digest }}
+      publish_only: ${{ inputs.publish_only || false }}
     secrets: inherit

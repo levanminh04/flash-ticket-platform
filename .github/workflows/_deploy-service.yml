@@ -13,6 +13,10 @@ on:
         description: maven | node
         type: string
         default: maven
+      runtime:
+        description: k8s | compose; cluster must be bootstrapped before K8s deploy
+        type: string
+        required: true
       mvn:
         type: string
         default: ''
@@ -30,6 +34,10 @@ on:
         description: sha256:<64 hex>, rollback only
         type: string
         default: ''
+      publish_only:
+        description: Bootstrap images only; skip all SSH and runtime changes
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -119,7 +127,7 @@ jobs:
 
   deploy:
     needs: [verify, publish]
-    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ always() && !inputs.publish_only && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -147,6 +155,7 @@ jobs:
           SERVICE: ${{ inputs.service }}
           MODE: ${{ inputs.mode }}
           KIND: ${{ inputs.kind }}
+          RUNTIME: ${{ inputs.runtime }}
           PUBLISHED_DIGEST: ${{ needs.publish.outputs.digest }}
           ROLLBACK_DIGEST: ${{ inputs.image_digest }}
           REGISTRY_USER: ${{ github.actor }}
@@ -157,6 +166,7 @@ jobs:
           [[ $SERVICE =~ ^[a-z-]+$ ]]
           [[ $SSH_HOST =~ ^[A-Za-z0-9.-]+$ && $SSH_USER =~ ^[A-Za-z0-9_-]+$ && $SSH_PORT =~ ^[0-9]+$ ]]
           [[ $REGISTRY_USER =~ ^[A-Za-z0-9-]+$ ]]
+          [[ $RUNTIME == k8s || $RUNTIME == compose ]]
           test -n "$SSH_KEY" && test -n "$SSH_KNOWN_HOSTS"
           dir=$(mktemp -d "$RUNNER_TEMP/ssh.XXXXXXXX")
           trap 'rm -rf -- "$dir"' EXIT
@@ -165,13 +175,18 @@ jobs:
           chmod 600 "$dir/key" "$dir/known_hosts"
           opts=(-i "$dir/key" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o "UserKnownHostsFile=$dir/known_hosts")
           dest="$SSH_USER@$SSH_HOST"
+          state_path="$APP_ROOT/state"
+          if [[ $RUNTIME == k8s ]]; then state_path="$state_path/k8s"; fi
+          # Respect cutover before writing env/config for either runtime.
+          # shellcheck disable=SC2029
+          ssh "${opts[@]}" "$dest" "test ! -e '$APP_ROOT/state/maintenance'"
 
           case "$MODE" in
             build-and-deploy) image="$REGISTRY_IMAGE@$PUBLISHED_DIGEST" ;;
             rollback) image="$REGISTRY_IMAGE@$ROLLBACK_DIGEST" ;;
             recreate)
               # shellcheck disable=SC2029
-              image=$(ssh "${opts[@]}" "$dest" "cat '$APP_ROOT/state/$SERVICE.current'")
+              image=$(ssh "${opts[@]}" "$dest" "cat '$state_path/$SERVICE.current'")
               [[ $image == "$REGISTRY_IMAGE@sha256:"* ]] || { echo "No digest recorded for $SERVICE: deploy it first"; exit 1; } ;;
             *) echo "Unknown mode $MODE"; exit 1 ;;
           esac
@@ -183,9 +198,23 @@ jobs:
             printf '%s\n' "$ENV_SECRET" | ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$APP_ROOT/env' && cat > '$APP_ROOT/env/$SERVICE.env.tmp' && chmod 600 '$APP_ROOT/env/$SERVICE.env.tmp' && mv -f '$APP_ROOT/env/$SERVICE.env.tmp' '$APP_ROOT/env/$SERVICE.env'"
           fi
 
-          # shellcheck disable=SC2029
-          tar -C deploy/app -cf - . | ssh "${opts[@]}" "$dest" "tar -C '$APP_ROOT/compose' -xf -"
-          # shellcheck disable=SC2029
-          ssh "${opts[@]}" "$dest" "cat > '$APP_ROOT/deploy-service.sh.new' && chmod 755 '$APP_ROOT/deploy-service.sh.new' && mv '$APP_ROOT/deploy-service.sh.new' '$APP_ROOT/deploy-service.sh'" < deploy/scripts/deploy-service.sh
-          # shellcheck disable=SC2029
-          printf '%s' "$REGISTRY_TOKEN" | ssh "${opts[@]}" "$dest" "REGISTRY_USER='$REGISTRY_USER' '$APP_ROOT/deploy-service.sh' '$SERVICE' '$image' '$GITHUB_SHA'"
+          if [[ $RUNTIME == k8s ]]; then
+            release="$APP_ROOT/releases/$GITHUB_SHA"
+            # Each commit has its own input tree; another job cannot replace it mid-deploy.
+            # shellcheck disable=SC2029
+            ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$release'"
+            # shellcheck disable=SC2029
+            tar -cf - deploy/k8s deploy/scripts/deploy-k8s-service.sh | ssh "${opts[@]}" "$dest" "tar -C '$release' -xf -"
+            deploy_mode=deploy
+            if [[ $MODE == recreate || $MODE == rollback ]]; then deploy_mode=$MODE; fi
+            # GHCR pull authentication, if needed, is provisioned persistently on the cluster.
+            # shellcheck disable=SC2029
+            ssh "${opts[@]}" "$dest" "bash '$release/deploy/scripts/deploy-k8s-service.sh' '$SERVICE' '$image' '$GITHUB_SHA' '$deploy_mode'"
+          else
+            # shellcheck disable=SC2029
+            tar -C deploy/app -cf - . | ssh "${opts[@]}" "$dest" "tar -C '$APP_ROOT/compose' -xf -"
+            # shellcheck disable=SC2029
+            ssh "${opts[@]}" "$dest" "cat > '$APP_ROOT/deploy-service.sh.new' && chmod 755 '$APP_ROOT/deploy-service.sh.new' && mv '$APP_ROOT/deploy-service.sh.new' '$APP_ROOT/deploy-service.sh'" < deploy/scripts/deploy-service.sh
+            # shellcheck disable=SC2029
+            printf '%s' "$REGISTRY_TOKEN" | ssh "${opts[@]}" "$dest" "REGISTRY_USER='$REGISTRY_USER' '$APP_ROOT/deploy-service.sh' '$SERVICE' '$image' '$GITHUB_SHA'"
+          fi

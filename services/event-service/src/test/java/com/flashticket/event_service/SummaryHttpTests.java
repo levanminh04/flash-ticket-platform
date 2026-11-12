@@ -1,8 +1,7 @@
 package com.flashticket.event_service;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.flashticket.event_service.config.EventJsonConfig;
 import com.flashticket.event_service.integration.*;
@@ -18,15 +17,14 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
 import tools.jackson.databind.json.JsonMapper;
 
 class SummaryHttpTests {
   static HttpServer server;
   static ExecutorService executor;
   static final UUID EVENT = UUID.randomUUID();
-  static final AtomicReference<String> finance = new AtomicReference<>(),
-      sales = new AtomicReference<>();
+  static final AtomicReference<String> finance = new AtomicReference<>();
   static final AtomicReference<String> authorization = new AtomicReference<>(),
       correlation = new AtomicReference<>();
   static final AtomicInteger status = new AtomicInteger(200),
@@ -51,7 +49,7 @@ class SummaryHttpTests {
     executor = Executors.newVirtualThreadPerTaskExecutor();
     server.setExecutor(executor);
     server.createContext(
-        "/internal/v1/events/",
+        "/internal/v1/events/" + EVENT + "/financial-summary",
         exchange -> {
           requests.incrementAndGet();
           authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -61,11 +59,7 @@ class SummaryHttpTests {
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
           }
-          byte[] bytes =
-              (exchange.getRequestURI().getPath().endsWith("financial-summary")
-                      ? finance.get()
-                      : sales.get())
-                  .getBytes(StandardCharsets.UTF_8);
+          byte[] bytes = finance.get().getBytes(StandardCharsets.UTF_8);
           try {
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status.get(), bytes.length);
@@ -92,12 +86,6 @@ class SummaryHttpTests {
     requests.set(0);
     MDC.clear();
     finance.set(financial(Instant.now().toString()));
-    sales.set(
-        "{\"schemaVersion\":1,\"eventId\":\""
-            + EVENT
-            + "\",\"organizerSubject\":\"owner\",\"asOf\":\""
-            + Instant.now()
-            + "\",\"purchasedTicketCount\":\"12\"}");
   }
 
   @AfterEach
@@ -119,23 +107,21 @@ class SummaryHttpTests {
         new EventReadProperties(
             enabled,
             base,
-            base,
             Duration.ofSeconds(1),
             timeout,
             Duration.ofSeconds(30),
             Duration.ofSeconds(5)),
-        mock(DiscoveryClient.class),
+        mock(LoadBalancerClient.class),
         () -> "isolated-machine-token",
         json);
   }
 
   @Test
-  void readsStrictSummariesAndPropagatesMachineAuthenticationAndCorrelation() {
+  void readsStrictFinancialSummaryAndPropagatesMachineAuthenticationAndCorrelation() {
     String id = UUID.randomUUID().toString();
     MDC.put("correlationId", id);
     var client = client(true, Duration.ofSeconds(2));
     assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
-    assertThat(client.sales(EVENT, "owner").purchasedTicketCount()).isEqualTo("12");
     assertThat(authorization.get()).isEqualTo("Bearer isolated-machine-token");
     assertThat(correlation.get()).isEqualTo(id);
   }
@@ -149,30 +135,24 @@ class SummaryHttpTests {
     assertThat(requests.get()).isZero();
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"payment-service", "booking-service"})
-  void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty(String service) {
-    var discovery = mock(DiscoveryClient.class);
-    when(discovery.getInstances(service))
+  @Test
+  void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty() {
+    var loadBalancer = mock(LoadBalancerClient.class);
+    when(loadBalancer.choose("payment-service"))
         .thenThrow(new IllegalStateException("registry internal detail must not escape"));
     var client =
         new HttpEventSummaries(
             new EventReadProperties(
                 true,
                 null,
-                null,
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5)),
-            discovery,
+            loadBalancer,
             () -> "isolated-machine-token",
             json);
-    assertThatThrownBy(
-            () -> {
-              if (service.equals("payment-service")) client.financial(EVENT, "owner", true);
-              else client.sales(EVENT, "owner");
-            })
+    assertThatThrownBy(() -> client.financial(EVENT, "owner", true))
         .isInstanceOfSatisfying(
             EventProblem.class,
             p -> {
@@ -184,35 +164,105 @@ class SummaryHttpTests {
   }
 
   @Test
-  void resolvesBothSourceServicesThroughRegistryWhenNoExplicitOriginIsConfigured() {
-    var discovery = mock(DiscoveryClient.class);
+  void resolvesPaymentThroughRegistryWhenNoExplicitOriginIsConfigured() {
+    var loadBalancer = mock(LoadBalancerClient.class);
     int port = server.getAddress().getPort();
-    when(discovery.getInstances("payment-service"))
+    when(loadBalancer.choose("payment-service"))
         .thenReturn(
-            List.of(
-                new org.springframework.cloud.client.DefaultServiceInstance(
-                    "payment-test", "payment-service", "127.0.0.1", port, false)));
-    when(discovery.getInstances("booking-service"))
-        .thenReturn(
-            List.of(
-                new org.springframework.cloud.client.DefaultServiceInstance(
-                    "booking-test", "booking-service", "127.0.0.1", port, false)));
+            new org.springframework.cloud.client.DefaultServiceInstance(
+                "payment-test", "payment-service", "127.0.0.1", port, false));
     var client =
         new HttpEventSummaries(
             new EventReadProperties(
                 true,
                 null,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(5)),
+            loadBalancer,
+            () -> "isolated-machine-token",
+            json);
+    assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+    assertThat(requests.get()).isEqualTo(1);
+  }
+
+  @Test
+  void usesTheLoadBalancerSelectionForEachSummaryRequest() throws Exception {
+    var secondRequests = new AtomicInteger();
+    var secondServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    secondServer.createContext(
+        "/internal/v1/events/",
+        exchange -> {
+          secondRequests.incrementAndGet();
+          byte[] bytes = finance.get().getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, bytes.length);
+          exchange.getResponseBody().write(bytes);
+          exchange.close();
+        });
+    secondServer.start();
+    try {
+      var loadBalancer = mock(LoadBalancerClient.class);
+      when(loadBalancer.choose("payment-service"))
+          .thenReturn(
+              new org.springframework.cloud.client.DefaultServiceInstance(
+                  "payment-first",
+                  "payment-service",
+                  "127.0.0.1",
+                  server.getAddress().getPort(),
+                  false),
+              new org.springframework.cloud.client.DefaultServiceInstance(
+                  "payment-second",
+                  "payment-service",
+                  "127.0.0.1",
+                  secondServer.getAddress().getPort(),
+                  false));
+      var client =
+          new HttpEventSummaries(
+              new EventReadProperties(
+                  true,
+                  null,
+                  Duration.ofSeconds(1),
+                  Duration.ofSeconds(2),
+                  Duration.ofSeconds(30),
+                  Duration.ofSeconds(5)),
+              loadBalancer,
+              () -> "isolated-machine-token",
+              json);
+      assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+      assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+      assertThat(requests.get()).isEqualTo(1);
+      assertThat(secondRequests.get()).isEqualTo(1);
+      verify(loadBalancer, times(2)).choose("payment-service");
+    } finally {
+      secondServer.stop(0);
+    }
+  }
+
+  @Test
+  void missingInstanceReturnsUnavailableWithoutCallingCounterparty() {
+    var loadBalancer = mock(LoadBalancerClient.class);
+    var client =
+        new HttpEventSummaries(
+            new EventReadProperties(
+                true,
                 null,
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5)),
-            discovery,
+            loadBalancer,
             () -> "isolated-machine-token",
             json);
-    assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
-    assertThat(client.sales(EVENT, "owner").purchasedTicketCount()).isEqualTo("12");
-    assertThat(requests.get()).isEqualTo(2);
+    assertThatThrownBy(() -> client.financial(EVENT, "owner", true))
+        .isInstanceOfSatisfying(
+            EventProblem.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(503);
+              assertThat(error.code()).isEqualTo("UPSTREAM_UNAVAILABLE");
+            });
+    assertThat(requests.get()).isZero();
   }
 
   @ParameterizedTest
@@ -285,10 +335,7 @@ class SummaryHttpTests {
   }
 
   @Test
-  void statisticsRejectsCounterOverflowAndWrongOwner() {
-    sales.set(sales.get().replace("\"12\"", "\"9223372036854775808\""));
-    assertThatThrownBy(() -> client(true, Duration.ofSeconds(1)).sales(EVENT, "owner"))
-        .isInstanceOf(EventProblem.class);
+  void rejectsFinancialSummaryForWrongOwner() {
     assertThatThrownBy(() -> client(true, Duration.ofSeconds(1)).financial(EVENT, "foreign", false))
         .isInstanceOfSatisfying(
             EventProblem.class, p -> assertThat(p.code()).isEqualTo("UPSTREAM_SCOPE_MISMATCH"));

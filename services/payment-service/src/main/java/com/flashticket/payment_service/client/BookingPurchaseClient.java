@@ -28,16 +28,23 @@ public class BookingPurchaseClient {
 
   public PurchaseSnapshot preparePurchaseSnapshot(UUID orderId, String buyerSubject) {
     try {
-      String response =
-          bookingRestClient
-              .post()
-              .uri(snapshotPath, orderId)
-              .attributes(clientRegistrationId("booking"))
-              .attributes(principal("payment-service"))
-              .contentType(MediaType.APPLICATION_JSON)
-              .body(new PreparePurchaseSnapshotRequest(buyerSubject))
-              .retrieve()
-              .body(String.class);
+      String response;
+      try {
+        response =
+            bookingRestClient
+                .post()
+                .uri(snapshotPath, orderId)
+                .attributes(clientRegistrationId("booking"))
+                .attributes(principal("payment-service"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new PreparePurchaseSnapshotRequest(buyerSubject))
+                .retrieve()
+                .body(String.class);
+      } catch (IllegalStateException ex) {
+        // LoadBalancer ném IllegalStateException khi không có instance; không retry POST.
+        // Chỉ phân loại trong HTTP boundary, không che lỗi trạng thái khi đọc contract.
+        throw new PaymentException(PaymentErrorCode.BOOKING_UNAVAILABLE);
+      }
       return codec.read(response, PurchaseSnapshot.class);
     } catch (RestClientResponseException ex) {
       if (ex.getStatusCode().value() == 404)

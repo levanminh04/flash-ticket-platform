@@ -39,6 +39,10 @@ public class TicketSecurityConfiguration {
                     .hasRole("BUYER")
                     .requestMatchers(HttpMethod.POST, "/api/v1/events/*/check-ins")
                     .hasRole("ORGANIZER")
+                    // Probe không có JWT; không mở rộng quyền của health tổng/internal.
+                    .requestMatchers(
+                        HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness")
+                    .permitAll()
                     .requestMatchers(
                         HttpMethod.GET,
                         "/internal/v1/orders/*/issuance",
