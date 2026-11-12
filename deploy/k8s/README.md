@@ -52,6 +52,12 @@ khóa mới thay khóa cũ khi chuyển môi trường vì sẽ mất khả năn
 Secret `ticket-qr-key-ring` mount read-only `/run/ticket-qr/key-ring.json`, mode
 0440, fsGroup/UID 10001. Không đưa file thật vào Git/artifact.
 
+Tài khoản triển khai `ubuntu` cũng phải đọc được file nguồn để script tạo Secret.
+Trên 84, giữ owner UID 10001 của thư mục/file QR, dùng group `ubuntu`, thư mục
+0750 và file 0440. Cách này giữ quyền đọc của container cũ và cấp quyền đọc cho
+operator; không sinh khóa thay thế hoặc mở file cho mọi tài khoản. Backup trước
+cutover giữ nguyên nội dung khóa và quyền hạn ở thời điểm sao lưu.
+
 Kiểm pull đúng digest bằng Pod chẩn đoán. Nếu GHCR private, tạo credential đọc
 package bền vững trong Secret `ghcr-pull` ở namespace và gắn vào default Service
 Account trước khi bootstrap:
@@ -192,3 +198,26 @@ kubectl -n flash-ticket port-forward service/discovery-server 8761:8761 --addres
 
 Không publish Eureka/Actuator ra Internet để debug. Kiểm registry qua localhost
 port-forward; log có thể có dữ liệu nghiệp vụ, chỉ chia sẻ phần đã lọc.
+
+## Nghiệm thu trên 84 ngày 12/11/2026
+
+Đã chuyển đủ bảy ứng dụng sang K3s tại revision ứng dụng
+`03039e7d388c14aa37528a149d14bf52371e44f2`. Bảy container Java Compose đã dừng;
+dependency, Frontend và Ngrok tiếp tục chạy Compose. Image mới đều pull public,
+có amd64/arm64; không cần bổ sung GHCR credential cho các digest đã kiểm.
+
+Đã đạt 39 kiểm tra runtime: đúng digest, bảy Pod Ready không restart, probe GET,
+Eureka đúng sáu instance Pod, API qua Ingress, JWT/role, CORS, financial summary
+nội bộ với token thật và callback không chữ ký. API/Frontend cũng đã kiểm từ máy
+ngoài; Ngrok chỉ một tunnel trỏ port 80, frontend bundle bỏ URL Gateway port 8081.
+
+Đã diễn tập config-only và rollback riêng Gateway: đảo thứ tự cùng danh sách
+CORS origin trong fixture vận hành, xác nhận Pod mới nhận giá trị rồi rollback
+image/cấu hình cũ. Source manifest gốc được khôi phục sau kiểm; API trả 200.
+Đây là kiểm rollback một service, chưa diễn tập toàn bộ cutover về Compose.
+
+Report nằm trong thư mục release trên server: `runtime-smoke.json` và
+`gateway-rollout-rollback.json`. Snapshot env/Secret chỉ lưu trên server với
+quyền bảo vệ; không upload chúng để làm evidence. VNPay/callback giữ flag false;
+chưa chạy giao dịch sandbox/Saga E2E hoặc chứng minh chịu tải. CD phải giữ khóa
+cho tới khi thay đổi runtime trong PR #19 được phép tích hợp vào main.
