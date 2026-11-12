@@ -33,6 +33,13 @@ IFS= read -r token || true
 [[ -n $token ]] || reject "registry token must be passed on stdin"
 
 mkdir -p "$APP_ROOT/state"
+mkdir -p "$APP_ROOT/state/k8s"
+exec 8>"$APP_ROOT/state/k8s/deploy.lock"
+flock -w 600 8 || reject "cluster maintenance/deploy lock timeout"
+[[ ! -e $APP_ROOT/state/maintenance ]] || reject "maintenance active"
+if [[ -f $APP_ROOT/state/k8s/enabled && $svc != keycloak && $svc != frontend ]]; then
+  reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
+fi
 exec 9>"$APP_ROOT/state/$svc.lock"
 flock -w 300 9 || reject "another deploy of $svc is still running"
 

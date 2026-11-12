@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 class VNPayRefundClientTest {
   @MockitoBean OAuth2AuthorizedClientManager authorizedClientManager;
   @MockitoBean PlatformTransactionManager transactionManager;
+  @MockitoBean org.springframework.cloud.client.loadbalancer.LoadBalancerClient loadBalancer;
   @Autowired VNPayConfig vnPayConfig;
   final JsonMapper json = JsonMapper.builder().build();
   final List<String> refundFields =
@@ -67,6 +68,41 @@ class VNPayRefundClientTest {
             new BigDecimal("12345"),
             "transaction-1",
             "20261102123045");
+  }
+
+  @Test
+  void productionVnpayClientDoesNotUseBookingDiscoveryOrBearerToken() {
+    var config = new PaymentRuntimeConfig();
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "bookingDiscoveryEnabled", true);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "connectTimeout", java.time.Duration.ofSeconds(2));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "readTimeout", java.time.Duration.ofSeconds(2));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "vnpayApiUrl", vnPayConfig.getApiUrl());
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "vnpayConnectTimeout", java.time.Duration.ofSeconds(2));
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        config, "vnpayReadTimeout", java.time.Duration.ofSeconds(2));
+    var sharedBuilder = RestClient.builder();
+    config.bookingRestClient(sharedBuilder, authorizedClientManager, loadBalancer);
+    var builder = config.vnpayRestClient(sharedBuilder).mutate();
+    var probeServer = MockRestServiceServer.bindTo(builder).build();
+    probeServer
+        .expect(requestTo(vnPayConfig.getApiUrl() + "/health"))
+        .andExpect(headerDoesNotExist("Authorization"))
+        .andRespond(withSuccess("OK", MediaType.TEXT_PLAIN));
+    assertThat(
+            builder
+                .build()
+                .get()
+                .uri(vnPayConfig.getApiUrl() + "/health")
+                .retrieve()
+                .body(String.class))
+        .isEqualTo("OK");
+    probeServer.verify();
+    org.mockito.Mockito.verifyNoInteractions(loadBalancer, authorizedClientManager);
   }
 
   @Test

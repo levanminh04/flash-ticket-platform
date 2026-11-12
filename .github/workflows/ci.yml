@@ -74,6 +74,14 @@ jobs:
           persist-credentials: false
       - name: ShellCheck
         run: shellcheck --severity=warning deploy/scripts/*.sh .github/scripts/*.sh
+      - name: Deployment routing fixtures
+        run: |
+          bash .github/scripts/test-k8s-deploy-routing.sh
+          python3 .github/scripts/test-k8s-deploy.py
+      - name: Workflow syntax
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color=false
+      - name: Kubernetes resource schemas
+        run: go run github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0 -strict -summary -kubernetes-version 1.37.0 deploy/k8s/namespace.yaml deploy/k8s/*/*.yaml
 
   dependency_review:
     name: Dependency Review

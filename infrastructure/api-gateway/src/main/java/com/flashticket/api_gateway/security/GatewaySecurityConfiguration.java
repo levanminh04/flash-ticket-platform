@@ -62,7 +62,11 @@ public class GatewaySecurityConfiguration {
                         "/api/v1/venues",
                         "/api/v1/organizers/*")
                     .permitAll()
-                    // Không bao giờ lộ ra ngoài.
+                    // Probe gọi thẳng Pod; Ingress không route Actuator ra ngoài.
+                    .pathMatchers(
+                        HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness")
+                    .permitAll()
+                    // Các endpoint vận hành/nội bộ khác vẫn được bảo vệ.
                     .pathMatchers("/internal/**", "/actuator/**")
                     .denyAll()
                     // Phân quyền thô theo khu vực; quyền chi tiết do từng service kiểm.

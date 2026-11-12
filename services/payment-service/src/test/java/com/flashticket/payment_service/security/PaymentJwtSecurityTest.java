@@ -40,6 +40,16 @@ class PaymentJwtSecurityTest {
   static final HttpServer SERVER = startServer();
   final UUID order = UUID.randomUUID();
   @Autowired MockMvc mvc;
+
+  @Test
+  void permitsKubernetesProbesWithoutJwtAndKeepsOtherEndpointsProtected() throws Exception {
+    mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+    mvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
+    mvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    mvc.perform(post("/actuator/health/readiness")).andExpect(status().isUnauthorized());
+  }
+
   @Autowired OrderPaymentSnapshotRepository snapshots;
   @Autowired PaymentAttemptRepository attempts;
   @Autowired PaymentConfirmationRepository confirmations;

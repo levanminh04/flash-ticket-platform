@@ -3,6 +3,8 @@ package com.flashticket.payment_service.config;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerInterceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -24,6 +26,9 @@ import org.springframework.web.client.RestClient;
 public class PaymentRuntimeConfig {
   @Value("${payment.booking.base-url:http://localhost:8082}")
   private String bookingBaseUrl;
+
+  @Value("${payment.booking.discovery-enabled:false}")
+  private boolean bookingDiscoveryEnabled;
 
   @Value("${payment.booking.connect-timeout:PT3S}")
   private Duration connectTimeout;
@@ -69,17 +74,25 @@ public class PaymentRuntimeConfig {
 
   @Bean
   public RestClient bookingRestClient(
-      RestClient.Builder builder, OAuth2AuthorizedClientManager paymentAuthorizedClientManager) {
+      RestClient.Builder builder,
+      OAuth2AuthorizedClientManager paymentAuthorizedClientManager,
+      LoadBalancerClient loadBalancerClient) {
     var interceptor = new OAuth2ClientHttpRequestInterceptor(paymentAuthorizedClientManager);
     interceptor.setPrincipalResolver(new RequestAttributePrincipalResolver());
     var factory =
         new JdkClientHttpRequestFactory(
             HttpClient.newBuilder().connectTimeout(connectTimeout).build());
     factory.setReadTimeout(readTimeout);
-    return builder
-        .baseUrl(bookingBaseUrl)
-        .requestFactory(factory)
-        .requestInterceptor(interceptor)
-        .build();
+    // Clone để interceptor Booking không lan sang client VNPay dùng cùng builder.
+    var bookingBuilder =
+        builder
+            .clone()
+            .baseUrl(bookingDiscoveryEnabled ? "http://booking-service" : bookingBaseUrl)
+            .requestFactory(factory);
+    if (bookingDiscoveryEnabled) {
+      // Host logic được resolve qua Eureka, không gửi tới Kubernetes Service DNS.
+      bookingBuilder.requestInterceptor(new LoadBalancerInterceptor(loadBalancerClient));
+    }
+    return bookingBuilder.requestInterceptor(interceptor).build();
   }
 }

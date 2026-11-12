@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: flash-ticket
+  labels: &id001
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/part-of: flash-ticket
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+      - name: payment-service
+        image: ghcr.io/levanminh04/flash-ticket-platform/payment-service:render-required
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8083
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 150m
+            memory: 512Mi
+          limits:
+            memory: 768Mi
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        envFrom:
+        - configMapRef:
+            name: payment-service-config
+        - secretRef:
+            name: payment-service-secret
+        startupProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 36
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3

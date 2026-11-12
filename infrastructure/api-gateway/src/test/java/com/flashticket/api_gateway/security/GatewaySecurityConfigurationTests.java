@@ -56,6 +56,19 @@ class GatewaySecurityConfigurationTests {
   @Autowired private SecurityWebFilterChain springSecurityFilterChain;
 
   @Test
+  void permitsOnlyGetKubernetesProbePathsWithoutJwt() {
+    for (String path : List.of("/actuator/health/liveness", "/actuator/health/readiness")) {
+      assertTrue(reachesDownstream(HttpMethod.GET, path, null), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, null), path);
+    }
+    for (String path :
+        List.of("/actuator/health", "/actuator/env", "/internal/v1/orders/order-1")) {
+      assertFalse(reachesDownstream(HttpMethod.GET, path, null), path);
+      assertFalse(reachesDownstream(HttpMethod.GET, path, authenticatedAs("ROLE_ADMIN")), path);
+    }
+  }
+
+  @Test
   void publicEndpointsNeedNoToken() {
     for (String path :
         List.of(

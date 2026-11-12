@@ -77,6 +77,10 @@ public class PaymentSecurityConfiguration {
                         "/api/v1/admin/events/*/reconciliation",
                         "/api/v1/admin/events/*/payout")
                     .hasRole("ADMIN")
+                    // Kubelet chỉ được đọc hai probe, không mở các Actuator khác.
+                    .requestMatchers(
+                        HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness")
+                    .permitAll()
                     .anyRequest()
                     .denyAll())
         .exceptionHandling(c -> c.authenticationEntryPoint(problems).accessDeniedHandler(problems))

@@ -1,8 +1,7 @@
 package com.flashticket.event_service;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.flashticket.event_service.config.EventJsonConfig;
 import com.flashticket.event_service.integration.*;
@@ -18,7 +17,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
 import tools.jackson.databind.json.JsonMapper;
 
 class SummaryHttpTests {
@@ -112,7 +111,7 @@ class SummaryHttpTests {
             timeout,
             Duration.ofSeconds(30),
             Duration.ofSeconds(5)),
-        mock(DiscoveryClient.class),
+        mock(LoadBalancerClient.class),
         () -> "isolated-machine-token",
         json);
   }
@@ -138,8 +137,8 @@ class SummaryHttpTests {
 
   @Test
   void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty() {
-    var discovery = mock(DiscoveryClient.class);
-    when(discovery.getInstances("payment-service"))
+    var loadBalancer = mock(LoadBalancerClient.class);
+    when(loadBalancer.choose("payment-service"))
         .thenThrow(new IllegalStateException("registry internal detail must not escape"));
     var client =
         new HttpEventSummaries(
@@ -150,7 +149,7 @@ class SummaryHttpTests {
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5)),
-            discovery,
+            loadBalancer,
             () -> "isolated-machine-token",
             json);
     assertThatThrownBy(() -> client.financial(EVENT, "owner", true))
@@ -166,13 +165,12 @@ class SummaryHttpTests {
 
   @Test
   void resolvesPaymentThroughRegistryWhenNoExplicitOriginIsConfigured() {
-    var discovery = mock(DiscoveryClient.class);
+    var loadBalancer = mock(LoadBalancerClient.class);
     int port = server.getAddress().getPort();
-    when(discovery.getInstances("payment-service"))
+    when(loadBalancer.choose("payment-service"))
         .thenReturn(
-            List.of(
-                new org.springframework.cloud.client.DefaultServiceInstance(
-                    "payment-test", "payment-service", "127.0.0.1", port, false)));
+            new org.springframework.cloud.client.DefaultServiceInstance(
+                "payment-test", "payment-service", "127.0.0.1", port, false));
     var client =
         new HttpEventSummaries(
             new EventReadProperties(
@@ -182,11 +180,89 @@ class SummaryHttpTests {
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5)),
-            discovery,
+            loadBalancer,
             () -> "isolated-machine-token",
             json);
     assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
     assertThat(requests.get()).isEqualTo(1);
+  }
+
+  @Test
+  void usesTheLoadBalancerSelectionForEachSummaryRequest() throws Exception {
+    var secondRequests = new AtomicInteger();
+    var secondServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    secondServer.createContext(
+        "/internal/v1/events/",
+        exchange -> {
+          secondRequests.incrementAndGet();
+          byte[] bytes = finance.get().getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, bytes.length);
+          exchange.getResponseBody().write(bytes);
+          exchange.close();
+        });
+    secondServer.start();
+    try {
+      var loadBalancer = mock(LoadBalancerClient.class);
+      when(loadBalancer.choose("payment-service"))
+          .thenReturn(
+              new org.springframework.cloud.client.DefaultServiceInstance(
+                  "payment-first",
+                  "payment-service",
+                  "127.0.0.1",
+                  server.getAddress().getPort(),
+                  false),
+              new org.springframework.cloud.client.DefaultServiceInstance(
+                  "payment-second",
+                  "payment-service",
+                  "127.0.0.1",
+                  secondServer.getAddress().getPort(),
+                  false));
+      var client =
+          new HttpEventSummaries(
+              new EventReadProperties(
+                  true,
+                  null,
+                  Duration.ofSeconds(1),
+                  Duration.ofSeconds(2),
+                  Duration.ofSeconds(30),
+                  Duration.ofSeconds(5)),
+              loadBalancer,
+              () -> "isolated-machine-token",
+              json);
+      assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+      assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
+      assertThat(requests.get()).isEqualTo(1);
+      assertThat(secondRequests.get()).isEqualTo(1);
+      verify(loadBalancer, times(2)).choose("payment-service");
+    } finally {
+      secondServer.stop(0);
+    }
+  }
+
+  @Test
+  void missingInstanceReturnsUnavailableWithoutCallingCounterparty() {
+    var loadBalancer = mock(LoadBalancerClient.class);
+    var client =
+        new HttpEventSummaries(
+            new EventReadProperties(
+                true,
+                null,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(5)),
+            loadBalancer,
+            () -> "isolated-machine-token",
+            json);
+    assertThatThrownBy(() -> client.financial(EVENT, "owner", true))
+        .isInstanceOfSatisfying(
+            EventProblem.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(503);
+              assertThat(error.code()).isEqualTo("UPSTREAM_UNAVAILABLE");
+            });
+    assertThat(requests.get()).isZero();
   }
 
   @ParameterizedTest
