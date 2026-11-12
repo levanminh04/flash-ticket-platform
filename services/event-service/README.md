@@ -229,7 +229,6 @@ Các path dưới đây vẫn có prefix `/api/v1`:
 | POST `/admin/events/{id}/cancel` | ADMIN; `{rowVersion}` |
 | POST `/admin/cancellation-requests/{id}/approve` | ADMIN; `{rowVersion}` của event |
 | POST `/admin/cancellation-requests/{id}/reject` | ADMIN; `{rowVersion,reason}`; reason có thể null |
-| GET `/organizer/events/{id}/statistics` | ORGANIZER + owner; không ghi counter |
 
 Organizer được hủy trực tiếp khi Payment xác nhận chưa có đơn thu tiền, hoặc tạo
 request khi đã có đơn thu tiền. Admin có thể chủ động hủy mà không cần phân loại.
@@ -252,7 +251,7 @@ vô hiệu vé hoặc gọi hoàn tiền; Booking/Ticket/Payment xử lý messag
 Statistics đọc Booking/Payment sau kiểm ownership, trả nguồn và thời điểm dữ liệu;
 hai nguồn phải thành công. Chi tiết field/config/error và phần chưa được chốt ở
 [contract đề xuất](INTEGRATION-CONTRACTS.md). Default-disabled không ảnh hưởng
-editor, duyệt/publish hoặc admin cancel; organizer cancel/request và statistics
+editor, duyệt/publish hoặc admin cancel; organizer cancel/request
 sẽ503 DEPENDENCY_CONTRACT_NOT_READY tới khi hai owner thống nhất và cấu hình bật.
 
 ## Vòng đời, transaction và outbox

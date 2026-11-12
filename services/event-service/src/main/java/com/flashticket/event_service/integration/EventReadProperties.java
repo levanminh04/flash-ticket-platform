@@ -9,14 +9,12 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record EventReadProperties(
     @DefaultValue("false") boolean enabled,
     URI paymentBaseUrl,
-    URI bookingBaseUrl,
     @DefaultValue("2s") Duration connectTimeout,
     @DefaultValue("5s") Duration responseTimeout,
     @DefaultValue("30s") Duration cancellationMaxAge,
     @DefaultValue("5s") Duration clockSkew) {
   public EventReadProperties {
     if (paymentBaseUrl != null && paymentBaseUrl.toString().isBlank()) paymentBaseUrl = null;
-    if (bookingBaseUrl != null && bookingBaseUrl.toString().isBlank()) bookingBaseUrl = null;
     if (connectTimeout.isNegative()
         || connectTimeout.isZero()
         || responseTimeout.isNegative()
@@ -26,7 +24,6 @@ public record EventReadProperties(
         || clockSkew.isNegative())
       throw new IllegalArgumentException("Invalid Event read-model durations");
     endpoint(paymentBaseUrl);
-    endpoint(bookingBaseUrl);
   }
 
   static void endpoint(URI uri) {

@@ -25,8 +25,7 @@ class SummaryHttpTests {
   static HttpServer server;
   static ExecutorService executor;
   static final UUID EVENT = UUID.randomUUID();
-  static final AtomicReference<String> finance = new AtomicReference<>(),
-      sales = new AtomicReference<>();
+  static final AtomicReference<String> finance = new AtomicReference<>();
   static final AtomicReference<String> authorization = new AtomicReference<>(),
       correlation = new AtomicReference<>();
   static final AtomicInteger status = new AtomicInteger(200),
@@ -51,7 +50,7 @@ class SummaryHttpTests {
     executor = Executors.newVirtualThreadPerTaskExecutor();
     server.setExecutor(executor);
     server.createContext(
-        "/internal/v1/events/",
+        "/internal/v1/events/" + EVENT + "/financial-summary",
         exchange -> {
           requests.incrementAndGet();
           authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -61,11 +60,7 @@ class SummaryHttpTests {
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
           }
-          byte[] bytes =
-              (exchange.getRequestURI().getPath().endsWith("financial-summary")
-                      ? finance.get()
-                      : sales.get())
-                  .getBytes(StandardCharsets.UTF_8);
+          byte[] bytes = finance.get().getBytes(StandardCharsets.UTF_8);
           try {
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status.get(), bytes.length);
@@ -92,12 +87,6 @@ class SummaryHttpTests {
     requests.set(0);
     MDC.clear();
     finance.set(financial(Instant.now().toString()));
-    sales.set(
-        "{\"schemaVersion\":1,\"eventId\":\""
-            + EVENT
-            + "\",\"organizerSubject\":\"owner\",\"asOf\":\""
-            + Instant.now()
-            + "\",\"purchasedTicketCount\":\"12\"}");
   }
 
   @AfterEach
@@ -119,7 +108,6 @@ class SummaryHttpTests {
         new EventReadProperties(
             enabled,
             base,
-            base,
             Duration.ofSeconds(1),
             timeout,
             Duration.ofSeconds(30),
@@ -130,12 +118,11 @@ class SummaryHttpTests {
   }
 
   @Test
-  void readsStrictSummariesAndPropagatesMachineAuthenticationAndCorrelation() {
+  void readsStrictFinancialSummaryAndPropagatesMachineAuthenticationAndCorrelation() {
     String id = UUID.randomUUID().toString();
     MDC.put("correlationId", id);
     var client = client(true, Duration.ofSeconds(2));
     assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
-    assertThat(client.sales(EVENT, "owner").purchasedTicketCount()).isEqualTo("12");
     assertThat(authorization.get()).isEqualTo("Bearer isolated-machine-token");
     assertThat(correlation.get()).isEqualTo(id);
   }
@@ -149,17 +136,15 @@ class SummaryHttpTests {
     assertThat(requests.get()).isZero();
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"payment-service", "booking-service"})
-  void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty(String service) {
+  @Test
+  void registryFailureBecomesDependencyUnavailableWithoutCallingCounterparty() {
     var discovery = mock(DiscoveryClient.class);
-    when(discovery.getInstances(service))
+    when(discovery.getInstances("payment-service"))
         .thenThrow(new IllegalStateException("registry internal detail must not escape"));
     var client =
         new HttpEventSummaries(
             new EventReadProperties(
                 true,
-                null,
                 null,
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1),
@@ -168,11 +153,7 @@ class SummaryHttpTests {
             discovery,
             () -> "isolated-machine-token",
             json);
-    assertThatThrownBy(
-            () -> {
-              if (service.equals("payment-service")) client.financial(EVENT, "owner", true);
-              else client.sales(EVENT, "owner");
-            })
+    assertThatThrownBy(() -> client.financial(EVENT, "owner", true))
         .isInstanceOfSatisfying(
             EventProblem.class,
             p -> {
@@ -184,7 +165,7 @@ class SummaryHttpTests {
   }
 
   @Test
-  void resolvesBothSourceServicesThroughRegistryWhenNoExplicitOriginIsConfigured() {
+  void resolvesPaymentThroughRegistryWhenNoExplicitOriginIsConfigured() {
     var discovery = mock(DiscoveryClient.class);
     int port = server.getAddress().getPort();
     when(discovery.getInstances("payment-service"))
@@ -192,16 +173,10 @@ class SummaryHttpTests {
             List.of(
                 new org.springframework.cloud.client.DefaultServiceInstance(
                     "payment-test", "payment-service", "127.0.0.1", port, false)));
-    when(discovery.getInstances("booking-service"))
-        .thenReturn(
-            List.of(
-                new org.springframework.cloud.client.DefaultServiceInstance(
-                    "booking-test", "booking-service", "127.0.0.1", port, false)));
     var client =
         new HttpEventSummaries(
             new EventReadProperties(
                 true,
-                null,
                 null,
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(1),
@@ -211,8 +186,7 @@ class SummaryHttpTests {
             () -> "isolated-machine-token",
             json);
     assertThat(client.financial(EVENT, "owner", true).netAmount()).isEqualTo("72000");
-    assertThat(client.sales(EVENT, "owner").purchasedTicketCount()).isEqualTo("12");
-    assertThat(requests.get()).isEqualTo(2);
+    assertThat(requests.get()).isEqualTo(1);
   }
 
   @ParameterizedTest
@@ -285,10 +259,7 @@ class SummaryHttpTests {
   }
 
   @Test
-  void statisticsRejectsCounterOverflowAndWrongOwner() {
-    sales.set(sales.get().replace("\"12\"", "\"9223372036854775808\""));
-    assertThatThrownBy(() -> client(true, Duration.ofSeconds(1)).sales(EVENT, "owner"))
-        .isInstanceOf(EventProblem.class);
+  void rejectsFinancialSummaryForWrongOwner() {
     assertThatThrownBy(() -> client(true, Duration.ofSeconds(1)).financial(EVENT, "foreign", false))
         .isInstanceOfSatisfying(
             EventProblem.class, p -> assertThat(p.code()).isEqualTo("UPSTREAM_SCOPE_MISMATCH"));

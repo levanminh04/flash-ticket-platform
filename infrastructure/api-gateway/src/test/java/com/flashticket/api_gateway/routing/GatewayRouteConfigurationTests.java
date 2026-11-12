@@ -75,7 +75,6 @@ class GatewayRouteConfigurationTests {
     "POST, /api/v1/organizer/events/id-1/sales-mode, lb://event-service",
     "GET, /api/v1/organizer/events/id-1/seat-map, lb://event-service",
     "PUT, /api/v1/organizer/events/id-1/seat-map, lb://event-service",
-    "GET, /api/v1/organizer/events/id-1/statistics, lb://event-service",
     "POST, /api/v1/organizer/events/id-1/submit, lb://event-service",
     "PUT, /api/v1/organizer/events/id-1/ticket-types, lb://event-service",
     "GET, /api/v1/venues, lb://event-service",
