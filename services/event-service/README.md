@@ -3,7 +3,7 @@
 Triển khai `QUANTITY` và `SEAT_MAP`: tạo/sửa bản nháp, gửi duyệt, trả về nháp,
 duyệt/công bố, hủy và yêu cầu hủy; đọc/tìm sự kiện; transactional outbox gửi snapshot.
 Thống kê có adapter đọc với contract đề xuất, mặc định chưa bật. Cấu hình
-ảnh hỗ trợ upload PNG/JPEG lên Cloudinary, DB lưu URL HTTPS trong objectReference;
+ảnh hỗ trợ upload PNG, JPEG và WebP tĩnh lên Cloudinary, DB lưu URL HTTPS trong objectReference;
 không tải URL do client gửi. Venue/category chỉ
 tra cứu dữ liệu có sẵn, chưa có API quản trị hai danh mục này.
 
@@ -118,9 +118,9 @@ lọc hidden theo B13. Không dùng public endpoint để admin đọc bản nh�
 
 Theo yêu cầu tham khảo repo cũ, bổ sung upload/quản lý ảnh bằng Cloudinary. Giữ
 schema canonical `tbl_event_images(id,event_id,object_reference,display_order)`,
-không migrate hoặc mang bảng metadata cũ sang. PNG/JPEG được kiểm bytes thực,
+không migrate hoặc mang bảng metadata cũ sang. PNG, JPEG và WebP tĩnh được kiểm bytes thực,
 MIME khớp định dạng, decode hợp lệ, mặc định tối đa5MiB và16 triệu pixel.
-WEBP/SVG không được hỗ trợ ở adapter hiện tại. Không nhận URL để upload/fetch;
+WebP động và SVG không được hỗ trợ. Không nhận URL để upload/fetch;
 không dùng tên file client làm publicId. HTTP provider dùng Basic Authorization
 server-side, timeout hữu hạn; không log secret/provider response.
 
