@@ -1,6 +1,7 @@
 package com.flashticket.event_service.application;
 
 import com.flashticket.event_service.api.EventViews;
+import com.flashticket.event_service.domain.EventData.ImageRole;
 import com.flashticket.event_service.integration.EventImageStorage;
 import com.flashticket.event_service.web.EventProblem;
 import java.util.UUID;
@@ -29,11 +30,25 @@ public class EventImageService {
       UUID imageId,
       Integer position,
       MultipartFile file) {
-    transactions.prepare(eventId, actor, version, imageId, position);
-    var uploaded = storage.upload(eventId, file); // No DB transaction/lock during HTTP.
+    return upload(eventId, actor, version, imageId, position, ImageRole.GALLERY, file);
+  }
+
+  public EventViews.Owner upload(
+      UUID eventId,
+      String actor,
+      String version,
+      UUID imageId,
+      Integer position,
+      ImageRole requestedRole,
+      MultipartFile file) {
+    var role = transactions.prepare(eventId, actor, version, imageId, position, requestedRole);
+    var uploaded =
+        role == ImageRole.BANNER
+            ? storage.uploadBanner(eventId, file)
+            : storage.upload(eventId, file); // No DB transaction/lock during HTTP.
     try {
       return transactions.attach(
-          eventId, actor, version, imageId, position, uploaded.objectReference());
+          eventId, actor, version, imageId, position, role, uploaded.objectReference());
     } catch (RuntimeException failure) {
       try {
         // Only compensate a domain rejection before any metadata write. A separate read

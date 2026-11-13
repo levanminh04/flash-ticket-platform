@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.flashticket.event_service.application.EventImageService;
 import com.flashticket.event_service.application.EventImageTransactions;
+import com.flashticket.event_service.domain.EventData.ImageRole;
 import com.flashticket.event_service.integration.EventImageStorage;
 import com.flashticket.event_service.web.EventProblem;
 import java.util.UUID;
@@ -20,8 +21,10 @@ class EventImageServiceTests {
     var event = UUID.randomUUID();
     var file = new MockMultipartFile("file", new byte[] {1});
     var uploaded = new EventImageStorage.Uploaded("url", "asset");
+    when(transactions.prepare(event, "owner", "0", null, 0, ImageRole.GALLERY))
+        .thenReturn(ImageRole.GALLERY);
     when(storage.upload(event, file)).thenReturn(uploaded);
-    when(transactions.attach(event, "owner", "0", null, 0, "url"))
+    when(transactions.attach(event, "owner", "0", null, 0, ImageRole.GALLERY, "url"))
         .thenThrow(
             new org.springframework.transaction.TransactionSystemException(
                 "COMMIT outcome unknown"));
@@ -39,9 +42,12 @@ class EventImageServiceTests {
     var event = UUID.randomUUID();
     var file = new MockMultipartFile("file", new byte[] {1});
     var uploaded = new EventImageStorage.Uploaded("url", "asset");
+    when(transactions.prepare(event, "owner", "0", null, 0, ImageRole.GALLERY))
+        .thenReturn(ImageRole.GALLERY);
     when(storage.upload(event, file)).thenReturn(uploaded);
     var failure = new IllegalStateException("database unreachable");
-    when(transactions.attach(event, "owner", "0", null, 0, "url")).thenThrow(failure);
+    when(transactions.attach(event, "owner", "0", null, 0, ImageRole.GALLERY, "url"))
+        .thenThrow(failure);
     when(transactions.referenced("url")).thenThrow(new IllegalStateException("still unreachable"));
     assertThatThrownBy(() -> service.upload(event, "owner", "0", null, 0, file)).isSameAs(failure);
     verify(storage, never()).discard(any());
@@ -55,8 +61,10 @@ class EventImageServiceTests {
     var event = UUID.randomUUID();
     var file = new MockMultipartFile("file", new byte[] {1});
     var uploaded = new EventImageStorage.Uploaded("url", "asset");
+    when(transactions.prepare(event, "owner", "0", null, 0, ImageRole.GALLERY))
+        .thenReturn(ImageRole.GALLERY);
     when(storage.upload(event, file)).thenReturn(uploaded);
-    when(transactions.attach(event, "owner", "0", null, 0, "url"))
+    when(transactions.attach(event, "owner", "0", null, 0, ImageRole.GALLERY, "url"))
         .thenThrow(EventProblem.conflict("STALE_EVENT_VERSION"));
     when(transactions.referenced("url")).thenReturn(true);
     assertThatThrownBy(() -> service.upload(event, "owner", "0", null, 0, file))

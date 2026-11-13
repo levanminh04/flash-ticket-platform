@@ -261,6 +261,18 @@ class EventImageStorageTests {
         .isInstanceOfSatisfying(EventProblem.class, p -> assertThat(p.status()).isEqualTo(503));
   }
 
+  @Test
+  void rejectsBannerThatIsTooSmallOrHasWrongAspectRatio() throws Exception {
+    var storage = storage(RestClient.builder(), 5242880, 16000000);
+    var wrongRatio = new MockMultipartFile("file", "x.png", "image/png", png(1280, 800));
+    for (var file : List.of(file(), wrongRatio)) {
+      assertThatThrownBy(() -> storage.uploadBanner(EVENT, file))
+          .isInstanceOfSatisfying(
+              EventProblem.class,
+              p -> assertThat(p.getMessage()).isEqualTo("INVALID_BANNER_DIMENSIONS"));
+    }
+  }
+
   private void assertUnavailable(EventImageStorage storage, MockMultipartFile file) {
     assertThatThrownBy(() -> storage.upload(EVENT, file))
         .isInstanceOfSatisfying(

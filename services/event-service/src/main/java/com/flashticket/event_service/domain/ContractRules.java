@@ -82,10 +82,8 @@ public final class ContractRules {
         input.images().stream()
             .map(
                 image -> {
-                  if (image == null
-                      || image.displayOrder() == null
-                      || image.displayOrder() < 0
-                      || !orders.add(image.displayOrder())) throw EventProblem.invalid("images");
+                  if (image == null || image.displayOrder() == null || image.displayOrder() < 0)
+                    throw EventProblem.invalid("images");
                   UUID id =
                       childId(
                           image.imageId(),
@@ -93,8 +91,22 @@ public final class ContractRules {
                           EventData.Image::id,
                           "images");
                   if (!imageIds.add(id)) throw EventProblem.invalid("images");
+                  var saved =
+                      existing == null
+                          ? null
+                          : existing.images().stream()
+                              .filter(item -> item.id().equals(id))
+                              .findFirst()
+                              .orElse(null);
+                  String reference = text(image.objectReference(), "objectReference");
+                  if (saved != null && saved.role() == EventData.ImageRole.BANNER) {
+                    if (!saved.objectReference().equals(reference) || image.displayOrder() != 0)
+                      throw EventProblem.invalid("images");
+                    return saved;
+                  }
+                  if (!orders.add(image.displayOrder())) throw EventProblem.invalid("images");
                   return new EventData.Image(
-                      id, text(image.objectReference(), "objectReference"), image.displayOrder());
+                      id, reference, image.displayOrder(), EventData.ImageRole.GALLERY);
                 })
             .toList();
     var typeIds = new HashSet<UUID>();

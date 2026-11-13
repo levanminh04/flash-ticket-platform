@@ -41,7 +41,9 @@ CREATE TABLE events (
 CREATE TABLE event_images (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event_id uuid NOT NULL REFERENCES events(id),
   object_reference nonempty_text NOT NULL, display_order integer NOT NULL CHECK (display_order >= 0),
-  UNIQUE (event_id, display_order)
+  image_role text NOT NULL DEFAULT 'GALLERY',
+  CONSTRAINT event_image_role_check CHECK (image_role = 'GALLERY' OR (image_role = 'BANNER' AND display_order = 0)),
+  UNIQUE (event_id, image_role, display_order)
 );
 CREATE TABLE event_layouts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event_id uuid NOT NULL REFERENCES events(id),

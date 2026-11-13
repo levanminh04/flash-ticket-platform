@@ -85,7 +85,7 @@ public class EventRepository {
     Map<UUID, List<EventData.TicketType>> types = new HashMap<>();
     Map<UUID, List<EventData.Promotion>> promotions = new HashMap<>();
     jdbc.query(
-        "SELECT * FROM event_schema.tbl_event_images WHERE event_id IN (:ids) ORDER BY display_order,id",
+        "SELECT * FROM event_schema.tbl_event_images WHERE event_id IN (:ids) ORDER BY image_role,display_order,id",
         params,
         (org.springframework.jdbc.core.RowCallbackHandler)
             rs ->
@@ -191,11 +191,12 @@ public class EventRepository {
         Map.of("id", existing.id()));
     for (var image : images)
       jdbc.update(
-          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order) VALUES(:id,:event,:reference,:position)",
+          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order,image_role) VALUES(:id,:event,:reference,:position,:role)",
           new MapSqlParameterSource("id", image.id())
               .addValue("event", existing.id())
               .addValue("reference", image.objectReference())
-              .addValue("position", image.displayOrder()));
+              .addValue("position", image.displayOrder())
+              .addValue("role", image.role().name()));
   }
 
   public boolean imageReferenced(String reference) {
@@ -230,11 +231,12 @@ public class EventRepository {
     jdbc.update("DELETE FROM event_schema.tbl_promotions WHERE event_id=:id", Map.of("id", id));
     for (var i : draft.images())
       jdbc.update(
-          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order) VALUES(:child,:event,:reference,:position)",
+          "INSERT INTO event_schema.tbl_event_images(id,event_id,object_reference,display_order,image_role) VALUES(:child,:event,:reference,:position,:role)",
           new MapSqlParameterSource("child", i.id())
               .addValue("event", id)
               .addValue("reference", i.objectReference())
-              .addValue("position", i.displayOrder()));
+              .addValue("position", i.displayOrder())
+              .addValue("role", i.role().name()));
     for (var t : draft.ticketTypes())
       jdbc.update(
           "INSERT INTO event_schema.tbl_ticket_types(id,event_id,name,sales_mode,sector_id,color_code,unit_price,currency,configured_quantity) VALUES(:child,:event,:name,'QUANTITY',NULL,:color,:price,'VND',:quantity)",
@@ -338,7 +340,10 @@ public class EventRepository {
 
   private static EventData.Image image(ResultSet r) throws SQLException {
     return new EventData.Image(
-        r.getObject("id", UUID.class), r.getString("object_reference"), r.getInt("display_order"));
+        r.getObject("id", UUID.class),
+        r.getString("object_reference"),
+        r.getInt("display_order"),
+        EventData.ImageRole.valueOf(r.getString("image_role")));
   }
 
   private static EventData.TicketType type(ResultSet r) throws SQLException {

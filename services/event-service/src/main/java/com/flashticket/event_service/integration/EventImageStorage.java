@@ -78,7 +78,15 @@ public final class EventImageStorage {
   }
 
   public Uploaded upload(UUID eventId, MultipartFile file) {
-    byte[] bytes = validate(file);
+    return upload(eventId, file, false);
+  }
+
+  public Uploaded uploadBanner(UUID eventId, MultipartFile file) {
+    return upload(eventId, file, true);
+  }
+
+  private Uploaded upload(UUID eventId, MultipartFile file, boolean banner) {
+    byte[] bytes = validate(file, banner);
     if (cloud.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) throw unavailable();
     String publicId = folder + "/" + eventId + "/" + UUID.randomUUID();
     var form = new LinkedMultiValueMap<String, Object>();
@@ -158,7 +166,7 @@ public final class EventImageStorage {
     return "https://api.cloudinary.com/v1_1/" + cloud + "/image/" + action;
   }
 
-  private byte[] validate(MultipartFile file) {
+  private byte[] validate(MultipartFile file, boolean banner) {
     if (file == null || file.isEmpty()) throw invalid();
     if (file.getSize() > maxBytes) throw tooLarge();
     String type = file.getContentType();
@@ -182,6 +190,8 @@ public final class EventImageStorage {
           if (IMAGE_WEBP.equals(type)) validateStaticWebp(bytes);
           int width = reader.getWidth(0), height = reader.getHeight(0);
           if (width < 1 || height < 1 || (long) width * height > maxPixels) throw tooLarge();
+          if (banner && (width < 1280 || height < 720 || width * 9L != height * 16L))
+            throw new EventProblem(422, "INVALID_BANNER_DIMENSIONS", "file");
           if (reader.read(0) == null) throw invalid();
         } finally {
           reader.dispose();

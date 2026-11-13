@@ -15,7 +15,7 @@ tra cứu dữ liệu có sẵn, chưa có API quản trị hai danh mục này.
   cấu hình, duyệt, công bố, tìm/đọc sự kiện.
 - [B12](../../docs/architecture/B12-data-ownership-and-schema.md) và
   [SQL Event](../../docs/architecture/data/postgres/10-event.sql): Event sở hữu
-  cấu hình; dùng bảng canonical có tiền tố `tbl_`, không thêm DDL/migration.
+  cấu hình; dùng bảng canonical có tiền tố `tbl_`.
 - [B13](../../docs/architecture/B13-api-and-event-contracts.md): DTO công khai,
   money/version, lỗi, envelope và ba snapshot. Các endpoint CRUD thuộc owner được
   cụ thể hóa tại đây theo §9; không đổi hợp đồng xuyên service.
@@ -117,19 +117,22 @@ lọc hidden theo B13. Không dùng public endpoint để admin đọc bản nh�
 ## Ảnh Event — bổ sung 02/11/2026
 
 Theo yêu cầu tham khảo repo cũ, bổ sung upload/quản lý ảnh bằng Cloudinary. Giữ
-schema canonical `tbl_event_images(id,event_id,object_reference,display_order)`,
-không migrate hoặc mang bảng metadata cũ sang. PNG, JPEG và WebP tĩnh được kiểm bytes thực,
+schema canonical `tbl_event_images`. Vai trò `BANNER` hoặc `GALLERY` được lưu trong `image_role`. Với DB hiện hữu, chạy [migration vai trò ảnh](../../deploy/postgres/migrations/2026-11-13-event-image-roles.sql) trước khi chạy phiên bản Event Service mới. Migration giữ ảnh đầu tiên hiện tại làm Banner. PNG, JPEG và WebP tĩnh được kiểm bytes thực,
 MIME khớp định dạng, decode hợp lệ, mặc định tối đa5MiB và16 triệu pixel.
 WebP động và SVG không được hỗ trợ. Không nhận URL để upload/fetch;
 không dùng tên file client làm publicId. HTTP provider dùng Basic Authorization
 server-side, timeout hữu hạn; không log secret/provider response.
 
+Mỗi sự kiện có tối đa một Banner, tỷ lệ 16:9 và tối thiểu 1280 × 720 px cho file mới.
+Khi upload, gửi `role=BANNER` hoặc `role=GALLERY`. Upload Gallery cần `displayOrder`.
+PUT giữ vai trò ảnh hiện tại. PATCH chỉ sắp xếp Gallery.
+
 | Method/path sau `/api/v1` | Input | Output |
 |---|---|---|
 | GET `/organizer/events/{id}/images` | JWT organizer/chủ sở hữu | Mảng Image theo displayOrder |
-| POST `/organizer/events/{id}/images` | Multipart: file, rowVersion, displayOrder | 201 Owner cập nhật |
+| POST `/organizer/events/{id}/images` | Multipart: file, rowVersion, role, displayOrder (Gallery) | 201 Owner cập nhật |
 | PUT `/organizer/events/{id}/images/{imageId}` | Multipart: file, rowVersion | 200 Owner; giữ imageId/thứ tự |
-| PATCH `/organizer/events/{id}/images/{imageId}` | JSON `{rowVersion,displayOrder}` | 200 Owner; đổi chỗ nếu vị trí đã có ảnh |
+| PATCH `/organizer/events/{id}/images/{imageId}` | JSON `{rowVersion,displayOrder}` | 200 Owner; đổi chỗ hai ảnh Gallery nếu vị trí đã có ảnh |
 | DELETE `/organizer/events/{id}/images/{imageId}?rowVersion=...` | JWT organizer/chủ sở hữu | 200 Owner; gỡ tham chiếu |
 
 Mọi mutation chỉ DRAFT; kiểm owner, child thuộc đúng event và rowVersion. Mỗi
@@ -159,7 +162,7 @@ Ví dụ upload (curl trên Linux; không ghi token vào lịch sử lệnh):
 ```bash
 curl -X POST "$EVENT_BASE/api/v1/organizer/events/$EVENT_ID/images" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -F "rowVersion=$ROW_VERSION" -F 'displayOrder=0' -F 'file=@poster.png;type=image/png'
+  -F "rowVersion=$ROW_VERSION" -F 'role=BANNER' -F 'file=@banner.png;type=image/png'
 ```
 
 Đọc lại Owner và dùng rowVersion mới cho lần tiếp theo. Khi timeout/mất response,

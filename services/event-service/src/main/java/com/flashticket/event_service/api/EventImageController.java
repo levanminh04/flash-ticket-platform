@@ -3,6 +3,7 @@ package com.flashticket.event_service.api;
 import com.flashticket.event_service.application.EventImageService;
 import com.flashticket.event_service.application.EventImageTransactions;
 import com.flashticket.event_service.application.EventService;
+import com.flashticket.event_service.domain.EventData.ImageRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -47,9 +48,11 @@ public class EventImageController {
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID id,
       @RequestParam String rowVersion,
-      @RequestParam Integer displayOrder,
+      @RequestParam(required = false) Integer displayOrder,
+      @RequestParam(defaultValue = "GALLERY") ImageRole role,
       @RequestPart("file") MultipartFile file) {
-    return images.upload(id, EventController.actor(jwt), rowVersion, null, displayOrder, file);
+    return images.upload(
+        id, EventController.actor(jwt), rowVersion, null, displayOrder, role, file);
   }
 
   @PutMapping(path = "/{imageId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

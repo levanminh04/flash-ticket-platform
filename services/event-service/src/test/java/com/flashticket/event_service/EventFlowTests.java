@@ -207,6 +207,51 @@ class EventFlowTests {
   }
 
   @Test
+  void bannerRoleIsIndependentOfGalleryOrderAndDeletion() throws Exception {
+    var event = service.create("a", draft("Independent image roles"));
+    String url = "https://res.cloudinary.com/test/image/upload/banner.png";
+    when(imageStorage.uploadBanner(eq(event.eventId()), any()))
+        .thenReturn(
+            new com.flashticket.event_service.integration.EventImageStorage.Uploaded(url, "asset"));
+    String base = "/api/v1/organizer/events/" + event.eventId() + "/images";
+    var file =
+        new org.springframework.mock.web.MockMultipartFile(
+            "file", "banner.png", "image/png", new byte[] {1});
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", event.rowVersion())
+                .param("role", "BANNER")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.images[0].role").value("BANNER"))
+        .andExpect(jsonPath("$.images[1].role").value("GALLERY"));
+    var saved = service.readOwned(event.eventId(), "a");
+    var banner = saved.images().getFirst();
+    mvc.perform(
+            multipart(base)
+                .file(file)
+                .param("rowVersion", saved.rowVersion())
+                .param("role", "BANNER")
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isConflict());
+    mvc.perform(
+            patch(base + "/" + banner.imageId())
+                .with(actor("a", "ORGANIZER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rowVersion\":\"1\",\"displayOrder\":1}"))
+        .andExpect(status().isUnprocessableEntity());
+    mvc.perform(
+            delete(base + "/" + banner.imageId())
+                .param("rowVersion", saved.rowVersion())
+                .with(actor("a", "ORGANIZER")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.images.length()").value(1))
+        .andExpect(jsonPath("$.images[0].role").value("GALLERY"));
+    verify(imageStorage).uploadBanner(eq(event.eventId()), any());
+  }
+
+  @Test
   void realServletAcceptsMultipartPostAndPutAndRejectsOversizedUpload() throws Exception {
     var event = service.create("a", draft("Real multipart"));
     var jwt =
