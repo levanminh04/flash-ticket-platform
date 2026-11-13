@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +59,50 @@ class EventImageStorageTests {
             .matcher(new String(body, StandardCharsets.ISO_8859_1));
     assertThat(match.find()).isTrue();
     return match.group(1);
+  }
+
+  // A 4x2 lossless WebP and a 4x2 two-frame WebP generated with Pillow.
+  private static final byte[] WEBP =
+      Base64.getDecoder().decode("UklGRhwAAABXRUJQVlA4TA8AAAAvA0AAAAcQ/Y/+ByKi/wEA");
+
+  @Test
+  void uploadsStaticWebpAndAcceptsItsCloudinaryUrl() {
+    var builder =
+        RestClient.builder()
+            .requestInterceptor(
+                (request, body, execution) -> {
+                  String id = publicId(body);
+                  assertThat(new String(body, StandardCharsets.ISO_8859_1))
+                      .contains(new String(WEBP, StandardCharsets.ISO_8859_1));
+                  return response(
+                      "{\"public_id\":\""
+                          + id
+                          + "\",\"secure_url\":\"https://res.cloudinary.com/test/image/upload/v42/"
+                          + id
+                          + ".webp\"}",
+                      HttpStatus.OK);
+                });
+    assertThat(storage(builder, 1024, 100).upload(EVENT, webp(WEBP)).objectReference())
+        .endsWith(".webp");
+  }
+
+  @Test
+  void rejectsAnimatedOrTruncatedWebpBeforeUpload() {
+    byte[] animated =
+        Base64.getDecoder()
+            .decode(
+                "UklGRsQAAABXRUJQVlA4WAoAAAACAAAAAwAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSgAAAAAAAAAAAAMAAAEAAGQAAAJW"
+                    + "UDggMgAAADABAJ0BKgQAAgABQCYloAADcAD+8ut///mwP/bz/wR6Af//0uD//pcH//S4P/SkAAAAQU5NRkYAAAAAAAA"
+                    + "AAAADAAABAABkAAAAVlA4IC4AAAA0AQCdASoEAAIAAAAmJaAAA3AA/vtV4///S4P/+lwf/9Lg/9Lg//rV5Vesq6AA");
+    var storage = storage(RestClient.builder(), 1024, 100);
+    for (byte[] bytes : List.of(animated, Arrays.copyOf(WEBP, WEBP.length - 3))) {
+      assertThatThrownBy(() -> storage.upload(EVENT, webp(bytes)))
+          .isInstanceOfSatisfying(EventProblem.class, p -> assertThat(p.status()).isEqualTo(422));
+    }
+  }
+
+  private static MockMultipartFile webp(byte[] bytes) {
+    return new MockMultipartFile("file", "event.webp", "image/webp", bytes);
   }
 
   @Test
