@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.flashticket.booking_service.dto.request.*;
 import com.flashticket.booking_service.dto.snapshot.PromotionConfig;
+import com.flashticket.booking_service.dto.snapshot.SelectionSnapshot;
+import java.util.List;
+import org.hibernate.type.format.jackson.Jackson3JsonFormatMapper;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -173,6 +176,24 @@ class BookingJsonTests {
     assertThat(tree.get("subtotal").asString()).isEqualTo("200");
     assertThat(tree.has("validSnapshot")).isFalse();
     assertThat(mapper.treeToValue(tree, value.getClass())).isEqualTo(value);
+
+    // Dùng đúng mapper Hibernate để kiểm tra JSONB cũ có quantity và snapshot hiện tại.
+    var persistenceMapper = new Jackson3JsonFormatMapper();
+    for (var snapshot :
+        List.of(new SelectionSnapshot(1, List.of()), new SelectionSnapshot(1, List.of(seat())))) {
+      var snapshotTree = mapper.valueToTree(snapshot);
+      for (String extraFields : List.of("", ",\"quantity\":2")) {
+        String snapshotJson =
+            "{\"schemaVersion\":1,\"seats\":" + snapshotTree.get("seats") + extraFields + "}";
+        assertThat(
+                persistenceMapper.<SelectionSnapshot>fromString(
+                    snapshotJson, SelectionSnapshot.class))
+            .isEqualTo(snapshot);
+        assertThat(mapper.readValue(snapshotJson, SelectionSnapshot.class)).isEqualTo(snapshot);
+      }
+      assertThat(mapper.readTree(persistenceMapper.toString(snapshot, SelectionSnapshot.class)))
+          .isEqualTo(snapshotTree);
+    }
   }
 
   @ParameterizedTest
