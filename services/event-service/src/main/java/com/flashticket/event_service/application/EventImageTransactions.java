@@ -3,6 +3,7 @@ package com.flashticket.event_service.application;
 import com.flashticket.event_service.api.EventViews;
 import com.flashticket.event_service.domain.ContractRules;
 import com.flashticket.event_service.domain.EventData;
+import com.flashticket.event_service.domain.EventData.ImageRole;
 import com.flashticket.event_service.observability.EventAudit;
 import com.flashticket.event_service.persistence.EventRepository;
 import com.flashticket.event_service.web.EventProblem;
@@ -38,23 +39,33 @@ public class EventImageTransactions {
   }
 
   @Transactional(readOnly = true, timeout = 5)
-  public void prepare(UUID id, String actor, String version, UUID imageId, Integer position) {
+  public ImageRole prepare(
+      UUID id, String actor, String version, UUID imageId, Integer position, ImageRole role) {
     var event = writable(id, actor, version, false);
-    validateUpload(event, imageId, position);
+    return validateUpload(event, imageId, position, role);
   }
 
   @Transactional(timeout = 5)
   public EventViews.Owner attach(
-      UUID id, String actor, String version, UUID imageId, Integer position, String reference) {
+      UUID id,
+      String actor,
+      String version,
+      UUID imageId,
+      Integer position,
+      ImageRole role,
+      String reference) {
     var event = writable(id, actor, version, true);
-    validateUpload(event, imageId, position);
+    validateUpload(event, imageId, position, role);
     var images = new ArrayList<>(event.images());
-    if (imageId == null) images.add(new EventData.Image(UUID.randomUUID(), reference, position));
+    if (imageId == null)
+      images.add(
+          new EventData.Image(
+              UUID.randomUUID(), reference, role == ImageRole.BANNER ? 0 : position, role));
     else
       images.replaceAll(
           i ->
               i.id().equals(imageId)
-                  ? new EventData.Image(i.id(), reference, i.displayOrder())
+                  ? new EventData.Image(i.id(), reference, i.displayOrder(), i.role())
                   : i);
     return persist(event, actor, images, "upload-image");
   }
@@ -75,16 +86,17 @@ public class EventImageTransactions {
       UUID id, String actor, String version, UUID imageId, int position) {
     var event = writable(id, actor, version, true);
     var selected = image(event, imageId);
-    if (position < 0) throw EventProblem.invalid("displayOrder");
+    if (selected.role() != ImageRole.GALLERY || position < 0)
+      throw EventProblem.invalid("displayOrder");
     var images =
         event.images().stream()
             .map(
                 i ->
                     i.id().equals(imageId)
-                        ? new EventData.Image(i.id(), i.objectReference(), position)
-                        : i.displayOrder() == position
+                        ? new EventData.Image(i.id(), i.objectReference(), position, i.role())
+                        : i.role() == ImageRole.GALLERY && i.displayOrder() == position
                             ? new EventData.Image(
-                                i.id(), i.objectReference(), selected.displayOrder())
+                                i.id(), i.objectReference(), selected.displayOrder(), i.role())
                             : i)
             .toList();
     return persist(event, actor, images, "reorder-image");
@@ -105,16 +117,21 @@ public class EventImageTransactions {
     return EventViews.owner(next);
   }
 
-  private void validateUpload(EventData event, UUID imageId, Integer position) {
-    if (imageId != null) {
-      image(event, imageId);
-      return;
-    }
+  private ImageRole validateUpload(
+      EventData event, UUID imageId, Integer position, ImageRole role) {
+    if (imageId != null) return image(event, imageId).role();
     if (event.images().size() >= maxCount)
       throw new EventProblem(422, "IMAGE_LIMIT_REACHED", "images");
-    if (position == null || position < 0) throw EventProblem.invalid("displayOrder");
-    if (event.images().stream().anyMatch(i -> i.displayOrder() == position))
-      throw EventProblem.conflict("IMAGE_ORDER_CONFLICT");
+    if (role == ImageRole.BANNER) {
+      if (event.images().stream().anyMatch(i -> i.role() == ImageRole.BANNER))
+        throw EventProblem.conflict("BANNER_ALREADY_EXISTS");
+    } else {
+      if (position == null || position < 0) throw EventProblem.invalid("displayOrder");
+      if (event.images().stream()
+          .anyMatch(i -> i.role() == ImageRole.GALLERY && i.displayOrder() == position))
+        throw EventProblem.conflict("IMAGE_ORDER_CONFLICT");
+    }
+    return role;
   }
 
   private EventData writable(UUID id, String actor, String expected, boolean lock) {

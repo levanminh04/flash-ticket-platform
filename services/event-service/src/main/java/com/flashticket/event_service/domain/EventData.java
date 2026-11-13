@@ -38,7 +38,12 @@ public record EventData(
     promotions = List.copyOf(promotions);
   }
 
-  public record Image(UUID id, String objectReference, int displayOrder) {}
+  public enum ImageRole {
+    BANNER,
+    GALLERY
+  }
+
+  public record Image(UUID id, String objectReference, int displayOrder, ImageRole role) {}
 
   public record TicketType(
       UUID id,

@@ -55,7 +55,8 @@ public final class EventViews {
     }
   }
 
-  public record Image(UUID imageId, String objectReference, int displayOrder) {}
+  public record Image(
+      UUID imageId, String objectReference, int displayOrder, EventData.ImageRole role) {}
 
   public record TicketType(
       UUID ticketTypeId,
@@ -127,7 +128,7 @@ public final class EventViews {
         event.feeRate() == null ? null : event.feeRate().toPlainString(),
         event.approvedAt(),
         event.images().stream()
-            .map(i -> new Image(i.id(), i.objectReference(), i.displayOrder()))
+            .map(i -> new Image(i.id(), i.objectReference(), i.displayOrder(), i.role()))
             .toList(),
         event.ticketTypes().stream().map(EventViews::ticketType).toList(),
         event.promotions().stream()
@@ -160,7 +161,7 @@ public final class EventViews {
         event.venueName(),
         event.mode(),
         event.images().stream()
-            .map(i -> new Image(i.id(), i.objectReference(), i.displayOrder()))
+            .map(i -> new Image(i.id(), i.objectReference(), i.displayOrder(), i.role()))
             .toList(),
         event.ticketTypes().stream().map(EventViews::ticketType).toList(),
         event.seatMap() == null ? null : event.seatMap().publicView());
