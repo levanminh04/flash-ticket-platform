@@ -66,7 +66,7 @@ public final class RcaFaults implements AutoCloseable {
 
   @PostConstruct
   public void start() {
-    if (enabled && "event_service".equals("booking_service"))
+    if (enabled)
       watchdog.scheduleWithFixedDelay(this::pollSafely, 0, 100, TimeUnit.MILLISECONDS);
   }
 
@@ -160,7 +160,7 @@ public final class RcaFaults implements AutoCloseable {
 
   /** Separate watchdog ensures blocked acquisition cannot postpone lease cleanup. */
   public void poll() {
-    if (!enabled || !"event_service".equals("booking_service")) return;
+    if (!enabled) return;
     Lease lease = lease();
     if (lease == null || !lease.action().equals("pool.hold")) {
       release();
