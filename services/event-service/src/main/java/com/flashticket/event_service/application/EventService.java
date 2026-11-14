@@ -9,8 +9,10 @@ import com.flashticket.event_service.messaging.OutboxStore;
 import com.flashticket.event_service.observability.EventAudit;
 import com.flashticket.event_service.persistence.EventRepository;
 import com.flashticket.event_service.web.EventProblem;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 import org.springframework.stereotype.Service;
@@ -144,7 +146,41 @@ public class EventService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public EventViews.Page<EventViews.Public> listPublic(
       String query, UUID category, int size, String cursor) {
-    return page(null, null, query, category, size, cursor, true, EventViews::publicView, true);
+    return listPublic(query, category, null, null, null, null, false, size, cursor);
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public EventViews.Page<EventViews.Public> listPublic(
+      String query,
+      UUID category,
+      LocalDate from,
+      LocalDate to,
+      BigDecimal maxPrice,
+      String venue,
+      boolean includePast,
+      int size,
+      String cursor) {
+    if (from != null && to != null && from.isAfter(to)) {
+      throw EventProblem.invalid("dateRange");
+    }
+    if (maxPrice != null && maxPrice.signum() < 0) {
+      throw EventProblem.invalid("maxPrice");
+    }
+    return page(
+        null,
+        null,
+        query,
+        category,
+        from,
+        to,
+        maxPrice,
+        venue,
+        includePast,
+        size,
+        cursor,
+        true,
+        EventViews::publicView,
+        true);
   }
 
   @Transactional(readOnly = true)
@@ -162,6 +198,25 @@ public class EventService {
       String status,
       String query,
       UUID category,
+      int size,
+      String cursor,
+      boolean published,
+      Function<EventData, T> mapper,
+      boolean children) {
+    return page(
+        actor, status, query, category, null, null, null, null, true, size, cursor, published, mapper, children);
+  }
+
+  private <T> EventViews.Page<T> page(
+      String actor,
+      String status,
+      String query,
+      UUID category,
+      LocalDate from,
+      LocalDate to,
+      BigDecimal maxPrice,
+      String venue,
+      boolean includePast,
       int size,
       String cursor,
       boolean published,
@@ -185,17 +240,32 @@ public class EventService {
         throw new EventProblem(400, "INVALID_CURSOR", "cursor");
       }
     }
-    var rows = repository.list(actor, status, query, category, before, id, size + 1, published);
+    var rows =
+        repository.list(
+            actor,
+            status,
+            query,
+            category,
+            from,
+            to,
+            maxPrice,
+            venue,
+            includePast,
+            before,
+            id,
+            size + 1,
+            published);
     boolean more = rows.size() > size;
     var selected = rows.subList(0, Math.min(size, rows.size()));
     String next = null;
     if (more) {
       var last = selected.getLast();
+      Instant cursorTime = published ? last.startsAt() : last.createdAt();
       next =
           Base64.getUrlEncoder()
               .withoutPadding()
               .encodeToString(
-                  (last.createdAt() + "|" + last.id()).getBytes(StandardCharsets.UTF_8));
+                  (cursorTime + "|" + last.id()).getBytes(StandardCharsets.UTF_8));
     }
     var values = children ? repository.withChildren(selected) : selected;
     return new EventViews.Page<>(values.stream().map(mapper).toList(), next);
