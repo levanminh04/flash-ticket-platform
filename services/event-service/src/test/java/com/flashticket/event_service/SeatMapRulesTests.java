@@ -22,6 +22,34 @@ class SeatMapRulesTests {
     assertThat(map.publicView().sectors().getFirst().seats()).hasSize(1);
   }
 
+  @Test
+  void roundTripsEditorSettingsWithStrictRequestMapper() {
+    var strict =
+        JsonMapper.builder()
+            .enable(
+                tools.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+            .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
+    var legacy = strict.readValue(SeatMapFixtures.map(false), SeatMap.class);
+    SeatMapRules.validate(legacy, List.of());
+    var input =
+        SeatMapFixtures.map(false)
+            .replace(
+                "\"mode\":\"grid\"",
+                "\"mode\":\"table\",\"rotation\":30,\"curve\":15,\"stretch\":1.2,\"pathBasedLayout\":true,\"rowLabelPosition\":\"both\",\"rowAlignment\":\"center\",\"outlineMode\":\"auto\"")
+            .replace(
+                "\"shapeType\":\"rectangle\"",
+                "\"shapeType\":\"rectangle\",\"labelPosition\":{\"x\":10,\"y\":20},\"stylePreset\":\"vip\"");
+    var map = strict.readValue(input, SeatMap.class);
+    SeatMapRules.validate(map, List.of());
+    var geometry = map.sectors().getFirst().geometry();
+    var stored = strict.readValue(strict.writeValueAsString(geometry), SeatMap.Geometry.class);
+    assertThat(stored.seatLayout().getPathBasedLayout()).isTrue();
+    assertThat(stored.seatLayout().outlineMode).isEqualTo("auto");
+    assertThat(stored.seatLayout().rotation).isEqualByComparingTo("30");
+    assertThat(stored.shape().get("stylePreset").asString()).isEqualTo("vip");
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {
