@@ -50,7 +50,9 @@ public class EventRepository {
       UUID beforeId,
       int size,
       boolean published) {
-    return list(owner, status, query, category, null, null, null, null, true, before, beforeId, size, published);
+    return list(
+        owner, status, query, category, null, null, null, null, true, before, beforeId, size,
+        published);
   }
 
   public List<EventData> list(

@@ -204,7 +204,8 @@ public class EventService {
       Function<EventData, T> mapper,
       boolean children) {
     return page(
-        actor, status, query, category, null, null, null, null, true, size, cursor, published, mapper, children);
+        actor, status, query, category, null, null, null, null, true, size, cursor, published,
+        mapper, children);
   }
 
   private <T> EventViews.Page<T> page(
@@ -264,8 +265,7 @@ public class EventService {
       next =
           Base64.getUrlEncoder()
               .withoutPadding()
-              .encodeToString(
-                  (cursorTime + "|" + last.id()).getBytes(StandardCharsets.UTF_8));
+              .encodeToString((cursorTime + "|" + last.id()).getBytes(StandardCharsets.UTF_8));
     }
     var values = children ? repository.withChildren(selected) : selected;
     return new EventViews.Page<>(values.stream().map(mapper).toList(), next);
