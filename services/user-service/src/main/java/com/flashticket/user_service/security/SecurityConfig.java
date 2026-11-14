@@ -46,6 +46,8 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                     .requestMatchers("/api/v1/me", "/api/v1/me/avatar")
                     .hasAnyRole("BUYER", "ORGANIZER", "ADMIN")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/organizer-applications")
+                    .hasAnyRole("BUYER", "ORGANIZER")
                     .requestMatchers(
                         "/api/v1/organizer-applications/**",
                         "/api/v1/organizer-applications",

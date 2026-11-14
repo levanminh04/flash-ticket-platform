@@ -7,6 +7,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
@@ -27,6 +29,8 @@ public final class OrganizerImages {
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record Uploaded(@JsonProperty("secure_url") String secureUrl) {}
 
+  private static final String IMAGE_WEBP = "image/webp";
+
   private final RestClient rest;
   private final String cloud;
   private final String apiKey;
@@ -34,6 +38,7 @@ public final class OrganizerImages {
   private final String folder;
   private final String avatarFolder;
   private final int maxBytes;
+  private final int brandingMaxBytes;
   private final long maxPixels;
 
   public OrganizerImages(
@@ -44,12 +49,14 @@ public final class OrganizerImages {
       @Value("${user.images.folder:flash-ticket/organizers}") String folder,
       @Value("${user.images.avatar-folder:flash-ticket/avatars}") String avatarFolder,
       @Value("${user.images.max-bytes:2097152}") int maxBytes,
+      @Value("${user.images.branding-max-bytes:5242880}") int brandingMaxBytes,
       @Value("${user.images.max-pixels:16000000}") long maxPixels,
       @Value("${user.images.timeout:5s}") Duration timeout) {
     if ((!cloud.isEmpty() && !cloud.matches("[A-Za-z0-9_-]+"))
         || !folder.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*")
         || !avatarFolder.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*")
         || maxBytes < 1
+        || brandingMaxBytes < 1
         || maxPixels < 1
         || timeout.isZero()
         || timeout.isNegative())
@@ -60,6 +67,7 @@ public final class OrganizerImages {
     this.folder = folder;
     this.avatarFolder = avatarFolder;
     this.maxBytes = maxBytes;
+    this.brandingMaxBytes = brandingMaxBytes;
     this.maxPixels = maxPixels;
     var factory =
         new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(timeout).build());
@@ -69,7 +77,7 @@ public final class OrganizerImages {
 
   public String upload(MultipartFile file, String kind) {
     if (!kind.equals("logo") && !kind.equals("banner") && !kind.equals("avatar")) throw invalid();
-    byte[] bytes = validate(file);
+    byte[] bytes = validate(file, kind);
     if (cloud.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) throw unavailable();
     var form = new LinkedMultiValueMap<String, Object>();
     form.add(
@@ -108,15 +116,23 @@ public final class OrganizerImages {
     }
   }
 
-  private byte[] validate(MultipartFile file) {
+  private byte[] validate(MultipartFile file, String kind) {
     if (file == null || file.isEmpty()) throw invalid();
-    if (file.getSize() > maxBytes) throw tooLarge();
+    boolean branding = !kind.equals("avatar");
+    int limit = branding ? brandingMaxBytes : maxBytes;
+    if (file.getSize() > limit) throw tooLarge();
     String type = file.getContentType();
-    if (!MediaType.IMAGE_PNG_VALUE.equals(type) && !MediaType.IMAGE_JPEG_VALUE.equals(type))
-      throw new UserException(415, "UNSUPPORTED_IMAGE", "Use a PNG or JPEG image");
+    boolean webp = branding && IMAGE_WEBP.equals(type);
+    if (!MediaType.IMAGE_PNG_VALUE.equals(type)
+        && !MediaType.IMAGE_JPEG_VALUE.equals(type)
+        && !webp)
+      throw new UserException(
+          415,
+          "UNSUPPORTED_IMAGE",
+          branding ? "Use PNG, JPEG or static WebP" : "Use a PNG or JPEG image");
     try (var input = file.getInputStream()) {
-      byte[] bytes = input.readNBytes(Math.addExact(maxBytes, 1));
-      if (bytes.length > maxBytes) throw tooLarge();
+      byte[] bytes = input.readNBytes(Math.addExact(limit, 1));
+      if (bytes.length > limit) throw tooLarge();
       try (var imageInput = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
         var readers = ImageIO.getImageReaders(imageInput);
         if (!readers.hasNext()) throw invalid();
@@ -126,9 +142,17 @@ public final class OrganizerImages {
           String format = reader.getFormatName().toLowerCase(Locale.ROOT);
           if (!(type.equals(MediaType.IMAGE_PNG_VALUE) && format.equals("png"))
               && !(type.equals(MediaType.IMAGE_JPEG_VALUE)
-                  && (format.equals("jpeg") || format.equals("jpg")))) throw invalid();
+                  && (format.equals("jpeg") || format.equals("jpg")))
+              && !(webp && format.equals("webp"))) throw invalid();
+          if (webp) validateStaticWebp(bytes);
           int width = reader.getWidth(0), height = reader.getHeight(0);
           if (width < 1 || height < 1 || (long) width * height > maxPixels) throw tooLarge();
+          if ((kind.equals("logo") && width != height)
+              || (kind.equals("banner") && width * 9L != height * 16L))
+            throw new UserException(
+                422,
+                "INVALID_BRANDING_DIMENSIONS",
+                kind.equals("logo") ? "Use a 1:1 logo" : "Use a 16:9 banner");
           if (reader.read(0) == null) throw invalid();
         } finally {
           reader.dispose();
@@ -138,6 +162,18 @@ public final class OrganizerImages {
     } catch (IOException ex) {
       throw invalid();
     }
+  }
+
+  private static void validateStaticWebp(byte[] bytes) {
+    // ImageIO identifies the RIFF/WEBP signature before this check.
+    if (bytes.length < 21) throw invalid();
+    long riffSize =
+        Integer.toUnsignedLong(
+            ByteBuffer.wrap(bytes, 4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt());
+    if (riffSize + 8 != bytes.length) throw invalid();
+    // Extended WebP stores its animation flag in the first byte of the VP8X chunk payload.
+    boolean extended = bytes[12] == 'V' && bytes[13] == 'P' && bytes[14] == '8' && bytes[15] == 'X';
+    if (extended && (bytes[20] & 0x02) != 0) throw invalid();
   }
 
   private static UserException invalid() {

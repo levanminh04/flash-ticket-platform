@@ -2,27 +2,32 @@ package com.flashticket.event_service.application;
 
 import com.flashticket.event_service.api.*;
 import com.flashticket.event_service.domain.*;
+import com.flashticket.event_service.integration.EventImageStorage;
 import com.flashticket.event_service.observability.EventAudit;
 import com.flashticket.event_service.persistence.*;
 import com.flashticket.event_service.web.EventProblem;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class SeatMapService {
   private final EventRepository events;
   private final SeatMapRepository maps;
   private final EventAudit audit;
+  private final EventImageStorage storage;
 
   @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       justification =
           "Intentionally shares Spring-managed beans; no dependency accessor is exposed.")
-  public SeatMapService(EventRepository events, SeatMapRepository maps, EventAudit audit) {
+  public SeatMapService(
+      EventRepository events, SeatMapRepository maps, EventAudit audit, EventImageStorage storage) {
     this.events = events;
     this.maps = maps;
     this.audit = audit;
+    this.storage = storage;
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -86,6 +91,13 @@ public class SeatMapService {
     var next = events.find(id, false).orElseThrow(EventProblem::missing);
     audit.committed("change-sales-mode", event.status(), next, actor);
     return EventViews.owner(next);
+  }
+
+  public String uploadBackground(UUID id, String actor, MultipartFile file) {
+    var event = own(id, actor, false);
+    if (!"DRAFT".equals(event.status())) throw EventProblem.conflict("INVALID_EVENT_STATE");
+    seatMode(event);
+    return storage.uploadSeatMapBackground(id, file).objectReference();
   }
 
   private EventData editing(UUID id, String actor, String version) {
