@@ -181,6 +181,23 @@ class UserApiTests {
   }
 
   @Test
+  void organizerCanListOwnApplicationsButCannotSubmitAnotherApplication() throws Exception {
+    var organizer =
+        jwt()
+            .jwt(j -> j.subject("organizer-only"))
+            .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"));
+    mvc.perform(get("/api/v1/organizer-applications").with(organizer))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items").isEmpty());
+    mvc.perform(
+            post("/api/v1/organizer-applications")
+                .with(organizer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_APPLICATION))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   void applicationValidatesBusinessVerificationFieldsAndAllowsOptionalWebsite() throws Exception {
     mvc.perform(
             post("/api/v1/organizer-applications")

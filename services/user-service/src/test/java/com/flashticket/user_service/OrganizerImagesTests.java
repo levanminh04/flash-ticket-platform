@@ -38,8 +38,45 @@ class OrganizerImagesTests {
         "flash-ticket/organizers",
         "flash-ticket/avatars",
         maxBytes,
+        maxBytes,
         maxPixels,
         Duration.ofSeconds(2));
+  }
+
+  @Test
+  void decodesStaticWebpForBrandingAndRejectsItForAvatars() {
+    var bytes =
+        java.util.Base64.getDecoder().decode("UklGRhwAAABXRUJQVlA4TA8AAAAvA0AAAAcQ/Y/+ByKi/wEA");
+    var file = new MockMultipartFile("file", "image.webp", "image/webp", bytes);
+    var images = storage(RestClient.builder(), 5242880, 16000000);
+    assertThatThrownBy(() -> images.upload(file, "logo"))
+        .isInstanceOfSatisfying(
+            UserException.class,
+            e -> assertThat(e.code()).isEqualTo("INVALID_BRANDING_DIMENSIONS"));
+    assertThatThrownBy(() -> images.upload(file, "avatar"))
+        .isInstanceOfSatisfying(
+            UserException.class, e -> assertThat(e.code()).isEqualTo("UNSUPPORTED_IMAGE"));
+  }
+
+  @Test
+  void rejectsIncorrectBrandingDimensionsBeforeProviderUpload() throws Exception {
+    var builder =
+        RestClient.builder()
+            .requestInterceptor(
+                (request, body, execution) -> {
+                  throw new AssertionError("Invalid branding image reached the provider");
+                });
+    var images = storage(builder, 2097152, 16000000);
+    for (String kind : java.util.List.of("logo", "banner")) {
+      var file = new MockMultipartFile("file", "image.png", "image/png", png(400, 300));
+      assertThatThrownBy(() -> images.upload(file, kind))
+          .isInstanceOfSatisfying(
+              UserException.class,
+              e -> {
+                assertThat(e.status()).isEqualTo(422);
+                assertThat(e.code()).isEqualTo("INVALID_BRANDING_DIMENSIONS");
+              });
+    }
   }
 
   @Test
@@ -61,8 +98,8 @@ class OrganizerImagesTests {
                       "{\"secure_url\":\"https://res.cloudinary.com/test/image/upload/logo.png\",\"extra\":true}",
                       HttpStatus.OK);
                 });
-    var file = new MockMultipartFile("file", "../../untrusted.png", "image/png", png(2, 2));
-    assertThat(storage(builder, 1024, 16).upload(file, "logo"))
+    var file = new MockMultipartFile("file", "../../untrusted.png", "image/png", png(400, 400));
+    assertThat(storage(builder, 2097152, 16000000).upload(file, "logo"))
         .isEqualTo("https://res.cloudinary.com/test/image/upload/logo.png");
     assertThat(calls).hasValue(1);
   }
@@ -128,8 +165,8 @@ class OrganizerImagesTests {
                     new MockClientHttpResponse(
                         "private provider detail".getBytes(StandardCharsets.UTF_8),
                         HttpStatus.BAD_REQUEST));
-    var file = new MockMultipartFile("file", "image.png", "image/png", png(2, 2));
-    assertThatThrownBy(() -> storage(builder, 1024, 100).upload(file, "banner"))
+    var file = new MockMultipartFile("file", "image.png", "image/png", png(1280, 720));
+    assertThatThrownBy(() -> storage(builder, 2097152, 16000000).upload(file, "banner"))
         .isInstanceOfSatisfying(
             UserException.class,
             e -> {
@@ -142,7 +179,7 @@ class OrganizerImagesTests {
 
   @Test
   void refusesProviderUrlsOutsideTheConfiguredCloudAndHttpsImageDelivery() throws Exception {
-    var file = new MockMultipartFile("file", "image.png", "image/png", png(2, 2));
+    var file = new MockMultipartFile("file", "image.png", "image/png", png(400, 400));
     for (String url :
         java.util.List.of(
             "http://res.cloudinary.com/test/image/upload/logo.png",
@@ -153,7 +190,7 @@ class OrganizerImagesTests {
               .requestInterceptor(
                   (request, body, execution) ->
                       response("{\"secure_url\":\"" + url + "\"}", HttpStatus.OK));
-      assertThatThrownBy(() -> storage(builder, 1024, 100).upload(file, "logo"))
+      assertThatThrownBy(() -> storage(builder, 2097152, 16000000).upload(file, "logo"))
           .isInstanceOfSatisfying(UserException.class, e -> assertThat(e.status()).isEqualTo(503));
     }
   }

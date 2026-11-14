@@ -71,7 +71,7 @@ spring:
               uri: lb://event-service
               order: 30
               predicates:
-                - Path=/api/v1/organizer/events/*/images/**
+                - Path=/api/v1/organizer/events/*/images/**,/api/v1/organizer/events/*/seat-map/background-image
               metadata:
                 response-timeout: ${gateway.event-images.response-timeout-ms:45000}
               filters:
