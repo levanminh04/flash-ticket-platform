@@ -1,0 +1,842 @@
+# Isolated test environment; no production env file or external network.
+name: ft-bi
+services:
+  postgres:
+    image: postgres:16.15
+    restart: 'no'
+    mem_limit: 1536m
+    shm_size: 256m
+    stop_grace_period: 60s
+    command:
+    - postgres
+    - -c
+    - max_connections=${PG_MAX_CONNECTIONS:-100}
+    - -c
+    - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+    - -c
+    - work_mem=${PG_WORK_MEM:-4MB}
+    - -c
+    - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+    - -c
+    - password_encryption=scram-sha-256
+    - -c
+    - log_min_duration_statement=${PG_LOG_MIN_DURATION_STATEMENT:-500}
+    - -c
+    - log_lock_waits=${PG_LOG_LOCK_WAITS:-on}
+    - -c
+    - deadlock_timeout=${PG_DEADLOCK_TIMEOUT:-1s}
+    - -c
+    - log_parameter_max_length=0
+    - -c
+    - log_parameter_max_length_on_error=0
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root
+        .env}
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak_db}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      EVENT_DB_ADMIN_PASSWORD: ${EVENT_DB_ADMIN_PASSWORD:?Set EVENT_DB_ADMIN_PASSWORD
+        in the repository-root .env}
+      EVENT_DB_VIEWER_PASSWORD: ${EVENT_DB_VIEWER_PASSWORD:?Set EVENT_DB_VIEWER_PASSWORD
+        in the repository-root .env}
+      BOOKING_DB_ADMIN_PASSWORD: ${BOOKING_DB_ADMIN_PASSWORD:?Set BOOKING_DB_ADMIN_PASSWORD
+        in the repository-root .env}
+      BOOKING_DB_VIEWER_PASSWORD: ${BOOKING_DB_VIEWER_PASSWORD:?Set BOOKING_DB_VIEWER_PASSWORD
+        in the repository-root .env}
+      PAYMENT_DB_ADMIN_PASSWORD: ${PAYMENT_DB_ADMIN_PASSWORD:?Set PAYMENT_DB_ADMIN_PASSWORD
+        in the repository-root .env}
+      PAYMENT_DB_VIEWER_PASSWORD: ${PAYMENT_DB_VIEWER_PASSWORD:?Set PAYMENT_DB_VIEWER_PASSWORD
+        in the repository-root .env}
+      TICKET_DB_ADMIN_PASSWORD: ${TICKET_DB_ADMIN_PASSWORD:?Set TICKET_DB_ADMIN_PASSWORD
+        in the repository-root .env}
+      TICKET_DB_VIEWER_PASSWORD: ${TICKET_DB_VIEWER_PASSWORD:?Set TICKET_DB_VIEWER_PASSWORD
+        in the repository-root .env}
+    ports:
+    - 127.0.0.1:15439:5432
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    - ../postgres/00-business-databases.sh:/docker-entrypoint-initdb.d/00-business-databases.sh:ro
+    - ../../docs/architecture/data/postgres:/opt/flash-ticket/postgres:ro
+    - ../../services/99-table-prefix.sql:/opt/flash-ticket/99-table-prefix.sql:ro
+    - ../../services/event-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/event.sql:ro
+    - ../../services/booking-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/booking.sql:ro
+    - ../../services/payment-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/payment.sql:ro
+    - ../../services/ticket-service/database/90-erd-reader.sql:/opt/flash-ticket/readers/ticket.sql:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+    - ticket
+    labels:
+      ft.bi.test: 'true'
+    logging:
+      driver: json-file
+      options: &id001
+        max-size: 10m
+        max-file: '3'
+        labels: com.docker.compose.service
+  rabbitmq:
+    image: rabbitmq:4.3.6-management
+    hostname: rabbitmq
+    restart: 'no'
+    mem_limit: 768m
+    stop_grace_period: 30s
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+      RABBITMQ_ADMIN_USERNAME: ${RABBITMQ_ADMIN_USERNAME:-flash_ticket_admin}
+      RABBITMQ_ADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD
+        in the repository-root .env}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-flash_ticket_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in the repository-root
+        .env}
+      RABBITMQ_IDENTITY_USERNAME: ${RABBITMQ_IDENTITY_USERNAME:-flash_ticket_identity}
+      RABBITMQ_IDENTITY_PASSWORD: ${RABBITMQ_IDENTITY_PASSWORD:?Set RABBITMQ_IDENTITY_PASSWORD
+        in the repository-root .env}
+    ports:
+    - 127.0.0.1:15679:5672
+    - 127.0.0.1:15689:15672
+    volumes:
+    - rabbitmq-data:/var/lib/rabbitmq
+    - ../rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    - ../rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    post_start:
+    - user: rabbitmq
+      command:
+      - sh
+      - -ec
+      - |
+        rm -f /tmp/rabbitmq-users-ready
+        validate() {
+          if [ "$$1" = guest ]; then
+            echo 'Use a dedicated RabbitMQ username instead of guest' >&2; exit 1
+          fi
+          [ "$$(printf '%s\n' "$$1" | wc -l)" -eq 1 ] &&
+          printf '%s\n' "$$1" | LC_ALL=C grep -Eq '^[A-Za-z][A-Za-z0-9_-]{0,63}$$' || {
+            echo 'Invalid RabbitMQ username' >&2; exit 1;
+          }
+          if [ -z "$$2" ] || [ "$$(printf '%s\n' "$$2" | wc -l)" -ne 1 ] ||
+             printf '%s' "$$2" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+            echo 'RabbitMQ passwords must be nonempty without control characters' >&2; exit 1
+          fi
+        }
+        validate "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD"
+        validate "$$RABBITMQ_USERNAME" "$$RABBITMQ_PASSWORD"
+        validate "$$RABBITMQ_IDENTITY_USERNAME" "$$RABBITMQ_IDENTITY_PASSWORD"
+        if [ "$$RABBITMQ_ADMIN_USERNAME" = "$$RABBITMQ_USERNAME" ] ||
+           [ "$$RABBITMQ_ADMIN_USERNAME" = "$$RABBITMQ_IDENTITY_USERNAME" ] ||
+           [ "$$RABBITMQ_USERNAME" = "$$RABBITMQ_IDENTITY_USERNAME" ]; then
+          echo 'RabbitMQ usernames must be distinct' >&2; exit 1
+        fi
+        rabbitmqctl wait --pid 1 --timeout 120
+        users=$$(rabbitmqctl -q list_users --no-table-headers)
+        upsert_user() {
+          if printf '%s\n' "$$users" | cut -f1 | grep -Fxq "$$1"; then
+            rabbitmqctl -q change_password "$$1" "$$2"
+          else
+            rabbitmqctl -q add_user "$$1" "$$2"
+          fi
+        }
+        upsert_user "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD"
+        rabbitmqctl -q set_user_tags "$$RABBITMQ_ADMIN_USERNAME" administrator
+        rabbitmqctl -q set_permissions -p / "$$RABBITMQ_ADMIN_USERNAME" '.*' '.*' '.*'
+        upsert_user "$$RABBITMQ_USERNAME" "$$RABBITMQ_PASSWORD"
+        rabbitmqctl -q set_user_tags "$$RABBITMQ_USERNAME"
+        rabbitmqctl -q set_permissions -p / "$$RABBITMQ_USERNAME" '^$$' '^(business|dlx)\.ex$$' '^(booking\.(sales-configured|event-cancelled|accept-payment|tickets-issued|issuance-failed)|payment\.(finance-configured|event-cancelled|start|decision|ticket-issuance-failed|order-completed)|ticket\.(access-configured|event-cancelled|issuance)|user\.identity)\.q$$'
+        upsert_user "$$RABBITMQ_IDENTITY_USERNAME" "$$RABBITMQ_IDENTITY_PASSWORD"
+        rabbitmqctl -q set_user_tags "$$RABBITMQ_IDENTITY_USERNAME"
+        rabbitmqctl -q set_permissions -p / "$$RABBITMQ_IDENTITY_USERNAME" '^$$' '^identity\.ex$$' '^$$'
+        rabbitmqctl -q authenticate_user "$$RABBITMQ_ADMIN_USERNAME" "$$RABBITMQ_ADMIN_PASSWORD" >/dev/null
+        if printf '%s\n' "$$users" | cut -f1 | grep -Fxq guest; then
+          rabbitmqctl -q delete_user guest
+        fi
+        touch /tmp/rabbitmq-users-ready
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - test -f /tmp/rabbitmq-users-ready && rabbitmq-diagnostics -q check_running
+        && rabbitmq-diagnostics -q check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+    - ticket
+    labels:
+      ft.bi.test: 'true'
+    logging:
+      driver: json-file
+      options: *id001
+  redis:
+    image: redis:7.4.11-alpine
+    restart: 'no'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the repository-root
+        .env}
+      REDIS_AOF_ENABLED: ${REDIS_AOF_ENABLED:-yes}
+    command:
+    - sh
+    - -ec
+    - exec /usr/local/bin/docker-entrypoint.sh redis-server --requirepass "$$REDIS_PASSWORD"
+      --appendonly "$$REDIS_AOF_ENABLED"
+    ports:
+    - 127.0.0.1:16389:6379
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --raw PING | grep -qx PONG
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+    - ticket
+    labels:
+      ft.bi.test: 'true'
+    logging:
+      driver: json-file
+      options: *id001
+    mem_limit: 256m
+  mongodb:
+    image: mongo:7.0
+    labels: &id002
+      ft.bi.test: 'true'
+    networks:
+    - ticket
+    mem_limit: 512m
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bi_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${USER_DB_ADMIN_PASSWORD:?test Mongo password}
+    command:
+    - mongod
+    - --wiredTigerCacheSizeGB
+    - '0.25'
+    volumes:
+    - mongodb-data:/data/db
+    logging: &id003
+      driver: json-file
+      options: *id001
+    healthcheck:
+      test:
+      - CMD
+      - mongosh
+      - --quiet
+      - --eval
+      - 'quit(db.runCommand({ping:1}).ok ? 0 : 1)'
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  keycloak:
+    image: ft-bi/keycloak:local
+    build:
+      context: ../../services/keycloak-spi
+    labels: *id002
+    command:
+    - start
+    - --import-realm
+    networks:
+    - ticket
+    mem_limit: 1536m
+    ports:
+    - 127.0.0.1:18080:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?test Postgres password}
+      KC_HTTP_ENABLED: 'true'
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_STRICT: 'false'
+      KC_BOOTSTRAP_ADMIN_USERNAME: bi_admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?test Keycloak password}
+      KC_LOG_CONSOLE_OUTPUT: json
+      KC_LOG_CONSOLE_INCLUDE_TRACE: 'true'
+      KC_TRACING_ENABLED: 'true'
+      KC_TRACING_ENDPOINT: http://otel-collector:4317
+      KC_TRACING_SERVICE_NAME: keycloak
+      FT_IDENTITY_OUTBOX_ENABLED: 'false'
+    volumes:
+    - ../../.local/rca-test/private/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    logging: *id003
+  mock-vnpay:
+    image: python:3.12-alpine
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 128m
+    ports:
+    - 127.0.0.1:${FT_MOCK_HTTP_PORT:-19090}:9090
+    working_dir: /work
+    command:
+    - python
+    - mock_vnpay.py
+    environment:
+      FT_TEST_ENVIRONMENT: 'true'
+      FT_MOCK_REFUND_POLL: ${FT_MOCK_REFUND_POLL:-false}
+      VNPAY_TMN_CODE: BI_TEST
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:?test VNPay key}
+      VNPAY_IPN_URL: http://payment-service:8083/api/v1/payments/vnpay/ipn
+    volumes:
+    - ./mock_vnpay.py:/work/mock_vnpay.py:ro
+    - ../../.local/rca-test/private/mock-state:/state
+    - ../../.local/rca-test/private/probes:/audit
+    logging: *id003
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 128m
+    command:
+    - -host=0.0.0.0
+    - -proxy-metrics
+    - -config=/config/proxies.json
+    ports:
+    - 127.0.0.1:18474:8474
+    volumes:
+    - ./toxiproxy.json:/config/proxies.json:ro
+    logging: *id003
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 128m
+    ports:
+    - 127.0.0.1:18025:8025
+    logging: *id003
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.165.0
+    labels: *id002
+    networks:
+    - ticket
+    command:
+    - --config=/etc/otel/config.yaml
+    mem_limit: 256m
+    ports:
+    - 127.0.0.1:14318:4318
+    volumes:
+    - ./otel-collector.yaml:/etc/otel/config.yaml:ro
+    - ../../.local/rca-test/public/telemetry:/output
+    - ../../.local/rca-test/public/logs:/app-logs:ro
+    logging: *id003
+  discovery-server:
+    image: ft-bi/discovery-server:local
+    build:
+      context: ../../infrastructure/discovery-server
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 768m
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+    logging: *id003
+    ports:
+    - 127.0.0.1:18761:8761
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8761/actuator/health
+      interval: 5s
+      timeout: 3s
+      retries: 36
+  api-gateway:
+    image: ft-bi/api-gateway:local
+    build:
+      context: ../../infrastructure/api-gateway
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 768m
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      REDIS_HOST: toxiproxy
+      REDIS_PORT: '16380'
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?test Redis password}
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.data.redis.autoconfigure.observation.LettuceObservationAutoConfiguration
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+    - 127.0.0.1:18081:8081
+  booking-service:
+    image: ft-bi/booking-service:local
+    build:
+      context: ../../services/booking-service
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 1g
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      SPRING_PROFILES_ACTIVE: rca-test
+      FT_FAULTS_ENABLED: ${FT_FAULTS_ENABLED:-false}
+      FT_FAULT_CONTROL_FILE: /run/fault-control/control.json
+      FT_FAULT_AUDIT_FILE: /run/fault-audit/executions.jsonl
+      BOOKING_DB_URL: jdbc:postgresql://toxiproxy:15432/booking_db?currentSchema=booking_schema
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_ADMIN_PASSWORD:?test DB password}
+      REDIS_HOST: toxiproxy
+      REDIS_PORT: '16379'
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?test Redis password}
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.boot.data.redis.autoconfigure.observation.LettuceObservationAutoConfiguration
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+    - ../../.local/rca-test/private/controls/booking-service:/run/fault-control:ro
+    - ../../.local/rca-test/private/audit/booking-service:/run/fault-audit
+    cpus: 1.0
+  payment-service:
+    image: ft-bi/payment-service:local
+    build:
+      context: ../../services/payment-service
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 1g
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/payment_db?currentSchema=payment_schema
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_ADMIN_PASSWORD:?test DB password}
+      BOOKING_SERVICE_URL: http://booking-service:8082
+      VNPAY_TMN_CODE: BI_TEST
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:?test VNPay key}
+      VNPAY_API_URL: http://toxiproxy:19091/transaction
+      VNPAY_PAYMENT_URL: http://127.0.0.1:${FT_MOCK_HTTP_PORT:-19090}/checkout
+      VNPAY_RETURN_URL: http://127.0.0.1:18081/api/v1/payments/vnpay/return
+      VNPAY_IPN_URL: http://payment-service:8083/api/v1/payments/vnpay/ipn
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+  ticket-service:
+    image: ft-bi/ticket-service:local
+    build:
+      context: ../../services/ticket-service
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 768m
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      SPRING_PROFILES_ACTIVE: rca-test
+      FT_FAULTS_ENABLED: ${FT_FAULTS_ENABLED:-false}
+      FT_FAULT_CONTROL_FILE: /run/fault-control/control.json
+      FT_FAULT_AUDIT_FILE: /run/fault-audit/executions.jsonl
+      TICKET_DB_URL: jdbc:postgresql://postgres:5432/ticket_db?currentSchema=ticket_schema
+      TICKET_DB_PASSWORD: ${TICKET_DB_ADMIN_PASSWORD:?test DB password}
+      TICKET_BUSINESS_ENABLED: 'true'
+      TICKET_LISTENERS_ENABLED: 'true'
+      TICKET_WORKERS_ENABLED: 'true'
+      MAIL_HOST: mailpit
+      MAIL_PORT: '1025'
+      MAIL_USERNAME: ''
+      MAIL_PASSWORD: ''
+      MAIL_SMTP_AUTH: 'false'
+      MAIL_SMTP_STARTTLS_ENABLE: 'false'
+      MAIL_SMTP_STARTTLS_REQUIRED: 'false'
+      TICKET_MAIL_FROM: tickets@example.test
+      TICKET_QR_ACTIVE_KEY_VERSION: bi-test-key
+      TICKET_QR_KEY_RING_LOCATION: file:/run/test-qr/key-ring.json
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+    - ../../.local/rca-test/private/qr:/run/test-qr:ro
+  user-service:
+    image: ft-bi/user-service:local
+    build:
+      context: ../../services/user-service
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 768m
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      MONGO_URI: mongodb://bi_admin:${USER_DB_ADMIN_PASSWORD:?test Mongo password}@mongodb:27017/user_db?authSource=admin
+      KEYCLOAK_IDENTITY_REALM_ID: flash-ticket-bi
+      USER_KEYCLOAK_ADMIN_BASE_URL: http://keycloak:8080
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+  event-service:
+    image: ft-bi/event-service:local
+    build:
+      context: ../../services/event-service
+      args:
+        SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 1g
+    read_only: true
+    tmpfs:
+    - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_CLIENT_ENABLED: 'true'
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: 'true'
+      ENVIRONMENT: rca-test
+      HOST_ID: local-docker
+      SERVICE_VERSION: ${SERVICE_VERSION:-local-review}
+      OTEL_AGENT_ENABLED: ${OTEL_AGENT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/flash-ticket-bi
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/certs
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      KEYCLOAK_AUDIENCE: flash-ticket-api
+      INTERNAL_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${INTERNAL_SERVICE_CLIENT_SECRET:?test internal
+        key}
+      PAYMENT_SERVICE_TOKEN_URI: http://keycloak:8080/realms/flash-ticket-bi/protocol/openid-connect/token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: '5672'
+      RABBITMQ_USERNAME: flash_ticket_app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?test broker password}
+      RABBITMQ_VHOST: /
+      OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES: 'true'
+      SPRING_PROFILES_ACTIVE: rca-test
+      FT_FAULTS_ENABLED: ${FT_FAULTS_ENABLED:-false}
+      FT_FAULT_CONTROL_FILE: /run/fault-control/control.json
+      FT_FAULT_AUDIT_FILE: /run/fault-audit/executions.jsonl
+      EVENT_DB_URL: jdbc:postgresql://toxiproxy:15433/event_db?currentSchema=event_schema
+      EVENT_DB_PASSWORD: ${EVENT_DB_ADMIN_PASSWORD:?test DB password}
+      EVENT_BOOKING_BASE_URL: http://booking-service:8082
+      EVENT_PAYMENT_BASE_URL: http://payment-service:8083
+    logging: *id003
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+    - ../../.local/rca-test/private/controls/event-service:/run/fault-control:ro
+    - ../../.local/rca-test/private/audit/event-service:/run/fault-audit
+    cpus: 1.0
+  netem-gateway:
+    image: nicolaka/netshoot:v0.14
+    profiles:
+    - netem
+    labels: *id002
+    network_mode: service:api-gateway
+    cap_add:
+    - NET_ADMIN
+    command:
+    - sleep
+    - infinity
+    mem_limit: 64m
+    logging: *id003
+  netem-payment:
+    image: nicolaka/netshoot:v0.14
+    profiles:
+    - netem
+    labels: *id002
+    network_mode: service:payment-service
+    cap_add:
+    - NET_ADMIN
+    command:
+    - sleep
+    - infinity
+    mem_limit: 64m
+    logging: *id003
+  k6:
+    image: grafana/k6:1.4.0
+    user: 10001:10001
+    profiles:
+    - load
+    labels: *id002
+    networks:
+    - ticket
+    mem_limit: 256m
+    command:
+    - run
+    - --summary-export=/output/k6-summary.json
+    - /work/workload.js
+    environment:
+      FT_TEST_ENVIRONMENT: 'true'
+      FT_GATEWAY_URL: http://api-gateway:8081
+      FT_FIXTURES_FILE: /private/fixtures.json
+      FT_BUYER_TOKEN_FILE: /private/tokens/buyer.jwt
+      FT_LOAD_RATE: ${FT_LOAD_RATE:-2}
+      FT_LOAD_SECONDS: ${FT_LOAD_SECONDS:-60}
+    volumes:
+    - ./workload.js:/work/workload.js:ro
+    - ../../.local/rca-test/private:/private:ro
+    - ../../.local/rca-test/private/probes:/output
+    logging: *id003
+volumes:
+  postgres-data:
+    name: ft-bi-postgres-data
+  mongodb-data:
+    name: ft-bi-mongodb-data
+  rabbitmq-data:
+    name: ft-bi-rabbitmq-data
+  redis-data:
+    name: ft-bi-redis-data
+networks:
+  ticket:
+    name: ft-bi-network

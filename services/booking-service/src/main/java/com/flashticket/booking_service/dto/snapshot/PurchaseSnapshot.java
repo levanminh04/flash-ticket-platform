@@ -40,7 +40,7 @@ public record PurchaseSnapshot(
     @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") String discount,
     @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") String total,
     @Valid AppliedPromotionSnapshot promotion,
-    @NotNull @Valid List<@NotNull @Valid Item> items) {
+    @NotNull List<@NotNull @Valid Item> items) {
   public PurchaseSnapshot {
     items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
   }
@@ -64,7 +64,7 @@ public record PurchaseSnapshot(
       @NotBlank @Pattern(regexp = "^[1-9][0-9]{0,18}$") String unitPrice,
       @NotBlank @Pattern(regexp = "^(0|[1-9][0-9]{0,18})$") String lineSubtotal,
       UUID sectorId,
-      @NotNull @Valid List<@NotNull @Valid SeatSelectionSnapshot> seats) {
+      @NotNull List<@NotNull @Valid SeatSelectionSnapshot> seats) {
     public Item {
       seats = seats == null ? null : Collections.unmodifiableList(new ArrayList<>(seats));
     }

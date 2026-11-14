@@ -1,0 +1,57 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  filelog:
+    include:
+    - /app-logs/*.jsonl
+    start_at: beginning
+    operators:
+    - type: json_parser
+      parse_from: body
+      parse_to: attributes
+    - type: copy
+      from: attributes.serviceName
+      to: resource["service.name"]
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+  batch:
+    timeout: 1s
+exporters:
+  file/traces:
+    path: /output/traces.jsonl
+  file/metrics:
+    path: /output/metrics.jsonl
+  file/logs:
+    path: /output/logs.jsonl
+service:
+  pipelines:
+    traces:
+      receivers:
+      - otlp
+      processors:
+      - memory_limiter
+      - batch
+      exporters:
+      - file/traces
+    metrics:
+      receivers:
+      - otlp
+      processors:
+      - memory_limiter
+      - batch
+      exporters:
+      - file/metrics
+    logs:
+      receivers:
+      - filelog
+      processors:
+      - memory_limiter
+      - batch
+      exporters:
+      - file/logs

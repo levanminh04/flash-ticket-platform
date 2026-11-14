@@ -7,6 +7,7 @@ import com.flashticket.ticket_service.contract.TicketContracts.Envelope;
 import com.flashticket.ticket_service.contract.TicketContracts.EventCancellation;
 import com.flashticket.ticket_service.contract.TicketContracts.InvalidContractException;
 import com.flashticket.ticket_service.contract.TicketContracts.IssueTickets;
+import com.flashticket.ticket_service.observability.RabbitTelemetry;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.util.function.Consumer;
@@ -62,20 +63,28 @@ public class TicketBusinessListeners {
   private <T> void consume(
       Message message, Channel channel, Class<T> dataType, Consumer<Envelope<T>> transaction)
       throws IOException {
-    long tag = message.getMessageProperties().getDeliveryTag();
-    try {
-      transaction.accept(TicketContracts.decode(json, message.getBody(), dataType));
-    } catch (InvalidContractException ex) {
-      // Fixed diagnostic code: payload, broker headers and exception text stay inside the boundary.
-      LOG.warn("Ticket business message rejected; code=INVALID_CONTRACT");
-      channel.basicReject(tag, false);
-      return;
-    } catch (RuntimeException ex) {
-      LOG.warn("Ticket business message deferred; failureType={}", ex.getClass().getSimpleName());
-      channel.basicNack(tag, false, true);
-      return;
+    try (var telemetry = new RabbitTelemetry(message)) {
+      long tag = message.getMessageProperties().getDeliveryTag();
+      try {
+        var decoded = TicketContracts.decode(json, message.getBody(), dataType);
+        telemetry.context(decoded.messageId(), decoded.correlationId());
+        transaction.accept(decoded);
+      } catch (InvalidContractException ex) {
+        // Fixed diagnostic code: payload, broker headers and exception text stay inside the
+        // boundary.
+        LOG.warn("Ticket business message rejected; code=INVALID_CONTRACT");
+        channel.basicReject(tag, false);
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        return;
+      } catch (RuntimeException ex) {
+        LOG.warn("Ticket business message deferred; failureType={}", ex.getClass().getSimpleName());
+        channel.basicNack(tag, false, true);
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        return;
+      }
+      // Keep ACK outside the business catch: a transport failure after commit must not send a NACK.
+      channel.basicAck(tag, false);
+      telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
-    // Keep ACK outside the business catch: a transport failure after commit must not send a NACK.
-    channel.basicAck(tag, false);
   }
 }

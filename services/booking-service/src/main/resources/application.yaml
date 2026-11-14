@@ -112,6 +112,21 @@ spring:
 logging:
   charset:
     console: UTF-8
+  level:
+    root: WARN
+    com.flashticket: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.netflix: WARN
+    io.lettuce: WARN
+    org.apache: WARN
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.flashticket.booking_service.observability.LogFields
+      stacktrace:
+        printer: com.flashticket.booking_service.observability.SafeStackTracePrinter
 
 eureka:
   client:

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "leaseId",
+    "expiresAt",
+    "action",
+    "value",
+    "subject"
+  ],
+  "properties": {
+    "leaseId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "action": {
+      "enum": [
+        "off",
+        "http.error",
+        "http.delay",
+        "pool.hold",
+        "ticket.fail"
+      ]
+    },
+    "targetId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "value": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30000
+    }
+  }
+}

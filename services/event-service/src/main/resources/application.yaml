@@ -89,6 +89,16 @@ event:
     maximum-retry: ${EVENT_OUTBOX_MAXIMUM_RETRY:5m}
 
 logging:
+  charset:
+    console: UTF-8
+  level:
+    root: WARN
+    com.flashticket: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.netflix: WARN
+    io.lettuce: WARN
+    org.apache: WARN
   structured:
     format:
       console: logstash

@@ -1,9 +1,11 @@
 package com.flashticket.ticket_service.worker;
 
+import com.flashticket.ticket_service.observability.BusinessTelemetry;
 import com.flashticket.ticket_service.qr.QrUnavailableException;
 import jakarta.mail.MessagingException;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -141,21 +143,54 @@ public final class TicketDeliveryWorker {
   }
 
   private int complete(Job job, String outcome, String failure) {
-    return jdbc.update(
-        "UPDATE ticket_schema.tbl_ticket_deliveries SET finished_at=clock_timestamp(),outcome=?,failure_code=? WHERE id=? AND attempts=? AND finished_at IS NULL",
-        outcome,
-        failure,
-        job.id(),
-        job.attempt());
+    int changed =
+        jdbc.update(
+            "UPDATE ticket_schema.tbl_ticket_deliveries SET finished_at=clock_timestamp(),outcome=?,failure_code=? WHERE id=? AND attempts=? AND finished_at IS NULL",
+            outcome,
+            failure,
+            job.id(),
+            job.attempt());
+    if (changed == 1)
+      BusinessTelemetry.committed(
+          "delivery",
+          Map.of(
+              "orderId",
+              job.order().toString(),
+              "correlationId",
+              job.order().toString(),
+              "retryCount",
+              job.attempt(),
+              "outcome",
+              outcome.equals("DELIVERED") ? "SUCCESS" : "REJECTED"),
+          "PENDING",
+          outcome,
+          failure == null ? "SMTP_ACCEPTED" : failure);
+    return changed;
   }
 
   private void retry(Job job, String code) {
-    jdbc.update(
-        "UPDATE ticket_schema.tbl_ticket_deliveries SET failure_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE id=? AND attempts=? AND finished_at IS NULL",
-        code,
-        TicketOutboxPublisher.retryMillis(job.attempt()),
-        job.id(),
-        job.attempt());
+    int changed =
+        jdbc.update(
+            "UPDATE ticket_schema.tbl_ticket_deliveries SET failure_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE id=? AND attempts=? AND finished_at IS NULL",
+            code,
+            TicketOutboxPublisher.retryMillis(job.attempt()),
+            job.id(),
+            job.attempt());
+    if (changed == 1)
+      BusinessTelemetry.committed(
+          "delivery",
+          Map.of(
+              "orderId",
+              job.order().toString(),
+              "correlationId",
+              job.order().toString(),
+              "retryCount",
+              job.attempt(),
+              "outcome",
+              "RETRY"),
+          "PENDING",
+          "PENDING",
+          code);
   }
 
   private String link(UUID order) {

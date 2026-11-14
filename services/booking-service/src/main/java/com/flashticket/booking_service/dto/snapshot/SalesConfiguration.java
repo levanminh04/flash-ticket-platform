@@ -32,10 +32,10 @@ public record SalesConfiguration(
     @NotNull Instant saleStartsAt,
     @NotNull Instant saleEndsAt,
     @Positive int purchaseLimit,
-    @NotNull @Valid List<@NotNull @Valid TicketTypeConfig> ticketTypes,
-    @NotNull @Valid List<@NotNull @Valid SectorConfig> sectors,
-    @NotNull @Valid List<@NotNull @Valid SeatConfig> seats,
-    @NotNull @Valid List<@NotNull @Valid PromotionConfig> promotions) {
+    @NotNull List<@NotNull @Valid TicketTypeConfig> ticketTypes,
+    @NotNull List<@NotNull @Valid SectorConfig> sectors,
+    @NotNull List<@NotNull @Valid SeatConfig> seats,
+    @NotNull List<@NotNull @Valid PromotionConfig> promotions) {
   public SalesConfiguration {
     ticketTypes = immutableCopy(ticketTypes);
     sectors = immutableCopy(sectors);

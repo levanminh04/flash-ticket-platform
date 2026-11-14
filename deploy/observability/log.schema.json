@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlashTicket B16 application log",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "timestamp",
+    "severity",
+    "serviceName",
+    "serviceVersion",
+    "instanceId",
+    "environment",
+    "hostId",
+    "eventName",
+    "operation",
+    "outcome",
+    "loggerName",
+    "message"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT.*Z$"
+    },
+    "severity": {
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARN",
+        "ERROR"
+      ]
+    },
+    "serviceName": {
+      "type": "string"
+    },
+    "serviceVersion": {
+      "type": "string"
+    },
+    "instanceId": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string"
+    },
+    "hostId": {
+      "type": "string"
+    },
+    "eventName": {
+      "type": "string"
+    },
+    "operation": {
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "SUCCESS",
+        "REJECTED",
+        "RETRY",
+        "FAILED",
+        "UNKNOWN"
+      ]
+    },
+    "loggerName": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "correlationId": {
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "traceId": {
+      "type": "string",
+      "pattern": "^(?!0{32}$)[0-9a-f]{32}$"
+    },
+    "spanId": {
+      "type": "string",
+      "pattern": "^(?!0{16}$)[0-9a-f]{16}$"
+    },
+    "orderId": {
+      "type": "string"
+    },
+    "paymentAttemptId": {
+      "type": "string"
+    },
+    "chargeId": {
+      "type": "string"
+    },
+    "refundId": {
+      "type": "string"
+    },
+    "issuanceId": {
+      "type": "string"
+    },
+    "ticketId": {
+      "type": "string"
+    },
+    "messageId": {
+      "type": "string"
+    },
+    "causationId": {
+      "type": "string"
+    },
+    "sagaId": {
+      "type": "string"
+    },
+    "stateBefore": {
+      "type": "string"
+    },
+    "stateAfter": {
+      "type": "string"
+    },
+    "reasonCode": {
+      "type": "string"
+    },
+    "configVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "errorType": {
+      "type": "string"
+    },
+    "errorCode": {
+      "type": "string"
+    },
+    "eventId": {
+      "type": "string"
+    },
+    "actorSubject": {
+      "type": "string"
+    },
+    "httpMethod": {
+      "type": "string"
+    },
+    "routeId": {
+      "type": "string"
+    },
+    "dependencyService": {
+      "type": "string"
+    },
+    "queue": {
+      "type": "string"
+    },
+    "stackTrace": {
+      "type": "string"
+    },
+    "durationMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "retryCount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "httpStatus": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    }
+  }
+}

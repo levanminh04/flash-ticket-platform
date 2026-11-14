@@ -38,16 +38,21 @@ spring:
 logging:
   charset:
     console: UTF-8
+  level:
+    root: WARN
+    com.flashticket: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.netflix: WARN
+    io.lettuce: WARN
+    org.apache: WARN
   structured:
     format:
       console: logstash
     json:
       customizer: com.flashticket.user_service.observability.UserLogCustomizer
-      # Native Boot filtering/renaming; never include arbitrary MDC fields.
-      include: timestamp,level,message,stack_trace,schemaVersion,serviceName,serviceVersion,instanceId,environment,eventName,operation,outcome,errorCode,errorType,httpMethod,httpStatus,correlationId,requestId,orderId,messageId,causationId,sagaId,paymentAttemptId,chargeId,refundId,issuanceId,ticketId,traceId,spanId,stateBefore,stateAfter,reasonCode,durationMs,retryCount,configVersion
-      rename:
-        level: severity
-        stack_trace: stackTrace
+      stacktrace:
+        printer: com.flashticket.user_service.observability.SafeStackTracePrinter
 
 user:
   images:

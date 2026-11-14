@@ -7,7 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -74,6 +77,7 @@ public final class TicketOutboxPublisher {
       Pending message = claim();
       if (message == null) break;
       String failure = null;
+      int previouslyPublished = published;
       try {
         if (message.schema() != 1) throw new IllegalArgumentException("Invalid stored message");
         var data = json.readTree(message.data());
@@ -118,9 +122,7 @@ public final class TicketOutboxPublisher {
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
         failure = "INTERRUPTED";
-      } catch (java.util.concurrent.ExecutionException
-          | java.util.concurrent.TimeoutException
-          | RuntimeException unavailable) {
+      } catch (ExecutionException | TimeoutException | RuntimeException unavailable) {
         failure = "BROKER_UNAVAILABLE";
       }
       if (failure != null)
@@ -130,6 +132,22 @@ public final class TicketOutboxPublisher {
             retryMillis(message.attempt()),
             message.id(),
             message.attempt());
+      LoggerFactory.getLogger(TicketOutboxPublisher.class)
+          .atInfo()
+          .addKeyValue("eventName", "ticket.outbox.result")
+          .addKeyValue("operation", "outbox-publish")
+          .addKeyValue(
+              "outcome",
+              failure != null ? "RETRY" : published > previouslyPublished ? "SUCCESS" : "UNKNOWN")
+          .addKeyValue(
+              "reasonCode",
+              failure != null
+                  ? failure
+                  : published > previouslyPublished ? "BROKER_CONFIRMED" : "LEASE_CHANGED")
+          .addKeyValue("messageId", message.id().toString())
+          .addKeyValue("correlationId", message.correlation().toString())
+          .addKeyValue("retryCount", message.attempt())
+          .log("Outbox delivery result");
       if (Thread.currentThread().isInterrupted()) break;
     }
     return published;

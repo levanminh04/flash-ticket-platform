@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -104,6 +105,15 @@ public final class KeycloakAdminClient implements KeycloakRoles {
       throw unavailable();
     } finally {
       sample.stop(Timer.builder("user.keycloak.admin").tag("outcome", outcome).register(metrics));
+      LoggerFactory.getLogger(KeycloakAdminClient.class)
+          .atInfo()
+          .addKeyValue("eventName", "user.keycloak-admin.result")
+          .addKeyValue("operation", "role-grant-confirm")
+          .addKeyValue("outcome", "success".equals(outcome) ? "SUCCESS" : "UNKNOWN")
+          .addKeyValue(
+              "reasonCode",
+              "success".equals(outcome) ? "KEYCLOAK_CONFIRMED" : "KEYCLOAK_UNCONFIRMED")
+          .log("Keycloak Admin operation finished");
     }
   }
 
