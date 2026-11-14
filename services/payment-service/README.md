@@ -19,6 +19,8 @@ có trong dự án, theo [hướng dẫn springdoc](https://springdoc.org/#getti
 
 Payment xử lý thanh toán VNPay, điều phối phát vé qua RabbitMQ, hoàn tiền và đối soát. API đọc trạng thái kiểm tra JWT và quyền sở hữu đơn. Cấu hình Swagger ở trên dùng cho các API Payment, Finance và Refund.
 
+Refund hiện xử lý nội bộ trong DB vì VNPay chưa hỗ trợ hoàn tiền cho môi trường đang dùng. Worker đánh dấu refund `SUCCEEDED`, ghi attempt với outcome `DB_ONLY`, cập nhật Saga và tiến độ hoàn tiền sự kiện trong cùng transaction. Cả refund mới và refund cũ đang `PROCESSING` đều dùng luồng này. Refund `FAILED` cần admin retry hoặc xác nhận thủ công. Trạng thái hoàn tất chỉ phản ánh cập nhật nội bộ, không thực hiện chuyển tiền qua VNPay.
+
 `GET /api/v1/orders/{orderId}/payment` trả `ApiResponse<PaymentView>`. `POST /api/v1/payments` tạo URL VNPay, hai GET `/api/v1/payments/vnpay/ipn` và `/api/v1/payments/vnpay/return` nhận callback. PaymentController gọi PaymentService; dữ liệu được đọc/ghi qua repository cục bộ.
 
 ## VNPay chuyển từ Cinema
