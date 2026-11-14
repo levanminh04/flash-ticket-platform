@@ -136,3 +136,60 @@ Services có trường `kind`: `maven` cho service Spring/Keycloak, `node` cho f
 - Image `frontend` là nginx (`nginxinc/nginx-unprivileged`) phục vụ `dist/` đã build, cổng 5173, không có env runtime (không `env/frontend.env`, không secret `ENV_FRONTEND`).
 - `VITE_*` được build cứng vào bundle. Lấy từ **repo Variables** (`vars.VITE_API_GATEWAY_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`), không phải secret. Đổi giá trị thì phải chạy `action=deploy` (không phải `restart`) để build lại.
 - Workflow và script bỏ qua bước ghi/kiểm tra env khi service là frontend (trường `kind: node` trong `.github/services.json`).
+
+
+## Gói a–i: đầu vào vận hành sau khi duyệt riêng
+
+Bản sửa local không cập nhật Secrets/Variables, tài khoản hay server. Các lệnh dưới
+đây mô tả bước người vận hành hoặc agent được ủy quyền sẽ làm sau khi Minh duyệt
+riêng đúng thao tác. Chi tiết môi trường thử ở `../rca-test/README.md`; bản đồ file
+và bằng chứng kiểm ở `../observability/README.md`.
+
+1. **GitHub:** tài khoản có quyền ghi Actions Secrets/Variables của repo, chạy Actions
+   và xuất package GHCR; Environment `production` cần reviewer nếu cấu hình yêu cầu.
+   Secret SSH là `FT84_SSH_PRIVATE_KEY`; Variables là `FT84_SSH_HOST`,
+   `FT84_SSH_USER`, `FT84_SSH_PORT`, `FT84_SSH_KNOWN_HOSTS`. Known-host fingerprint
+   phải nhận qua kênh tin cậy; không tắt StrictHostKeyChecking.
+2. **Env từng ứng dụng:** cập nhật đúng 8 secret cấp repo trong bảng phía trên:
+   `ENV_DISCOVERY_SERVER`, `ENV_API_GATEWAY`, `ENV_USER_SERVICE`, `ENV_EVENT_SERVICE`,
+   `ENV_TICKET_SERVICE`, `ENV_BOOKING_SERVICE`, `ENV_PAYMENT_SERVICE`, `ENV_KEYCLOAK`.
+   Dùng `.env.example` tại từng ứng dụng làm tên đầu vào; thay bằng thông tin thật
+   ở nơi riêng. Không đưa secret value vào diff hay log hỗ trợ.
+3. **Java agent:** đặt `OTEL_AGENT_ENABLED=true`, `ENVIRONMENT`, `HOST_ID`,
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`,
+   `OTEL_TRACES_SAMPLER`, `OTEL_METRICS_EXPORTER=otlp`, `OTEL_LOGS_EXPORTER=none`.
+   `SERVICE_NAME` do image cung cấp, `SERVICE_VERSION` do CI build bằng github.sha,
+   `INSTANCE_ID` sinh lại mỗi lần container chạy; bỏ override version cũ trong env
+   để không làm sai identity. Chuyển identity từ các biến EVENT_*/USER_*/TICKET_*
+   cũ sang bộ tên chung. Không khai lặp identity trong `OTEL_RESOURCE_ATTRIBUTES`.
+   Bỏ `-javaagent:` cũ khỏi `JAVA_TOOL_OPTIONS` để tránh agent kép; JVM options khác giữ.
+   Booking/Gateway giữ `SPRING_AUTOCONFIGURE_EXCLUDE` cho LettuceObservationAutoConfiguration;
+   Event/Booking/Payment/Ticket đặt
+   `OTEL_INSTRUMENTATION_RABBITMQ_EXPERIMENTAL_SPAN_ATTRIBUTES=true`.
+4. **Keycloak:** `KC_LOG_CONSOLE_OUTPUT=json`, `KC_LOG_CONSOLE_INCLUDE_TRACE=true`,
+   `KC_TRACING_ENABLED=true`, `KC_TRACING_SERVICE_NAME=keycloak`,
+   `KC_TRACING_ENDPOINT` (OTLP gRPC collector), `KC_TRACING_SAMPLER_TYPE=parentbased_traceidratio`,
+   `KC_TRACING_SAMPLER_RATIO` theo tỷ lệ thu đã duyệt. Image build bật native tracing;
+   không gắn Java agent Spring vào Keycloak. Các biến DB/hostname/broker ở bảng trên
+   vẫn phải có. Trace ID chỉ có trên dòng thuộc request có span.
+5. **Server:** SSH key được cấp cho đúng user, đường dẫn `/opt/flash-ticket-app`
+   có compose/env/state và script như quy trình hiện có; Docker/Compose, quyền kéo
+   package GHCR, endpoint OTLP và mạng tới DB/Redis/RabbitMQ/Keycloak phải hoạt động.
+   Cấp file QR key-ring đúng owner 10001/mode 0440. Chưa biết credentials/endpoint
+   thật thì giữ OPEN; không suy từ file mẫu hay tự cấp thêm quyền tài khoản.
+6. **PostgreSQL:** trên host hạ tầng quản lý file env có
+   `PG_LOG_MIN_DURATION_STATEMENT=500`, `PG_LOG_LOCK_WAITS=on`,
+   `PG_DEADLOCK_TIMEOUT=1s`; compose tắt giá trị bind parameter trong diagnostic log.
+   Chỉ áp bằng lượt recreate đã duyệt. Init SQL mới chỉ tự chạy khi PGDATA rỗng;
+   server có dữ liệu cần kiểm grants và áp hai SQL reader qua kế hoạch riêng,
+   không xóa volume để ép init lại.
+7. **Nghiệm thu sau deploy:** lưu digest đa kiến trúc, chạy đúng digest trên x86 và
+   ARM; kiểm identity/log JSON trong Loki, span Redis và queue RabbitMQ, slow/lock
+   PostgreSQL; tải một giờ kiểm OOM/restart/RSS. Có config/build local không tự đạt
+   các điều kiện nghiệm thu runtime này.
+
+Agent có thể thực hiện các bước GitHub/SSH khi có công cụ đăng nhập, quyền phù hợp,
+kết nối mạng và phê duyệt riêng. Phiên local hiện có SSH nhưng chưa có `gh`;
+có thể chuẩn bị CLI/API sau khi được duyệt. MFA, cấp quyền tổ chức hoặc cung cấp
+khóa/chứng thực tin cậy vẫn có thể cần chủ tài khoản tương tác. Cấp quyền không
+thay cho phê duyệt commit/push, cập nhật GitHub hay deploy.

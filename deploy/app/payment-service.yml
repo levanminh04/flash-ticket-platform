@@ -5,7 +5,7 @@ services:
       service: common
     image: ${IMAGE:?image digest required}
     env_file: ../env/payment-service.env
-    mem_limit: 512m
+    mem_limit: 1g
 
   ngrok:
     # Agent 3.39.13; pinned so CLI and config behaviour stay reproducible.

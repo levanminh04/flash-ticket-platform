@@ -8,6 +8,7 @@ import com.flashticket.booking_service.entity.PromotionUsage;
 import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.exception.*;
 import com.flashticket.booking_service.mapper.OrderMapper;
+import com.flashticket.booking_service.observability.BusinessTelemetry;
 import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
@@ -148,6 +149,12 @@ public class PromotionServiceImpl implements PromotionService {
     promotionUsageRepository.save(usage);
     promotionInventoryRepository.save(lockedPromotion);
     orderRepository.save(lockedOrder);
+    BusinessTelemetry.committed(
+        "promotion",
+        lockedOrder.getId(),
+        lockedOrder.getLifecycleState(),
+        lockedOrder.getLifecycleState(),
+        "PROMOTION_APPLIED");
     applicationEventPublisher.publishEvent(
         new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     return orderMapper.toView(lockedOrder);

@@ -17,6 +17,16 @@ services:
       - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
       - -c
       - password_encryption=scram-sha-256
+      - -c
+      - log_min_duration_statement=${PG_LOG_MIN_DURATION_STATEMENT:-500}
+      - -c
+      - log_lock_waits=${PG_LOG_LOCK_WAITS:-on}
+      - -c
+      - deadlock_timeout=${PG_DEADLOCK_TIMEOUT:-1s}
+      - -c
+      - log_parameter_max_length=0
+      - -c
+      - log_parameter_max_length_on_error=0
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the repository-root .env}

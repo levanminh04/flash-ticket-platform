@@ -19,6 +19,7 @@ import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.hashing.ContractHashService;
 import com.flashticket.payment_service.mapper.*;
+import com.flashticket.payment_service.observability.BusinessTelemetry;
 import com.flashticket.payment_service.repository.*;
 import com.flashticket.payment_service.util.VNPayUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -139,14 +140,32 @@ public class PaymentService {
             requestHash);
     payment.setPaymentUrl(buildVNPayUrl(snapshot, payment, clientIp));
     var saved = attempts.save(payment);
-    log.info("Payment created: orderId={}, attemptId={}", snapshot.getOrderId(), saved.getId());
+    BusinessTelemetry.committed(
+        "attempt-created",
+        Map.of(
+            "orderId",
+            snapshot.getOrderId().toString(),
+            "correlationId",
+            snapshot.getOrderId().toString(),
+            "paymentAttemptId",
+            saved.getId().toString()),
+        "ABSENT",
+        saved.getState(),
+        "PAYMENT_ATTEMPT_CREATED");
     return starts.toDto(saved, incomingPurchase.expiresAt());
   }
 
   @Transactional
   public String handleIPN(Map<String, String> params) {
-    if (!VNPayUtil.verifySecureHash(params, vnPayConfig.getHashSecret()))
+    if (!VNPayUtil.verifySecureHash(params, vnPayConfig.getHashSecret())) {
+      log.atInfo()
+          .addKeyValue("eventName", "payment.callback.rejected")
+          .addKeyValue("operation", "callback-validate")
+          .addKeyValue("outcome", "REJECTED")
+          .addKeyValue("reasonCode", "INVALID_SIGNATURE")
+          .log("Payment callback rejected");
       return "{\"RspCode\":\"97\",\"Message\":\"Invalid signature\"}";
+    }
     UUID attemptId;
     if (params.get("vnp_TxnRef") == null)
       return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
@@ -183,6 +202,7 @@ public class PaymentService {
         || transactionStatus == null
         || !transactionStatus.matches("[0-9]{2}"))
       return "{\"RspCode\":\"99\",\"Message\":\"Invalid response\"}";
+    var previousState = payment.getState();
     boolean success = "00".equals(responseCode) && "00".equals(transactionStatus);
     boolean failed =
         "02".equals(transactionStatus) && !"00".equals(responseCode) && !"07".equals(responseCode);
@@ -222,7 +242,18 @@ public class PaymentService {
             : failed ? PaymentAttemptState.FAILED : PaymentAttemptState.UNKNOWN);
     payment.setFinishedAt(payment.getState() == PaymentAttemptState.UNKNOWN ? null : Instant.now());
     attempts.save(payment);
-    log.info("IPN processed: attemptId={}, state={}", payment.getId(), payment.getState());
+    BusinessTelemetry.committed(
+        "callback-confirmed",
+        Map.of(
+            "orderId",
+            payment.getOrderId().toString(),
+            "correlationId",
+            payment.getOrderId().toString(),
+            "paymentAttemptId",
+            payment.getId().toString()),
+        previousState,
+        payment.getState(),
+        "CALLBACK_VERIFIED");
     return "{\"RspCode\":\"00\",\"Message\":\"Confirm success\"}";
   }
 

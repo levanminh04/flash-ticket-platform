@@ -1,0 +1,32 @@
+[
+  {
+    "name": "booking-jdbc",
+    "listen": "0.0.0.0:15432",
+    "upstream": "postgres:5432",
+    "enabled": true
+  },
+  {
+    "name": "event-jdbc",
+    "listen": "0.0.0.0:15433",
+    "upstream": "postgres:5432",
+    "enabled": true
+  },
+  {
+    "name": "booking-redis",
+    "listen": "0.0.0.0:16379",
+    "upstream": "redis:6379",
+    "enabled": true
+  },
+  {
+    "name": "gateway-redis",
+    "listen": "0.0.0.0:16380",
+    "upstream": "redis:6379",
+    "enabled": true
+  },
+  {
+    "name": "payment-vnpay",
+    "listen": "0.0.0.0:19091",
+    "upstream": "mock-vnpay:9090",
+    "enabled": true
+  }
+]

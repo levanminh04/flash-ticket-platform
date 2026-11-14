@@ -80,8 +80,8 @@ class BundledConfigurationTests {
                   .isEqualTo("never");
               assertThat(environment.getProperty("logging.structured.json.customizer"))
                   .isEqualTo("com.flashticket.user_service.observability.UserLogCustomizer");
-              assertThat(environment.getProperty("logging.structured.json.include"))
-                  .contains("correlationId");
+              assertThat(environment.getProperty("logging.structured.format.console"))
+                  .isEqualTo("logstash");
               assertThat(environment.getProperty("user.keycloak-admin.realm"))
                   .isEqualTo("flash-ticket");
             });

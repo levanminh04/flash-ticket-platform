@@ -5,4 +5,4 @@ services:
       service: common
     image: ${IMAGE:?image digest required}
     env_file: ../env/event-service.env
-    mem_limit: 512m
+    mem_limit: 1g

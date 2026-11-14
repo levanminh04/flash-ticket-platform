@@ -3,3 +3,4 @@
 !.dockerignore
 !target/
 !target/api-gateway-*.jar
+!docker-entrypoint.sh

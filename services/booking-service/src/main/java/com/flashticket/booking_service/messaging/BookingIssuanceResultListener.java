@@ -4,9 +4,11 @@ import com.flashticket.booking_service.dto.message.BookingIssuanceResult;
 import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.observability.RabbitTelemetry;
 import com.flashticket.booking_service.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +18,14 @@ public class BookingIssuanceResultListener {
   private final OrderService orderService;
 
   @RabbitListener(queues = "booking.tickets-issued.q", ackMode = "AUTO", concurrency = "1")
+  public void handleTicketsIssuedDelivery(Envelope<BookingIssuanceResult> message, Message raw) {
+    try (var telemetry = new RabbitTelemetry(raw)) {
+      if (message != null) telemetry.context(message.messageId(), message.correlationId());
+      handleTicketsIssued(message);
+      telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
+    }
+  }
+
   public void handleTicketsIssued(Envelope<BookingIssuanceResult> message) {
     if (message == null
         || !"ticket.issued.v1".equals(message.messageType())
@@ -37,6 +47,14 @@ public class BookingIssuanceResultListener {
   }
 
   @RabbitListener(queues = "booking.issuance-failed.q", ackMode = "AUTO", concurrency = "1")
+  public void handleIssuanceFailedDelivery(Envelope<BookingIssuanceResult> message, Message raw) {
+    try (var telemetry = new RabbitTelemetry(raw)) {
+      if (message != null) telemetry.context(message.messageId(), message.correlationId());
+      handleIssuanceFailed(message);
+      telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
+    }
+  }
+
   public void handleIssuanceFailed(Envelope<BookingIssuanceResult> message) {
     if (message == null
         || !"booking.issuance-failed.v1".equals(message.messageType())
