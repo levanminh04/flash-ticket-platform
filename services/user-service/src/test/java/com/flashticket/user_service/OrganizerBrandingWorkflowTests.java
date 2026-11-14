@@ -77,8 +77,12 @@ class OrganizerBrandingWorkflowTests {
   }
 
   private MockMultipartFile image() throws Exception {
+    return image(2, 2);
+  }
+
+  private MockMultipartFile image(int width, int height) throws Exception {
     var output = new ByteArrayOutputStream();
-    ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "png", output);
+    ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", output);
     return new MockMultipartFile("file", "image.png", "image/png", output.toByteArray());
   }
 
@@ -90,7 +94,10 @@ class OrganizerBrandingWorkflowTests {
   void uploadedBrandingIsPublicAndSurvivesProjectionRecoveryWithoutEditingApplication()
       throws Exception {
     for (String kind : java.util.List.of("logo", "banner")) {
-      mvc.perform(multipart("/api/v1/organizers/me/" + kind).file(image()).with(organizer("owner")))
+      mvc.perform(
+              multipart("/api/v1/organizers/me/" + kind)
+                  .file(kind.equals("banner") ? image(16, 9) : image())
+                  .with(organizer("owner")))
           .andExpect(status().isOk());
     }
     store.project(active);

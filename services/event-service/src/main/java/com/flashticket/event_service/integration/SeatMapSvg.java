@@ -3,14 +3,18 @@ package com.flashticket.event_service.integration;
 import com.flashticket.event_service.web.EventProblem;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Set;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 /** Accepts self-contained vector artwork and strips embedded editor metadata. */
@@ -106,7 +110,7 @@ final class SeatMapSvg {
       transformers.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
       transformers.newTransformer().transform(new DOMSource(root), new StreamResult(output));
       return output.toByteArray();
-    } catch (Exception ex) {
+    } catch (IOException | ParserConfigurationException | SAXException | TransformerException ex) {
       throw invalid();
     }
   }
