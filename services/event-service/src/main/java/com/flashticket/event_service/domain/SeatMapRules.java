@@ -105,39 +105,44 @@ public final class SeatMapRules {
     shape(g.shape());
     var l = g.seatLayout();
     require(
-        Set.of("grid", "arc", "fan").contains(Objects.toString(l.mode(), ""))
-            && positive(l.rows())
-            && positive(l.seatsPerRow())
-            && l.rowStartCharCode() != null
-            && Character.isValidCodePoint(l.rowStartCharCode())
-            && l.seatStartNumber() != null
-            && l.seatStartNumber() >= 0,
+        Set.of("grid", "arc", "fan", "table").contains(Objects.toString(l.mode, ""))
+            && positive(l.rows)
+            && positive(l.seatsPerRow)
+            && l.rowStartCharCode != null
+            && Character.isValidCodePoint(l.rowStartCharCode)
+            && l.seatStartNumber != null
+            && l.seatStartNumber >= 0,
         "seatLayout");
+    var gapX = l.gapX;
+    var gapY = l.gapY;
+    var paddingX = l.paddingX;
+    var paddingY = l.paddingY;
+    var seatRadius = l.seatRadius;
+    if (gapX == null
+        || gapY == null
+        || paddingX == null
+        || paddingY == null
+        || l.offsetX == null
+        || l.offsetY == null
+        || seatRadius == null) {
+      throw EventProblem.invalid("seatLayout");
+    }
     require(
-        l.gapX() != null
-            && l.gapY() != null
-            && l.paddingX() != null
-            && l.paddingY() != null
-            && l.offsetX() != null
-            && l.offsetY() != null
-            && l.seatRadius() != null,
+        gapX.signum() >= 0
+            && gapY.signum() >= 0
+            && paddingX.signum() >= 0
+            && paddingY.signum() >= 0
+            && seatRadius.signum() > 0,
         "seatLayout");
-    require(
-        l.gapX().signum() >= 0
-            && l.gapY().signum() >= 0
-            && l.paddingX().signum() >= 0
-            && l.paddingY().signum() >= 0
-            && l.seatRadius().signum() > 0,
-        "seatLayout");
+    optionalChoice(l.rowLabelPosition, Set.of("none", "left", "right", "both"));
+    optionalChoice(l.rowAlignment, Set.of("left", "center", "right"));
+    optionalChoice(l.outlineMode, Set.of("auto", "full", "none"));
+    for (var value : new BigDecimal[] {l.rotation, l.curve, l.stretch}) {
+      require(value == null || Double.isFinite(value.doubleValue()), "seatLayout");
+    }
     for (var number :
-        List.of(
-            l.gapX(),
-            l.gapY(),
-            l.paddingX(),
-            l.paddingY(),
-            l.offsetX(),
-            l.offsetY(),
-            l.seatRadius())) require(Double.isFinite(number.doubleValue()), "seatLayout");
+        List.of(l.gapX, l.gapY, l.paddingX, l.paddingY, l.offsetX, l.offsetY, l.seatRadius))
+      require(Double.isFinite(number.doubleValue()), "seatLayout");
   }
 
   public static void shape(JsonNode shape) {
@@ -163,7 +168,13 @@ public final class SeatMapRules {
                   "endAngle");
           default -> throw EventProblem.invalid("shapeType");
         };
-    exact(shape, fields);
+    for (String field : fields) require(shape.has(field), "shape.fields");
+    shape
+        .propertyNames()
+        .forEach(
+            field -> {
+              if (!fields.contains(field)) validateShapePresentation(field, shape.get(field));
+            });
     var bounds = shape.get("bounds");
     exact(bounds, Set.of("x", "y", "width", "height"));
     number(bounds.get("x"));
@@ -188,6 +199,25 @@ public final class SeatMapRules {
               && start != end
               && Math.abs(end - start) <= 360,
           "shape.angles");
+    }
+  }
+
+  private static void optionalChoice(String value, Set<String> allowed) {
+    require(value == null || allowed.contains(value), "seatLayout");
+  }
+
+  private static void validateShapePresentation(String field, JsonNode value) {
+    switch (field) {
+      case "stylePreset", "fill", "subtitle" -> require(value.isString(), field);
+      case "hideSubtitle", "decorative" -> require(value.isBoolean(), field);
+      case "cornerRadius", "labelWidth" -> require(number(value) >= 0, field);
+      case "labelRotation" -> number(value);
+      case "labelPosition" -> {
+        exact(value, Set.of("x", "y"));
+        number(value.get("x"));
+        number(value.get("y"));
+      }
+      default -> throw EventProblem.invalid("shape.fields");
     }
   }
 
