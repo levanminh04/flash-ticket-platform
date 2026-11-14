@@ -29,56 +29,91 @@ if [[ -f $revision_root/current ]]; then
 fi
 
 apply_revision() {
-  local revision=$1 resource
+  local revision=$1 resource manifest
   # Secret diagnostics may include values; never forward their raw stderr.
   for resource in "$revision"/secret*.json; do
     [[ -f $resource ]] || continue
     kubectl apply -f "$resource" >/dev/null 2>"$revision/secret-apply.error" || { echo 'SECRET_APPLY_FAILED' >&2; return 1; }
   done
-  for resource in configmap service ingress deployment; do
+  if [[ -f $revision/hpa.json ]]; then
+    kubectl -n "$namespace" get deployment "$service" --ignore-not-found -o json > "$revision/replica-ownership-live.json" || return 1
+    python3 - "$revision" <<'PY' || return 1
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+deployment = json.loads((root / 'deployment.json').read_text())
+# HPA owns replicas, including when restoring an older app revision.
+deployment['spec'].pop('replicas', None)
+(root / 'deployment-effective.json').write_text(json.dumps(deployment))
+ownership = root / 'replica-ownership.json'
+ownership.unlink(missing_ok=True)
+live_text = (root / 'replica-ownership-live.json').read_text().strip()
+live = json.loads(live_text) if live_text else {}
+last = live.get('metadata', {}).get('annotations', {}).get('kubectl.kubernetes.io/last-applied-configuration')
+if last:
+    previous = json.loads(last)
+    if 'replicas' in previous.get('spec', {}):
+        previous['spec'].pop('replicas')
+        previous.get('metadata', {}).get('annotations', {}).pop('kubectl.kubernetes.io/last-applied-configuration', None)
+        ownership.write_text(json.dumps(previous))
+PY
+    if [[ -f $revision/replica-ownership.json ]]; then
+      kubectl apply set-last-applied -f "$revision/replica-ownership.json" >/dev/null || return 1
+    fi
+  else
+    # Restoring a revision without HPA explicitly restores fixed-replica operation.
+    kubectl -n "$namespace" delete hpa "$service" --ignore-not-found >/dev/null || return 1
+  fi
+  for resource in configmap service ingress deployment hpa; do
     [[ -f $revision/$resource.json ]] || continue
-    kubectl apply -f "$revision/$resource.json" || return 1
+    manifest="$revision/$resource.json"
+    if [[ $resource == deployment && -f $revision/hpa.json ]]; then manifest="$revision/deployment-effective.json"; fi
+    kubectl apply -f "$manifest" || return 1
   done
 }
 
 check_revision() {
-  local revision=$1
+  local revision=$1 attempt
   kubectl -n "$namespace" rollout status "deployment/$service" --timeout=300s || return 1
-  kubectl -n "$namespace" get deployment "$service" -o json > "$revision/live-deployment.json" || return 1
-  kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$service" -o json > "$revision/live-pods.json" || return 1
   kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
-  python3 - "$revision" "$service" <<'PY'
-import json, pathlib, sys, time, urllib.request
+  for attempt in {1..40}; do
+    # Read desired scale again: HPA may change it while Pods register in Eureka.
+    kubectl -n "$namespace" get deployment "$service" -o json > "$revision/live-deployment.json" || return 1
+    kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$service" -o json > "$revision/live-pods.json" || return 1
+    if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<'PY'
+import json, pathlib, sys, urllib.request
 root, service = pathlib.Path(sys.argv[1]), sys.argv[2]
 expected = (root / 'image').read_text().strip()
 deployment = json.loads((root / 'live-deployment.json').read_text())
+pod_list = json.loads((root / 'live-pods.json').read_text())
 assert deployment['spec']['template']['spec']['containers'][0]['image'] == expected, 'IMAGE_MISMATCH'
-pods = [p for p in json.loads((root / 'live-pods.json').read_text())['items'] if not p['metadata'].get('deletionTimestamp')]
-assert len(pods) == 1, 'EXPECTED_ONE_POD'
-pod = pods[0]
-statuses = pod['status'].get('containerStatuses', [])
-assert len(statuses) == 1 and statuses[0]['ready'] and statuses[0]['restartCount'] == 0, 'POD_NOT_STABLE'
+desired = deployment['spec'].get('replicas', 1)
+pods = [p for p in pod_list['items'] if not p['metadata'].get('deletionTimestamp')]
+assert desired >= 1 and len(pods) == desired, 'REPLICA_COUNT_MISMATCH'
+for pod in pods:
+    statuses = pod['status'].get('containerStatuses', [])
+    assert pod['spec']['containers'][0]['image'] == expected, 'POD_IMAGE_MISMATCH'
+    assert len(statuses) == 1 and statuses[0]['ready'] and statuses[0]['restartCount'] == 0, 'POD_NOT_STABLE'
 if service == 'discovery-server':
     sys.exit(0)
 discovery = json.loads((root / 'discovery.json').read_text())['spec']
 url = 'http://' + discovery['clusterIP'] + ':' + str(discovery['ports'][0]['port']) + '/eureka/apps/' + service.upper()
-instance_id = service + ':' + pod['metadata']['uid']
-port = pod['spec']['containers'][0]['ports'][0]['containerPort']
-for attempt in range(40):
-    try:
-        request = urllib.request.Request(url, headers={'Accept': 'application/json'})
-        with urllib.request.urlopen(request, timeout=3) as response:
-            instances = json.load(response)['application']['instance']
-        if isinstance(instances, dict):
-            instances = [instances]
-        if any(i.get('instanceId') == instance_id and i.get('ipAddr') == pod['status']['podIP']
-               and int(i['port']['$']) == port and i.get('status') == 'UP' for i in instances):
-            sys.exit(0)
-    except (OSError, ValueError, KeyError):
-        pass
-    time.sleep(3)
-sys.exit('EUREKA_REGISTRATION_TIMEOUT')
+request = urllib.request.Request(url, headers={'Accept': 'application/json'})
+with urllib.request.urlopen(request, timeout=3) as response:
+    instances = json.load(response)['application']['instance']
+if isinstance(instances, dict):
+    instances = [instances]
+assert all(any(i.get('instanceId') == service + ':' + pod['metadata']['uid']
+               and i.get('ipAddr') == pod['status']['podIP']
+               and int(i['port']['$']) == pod['spec']['containers'][0]['ports'][0]['containerPort']
+               and i.get('status') == 'UP' for i in instances) for pod in pods), 'EUREKA_REGISTRATION_PENDING'
 PY
+    then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "POD_OR_EUREKA_CHECK_TIMEOUT $service attempts=$attempt" >&2
+  return 1
 }
 
 if [[ $mode == rollback ]]; then
@@ -91,7 +126,7 @@ else
   target="$revision_root/$revision"
   mkdir -m 700 "$target"
   printf '%s\n' "$image" > "$target/image"
-  for resource in configmap service ingress deployment; do
+  for resource in configmap service ingress deployment hpa; do
     file="$source_root/deploy/k8s/$service/$resource.yaml"
     [[ -f $file ]] || { [[ $resource != configmap && $resource != deployment ]] || die MISSING_MANIFEST; continue; }
     kubectl create --dry-run=client --validate=false -f "$file" -o json > "$target/$resource.json"

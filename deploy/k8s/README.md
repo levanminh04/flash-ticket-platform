@@ -10,8 +10,9 @@ tiếp đến Pod đã chọn. Hai Kubernetes Service dành cho Eureka và Gatew
 ```text
 deploy/k3s/                       config node, hướng dẫn mạng/join agent
 deploy/k8s/namespace.yaml
-deploy/k8s/<app>/deployment.yaml  một replica, Recreate, probes/resources
+deploy/k8s/<app>/deployment.yaml  Recreate, probes/resources
 deploy/k8s/<app>/configmap.yaml   endpoint private và cấu hình không nhạy cảm
+deploy/k8s/<core>/hpa.yaml        autoscaling/v2 cho năm service nghiệp vụ
 deploy/k8s/discovery-server/service.yaml
 deploy/k8s/api-gateway/service.yaml
 deploy/k8s/api-gateway/ingress.yaml
@@ -97,17 +98,64 @@ K3s hoặc fallback Compose. Compose deploy cũng dùng khóa này và từ ch�
 chuyển K8s khi gate enabled.
 
 State K8s riêng `state/k8s/<service>/`: current/previous trỏ revision, mỗi revision
-có image, Deployment/ConfigMap/Service/Ingress và snapshot Secret. Thư mục mode
+có image, Deployment/ConfigMap/Service/Ingress/HPA và snapshot Secret. Thư mục mode
 700/file 600, chỉ người vận hành được đọc; **không upload artifact hoặc in cả
 thư mục**. Đây là dữ liệu nhạy cảm cần backup/retention theo chính sách vận hành.
 State Compose `state/<service>.current/.previous` được giữ nguyên cho rollback
 cutover. Không ghi đè hai loại state.
 
-Sau apply, script đợi rollout (300s), kiểm đúng image ref, một Pod Ready không
-restart và Eureka có instance đúng Pod UID/IP/port. Không so digest multi-arch
+Sau apply, script đợi rollout (300s), đọc lại số replica mong muốn, kiểm đủ Pod
+Ready không restart và Eureka có instance đúng UID/IP/port cho từng Pod. HPA có
+thể đổi replica trong khi kiểm nên script lấy lại trạng thái mỗi lượt. Không so digest multi-arch
 index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗi rollout vẫn
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
+
+## HPA cho năm service nghiệp vụ
+
+Booking, Payment, Ticket, Event và User có HPA riêng; Gateway và Eureka giữ một
+replica. Cấu hình ban đầu trên node 84: min 1, max 2, CPU trung bình mục tiêu
+70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
+khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%
+tương ứng trung bình 140m/Pod, không phải 70% CPU toàn node.
+
+Metrics-server cung cấp resource metrics hiện có. Chỉ dùng CPU ở đợt đầu;
+heap JVM có thể giữ memory sau khi tải giảm nên không dùng memory làm điều kiện
+scale-down. CPU HPA không đo được trực tiếp backlog RabbitMQ; đây chưa phải
+queue autoscaling. HPA thêm Pod trên các node hiện có, không tự tạo thêm EC2.
+
+Deployment core bỏ `spec.replicas` để CD không kéo về 1. Script deploy bỏ cả
+giá trị replicas mà kubectl có thể default khi render, chuyển last-applied
+ownership trước apply và snapshot HPA cùng revision. Rollback về revision có
+HPA khôi phục policy cũ; rollback về revision **chưa có HPA** xóa HPA của service
+đó và khôi phục số replica cố định trong revision. Đây là thao tác có chủ đích,
+không dùng `kubectl scale` một lần để giữ số Pod khi HPA còn hoạt động.
+
+Chiến lược cập nhật vẫn `Recreate`: HPA hỗ trợ scale 1↔2 nhưng cập nhật image/config
+vẫn có khoảng gián đoạn của Recreate. Không coi việc bật HPA là đã có rolling
+update hoặc HA trên một node.
+
+Nếu cả năm core đạt max 2, tổng request K8s ở cấu hình hiện tại khoảng 1650m CPU,
+5132Mi memory, gồm Gateway/Eureka và system Pods có request. DB/Redis/Rabbit/
+Keycloak ngoài K8s vẫn dùng chung RAM của máy 84. Các request này không bảo đảm
+đủ RAM khi tải cao; theo dõi node memory/eviction/Pending, giữ max 2 và đo lại
+trước khi tăng giới hạn hoặc thêm HPA memory.
+
+Rà code đã thấy cơ chế khóa/lease và state guard trong relay Booking, outbox
+Event/Payment/Ticket, refund Payment và recovery User. Message/SMTP vẫn có thể
+được gửi lại khi crash hoặc mất phản hồi; không khẳng định exactly-once. Thử HPA
+bằng CPU có giới hạn thời gian và GET/health/Eureka, không tạo thanh toán thật,
+purge queue hoặc thay topology để thử autoscaling.
+
+```bash
+kubectl -n flash-ticket get hpa
+kubectl -n flash-ticket describe hpa booking-service
+kubectl -n flash-ticket top pods
+kubectl top nodes
+```
+
+Nguồn: [Kubernetes HPA](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/),
+[mẫu autoscaling/v2](https://github.com/kubernetes/website/blob/main/content/en/examples/application/hpa/php-apache.yaml).
 
 ## Bootstrap/cutover: chưa tự động thực hiện
 
