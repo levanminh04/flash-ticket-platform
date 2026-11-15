@@ -1,7 +1,6 @@
 package com.flashticket.payment_service.service;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.flashticket.payment_service.client.BookingPurchaseClient;
@@ -10,9 +9,8 @@ import com.flashticket.payment_service.dto.common.ContractCodec;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.EventCancellation;
 import com.flashticket.payment_service.dto.request.ManualSettlementRequest;
-import com.flashticket.payment_service.dto.response.RefundGatewayRequest;
-import com.flashticket.payment_service.dto.response.RefundGatewayResult;
 import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
+import com.flashticket.payment_service.entity.RefundAttempt;
 import com.flashticket.payment_service.entity.enums.*;
 import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
@@ -25,7 +23,6 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -71,9 +68,10 @@ class RefundFlowIntegrationTest {
             s ->
                 refundService.ensureRefund(
                     charge, RefundReason.TICKET_ISSUANCE_FAILED, Instant.now()));
-    when(refundClient.refund(any()))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
 
+    jdbc.update(
+        "update payment_schema.tbl_payment_attempts set payment_url=null where id=?",
+        charge.getAttemptId());
     worker.sendRefunds();
 
     var stored = refunds.findById(refund.getId()).orElseThrow();
@@ -81,56 +79,55 @@ class RefundFlowIntegrationTest {
     assertThat(stored.getCompletedAt()).isNotNull();
     assertThat(refundAttempts.findAll()).hasSize(1);
     assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNotNull();
-    var request = ArgumentCaptor.forClass(RefundGatewayRequest.class);
-    verify(refundClient).refund(request.capture());
-    assertThat(request.getValue().txnRef()).isEqualTo(charge.getAttemptId().toString());
-    assertThat(request.getValue().amount()).isEqualByComparingTo("100000");
-    assertThat(request.getValue().transactionDate()).isEqualTo("20261102123045");
+    assertThat(stored.getAmount()).isEqualByComparingTo("100000");
+    assertThat(refundAttempts.findAll().getFirst().getOutcome()).isEqualTo("DB_ONLY");
+    assertThat(refundAttempts.findAll().getFirst().getProviderRefundId()).isNull();
     assertThat(sagas.findById(orderId).orElseThrow().getState())
         .isEqualTo(PaymentSagaState.COMPENSATED);
     worker.sendRefunds();
-    verify(refundClient, times(1)).refund(any());
+    assertThat(refundAttempts.count()).isEqualTo(1);
+    verifyNoInteractions(refundClient);
   }
 
   @Test
-  void keepsRefundProcessingUntilQueryConfirms() {
-    seedConfirmedOrder(UUID.randomUUID(), PaymentSagaState.COMPENSATING);
+  void completesExistingProcessingRefundWithoutGateway() {
+    UUID orderId = seedConfirmedOrder(UUID.randomUUID(), PaymentSagaState.COMPENSATING);
     var charge = charges.findAll().getFirst();
     var refund =
         tx.execute(
             s ->
                 refundService.ensureRefund(
                     charge, RefundReason.TICKET_ISSUANCE_FAILED, Instant.now()));
-    when(refundClient.refund(any()))
-        .thenReturn(
-            new RefundGatewayResult(
-                RefundGatewayOutcome.UNKNOWN, "vnp-refund-1", "GATEWAY_UNAVAILABLE"));
-    when(refundClient.queryRefund(any()))
-        .thenReturn(
-            new RefundGatewayResult(RefundGatewayOutcome.PROCESSING, "vnp-refund-1", "00"),
-            new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
+    var attempt =
+        RefundAttempt.started(refund.getId(), "legacy-request", Instant.now().minusSeconds(120));
+    attempt.setProviderRefundId("legacy-provider-refund");
+    refundAttempts.save(attempt);
+    jdbc.update(
+        "update payment_schema.tbl_refunds set state='PROCESSING' where id=?", refund.getId());
+    jdbc.update(
+        "update payment_schema.tbl_payment_attempts set payment_url=null where id=?",
+        charge.getAttemptId());
 
-    worker.sendRefunds();
-    assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
-        .isEqualTo(RefundState.PROCESSING);
-    assertThat(refundAttempts.findAll()).hasSize(1);
-    assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNull();
-    worker.sendRefunds();
+    worker.pollRefunds();
+    var stored = refunds.findById(refund.getId()).orElseThrow();
+    assertThat(stored.getState()).isEqualTo(RefundState.SUCCEEDED);
+    assertThat(stored.getCompletedAt()).isNotNull();
+    var storedAttempt = refundAttempts.findById(attempt.getId()).orElseThrow();
+    assertThat(storedAttempt.getFinishedAt()).isNotNull();
+    assertThat(storedAttempt.getOutcome()).isEqualTo("DB_ONLY");
+    assertThat(storedAttempt.getProviderRefundId()).isEqualTo("legacy-provider-refund");
+    assertThat(sagas.findById(orderId).orElseThrow().getState())
+        .isEqualTo(PaymentSagaState.COMPENSATED);
     refundService.pollRefund(refund.getId());
-    assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
-        .isEqualTo(RefundState.PROCESSING);
-    assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNull();
-    refundService.pollRefund(refund.getId());
-    assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
-        .isEqualTo(RefundState.SUCCEEDED);
-    assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNotNull();
     worker.sendRefunds();
-    verify(refundClient, times(1)).refund(any());
-    verify(refundClient, times(2)).queryRefund(any());
+    assertThat(refundAttempts.count()).isEqualTo(1);
+    assertThat(refunds.findById(refund.getId()).orElseThrow().getCompletedAt())
+        .isEqualTo(stored.getCompletedAt());
+    verifyNoInteractions(refundClient);
   }
 
   @Test
-  void marksRefundFailedAndAllowsAdminRetry() {
+  void retriesLegacyFailedRefundWithoutGateway() {
     UUID eventId = UUID.randomUUID();
     seedConfirmedOrder(eventId, PaymentSagaState.COMPLETED);
     refundService.recordEventCancellation(
@@ -138,16 +135,16 @@ class RefundFlowIntegrationTest {
     UUID runId = runs.findAll().getFirst().getId();
     refundService.selectEventRefundOrders(runId, 2);
     UUID refundId = refunds.findAll().getFirst().getId();
-    when(refundClient.refund(any()))
-        .thenReturn(
-            new RefundGatewayResult(RefundGatewayOutcome.FAILED, "vnp-refund-1", "95"),
-            new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
-
-    worker.sendRefunds();
+    var failedAttempt = RefundAttempt.started(refundId, "failed-request", Instant.now());
+    failedAttempt.setFinishedAt(Instant.now());
+    failedAttempt.setOutcome("95");
+    refundAttempts.save(failedAttempt);
+    jdbc.update("update payment_schema.tbl_refunds set state='FAILED' where id=?", refundId);
+    jdbc.update(
+        "update payment_schema.tbl_event_refund_items set state='NEEDS_ATTENTION' where refund_id=?",
+        refundId);
+    refundService.sendRefund(refundId);
     assertThat(refunds.findById(refundId).orElseThrow().getState()).isEqualTo(RefundState.FAILED);
-    assertThat(items.findAll().getFirst().getState())
-        .isEqualTo(EventRefundItemState.NEEDS_ATTENTION);
-    assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNotNull();
     assertThat(refundService.retryRefund(refundId).state()).isEqualTo(RefundState.PENDING);
     assertThat(items.findAll().getFirst().getState())
         .isEqualTo(EventRefundItemState.REFUND_PENDING);
@@ -160,7 +157,7 @@ class RefundFlowIntegrationTest {
       assertThat(attempt.getRefundId()).isEqualTo(refundId);
       assertThat(attempt.getFinishedAt()).isNotNull();
     }
-    verify(refundClient, times(2)).refund(any());
+    verifyNoInteractions(refundClient);
   }
 
   @Test
@@ -172,9 +169,11 @@ class RefundFlowIntegrationTest {
             s ->
                 refundService.ensureRefund(
                     charge, RefundReason.TICKET_ISSUANCE_FAILED, Instant.now()));
-    when(refundClient.refund(any()))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.FAILED, "vnp-refund-1", "95"));
-    worker.sendRefunds();
+    var failedAttempt = RefundAttempt.started(refund.getId(), "manual-request", Instant.now());
+    failedAttempt.setFinishedAt(Instant.now());
+    failedAttempt.setOutcome("95");
+    refundAttempts.save(failedAttempt);
+    jdbc.update("update payment_schema.tbl_refunds set state='FAILED' where id=?", refund.getId());
     assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
         .isEqualTo(RefundState.FAILED);
 
@@ -225,11 +224,9 @@ class RefundFlowIntegrationTest {
             ex -> assertThat(ex.errorCode()).isEqualTo(PaymentErrorCode.REFUND_NOT_FAILED));
     assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
         .isEqualTo(RefundState.PENDING);
-    when(refundClient.refund(any()))
-        .thenReturn(
-            new RefundGatewayResult(
-                RefundGatewayOutcome.UNKNOWN, "vnp-refund-1", "GATEWAY_UNAVAILABLE"));
-    worker.sendRefunds();
+    refundAttempts.save(RefundAttempt.started(refund.getId(), "in-flight-request", Instant.now()));
+    jdbc.update(
+        "update payment_schema.tbl_refunds set state='PROCESSING' where id=?", refund.getId());
     assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
         .isEqualTo(RefundState.PROCESSING);
     assertThat(refundAttempts.findAll().getFirst().getFinishedAt()).isNull();
@@ -264,8 +261,6 @@ class RefundFlowIntegrationTest {
             s ->
                 refundService.ensureRefund(
                     extraCharge, RefundReason.DUPLICATE_PAYMENT, Instant.now()));
-    when(refundClient.refund(any()))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
     worker.sendRefunds();
     assertThat(refunds.findById(refund.getId()).orElseThrow().getState())
         .isEqualTo(RefundState.SUCCEEDED);
@@ -322,8 +317,6 @@ class RefundFlowIntegrationTest {
     UUID runId = runs.findAll().getFirst().getId();
     refundService.selectEventRefundOrders(runId, 3);
     assertThat(runs.findById(runId).orElseThrow().getSelectionComplete()).isTrue();
-    when(refundClient.refund(any()))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
 
     refundService.sendRefund(refunds.findAll().getFirst().getId());
     assertThat(items.countByIdRunIdAndState(runId, EventRefundItemState.REFUNDED)).isEqualTo(1);
@@ -338,7 +331,7 @@ class RefundFlowIntegrationTest {
       assertThat(sagas.findById(item.getId().getOrderId()).orElseThrow().getState())
           .isEqualTo(PaymentSagaState.COMPENSATED);
     }
-    verify(refundClient, times(2)).refund(any());
+    verifyNoInteractions(refundClient);
   }
 
   @Test
@@ -386,12 +379,11 @@ class RefundFlowIntegrationTest {
     var selected = refunds.findAll();
     UUID succeededId = selected.get(0).getId();
     UUID failedId = selected.get(1).getId();
-    when(refundClient.refund(argThat(r -> r != null && r.refundId().equals(succeededId))))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.SUCCEEDED, "vnp-refund-1", "00"));
-    when(refundClient.refund(argThat(r -> r != null && r.refundId().equals(failedId))))
-        .thenReturn(new RefundGatewayResult(RefundGatewayOutcome.FAILED, "vnp-refund-2", "95"));
     refundService.sendRefund(succeededId);
-    refundService.sendRefund(failedId);
+    jdbc.update("update payment_schema.tbl_refunds set state='FAILED' where id=?", failedId);
+    jdbc.update(
+        "update payment_schema.tbl_event_refund_items set state='NEEDS_ATTENTION' where refund_id=?",
+        failedId);
 
     var progress = refundService.getEventRefundProgress(eventId);
     assertThat(progress.pendingCount()).isEqualTo(1);

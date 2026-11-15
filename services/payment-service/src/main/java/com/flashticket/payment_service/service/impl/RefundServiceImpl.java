@@ -1,6 +1,5 @@
 package com.flashticket.payment_service.service.impl;
 
-import com.flashticket.payment_service.client.VNPayRefundClient;
 import com.flashticket.payment_service.dto.common.ContractCodec;
 import com.flashticket.payment_service.dto.common.Envelope;
 import com.flashticket.payment_service.dto.message.EventCancellation;
@@ -26,7 +25,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
@@ -36,13 +34,11 @@ public class RefundServiceImpl implements RefundService {
   private final RefundAttemptRepository refundAttemptRepository;
   private final EventRefundRunRepository eventRefundRunRepository;
   private final EventRefundItemRepository eventRefundItemRepository;
-  private final VNPayRefundClient refundClient;
   private final PaymentSagaRepository paymentSagaRepository;
   private final OrderPaymentSnapshotRepository snapshots;
   private final EventFinanceSnapshotRepository finance;
   private final PaymentConfirmationRepository confirmations;
   private final ChargeRepository charges;
-  private final PaymentAttemptRepository paymentAttempts;
   private final MessagingService messaging;
   private final ContractCodec codec;
   private final RefundMapper refundMapper;
@@ -160,23 +156,34 @@ public class RefundServiceImpl implements RefundService {
   @Override
   @Transactional(propagation = Propagation.NEVER)
   public void sendRefund(UUID refundId) {
-    var request = paymentTransactionTemplate.execute(status -> claimRefund(refundId));
-    if (request == null) return;
-    // Không gọi cổng trong transaction để không giữ khóa khi chờ mạng.
-    var result = refundClient.refund(request);
     paymentTransactionTemplate.executeWithoutResult(
-        status -> recordGatewayResult(refundId, request.attemptId(), result));
+        status -> {
+          var refund = lockRefund(refundId);
+          if (refund.getState() != RefundState.PENDING
+              && refund.getState() != RefundState.PROCESSING) return;
+          Instant now = Instant.now();
+          var attempt =
+              refundAttemptRepository
+                  .findFirstByRefundIdAndFinishedAtIsNull(refundId)
+                  .orElseGet(
+                      () ->
+                          RefundAttempt.started(
+                              refundId, UUID.randomUUID().toString().replace("-", ""), now));
+          // Hoàn tiền nội bộ: chỉ cập nhật DB, không gửi lệnh hoặc query sang VNPay.
+          // Dùng lại attempt đang mở để xử lý cả refund PROCESSING từ luồng cũ.
+          attempt.setFinishedAt(now);
+          attempt.setOutcome("DB_ONLY");
+          refundAttemptRepository.save(attempt);
+          refund.setState(RefundState.SUCCEEDED);
+          refund.setCompletedAt(now);
+          completeRefund(refund, now);
+        });
   }
 
   @Override
   @Transactional(propagation = Propagation.NEVER)
   public void pollRefund(UUID refundId) {
-    var request = paymentTransactionTemplate.execute(status -> findUnfinishedAttempt(refundId));
-    if (request == null) return;
-    // Không gọi cổng trong transaction để không giữ khóa khi chờ mạng.
-    var result = refundClient.queryRefund(request);
-    paymentTransactionTemplate.executeWithoutResult(
-        status -> recordGatewayResult(refundId, request.attemptId(), result));
+    sendRefund(refundId);
   }
 
   @Override
@@ -266,85 +273,6 @@ public class RefundServiceImpl implements RefundService {
         needsAttention,
         run.getCompletedAt(),
         Instant.now());
-  }
-
-  private RefundGatewayRequest claimRefund(UUID refundId) {
-    var refund = lockRefund(refundId);
-    if (refund.getState() != RefundState.PENDING
-        || refundAttemptRepository.existsByRefundIdAndFinishedAtIsNull(refundId)) return null;
-    refund.setState(RefundState.PROCESSING);
-    refundAttemptRepository.save(
-        RefundAttempt.started(
-            refundId, UUID.randomUUID().toString().replace("-", ""), Instant.now()));
-    // Query JPQL tự flush attempt vừa lưu trước khi đọc lại.
-    return findUnfinishedAttempt(refundId);
-  }
-
-  private RefundGatewayRequest findUnfinishedAttempt(UUID refundId) {
-    var refund = refundRepository.findById(refundId).orElseThrow();
-    var attempt =
-        refundAttemptRepository.findFirstByRefundIdAndFinishedAtIsNull(refundId).orElse(null);
-    if (attempt == null) return null;
-    var charge = charges.findById(refund.getChargeId()).orElseThrow();
-    var paymentAttempt = paymentAttempts.findById(charge.getAttemptId()).orElseThrow();
-    // VNPay yêu cầu ngày tạo lệnh gốc; lỗi làm TX claim rollback, refund giữ PENDING.
-    if (paymentAttempt.getPaymentUrl() == null)
-      throw new IllegalStateException("Missing vnp_CreateDate for refund " + refundId);
-    String transactionDate =
-        UriComponentsBuilder.fromUriString(paymentAttempt.getPaymentUrl())
-            .build()
-            .getQueryParams()
-            .getFirst("vnp_CreateDate");
-    if (transactionDate == null)
-      throw new IllegalStateException("Missing vnp_CreateDate for refund " + refundId);
-    return new RefundGatewayRequest(
-        refundId,
-        attempt.getId(),
-        attempt.getRequestKey(),
-        charge.getAttemptId().toString(),
-        refund.getAmount(),
-        charge.getProviderChargeId(),
-        transactionDate);
-  }
-
-  private void recordGatewayResult(UUID refundId, UUID attemptId, RefundGatewayResult result) {
-    var refund = lockRefund(refundId);
-    var attempt = refundAttemptRepository.findById(attemptId).orElseThrow();
-    if (attempt.getFinishedAt() != null) return;
-    if (result.providerRefundId() != null) attempt.setProviderRefundId(result.providerRefundId());
-    Instant now = Instant.now();
-    String outcome =
-        result.responseCode() != null ? result.responseCode() : result.outcome().name();
-    if (refund.getState() == RefundState.SUCCEEDED) {
-      attempt.setFinishedAt(now);
-      attempt.setOutcome(outcome);
-      log.warn("Gateway result after refund succeeded: refundId={}, outcome={}", refundId, outcome);
-      return;
-    }
-    switch (result.outcome()) {
-      case SUCCEEDED -> {
-        attempt.setFinishedAt(now);
-        attempt.setOutcome(outcome);
-        refund.setState(RefundState.SUCCEEDED);
-        refund.setCompletedAt(now);
-        completeRefund(refund, now);
-      }
-      case FAILED -> {
-        attempt.setFinishedAt(now);
-        attempt.setOutcome(outcome);
-        refund.setState(RefundState.FAILED);
-        var item = eventRefundItemRepository.findFirstByRefundIdOrderByUpdatedAtDesc(refundId);
-        if (item.isPresent()) {
-          item.get().setState(EventRefundItemState.NEEDS_ATTENTION);
-          item.get().setLastErrorCode(outcome);
-          item.get().setUpdatedAt(now);
-        }
-      }
-      case PROCESSING, UNKNOWN -> {
-        // Chưa rõ kết quả: worker hỏi lại bằng querydr, không gửi lệnh mới.
-        refund.setState(RefundState.PROCESSING);
-      }
-    }
   }
 
   private Refund lockRefund(UUID refundId) {
