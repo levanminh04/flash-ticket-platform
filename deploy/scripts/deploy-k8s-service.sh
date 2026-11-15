@@ -29,7 +29,19 @@ if [[ -f $revision_root/current ]]; then
 fi
 
 apply_revision() {
-  local revision=$1 resource manifest
+  local revision=$1 resource manifest preparation=prepare
+  if [[ $service == discovery-server ]]; then
+    if [[ -f $revision/statefulset.json ]]; then
+      kubectl -n "$namespace" get deployment "$service" --ignore-not-found -o json > "$revision/legacy-live.json" || return 1
+      if [[ -s $revision/legacy-live.json ]]; then
+        python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" migrate "$revision" || return 1
+        return 0
+      fi
+    else
+      kubectl -n "$namespace" get statefulset "$service" --ignore-not-found -o json > "$revision/peer-live.json" || return 1
+      [[ ! -s $revision/peer-live.json ]] || { echo 'DISCOVERY_TOPOLOGY_DOWNGRADE_REQUIRES_RUNBOOK' >&2; return 1; }
+    fi
+  fi
   # Secret diagnostics may include values; never forward their raw stderr.
   for resource in "$revision"/secret*.json; do
     [[ -f $resource ]] || continue
@@ -63,22 +75,33 @@ PY
     # Restoring a revision without HPA explicitly restores fixed-replica operation.
     kubectl -n "$namespace" delete hpa "$service" --ignore-not-found >/dev/null || return 1
   fi
-  for resource in configmap service ingress deployment hpa; do
+  if [[ $service != discovery-server ]]; then
+    if [[ $mode == rollback || $revision != "$target" ]]; then preparation=prepare-rollback; fi
+    python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" "$preparation" "$revision" || return 1
+  fi
+  for resource in configmap peer-service service ingress deployment statefulset hpa; do
     [[ -f $revision/$resource.json ]] || continue
     manifest="$revision/$resource.json"
-    if [[ $resource == deployment && -f $revision/hpa.json ]]; then manifest="$revision/deployment-effective.json"; fi
+    if [[ $resource == deployment && -f $revision/deployment-effective.json ]]; then manifest="$revision/deployment-effective.json"; fi
     kubectl apply -f "$manifest" || return 1
   done
+  if [[ $service == discovery-server && -f $revision/statefulset.json ]]; then
+    python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" recover "$revision" || return 1
+  elif [[ -f $revision/bridge-legacy.json ]]; then
+    python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" bridge "$revision" || return 1
+  fi
 }
 
 check_revision() {
-  local revision=$1 attempt
-  kubectl -n "$namespace" rollout status "deployment/$service" --timeout=300s || return 1
+  local revision=$1 attempt kind=deployment
+  if [[ -f $revision/statefulset.json ]]; then kind=statefulset; fi
+  kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
   kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
   for attempt in {1..40}; do
     # Read desired scale again: HPA may change it while Pods register in Eureka.
-    kubectl -n "$namespace" get deployment "$service" -o json > "$revision/live-deployment.json" || return 1
+    kubectl -n "$namespace" get "$kind" "$service" -o json > "$revision/live-deployment.json" || return 1
     kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$service" -o json > "$revision/live-pods.json" || return 1
+    kubectl -n "$namespace" get pods -l 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' -o json > "$revision/discovery-pods.json" || return 1
     if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<'PY'
 import json, pathlib, sys, urllib.request
 root, service = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -88,26 +111,36 @@ pod_list = json.loads((root / 'live-pods.json').read_text())
 assert deployment['spec']['template']['spec']['containers'][0]['image'] == expected, 'IMAGE_MISMATCH'
 desired = deployment['spec'].get('replicas', 1)
 pods = [p for p in pod_list['items'] if not p['metadata'].get('deletionTimestamp')]
+if deployment['kind'] == 'StatefulSet':
+    pods = [p for p in pods if p['metadata'].get('labels', {}).get('flash-ticket/discovery-generation') == 'peers']
 assert desired >= 1 and len(pods) == desired, 'REPLICA_COUNT_MISMATCH'
 for pod in pods:
     statuses = pod['status'].get('containerStatuses', [])
     assert pod['spec']['containers'][0]['image'] == expected, 'POD_IMAGE_MISMATCH'
     assert len(statuses) == 1 and statuses[0]['ready'] and statuses[0]['restartCount'] == 0, 'POD_NOT_STABLE'
 if service == 'discovery-server':
+    # Full peer comparison runs below after this Pod/image check.
     sys.exit(0)
 discovery = json.loads((root / 'discovery.json').read_text())['spec']
-url = 'http://' + discovery['clusterIP'] + ':' + str(discovery['ports'][0]['port']) + '/eureka/apps/' + service.upper()
-request = urllib.request.Request(url, headers={'Accept': 'application/json'})
-with urllib.request.urlopen(request, timeout=3) as response:
-    instances = json.load(response)['application']['instance']
-if isinstance(instances, dict):
-    instances = [instances]
-assert all(any(i.get('instanceId') == service + ':' + pod['metadata']['uid']
-               and i.get('ipAddr') == pod['status']['podIP']
-               and int(i['port']['$']) == pod['spec']['containers'][0]['ports'][0]['containerPort']
-               and i.get('status') == 'UP' for i in instances) for pod in pods), 'EUREKA_REGISTRATION_PENDING'
+peers = json.loads((root / 'discovery-pods.json').read_text())['items']
+addresses = ['http://' + p['status']['podIP'] + ':8761' for p in peers if not p['metadata'].get('deletionTimestamp')]
+if not addresses:
+    addresses = ['http://' + discovery['clusterIP'] + ':' + str(discovery['ports'][0]['port'])]
+for address in addresses:
+    request = urllib.request.Request(address + '/eureka/apps/' + service.upper(), headers={'Accept': 'application/json'})
+    with urllib.request.urlopen(request, timeout=3) as response:
+        instances = json.load(response)['application']['instance']
+    if isinstance(instances, dict):
+        instances = [instances]
+    assert all(any(i.get('instanceId') == service + ':' + pod['metadata']['uid']
+                   and i.get('ipAddr') == pod['status']['podIP']
+                   and int(i['port']['$']) == pod['spec']['containers'][0]['ports'][0]['containerPort']
+                   and i.get('status') == 'UP' for i in instances) for pod in pods), 'EUREKA_REGISTRATION_PENDING'
 PY
     then
+      if [[ $service == discovery-server && $kind == statefulset ]]; then
+        python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" check "$revision" || { sleep 3; continue; }
+      fi
       return 0
     fi
     sleep 3
@@ -126,15 +159,15 @@ else
   target="$revision_root/$revision"
   mkdir -m 700 "$target"
   printf '%s\n' "$image" > "$target/image"
-  for resource in configmap service ingress deployment hpa; do
+  for resource in configmap peer-service service ingress deployment statefulset hpa; do
     file="$source_root/deploy/k8s/$service/$resource.yaml"
-    [[ -f $file ]] || { [[ $resource != configmap && $resource != deployment ]] || die MISSING_MANIFEST; continue; }
+    [[ -f $file ]] || { [[ $resource != configmap ]] || die MISSING_MANIFEST; continue; }
     kubectl create --dry-run=client --validate=false -f "$file" -o json > "$target/$resource.json"
   done
   python3 - "$target" "$image" "$revision" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
-path = root / 'deployment.json'
+path = root / ('statefulset.json' if (root / 'statefulset.json').exists() else 'deployment.json')
 deployment = json.loads(path.read_text())
 template = deployment['spec']['template']
 template['spec']['containers'][0]['image'] = sys.argv[2]
@@ -208,6 +241,10 @@ PY
 fi
 target="$revision_root/$revision"
 if apply_revision "$target" && check_revision "$target"; then
+  if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
+    python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" finish "$target" || die DISCOVERY_MIGRATION_FINALIZE_FAILED
+    previous=$(cat "$target/compatible-previous")
+  fi
   printf '%s\n' "$revision" > "$revision_root/current.tmp"
   mv -f "$revision_root/current.tmp" "$revision_root/current"
   if [[ -n $previous && $previous != "$revision" ]]; then printf '%s\n' "$previous" > "$revision_root/previous"; fi
@@ -216,6 +253,17 @@ if apply_revision "$target" && check_revision "$target"; then
   echo "DEPLOY_OK $service $revision"
 else
   echo "DEPLOY_FAILED $service $revision" >&2
+  if [[ -f $target/bridge-drained.json ]]; then
+    python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" unbridge "$target" || die LEGACY_APPLICATION_UNDRAIN_FAILED
+  fi
+  if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
+    if python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" restore "$target"; then
+      echo 'RESTORED_LEGACY_DISCOVERY' >&2
+    else
+      echo 'DISCOVERY_RESTORE_FAILED: both workloads retained for operator recovery' >&2
+    fi
+    exit 1
+  fi
   if [[ -n $previous ]]; then
     if apply_revision "$revision_root/$previous" && check_revision "$revision_root/$previous"; then
       echo "RESTORED_PREVIOUS $service $previous" >&2

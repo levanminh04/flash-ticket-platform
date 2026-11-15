@@ -3,34 +3,39 @@
 Gateway/Eureka và Booking/Payment/Ticket/Event/User chạy trong namespace
 `flash-ticket`. PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak, Frontend và Ngrok
 tiếp tục chạy Compose trên 84. Eureka trả địa chỉ Pod; HTTP nghiệp vụ đi trực
-tiếp đến Pod đã chọn. Hai Kubernetes Service dành cho Eureka và Gateway.
+tiếp đến Pod đã chọn. Gateway có một Service; Eureka có Service client và thêm
+headless Service để hai peer có địa chỉ DNS ổn định.
 
 ## File và cấu hình
 
 ```text
 deploy/k3s/                       config node, hướng dẫn mạng/join agent
 deploy/k8s/namespace.yaml
-deploy/k8s/<app>/deployment.yaml  Recreate, probes/resources
+deploy/k8s/<app>/deployment.yaml  RollingUpdate cho Gateway và năm service
 deploy/k8s/<app>/configmap.yaml   endpoint private và cấu hình không nhạy cảm
 deploy/k8s/<core>/hpa.yaml        autoscaling/v2 cho năm service nghiệp vụ
 deploy/k8s/discovery-server/service.yaml
+deploy/k8s/discovery-server/statefulset.yaml   hai peer, cập nhật lần lượt
+deploy/k8s/discovery-server/peer-service.yaml  headless DNS cho peer
 deploy/k8s/api-gateway/service.yaml
 deploy/k8s/api-gateway/ingress.yaml
 deploy/k8s/examples/              danh sách Secret; không apply thư mục này
 deploy/scripts/deploy-k8s-service.sh
+deploy/scripts/migrate-k8s-discovery.py
 ```
 
-**Không `kubectl apply -R -f deploy/k8s`.** Deployment chứa image
+**Không `kubectl apply -R -f deploy/k8s`.** Workload chứa image
 `:render-required`; script render digest đã verify trước khi apply. Không render
 bằng envsubst: `${POD_IP}`, `${POD_UID}`, `${server.port}` trong
 `SPRING_APPLICATION_JSON` do Spring resolve. Pod IP/UID lấy bằng Downward API.
 
-Liveness kiểm tiến trình còn hoạt động; readiness kiểm trạng thái nhận request.
-Startup dùng liveness, tối đa khoảng 180 giây trước khi chuyển sang probe thường.
-Hai health group chỉ gồm availability state, không gộp DB/Rabbit/Eureka vào
-liveness. Readiness UP không chứng minh nghiệp vụ/dependency đã hoạt động.
-Mỗi Pod chờ shutdown tối đa 90 giây; Spring cho 30 giây mỗi phase. Cần kiểm HTTP,
-scheduler, AMQP và đăng ký Eureka thực tế khi nghiệm thu.
+Liveness kiểm tiến trình, readiness kiểm trạng thái nhận request. Startup của
+sáu ứng dụng chờ health readiness và chính instance UID/IP có status UP trong
+Eureka. Đây là gate một lần, không khiến toàn bộ Pod đang phục vụ mất Ready khi
+Eureka tạm gián đoạn. Hai health group chỉ gồm availability state; không gộp
+DB/Rabbit/Eureka vào liveness. Các image có curl/jq để chạy hook và đọc JSON.
+Gateway/core có 180 giây shutdown, Eureka 120 giây; Spring cho 30 giây mỗi phase.
+Health/registry đạt chưa chứng minh luồng nghiệp vụ đã chạy đúng.
 
 Ingress Traefik chỉ route `/api` đến Gateway:8081. `/actuator` và `/internal`
 không có public route. Chỉ GET hai đường probe được mở chính xác trong các chain
@@ -88,7 +93,8 @@ bash /opt/flash-ticket-app/releases/<sha>/deploy/scripts/deploy-k8s-service.sh \
   <40hex-commit> deploy
 ```
 
-Mode `recreate` dùng cùng digest nhưng annotation release mới; `rollback` chỉ
+Mode `recreate` giữ tên CLI cũ: dùng cùng digest nhưng annotation release mới,
+vẫn chạy RollingUpdate theo manifest. `rollback` chỉ
 chấp nhận digest **previous** có đủ snapshot cấu hình. Không rollback một digest
 tùy ý mà không biết cấu hình tương ứng.
 
@@ -98,23 +104,83 @@ K3s hoặc fallback Compose. Compose deploy cũng dùng khóa này và từ ch�
 chuyển K8s khi gate enabled.
 
 State K8s riêng `state/k8s/<service>/`: current/previous trỏ revision, mỗi revision
-có image, Deployment/ConfigMap/Service/Ingress/HPA và snapshot Secret. Thư mục mode
+có image, Deployment hoặc StatefulSet, ConfigMap/Service/Ingress/HPA và snapshot Secret. Thư mục mode
 700/file 600, chỉ người vận hành được đọc; **không upload artifact hoặc in cả
 thư mục**. Đây là dữ liệu nhạy cảm cần backup/retention theo chính sách vận hành.
 State Compose `state/<service>.current/.previous` được giữ nguyên cho rollback
 cutover. Không ghi đè hai loại state.
 
-Sau apply, script đợi rollout (300s), đọc lại số replica mong muốn, kiểm đủ Pod
+Sau apply, script đợi rollout (600s), đọc lại số replica mong muốn, kiểm đủ Pod
 Ready không restart và Eureka có instance đúng UID/IP/port cho từng Pod. HPA có
 thể đổi replica trong khi kiểm nên script lấy lại trạng thái mỗi lượt. Không so digest multi-arch
 index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗi rollout vẫn
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
 
+## Rollout giữ ứng dụng phục vụ trên node 84
+
+Gateway và năm core dùng `RollingUpdate`, `maxUnavailable: 0`, `maxSurge: 1`,
+`minReadySeconds: 75`. Bình thường Gateway có 1 Pod, core do HPA quản lý 1–2;
+chỉ thêm Pod khi thay phiên bản. Pod mới phải đăng ký Eureka trước khi Ready.
+Pod cũ chạy preStop: PUT status OUT_OF_SERVICE, chờ 75 giây để client bỏ địa chỉ,
+rồi mới graceful shutdown. Không bật retry request ghi để che lỗi chuyển Pod.
+
+Client mới fetch registry mỗi 5 giây và tắt cache LoadBalancer vì Eureka client
+đã cache. Khoảng 75 giây còn bao phủ client cũ fetch 30 giây/cache LB 35 giây
+trong lần chuyển đầu, sau khi hai peer đã tắt read-only response cache.
+`maxSurge` không giới hạn cứng tổng số Pod kể cả các Pod đang Terminating;
+cần tính cả RAM của Pod còn drain. Trước rollout mới script yêu cầu host còn
+ít nhất 1536Mi; rollback không bị chặn bởi ngưỡng capacity này.
+
+Pod cũ trước tính năng này chưa có preStop. Lần chuyển đầu script chỉ chấp nhận
+một Pod legacy Ready/service và hai Eureka peer Ready; không ép HPA giảm replica.
+Script thêm readiness gate tạm: đợi container mới sẵn sàng/đăng ký đủ hai peer,
+đưa instance legacy OUT_OF_SERVICE trên cả hai peer, đợi 75 giây rồi mở gate.
+Nếu script bị ngắt trước đó, Pod cũ vẫn được giữ, không dựa vào một timer tự hết.
+Gateway còn đợi endpoint mới Ready, bỏ riêng nhãn phục vụ Service của Pod cũ và
+chờ Traefik cập nhật. Sau đó script bỏ gate khỏi template, thêm một lượt rollout
+để các Pod HPA sau này không phụ thuộc host controller. Nếu legacy đã scale 2, dừng rollout trước đổi
+workload và chờ cửa sổ tải thấp; không chọn ngẫu nhiên Pod chưa drain để xóa.
+
+Eureka dùng StatefulSet 2 Pod và headless Service. Peer URLs trỏ hai DNS cố định,
+hostname theo POD_NAME; client tiếp tục dùng discovery-server:8761. Update từng
+ordinal, chờ Ready/Available trước khi thay ordinal tiếp theo. Startup so local
+registry với các instance UP trên peer còn phục vụ; readiness thường không phụ
+thuộc peer để Pod sống sót vẫn phục vụ khi peer kia đang được thay. Cold start
+cả node cho phép registry rỗng nếu peer chưa truy cập được, để app đăng ký lại.
+
+Lần đầu script tự chuyển Deployment Eureka cũ sang StatefulSet dưới deploy.lock:
+snapshot tài nguyên, giữ client Service riêng Pod legacy, tạo hai peer có URL
+bootstrap tới registry cũ, kiểm mọi app Ready đã có trên cả hai peer rồi mới
+cutover Service. Gỡ URL tạm qua rollout từng peer; chỉ xóa Deployment cũ sau khi
+check cuối đạt. Khi lỗi trước hoàn tất, chỉ quay selector về Pod cũ sau khi xác
+nhận registry cũ đủ dữ liệu; giữ cả workload nếu không thể khôi phục an toàn.
+
+Backup standalone nằm trong revision migration với prefix `legacy-`. Sau chuyển
+thành công, baseline rollback mới giữ topology 2 peer và image có curl/jq; không
+đưa image standalone cũ thiếu công cụ vào startup probe mới. Quay về standalone
+là phục hồi topology từ backup trong cửa sổ vận hành riêng. Những lần image
+rollback sau đó dùng snapshot StatefulSet bình thường. Script xử lý Pod lỗi của
+StatefulSet chỉ sau khi restore template, chỉ xóa Pod chưa Ready/sai image và còn
+một peer Ready; không xóa peer khỏe để thúc rollout.
+
+Rollback core về revision trước tính năng vẫn khôi phục manifest/probes cũ,
+kể cả strategy Recreate nếu snapshot cũ dùng nó; không cam kết rollback xuyên
+mốc migration cũng không gián đoạn. Cần diễn tập trường hợp phù hợp trước dùng.
+
+Phải nghiệm thu request liên tục qua Gateway trong lúc thay từng ứng dụng,
+đối chiếu UID/image thực tế và thử đăng ký/hủy một instance chẩn đoán trên hai
+Eureka peer để chứng minh replication. Fixture/schema/dry-run không thay thế
+thử thật. Cấu hình này phục vụ cập nhật trên một máy, không chịu lỗi node 84.
+
+Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy),
+[Pod readiness gates](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-readiness),
+[Eureka peer awareness](https://docs.spring.io/spring-cloud-netflix/reference/spring-cloud-netflix.html).
+
 ## HPA cho năm service nghiệp vụ
 
-Booking, Payment, Ticket, Event và User có HPA riêng; Gateway và Eureka giữ một
-replica. Cấu hình ban đầu trên node 84: min 1, max 2, CPU trung bình mục tiêu
+Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
+Eureka giữ hai peer. Cấu hình HPA trên node 84: min 1, max 2, CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%
 tương ứng trung bình 140m/Pod, không phải 70% CPU toàn node.
@@ -131,12 +197,12 @@ HPA khôi phục policy cũ; rollback về revision **chưa có HPA** xóa HPA c
 đó và khôi phục số replica cố định trong revision. Đây là thao tác có chủ đích,
 không dùng `kubectl scale` một lần để giữ số Pod khi HPA còn hoạt động.
 
-Chiến lược cập nhật vẫn `Recreate`: HPA hỗ trợ scale 1↔2 nhưng cập nhật image/config
-vẫn có khoảng gián đoạn của Recreate. Không coi việc bật HPA là đã có rolling
-update hoặc HA trên một node.
+HPA hỗ trợ scale 1↔2; RollingUpdate giữ Pod phục vụ khi cập nhật như phần trên.
+Hai cơ chế độc lập, không làm hệ thống chịu được lỗi máy 84.
 
-Nếu cả năm core đạt max 2, tổng request K8s ở cấu hình hiện tại khoảng 1650m CPU,
-5132Mi memory, gồm Gateway/Eureka và system Pods có request. DB/Redis/Rabbit/
+Nếu cả năm core đạt max 2, tổng request K8s ở cấu hình hiện tại khoảng 1700m CPU,
+5388Mi memory, gồm Gateway/hai Eureka peer và system Pods có request, chưa cộng
+surge/Terminating Pod khi rollout. DB/Redis/Rabbit/
 Keycloak ngoài K8s vẫn dùng chung RAM của máy 84. Các request này không bảo đảm
 đủ RAM khi tải cao; theo dõi node memory/eviction/Pending, giữ max 2 và đo lại
 trước khi tăng giới hạn hoặc thêm HPA memory.
@@ -220,7 +286,8 @@ Chỉ thực hiện sau khi đã có kết quả verify, image đã publish đư
 
 ## Rollback cutover về Compose
 
-Giữ maintenance, đóng nhận giao dịch mới. Scale cả bảy Deployment ứng dụng về 0,
+Giữ maintenance, đóng nhận giao dịch mới. Scale sáu Deployment ứng dụng và
+StatefulSet discovery-server về 0 (hoặc Deployment Eureka nếu chưa migration),
 đợi Pod kết thúc và kiểm consumer dừng trước khi khởi động Compose. Bỏ gate
 enabled chỉ khi đã xác nhận K8s app dừng; giữ snapshot K8s để điều tra.
 Khôi phục đúng Compose/env/image snapshot trước chuyển đổi: Discovery trước,

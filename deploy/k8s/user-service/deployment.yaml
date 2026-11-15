@@ -8,7 +8,10 @@ metadata:
     app.kubernetes.io/part-of: flash-ticket
 spec:
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: user-service
@@ -17,7 +20,7 @@ spec:
       labels: *id001
     spec:
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 90
+      terminationGracePeriodSeconds: 180
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -55,11 +58,15 @@ spec:
         - secretRef:
             name: user-service-secret
         startupProbe:
-          httpGet:
-            path: /actuator/health/liveness
-            port: http
+          exec:
+            command:
+            - sh
+            - -ec
+            - |
+              curl -fsS --max-time 2 http://127.0.0.1:8085/actuator/health/readiness >/dev/null
+              curl -fsS --max-time 2 -H "Accept: application/json" "${EUREKA_SERVER_URL%/}/apps/USER-SERVICE/user-service:${POD_UID}" | jq -e --arg id "user-service:${POD_UID}" --arg ip "$POD_IP" ' .instance | .status == "UP" and .instanceId == $id and .ipAddr == $ip ' >/dev/null
           periodSeconds: 5
-          timeoutSeconds: 3
+          timeoutSeconds: 5
           failureThreshold: 36
         readinessProbe:
           httpGet:
@@ -67,7 +74,7 @@ spec:
             port: http
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 3
+          failureThreshold: 2
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
@@ -75,3 +82,16 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -ec
+              - |
+                # Đưa instance ra khỏi registry, chờ client bỏ địa chỉ rồi mới shutdown.
+                result=0
+                curl -fsS --max-time 4 --retry 3 --retry-delay 1 --retry-all-errors -X PUT "${EUREKA_SERVER_URL%/}/apps/USER-SERVICE/user-service:${POD_UID}/status?value=OUT_OF_SERVICE" >/dev/null || result=$?
+                sleep 75
+                exit "$result"
+  minReadySeconds: 75

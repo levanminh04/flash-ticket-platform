@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: discovery-server
+  namespace: flash-ticket
+  labels:
+    app.kubernetes.io/name: discovery-server
+    app.kubernetes.io/part-of: flash-ticket
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: discovery-server
+      flash-ticket/discovery-generation: peers
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: discovery-server
+        app.kubernetes.io/part-of: flash-ticket
+        flash-ticket/discovery-generation: peers
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+      - name: discovery-server
+        image: ghcr.io/levanminh04/flash-ticket-platform/discovery-server:render-required
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8761
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            memory: 384Mi
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+        - configMapRef:
+            name: discovery-server-config
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - |
+              # Pod mới phải có các instance UP đang tồn tại trên peer trước khi nhận traffic.
+              curl -fsS --max-time 2 http://127.0.0.1:8761/actuator/health/readiness >/dev/null
+              local_registry=$(mktemp)
+              peer_registry=$(mktemp)
+              trap 'rm -f "$local_registry" "$peer_registry"' EXIT
+              curl -fsS --max-time 2 -H 'Accept: application/json' http://127.0.0.1:8761/eureka/apps > "$local_registry"
+              jq -e '.applications | type == "object"' "$local_registry" >/dev/null
+              case "$POD_NAME" in
+                discovery-server-0) peer=discovery-server-1 ;;
+                discovery-server-1) peer=discovery-server-0 ;;
+                *) exit 1 ;;
+              esac
+              if curl -fsS --max-time 2 -H 'Accept: application/json' "http://${peer}.discovery-server-peers.flash-ticket.svc.cluster.local:8761/eureka/apps" > "$peer_registry"; then
+                jq -e '.applications | type == "object"' "$peer_registry" >/dev/null
+                jq -e --slurpfile peer "$peer_registry" '
+                  def list: if type == "array" then . elif . == null then [] else [.] end;
+                  def live:
+                    [.applications.application | list | .[] | .instance | list | .[]
+                     | select(.status == "UP" and .app != "DISCOVERY-SERVER")
+                     | [.instanceId, .ipAddr, (.port."$" | tostring)]];
+                  live as $local | ($peer[0] | live) as $remote | ($remote - $local | length) == 0
+                ' "$local_registry" >/dev/null
+              fi
+              # Không có peer khi cả node vừa khởi động: cho registry rỗng bootstrap để app đăng ký.
+          periodSeconds: 5
+          timeoutSeconds: 8
+          failureThreshold: 36
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - |
+              wget -q -T 2 -O /dev/null http://127.0.0.1:8761/actuator/health/readiness
+              wget -q -T 2 -O /dev/null http://127.0.0.1:8761/eureka/apps
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            sleep:
+              seconds: 15
+  serviceName: discovery-server-peers
+  podManagementPolicy: Parallel
+  minReadySeconds: 30
+  updateStrategy:
+    type: RollingUpdate

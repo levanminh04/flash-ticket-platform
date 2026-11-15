@@ -78,6 +78,12 @@ jobs:
         run: |
           bash .github/scripts/test-k8s-deploy-routing.sh
           python3 .github/scripts/test-k8s-deploy.py
+          python3 .github/scripts/test-k8s-discovery.py
+      - name: Rollout hooks in the application runtime
+        run: |
+          python3 -m venv "$RUNNER_TEMP/rollout-hooks-venv"
+          "$RUNNER_TEMP/rollout-hooks-venv/bin/pip" install --disable-pip-version-check PyYAML==6.0.3
+          "$RUNNER_TEMP/rollout-hooks-venv/bin/python" .github/scripts/test-k8s-rollout-hooks.py
       - name: Workflow syntax
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color=false
       - name: Kubernetes resource schemas

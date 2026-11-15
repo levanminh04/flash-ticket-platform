@@ -202,7 +202,7 @@ jobs:
             # shellcheck disable=SC2029
             ssh "${opts[@]}" "$dest" "umask 077; mkdir -p '$release'"
             # shellcheck disable=SC2029
-            tar -cf - deploy/k8s deploy/scripts/deploy-k8s-service.sh | ssh "${opts[@]}" "$dest" "tar -C '$release' -xf -"
+            tar -cf - deploy/k8s deploy/scripts/deploy-k8s-service.sh deploy/scripts/migrate-k8s-discovery.py | ssh "${opts[@]}" "$dest" "tar -C '$release' -xf -"
             deploy_mode=deploy
             if [[ $MODE == recreate || $MODE == rollback ]]; then deploy_mode=$MODE; fi
             # GHCR pull authentication, if needed, is provisioned persistently on the cluster.
