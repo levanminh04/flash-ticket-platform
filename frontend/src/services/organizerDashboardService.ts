@@ -11,18 +11,6 @@ export interface OrganizerSummary {
   rowVersion: string;
   sourceConfigVersion: string;
 }
-export interface EventStatistics {
-  eventId: string;
-  asOf: string;
-  salesAsOf: string;
-  financeAsOf: string;
-  purchasedTicketCount: string;
-  currency: string;
-  validGross: string;
-  validRefunds: string;
-  feeAmount: string;
-  netAmount: string;
-}
 export interface PublicOrganizer {
   organizerSubject: string;
   organizationName: string;
@@ -32,7 +20,61 @@ export interface PublicOrganizer {
   bannerUrl: string | null;
 }
 
+interface SalesReport {
+  from: string;
+  to: string;
+  asOf: string;
+  currency: string;
+}
+
+interface SalesTotals {
+  soldOrderCount: number;
+  soldTicketCount: number;
+  soldRevenue: string;
+}
+
+interface SalesChart extends SalesReport {
+  items: (SalesTotals & { periodStart: string; periodEnd: string })[];
+}
+
+interface EventSalesPage extends SalesReport {
+  items: (SalesTotals & { eventId: string; eventTitle: string })[];
+  page: number;
+  totalPages: number;
+}
+
+const organizerPath = (subject: string) => "/api/v1/organizers/" + encodeURIComponent(subject);
+
 export const organizerDashboardService = {
+  salesSummary: async (subject: string, from?: string, to?: string, signal?: AbortSignal) =>
+    (await axiosClient.get<SalesReport & SalesTotals>(organizerPath(subject) + "/sales/summary", {
+      params: { from: from || undefined, to: to || undefined },
+      signal,
+    })).data,
+  salesChart: async (subject: string, from?: string, to?: string, groupBy = "DAY", signal?: AbortSignal) =>
+    (await axiosClient.get<SalesChart>(organizerPath(subject) + "/sales/chart", {
+      params: { from: from || undefined, to: to || undefined, groupBy },
+      signal,
+    })).data,
+  eventSales: async (
+    subject: string,
+    page: number,
+    from?: string,
+    to?: string,
+    signal?: AbortSignal,
+    size = 100,
+  ) =>
+    (await axiosClient.get<EventSalesPage>(organizerPath(subject) + "/events/sales-statistics", {
+      params: {
+        page,
+        size,
+        sortBy: "soldTicketCount",
+        direction: "DESC",
+        from: from || undefined,
+        to: to || undefined,
+      },
+      signal,
+    })).data,
   profile: async (subject: string, signal?: AbortSignal) => {
     const response = await axiosClient.get<PublicOrganizer>(`/api/v1/organizers/${encodeURIComponent(subject)}`, { signal });
     return response.data;
@@ -46,9 +88,14 @@ export const organizerDashboardService = {
     );
     return response.data;
   },
-  events: async (cursor: string | null, signal?: AbortSignal, status?: OrganizerSummary["status"]) => {
+  events: async (
+    cursor: string | null,
+    signal?: AbortSignal,
+    status?: OrganizerSummary["status"],
+    size = 20,
+  ) => {
     const response = await axiosClient.get<{ items: OrganizerSummary[]; nextCursor: string | null }>(
-      "/api/v1/organizer/events", { params: { size: 20, cursor: cursor ?? undefined, status }, signal },
+      "/api/v1/organizer/events", { params: { size, cursor: cursor ?? undefined, status }, signal },
     );
     return response.data;
   },
@@ -58,8 +105,14 @@ export const organizerDashboardService = {
     );
     return response.data;
   },
-  statistics: async (id: string, signal?: AbortSignal) => {
-    const response = await axiosClient.get<EventStatistics>(`/api/v1/organizer/events/${id}/statistics`, { signal });
+  eventSalesSummary: async (eventId: string, signal?: AbortSignal, from?: string, to?: string) => {
+    const response = await axiosClient.get<SalesReport & SalesTotals>(
+      "/api/v1/organizer/events/" + encodeURIComponent(eventId) + "/sales-summary",
+      {
+        params: { from: from || undefined, to: to || undefined },
+        signal,
+      },
+    );
     return response.data;
   },
 };

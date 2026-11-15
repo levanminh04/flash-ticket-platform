@@ -4,6 +4,7 @@ import { EventPage, PublicEventContract } from "../types/eventContract";
 
 function toEventSummary(event: PublicEventContract): EventSummary {
   const images = [...event.images].sort((a, b) => a.displayOrder - b.displayOrder);
+  const banner = images.find(image => image.role === "BANNER")?.objectReference;
   const ticketTypes = event.ticketTypes.map((type, displayOrder) => ({
     id: type.ticketTypeId, eventId: event.eventId, name: type.name,
     unitPrice: type.unitPrice, price: Number(type.unitPrice), currency: type.currency,
@@ -32,26 +33,55 @@ function toEventSummary(event: PublicEventContract): EventSummary {
   return {
     id: event.eventId, slug: event.eventId, title: event.title, description: event.description,
     startDatetime: event.startsAt, endDatetime: event.endsAt, venueName: event.venueName,
+    organizer: event.organizerSubject
+      ? { id: event.organizerSubject, userId: event.organizerSubject, name: "", slug: event.organizerSubject }
+      : undefined,
+    categoryId: event.categoryId ?? null,
     mode: event.mode, seatMap, ticketTypes,
-    // Endpoint này chỉ trả sự kiện PUBLISHED; DTO không có slug hay category.
+    // Endpoint này chỉ trả sự kiện PUBLISHED; DTO không có slug.
     status: "PUBLISHED", isFeatured: false,
-    bannerUrl: images[0]?.objectReference || "/event-placeholder.svg", thumbnailUrl: images[0]?.objectReference,
-    images: images.map((image, index) => ({ type: index === 0 ? "BANNER" : "GALLERY", url: image.objectReference })),
+    bannerUrl: banner || "/event-placeholder.svg", thumbnailUrl: banner,
+    images: images.map(image => ({ type: image.role, url: image.objectReference })),
     minPrice: ticketTypes.length ? Math.min(...ticketTypes.map(type => type.price)) : undefined,
     minPriceAmount: event.ticketTypes.reduce<string | undefined>((minimum, type) => minimum === undefined || BigInt(type.unitPrice) < BigInt(minimum) ? type.unitPrice : minimum, undefined),
   };
 }
 
 export const eventService = {
-  getEvents: async (params: { search?: string; category?: string; size?: number; cursor?: string; [key: string]: unknown } = {}): Promise<EventPage> => {
+  getEvents: async (
+    params: {
+      search?: string;
+      category?: string;
+      from?: string;
+      to?: string;
+      maxPrice?: string;
+      venue?: string;
+      includePast?: boolean;
+      size?: number;
+      cursor?: string;
+      [key: string]: unknown;
+    } = {},
+    signal?: AbortSignal,
+  ): Promise<EventPage> => {
     const response = await axiosClient.get<{ items: PublicEventContract[]; nextCursor: string | null }>("/api/v1/events", {
-      params: { q: params.search || undefined, categoryId: params.category || undefined, size: params.size ?? 20, cursor: params.cursor || undefined },
+      signal,
+      params: {
+        q: params.search || undefined,
+        categoryId: params.category || undefined,
+        from: params.from || undefined,
+        to: params.to || undefined,
+        maxPrice: params.maxPrice || undefined,
+        venue: params.venue || undefined,
+        includePast: params.includePast ? true : undefined,
+        size: params.size ?? 20,
+        cursor: params.cursor || undefined,
+      },
     });
     return { content: response.data.items.map(toEventSummary), nextCursor: response.data.nextCursor };
   },
   getFeaturedEvents: async (limit = 8) => (await eventService.getEvents({ size: limit })).content,
-  getEventDetails: async (eventId: string): Promise<EventSummary> => {
-    const response = await axiosClient.get<PublicEventContract>(`/api/v1/events/${eventId}`);
+  getEventDetails: async (eventId: string, signal?: AbortSignal): Promise<EventSummary> => {
+    const response = await axiosClient.get<PublicEventContract>(`/api/v1/events/${encodeURIComponent(eventId)}`, { signal });
     return toEventSummary(response.data);
   },
   getSeatMap: async (eventId: string): Promise<PublicSeatMap | null> => {

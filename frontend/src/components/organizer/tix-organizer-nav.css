@@ -1,0 +1,244 @@
+/* ============================================================
+   TIX ORGANIZER TOP NAVIGATION BAR
+   ============================================================ */
+
+.tix-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+/* Left Brand / Logo */
+.tix-topbar .logo,
+.tix-topbar .logo:hover,
+.tix-topbar .logo:active,
+.tix-topbar .logo:focus,
+.tix-topbar .logo:focus-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-strong, #15171a);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 38px;
+  letter-spacing: -0.96px;
+  text-decoration: none;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--font-family, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+}
+
+.tix-topbar .logo span {
+  color: var(--text-strong, #15171a);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 38px;
+  letter-spacing: -0.96px;
+  font-family: inherit;
+}
+
+.tix-topbar .nav-brand-cat {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: brightness(0) drop-shadow(.3px 0 currentColor) drop-shadow(-.3px 0 currentColor);
+  display: block;
+}
+
+/* Center Floating Pill Navigation */
+.tix-pill-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--text-strong, #15171a);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(21, 23, 26, 0.15);
+}
+
+.tix-pill-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-secondary-on-dark, rgba(255, 255, 255, 0.7));
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tix-pill-item:hover {
+  color: var(--text-on-dark, #ffffff);
+}
+
+.tix-pill-item.active {
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Right User Profile & Language Switcher */
+.tix-topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tix-topbar-divider {
+  width: 1.5px;
+  height: 20px;
+  background: color-mix(in srgb, var(--text-strong, #15171a) 28%, transparent);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.tix-account-dropdown {
+  position: relative;
+}
+
+.tix-topbar-right .account-trigger.tix-account-trigger,
+.tix-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 12px 4px 6px !important;
+  border-radius: 999px !important;
+  list-style: none;
+  background: transparent;
+  border: none;
+  transition: all 0.15s ease;
+  user-select: none;
+  color: var(--text-strong, #15171a);
+  outline: none;
+}
+
+.tix-account-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.tix-topbar-right .account-trigger.tix-account-trigger:hover,
+.tix-topbar-right .account-trigger.tix-account-trigger:focus,
+.tix-topbar-right .account-trigger.tix-account-trigger:focus-visible,
+.tix-topbar-right .tix-account-dropdown[open] .account-trigger.tix-account-trigger,
+.tix-account-trigger:hover,
+.tix-account-dropdown[open] .tix-account-trigger {
+  background: rgba(204, 153, 0, 0.08) !important;
+  color: var(--brand-ink, #b8860b) !important;
+  border-radius: 999px !important;
+}
+
+.tix-nav-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid #cbd5e1;
+}
+
+.tix-nav-account-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-account-dropdown[open] .account-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.tix-account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid var(--border, #e2e6ed);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04);
+  padding: 6px;
+  z-index: 1000;
+  animation: tixDropdownFade 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tix-user-info-box {
+  padding: 8px 12px 6px;
+}
+
+.tix-user-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-user-role {
+  font-size: 11px;
+  color: var(--text-muted, #666b74);
+  font-weight: 500;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-account-menu hr {
+  margin: 6px 0;
+  border: none;
+  border-top: 1px solid #f1f5f9;
+}
+
+.tix-account-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong, #15171a);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.tix-account-menu .dropdown-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.tix-account-menu .dropdown-item.logout {
+  color: #ef4444;
+}
+
+.tix-account-menu .dropdown-item.logout:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+@keyframes tixDropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

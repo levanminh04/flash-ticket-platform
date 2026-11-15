@@ -1,30 +1,23 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useParams } from "react-router-dom";
 import {
   BadgeCheck,
+  Building2,
   CalendarDays,
-  Globe,
+  Check,
+  Copy,
   Heart,
   LoaderCircle,
-  Mail,
-  Phone,
-  Star,
-  Ticket,
-  Users,
+  Search,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
 import Footer from "../../components/common/Footer";
-import { eventService } from "../../services/eventService";
 import { OrganizerProfile, organizerService } from "../../services/organizerService";
-import { EventSummary } from "../../types/api";
-
-function statNumber(value: number | null | undefined, language: string) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? new Intl.NumberFormat(language === "en" ? "en-US" : "vi-VN").format(value)
-    : "0";
-}
+import "./organizer-dashboard.css";
+import "./organizer-profile.css";
 
 function organizerInitials(name?: string | null) {
   if (!name) return "FT";
@@ -37,92 +30,25 @@ function organizerInitials(name?: string | null) {
     .toUpperCase();
 }
 
-async function getCandidatePublicEvents(organizerId: string): Promise<EventSummary[]> {
-  // Public API dùng cursor; bước sau vẫn phải xác minh organizer trước khi hiển thị.
-  const events: EventSummary[] = [];
-  let cursor: string | undefined;
-  do {
-    const result = await eventService.getEvents({ size: 100, cursor, organizerId });
-    events.push(...result.content);
-    cursor = result.nextCursor || undefined;
-  } while (cursor);
-  return events;
-}
-
-function belongsToOrganizer(
-  event: EventSummary,
-  organizerUserId: string,
-  organizerProfileId: string,
-) {
-  return (
-    event.organizer?.userId === organizerUserId ||
-    event.organizer?.id === organizerUserId ||
-    event.organizer?.id === organizerProfileId
-  );
-}
-
-async function getVerifiedPublicOrganizerEvents(
-  organizerUserId: string,
-  organizerProfileId: string,
-): Promise<EventSummary[]> {
-  const candidates = await getCandidatePublicEvents(organizerUserId);
-
-  if (candidates.length === 0) {
-    return [];
-  }
-
-  const detailedEvents = await Promise.all(
-    candidates.map(async (event) => {
-      const idOrSlug = event.slug || event.id;
-      if (!idOrSlug) return event;
-
-      try {
-        return await eventService.getEventDetails(idOrSlug);
-      } catch {
-        return event;
-      }
-    }),
-  );
-
-  return detailedEvents.filter((event) =>
-    belongsToOrganizer(event, organizerUserId, organizerProfileId),
-  );
-}
-
-function getTicketsSold(events: EventSummary[]) {
-  return events.reduce(
-    (sum, event) => sum + (event.statistics?.ticketsSold ?? event.ticketsSold ?? 0),
-    0,
-  );
-}
-
 export default function PublicOrganizerPage() {
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const { keycloak, initialized } = useKeycloak();
   const queryClient = useQueryClient();
-  const language = i18n.resolvedLanguage || "vi";
 
-  const {
-    data: organizer,
-    isLoading,
-    isError,
-  } = useQuery({
+  const [copiedSubject, setCopiedSubject] = useState(false);
+
+  const organizerQuery = useQuery({
     queryKey: ["public-organizer", slug],
-    queryFn: () => organizerService.getPublicOrganizerBySlug(slug || ""),
+    queryFn: ({ signal }) => organizerService.getPublicOrganizerBySlug(slug || "", signal),
     enabled: Boolean(slug),
   });
 
+  const organizer = organizerQuery.data;
   const organizerProfileId = organizer?.id;
   const organizerUserId = organizer?.userId;
-  const isOwnOrganizer = keycloak.subject && keycloak.subject === organizerUserId;
+  const isOwnOrganizer = Boolean(keycloak.subject && keycloak.subject === organizerUserId);
 
-  const { data: publicEvents = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ["public-organizer-events", organizerUserId, organizerProfileId],
-    queryFn: () =>
-      getVerifiedPublicOrganizerEvents(organizerUserId || "", organizerProfileId || ""),
-    enabled: Boolean(organizerUserId) && Boolean(organizerProfileId),
-  });
 
   const { data: isFollowing = false } = useQuery({
     queryKey: ["organizer-follow-status", organizerProfileId],
@@ -175,166 +101,186 @@ export default function PublicOrganizerPage() {
     followMutation.mutate();
   };
 
-  if (isLoading) {
+  const handleCopySubject = () => {
+    const idValue = organizer?.userId || organizer?.id;
+    if (!idValue) return;
+    navigator.clipboard?.writeText(idValue);
+    setCopiedSubject(true);
+    toast.success(t("organizerProfile.copiedSubject", "Đã sao chép mã định danh!"));
+    setTimeout(() => setCopiedSubject(false), 1500);
+  };
+
+  if (organizerQuery.isLoading) {
     return (
-      <main className="public-organizer-page">
-        <div className="event-detail-loading" role="status" aria-live="polite">
-          <LoaderCircle className="event-detail-loading-icon" size={24} />
-          <span>{t("publicOrganizer.loading")}</span>
-        </div>
-      </main>
+      <div className="tix-public-organizer-wrapper">
+        <main className="tix-dashboard-page tix-profile-page tix-public-organizer-page">
+          <div className="tix-dashboard-container">
+            <div className="tix-public-state-card" role="status" aria-live="polite">
+              <LoaderCircle className="tix-spin" size={24} />
+              <span>{t("publicOrganizer.loading")}</span>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
     );
   }
 
-  if (isError || !organizer) {
+  if (organizerQuery.isError || !organizer) {
     return (
-      <main className="public-organizer-page">
-        <section className="public-organizer-state">
-          <h1>{t("publicOrganizer.notFoundTitle")}</h1>
-          <p>{t("publicOrganizer.notFoundDescription")}</p>
-          <Link className="btn btn-primary" to="/search">
-            {t("publicOrganizer.searchOther")}
-          </Link>
-        </section>
-      </main>
+      <div className="tix-public-organizer-wrapper">
+        <main className="tix-dashboard-page tix-profile-page tix-public-organizer-page">
+          <div className="tix-dashboard-container">
+            <section className="tix-public-state-card">
+              <h1>{t("publicOrganizer.notFoundTitle")}</h1>
+              <p>{t("publicOrganizer.notFoundDescription")}</p>
+              <Link className="tix-primary-cta-btn" to="/search" style={{ textDecoration: "none" }}>
+                <Search size={14} aria-hidden="true" />
+                <span>{t("publicOrganizer.searchOther")}</span>
+              </Link>
+            </section>
+          </div>
+        </main>
+        <Footer />
+      </div>
     );
   }
 
-  const heroImageUrl = organizer.bannerUrl || organizer.logoUrl || null;
-  const heroClassName = [
-    "public-organizer-hero",
-    organizer.bannerUrl ? "" : "public-organizer-hero--no-banner",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const totalEvents = publicEvents.length;
-  const totalTicketsSold = getTicketsSold(publicEvents);
+  const orgSubject = organizer.userId || organizer.id;
 
   return (
-    <main className="public-organizer-page">
-      <section
-        className={heroClassName}
-        style={heroImageUrl ? { backgroundImage: `url(${heroImageUrl})` } : undefined}
-      >
-        <div className="public-organizer-hero-overlay" />
-        <div className="container public-organizer-hero-content">
-          <div className="public-organizer-avatar">
-            {organizer.logoUrl ? (
-              <img src={organizer.logoUrl} alt={organizer.name} />
-            ) : (
-              <span>{organizerInitials(organizer.name)}</span>
-            )}
+    <div className="tix-public-organizer-wrapper">
+      <main className="tix-dashboard-page tix-profile-page tix-public-organizer-page">
+        <div className="tix-dashboard-container">
+          {/* 1. Hero Branding Card — Banner + Squircle Avatar + Org Name & Description */}
+          <div className="tix-profile-hero-card">
+            <div className="tix-profile-banner-wrap is-readonly">
+              {organizer.bannerUrl ? (
+                <img
+                  src={organizer.bannerUrl}
+                  alt={organizer.name}
+                  className="tix-profile-banner-img"
+                />
+              ) : (
+                <div className="tix-profile-banner-empty">
+                  <span>{t("publicOrganizer.bannerMissing")}</span>
+                </div>
+              )}
+
+              {!isOwnOrganizer && (
+                <div className="tix-public-banner-action">
+                  <button
+                    type="button"
+                    className={`tix-primary-cta-btn tix-public-follow-btn ${
+                      isFollowing ? "is-following" : ""
+                    }`}
+                    onClick={handleFollowClick}
+                    disabled={followMutation.isPending}
+                  >
+                    {followMutation.isPending ? (
+                      <LoaderCircle size={14} className="tix-spin" aria-hidden="true" />
+                    ) : (
+                      <Heart size={14} aria-hidden="true" />
+                    )}
+                    <span>
+                      {isFollowing ? t("publicOrganizer.unfollow") : t("publicOrganizer.follow")}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="tix-profile-identity-body">
+              <div className="tix-profile-identity-main">
+                <div className="tix-profile-avatar-col">
+                  <div className="tix-profile-avatar-box is-readonly">
+                    {organizer.logoUrl ? (
+                      <img src={organizer.logoUrl} alt={organizer.name} />
+                    ) : (
+                      <span>{organizerInitials(organizer.name)}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="tix-profile-copy">
+                  <div className="tix-profile-name-row">
+                    <h1 className="tix-profile-org-name">{organizer.name}</h1>
+                    {organizer.isVerified && (
+                      <span className="tix-profile-verified-pill">
+                        <BadgeCheck size={13} aria-hidden="true" />
+                        <span>{t("organizerProfile.verifiedBadge", "Hoạt động")}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="tix-public-description-row">
+                    <p className="tix-profile-desc">
+                      {organizer.description || t("publicOrganizer.descriptionMissing")}
+                    </p>
+                    {typeof organizer.followerCount === "number" && Number.isFinite(organizer.followerCount) && (
+                      <span className="tix-overview-badge">
+                        {t("organizerHub.followersCount", { count: organizer.followerCount })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="public-organizer-copy">
-            <div className="public-organizer-title-row">
-              <h1>{organizer.name}</h1>
-              {organizer.isVerified ? (
-                <span className="public-organizer-verified">
-                  <BadgeCheck size={16} />
-                  {t("publicOrganizer.verified")}
-                </span>
-              ) : null}
-            </div>
-            <p>{organizer.description || t("publicOrganizer.descriptionMissing")}</p>
-            <div className="public-organizer-actions">
-              {!isOwnOrganizer ? (
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={handleFollowClick}
-                  disabled={followMutation.isPending}
-                >
-                  {followMutation.isPending ? (
-                    <LoaderCircle size={16} className="spin" />
-                  ) : (
-                    <Heart size={16} />
-                  )}
-                  {isFollowing ? t("publicOrganizer.unfollow") : t("publicOrganizer.follow")}
-                </button>
-              ) : null}
-              {!organizer.bannerUrl ? (
-                <span className="public-organizer-banner-note">
-                  {t("publicOrganizer.bannerMissing")}
-                </span>
-              ) : null}
+          {/* 3. 2-Column Detail Grid — đồng bộ 1.4fr / 1fr với /organizer/profile */}
+          <div className="tix-profile-grid">
+            <div className="tix-orders-card">
+              <div className="tix-card-header">
+                <div>
+                  <h3 className="tix-card-title">
+                    {t("organizerProfile.identityInfo", "Thông tin định danh")}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="tix-profile-info-list">
+                <div className="tix-profile-info-row">
+                  <span className="tix-profile-info-label">
+                    <Building2 size={14} aria-hidden="true" />
+                    <span>{t("organizerProfile.title", "Hồ sơ ban tổ chức")}</span>
+                  </span>
+                  <span className="tix-profile-info-value">{organizer.name}</span>
+                </div>
+
+                <div className="tix-profile-info-row">
+                  <span className="tix-profile-info-label">
+                    <BadgeCheck size={14} aria-hidden="true" />
+                    <span>{t("organizerProfile.organizerId", "Mã định danh Ban tổ chức")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="tix-profile-copy-btn"
+                    onClick={handleCopySubject}
+                    title={orgSubject}
+                  >
+                    <span>{orgSubject}</span>
+                    {copiedSubject ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                  </button>
+                </div>
+              </div>
+
+              {isOwnOrganizer && (
+                <div className="tix-profile-quick-actions">
+                  <Link
+                    className="tix-primary-cta-btn"
+                    to="/organizer/events"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <CalendarDays size={14} aria-hidden="true" />
+                    <span>{t("organizerProfile.manageEvents", "Quản lý sự kiện")}</span>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="container public-organizer-content">
-        <div className="public-organizer-stats">
-          <div className="public-organizer-stat">
-            <CalendarDays size={24} />
-            <div className="public-organizer-stat-info">
-              <span>{t("publicOrganizer.eventsOnSale")}</span>
-              <strong>{eventsLoading ? "..." : statNumber(totalEvents, language)}</strong>
-            </div>
-          </div>
-          <div className="public-organizer-stat">
-            <Ticket size={24} />
-            <div className="public-organizer-stat-info">
-              <span>{t("publicOrganizer.ticketsSold")}</span>
-              <strong>{eventsLoading ? "..." : statNumber(totalTicketsSold, language)}</strong>
-            </div>
-          </div>
-          <div className="public-organizer-stat">
-            <Users size={24} />
-            <div className="public-organizer-stat-info">
-              <span>{t("publicOrganizer.followers")}</span>
-              <strong>{statNumber(organizer.followerCount, language)}</strong>
-            </div>
-          </div>
-          <div className="public-organizer-stat">
-            <Star size={24} />
-            <div className="public-organizer-stat-info">
-              <span>{t("publicOrganizer.averageRating")}</span>
-              <strong>
-                {typeof organizer.averageRating === "number"
-                  ? organizer.averageRating.toFixed(1)
-                  : "0.0"}
-              </strong>
-            </div>
-          </div>
-        </div>
-
-        <section className="public-organizer-info">
-          <h2>{t("publicOrganizer.contactInfo")}</h2>
-
-          <div className="public-organizer-contact-grid">
-            <div className="public-organizer-contact">
-              <Mail size={24} />
-              <div className="public-organizer-contact-info">
-                <span>Email</span>
-                <strong>{organizer.email || t("publicOrganizer.emailMissing")}</strong>
-              </div>
-            </div>
-            <div className="public-organizer-contact">
-              <Phone size={24} />
-              <div className="public-organizer-contact-info">
-                <span>{t("publicOrganizer.phone")}</span>
-                <strong>{organizer.phone || t("publicOrganizer.emailMissing")}</strong>
-              </div>
-            </div>
-            <div className="public-organizer-contact">
-              <Globe size={24} />
-              <div className="public-organizer-contact-info">
-                <span>Website</span>
-                {organizer.websiteUrl ? (
-                  <a href={organizer.websiteUrl} target="_blank" rel="noreferrer">
-                    {organizer.websiteUrl}
-                  </a>
-                ) : (
-                  <strong>{t("publicOrganizer.websiteMissing")}</strong>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      </section>
-
+      </main>
       <Footer />
-    </main>
+    </div>
   );
 }

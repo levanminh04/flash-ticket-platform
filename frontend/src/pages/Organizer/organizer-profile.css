@@ -1,0 +1,378 @@
+/* ============================================================
+   FLASHTICKET — ORGANIZER PROFILE (TIX STYLE)
+   Synchronized with organizer-dashboard.css & TixOrganizerTopNav
+   ============================================================ */
+
+.tix-profile-page .tix-profile-hero-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.tix-profile-page .tix-profile-banner-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 220px;
+  background: linear-gradient(135deg, #15171a 0%, #2b303a 55%, #3f4756 100%);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tix-profile-page .tix-profile-banner-wrap.is-disabled,
+.tix-profile-page .tix-profile-avatar-box.is-disabled {
+  cursor: not-allowed;
+}
+
+.tix-profile-page .tix-profile-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tix-profile-page .tix-profile-banner-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tix-profile-page .tix-profile-media-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.36);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.tix-profile-page .tix-profile-banner-wrap:hover .tix-profile-media-overlay,
+.tix-profile-page .tix-profile-banner-wrap:focus-within .tix-profile-media-overlay,
+.tix-profile-page .tix-profile-banner-wrap.is-uploading .tix-profile-media-overlay,
+.tix-profile-page .tix-profile-avatar-box:hover .tix-profile-media-overlay,
+.tix-profile-page .tix-profile-avatar-box:focus-within .tix-profile-media-overlay,
+.tix-profile-page .tix-profile-avatar-box.is-uploading .tix-profile-media-overlay {
+  opacity: 1;
+}
+
+.tix-profile-page .tix-profile-camera-icon {
+  color: #ffffff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+.tix-profile-page .tix-profile-identity-body {
+  padding: 0 24px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.tix-profile-page .tix-profile-identity-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tix-profile-page .tix-profile-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: -44px;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.tix-profile-page .tix-profile-avatar-box {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  border: 4px solid #ffffff;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
+.tix-profile-page .tix-profile-avatar-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tix-profile-page .tix-profile-copy {
+  padding-top: 16px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tix-profile-page .tix-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tix-profile-page .tix-profile-org-name {
+  margin: 0;
+  font-size: clamp(20px, 2vw, 24px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-strong, #15171a);
+  line-height: 1.25;
+}
+
+.tix-profile-page .tix-profile-verified-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tix-profile-page .tix-profile-desc {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-subtle, #565e69);
+  max-width: 720px;
+}
+
+.tix-profile-page .tix-profile-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-profile-page .tix-profile-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.tix-public-organizer-page .tix-public-description-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.tix-public-organizer-page .tix-public-description-row .tix-profile-desc {
+  margin: 0;
+}
+
+.tix-profile-page.tix-public-organizer-page .tix-profile-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tix-profile-page .tix-profile-info-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+}
+
+.tix-profile-page .tix-profile-info-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-profile-page .tix-profile-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.tix-profile-page .tix-profile-info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+  flex-shrink: 0;
+}
+
+.tix-profile-page .tix-profile-info-label svg {
+  color: var(--text-muted, #666b74);
+}
+
+.tix-profile-page .tix-profile-info-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.tix-profile-page .tix-profile-info-value.is-muted {
+  color: var(--text-muted, #666b74);
+  font-weight: 500;
+}
+
+.tix-profile-page .tix-profile-info-link {
+  color: var(--text-strong, #15171a);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tix-profile-page .tix-profile-info-link:hover {
+  color: var(--brand-ink, #805c00);
+}
+
+.tix-profile-page .tix-profile-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: right;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.tix-profile-page .tix-profile-copy-btn:hover {
+  background: transparent;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-profile-page .tix-profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.tix-profile-page .tix-profile-stat-tile {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e6ed);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tix-profile-page .tix-profile-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-profile-page .tix-profile-stat-val {
+  font-size: 20px;
+  font-weight: 750;
+  color: var(--text-strong, #15171a);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tix-profile-page .tix-profile-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-profile-page .tix-profile-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-profile-page .tix-profile-error-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tix-profile-page .tix-spin {
+  animation: tixProfileSpin 0.8s linear infinite;
+}
+
+@keyframes tixProfileSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+  .tix-profile-page .tix-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tix-profile-page .tix-profile-identity-main {
+    flex-direction: column;
+  }
+
+  .tix-profile-page .tix-profile-copy {
+    padding-top: 0;
+  }
+
+  .tix-profile-page .tix-profile-info-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tix-profile-page .tix-profile-info-value {
+    text-align: left;
+  }
+
+  .tix-profile-page .tix-profile-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

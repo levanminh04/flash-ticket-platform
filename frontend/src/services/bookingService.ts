@@ -1,6 +1,6 @@
 import axiosClient from "../lib/axiosClient";
 import keycloak from "../lib/keycloak";
-import { Availability, CreateOrderRequest, OrderSelection, OrderView } from "../types/bookingContract";
+import { Availability, BuyerOrdersPage, CreateOrderRequest, OrderSelection, OrderView } from "../types/bookingContract";
 
 function buyerSessionScope() {
   if (!keycloak.authenticated || !keycloak.tokenParsed?.sub) throw new Error("UNAUTHENTICATED");
@@ -12,13 +12,18 @@ function rememberOrder(order: OrderView, scope: string) {
 }
 
 export const bookingService = {
+  getBuyerOrders: async (params: { page: number; size: number; state?: OrderView["state"] }, signal?: AbortSignal): Promise<BuyerOrdersPage> => {
+    const response = await axiosClient.get<BuyerOrdersPage>("/api/v1/orders", { params, signal });
+    return response.data;
+  },
+
   getOrder: async (orderId: string, signal?: AbortSignal): Promise<OrderView | null> => {
     const response = await axiosClient.get<OrderView | { orderId: string; status: "STUB" }>(`/api/v1/orders/${encodeURIComponent(orderId)}`, { signal });
     return "status" in response.data ? null : response.data;
   },
 
-  getAvailability: async (eventId: string): Promise<Availability> => {
-    const response = await axiosClient.get<Availability>(`/api/v1/events/${eventId}/availability`);
+  getAvailability: async (eventId: string, signal?: AbortSignal): Promise<Availability> => {
+    const response = await axiosClient.get<Availability>(`/api/v1/events/${encodeURIComponent(eventId)}/availability`, { signal });
     return response.data;
   },
 

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -17,7 +17,9 @@ import ChatbotPage from "./pages/Chatbot/ChatbotPage";
 import VenuesPage from "./pages/Venues/VenuesPage";
 import AdminEventReviewPage from "./pages/Admin/AdminEventReviewPage";
 import AdminOrganizerReviewPage from "./pages/Admin/AdminOrganizerReviewPage";
+import AdminReconciliationPage from "./pages/Admin/AdminReconciliationPage";
 import AdminRefundsPage from "./pages/Admin/AdminRefundsPage";
+import AdminSalesPage from "./pages/Admin/AdminSalesPage";
 import OrganizerApplyPage from "./pages/Organizer/OrganizerApplyPage";
 import PublicOrganizerPage from "./pages/Organizer/PublicOrganizerPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
@@ -27,13 +29,13 @@ import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
 import OrganizerEventsPage from "./pages/Organizer/OrganizerEventsPage";
 import OrganizerEventSeatingPage from "./pages/Organizer/OrganizerEventSeatingPage";
 import OrganizerEventCreatePage from "./pages/Organizer/OrganizerEventCreatePage";
-import OrganizerEventEditorPage from "./pages/Organizer/OrganizerEventEditorPage";
 import OrganizerTicketTypesPage from "./pages/Organizer/OrganizerTicketTypesPage";
 import OrganizerLayoutPage from "./pages/Organizer/OrganizerLayoutPage";
 import OrganizerSeatMapPage from "./pages/Organizer/OrganizerSeatMapPage";
 
-import { ReactKeycloakProvider } from "@react-keycloak/web";
+import { ReactKeycloakProvider, useKeycloak } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
+import { hasRealmRole } from "./lib/auth";
 import Navbar from "./components/layout/Navbar";
 import FloatingChatbot from "./components/chatbot/FloatingChatbot";
 
@@ -49,13 +51,26 @@ const queryClient = new QueryClient({
 });
 
 const standaloneShellPaths = [
+  "/admin",
   "/organizer",
   "/organizer/events",
   "/organizer/profile",
   "/organizer/media",
   "/organizer/check-in",
   "/venues",
+  "/checkout",
 ];
+
+function OrganizerApplyRoute() {
+  const { keycloak, initialized } = useKeycloak();
+  if (!initialized) return null;
+
+  if (hasRealmRole(keycloak.tokenParsed, "ADMIN")) {
+    return <Navigate to="/admin/organizers" replace />;
+  }
+
+  return <OrganizerApplyPage />;
+}
 
 function AppRoutes() {
   const location = useLocation();
@@ -87,10 +102,15 @@ function AppRoutes() {
           <Route path="/search" element={<EventSearchPage />} />
           <Route path="/venues" element={<VenuesPage />} />
           <Route path="/event/:slug" element={<EventDetailPage />} />
-          <Route path="/organizers/apply" element={<OrganizerApplyPage />} />
+          <Route path="/events/:slug" element={<EventDetailPage />} />
+          <Route path="/organizers/apply" element={<OrganizerApplyRoute />} />
           <Route path="/organizers/:slug" element={<PublicOrganizerPage />} />
+          <Route path="/admin" element={<Navigate to="/admin/sales" replace />} />
+          <Route path="/admin/sales" element={<AdminSalesPage />} />
           <Route path="/admin/events" element={<AdminEventReviewPage />} />
           <Route path="/admin/organizers" element={<AdminOrganizerReviewPage />} />
+          <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
+          <Route path="/admin/reconciliation/:eventId" element={<AdminReconciliationPage />} />
           <Route path="/admin/refunds" element={<AdminRefundsPage />} />
           <Route path="/events/:slug/book" element={<SelectTicketPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
@@ -108,7 +128,7 @@ function AppRoutes() {
           />
           <Route
             path="/organizer/events/:eventId/edit"
-            element={<OrganizerEventEditorPage />}
+            element={<OrganizerEventCreatePage />}
           />
           <Route
             path="/organizer/events/:eventId/media"
@@ -138,7 +158,7 @@ function AppRoutes() {
           />
         </Routes>
       </div>
-      {!usesStandaloneShell && !["/checkout", "/payment-result", "/payment/result", "/my-orders", "/my-tickets"].includes(location.pathname) ? <FloatingChatbot /> : null}
+      {!usesStandaloneShell && !["/checkout", "/payment-result", "/payment/result"].includes(location.pathname) ? <FloatingChatbot /> : null}
     </>
   );
 }

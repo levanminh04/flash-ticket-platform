@@ -1,5 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
-  <rect width="800" height="450" fill="#282a30"/>
-  <path d="M320 170h160v30a25 25 0 0 0 0 50v30H320v-30a25 25 0 0 0 0-50z" fill="none" stroke="#f4d773" stroke-width="6"/>
-  <path d="M430 175v100" stroke="#f4d773" stroke-width="4" stroke-dasharray="8 8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f1f5f9" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <linearGradient id="ticketGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#f8fafc" stop-opacity="0.75" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg)" />
+  <g transform="translate(260, 145)">
+    <rect x="0" y="0" width="280" height="160" rx="16" fill="url(#ticketGlow)" stroke="#cbd5e1" stroke-width="2"/>
+    <circle cx="0" cy="80" r="16" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="2"/>
+    <circle cx="280" cy="80" r="16" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="2"/>
+    <line x1="200" y1="16" x2="200" y2="144" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6"/>
+    <circle cx="240" cy="80" r="18" fill="none" stroke="#b78200" stroke-width="2.5" stroke-opacity="0.8"/>
+    <path d="M240 70v20M230 80h20" stroke="#b78200" stroke-width="2" stroke-linecap="round" stroke-opacity="0.8"/>
+    <rect x="36" y="44" width="100" height="10" rx="5" fill="#94a3b8" fill-opacity="0.5"/>
+    <rect x="36" y="66" width="130" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="36" y="86" width="80" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="36" y="106" width="110" height="8" rx="4" fill="#e2e8f0"/>
+  </g>
 </svg>

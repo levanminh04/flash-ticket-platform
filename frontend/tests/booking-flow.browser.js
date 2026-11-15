@@ -40,6 +40,8 @@ async page => {
       order = { orderId, eventId, state: "PENDING_PAYMENT", customerEmail: body.customerEmail, currency: "VND", subtotal: "40000", discount: "0", total: "40000", expiresAt: new Date(Date.now() + (expired ? -1000 : 300000)).toISOString(), paymentFrozenAt: null, sourceConfigVersion: "1", items: items.map((item, i) => ({ orderItemId: ids[11 + i], ticketTypeId: item.ticketTypeId, ticketTypeName: item.ticketTypeId === typeA ? "Loại A" : "Loại B", quantity: item.quantity, unitPrice: "20000", lineSubtotal: "40000", sectorId: body.selection.sectorId || null, seats: seats.map(seatId => ({ seatId, seatLabel: "A1", rowName: "A", seatNumber: "1" })) })) };
       if (largeAmount) { order.total = order.subtotal = "9007199254740993"; order.items[0].unitPrice = order.items[0].lineSubtotal = order.total; }
       data = order;
+    } else if (path === "/api/v1/orders/" + orderId && req.method() === "GET" && order) {
+      data = order;
     } else if (path.endsWith("/promotion")) {
       const body = req.postDataJSON(); promotions.push(body);
       if (body.code === "BAD") return route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ code: "PROMOTION_NOT_FOUND", message: "Mã không hợp lệ." }) });
@@ -77,8 +79,12 @@ async page => {
   await page.getByRole("button", { name: "Áp dụng mã", exact: true }).click();
   await page.locator(".booking-order-total").filter({ hasText: "36.000" }).waitFor();
   if (creates.length !== 1 || promotions.length !== 2 || Object.keys(promotions[1]).join() !== "code") throw new Error("Voucher must be separate from create and never recreate order");
+  await page.evaluate(() => sessionStorage.clear());
   await page.reload(); await page.locator(".booking-order-total").filter({ hasText: "36.000" }).waitFor();
-  checks.push("voucher error/retry + server prices + reload receipt without duplicate hold");
+  if (!requests.some(r => r.method === "GET" && r.path === "/api/v1/orders/" + orderId) || creates.length !== 1) {
+    throw new Error("Checkout must load the existing order from Booking without creating another hold");
+  }
+  checks.push("voucher error/retry + server prices + reload from Booking without local receipt or duplicate hold");
   await capture("checkout", 1440); await capture("checkout", 390, 844); await capture("checkout", 320, 568);
   const deadline = order.expiresAt;
   await page.getByLabel("Mã giảm giá", { exact: true }).fill("FROZEN"); await page.getByRole("button", { name: "Áp dụng mã", exact: true }).click();
@@ -152,8 +158,7 @@ async page => {
 
   expired = true; await openSelection(); await rowA.getByRole("button", { name: "+", exact: true }).click(); await confirm(); await page.waitForURL("**/checkout?orderId=**");
   if (!await page.getByRole("button", { name: "Áp dụng mã", exact: true }).isDisabled()) throw new Error("Expired order must not apply promotions");
-  if (requests.some(r => r.method === "GET" && /\/api\/.*orders/.test(r.path))) throw new Error("Frontend invented a GET order endpoint");
-  checks.push("server deadline + no invented read endpoint");
+  checks.push("server deadline disables voucher");
   if (requests.filter(r => r.path.endsWith("/cancel")).length !== 1) throw new Error("Page reload or local deadline must never auto-cancel");
   checks.push("deadline/reload never auto-cancel a hold");
   expired = false; largeAmount = true;
@@ -174,7 +179,7 @@ async page => {
   checks.push("receipt isolated by buyer/session");
   await page.goto(`http://127.0.0.1:5173/checkout?orderId=${ids[13]}`);
   await page.getByRole("alert").filter({ hasText: "Không tìm thấy thông tin đơn" }).waitFor();
-  if (requests.some(r => r.method === "GET" && /\/api\/.*orders/.test(r.path))) throw new Error("Missing receipt triggered an invented read API");
-  checks.push("missing receipt stays empty without a fabricated read API");
+  if (!requests.some(r => r.method === "GET" && r.path === "/api/v1/orders/" + ids[13])) throw new Error("Checkout did not look up the requested order");
+  checks.push("missing order shows error after Booking lookup");
   return { passed: checks.length, checks };
 }

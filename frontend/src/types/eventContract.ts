@@ -1,13 +1,23 @@
 // Wire DTO của Event Service (dev/tuyen). Các ID dùng UUID, tiền là chuỗi VND.
+export type EventImageRole = "BANNER" | "GALLERY";
+export interface EventImageContract {
+  imageId: string;
+  objectReference: string;
+  displayOrder: number;
+  role: EventImageRole;
+}
+
 export interface PublicEventContract {
   eventId: string;
+  organizerSubject?: string;
   title: string;
   description: string;
+  categoryId?: string | null;
   startsAt: string;
   endsAt: string;
   venueName: string;
   mode: "QUANTITY" | "SEAT_MAP";
-  images: { imageId: string; objectReference: string; displayOrder: number }[];
+  images: EventImageContract[];
   ticketTypes: {
     ticketTypeId: string; name: string; unitPrice: string; currency: string;
     sectorId: string | null; configuredQuantity: string | null; colorCode: string;

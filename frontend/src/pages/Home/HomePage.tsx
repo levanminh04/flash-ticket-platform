@@ -1,4 +1,6 @@
 import Footer from "../../components/common/Footer";
+import MovingLogoStrip from "../../components/common/MovingLogoStrip";
+import FaqSection from "./FaqSection";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -30,6 +32,10 @@ import type { EventSummary } from "../../types/api";
 import "./discovery.css";
 
 const placeholder = "/event-placeholder.svg";
+const heroMockImages = [
+  "/promo/mock-event-concert.jpg",
+  "/promo/mock-event-art.jpg",
+];
 
 const mainCategoryLimit = 6;
 
@@ -56,8 +62,8 @@ function eventLink(event: EventSummary) {
   return `/event/${encodeURIComponent(event.slug || event.id)}`;
 }
 
-function EventImage({ event, eager = false }: { event: EventSummary; eager?: boolean }) {
-  return <img src={event.bannerUrl || placeholder} alt="" loading={eager ? "eager" : "lazy"}
+function EventImage({ event }: { event: EventSummary }) {
+  return <img src={event.bannerUrl || placeholder} alt="" loading="lazy"
     onError={({ currentTarget }) => {
       if (!currentTarget.src.endsWith(placeholder)) currentTarget.src = placeholder;
     }} />;
@@ -97,17 +103,32 @@ export default function HomePage() {
     year: "numeric",
     timeZone: "Asia/Ho_Chi_Minh",
   });
-  const events = useQuery({ queryKey: ["home-public-events"], queryFn: () => eventService.getEvents({ size: 20 }) });
+  const events = useQuery({
+    queryKey: ["home-public-events"],
+    queryFn: async ({ signal }) => {
+      const allItems: EventSummary[] = [];
+      let cursor: string | undefined;
+      for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
+        const page = await eventService.getEvents({ size: 50, cursor }, signal);
+        allItems.push(...page.content);
+        if (!page.nextCursor) {
+          return { content: allItems, nextCursor: null };
+        }
+        cursor = page.nextCursor;
+      }
+      return { content: allItems, nextCursor: cursor ?? null };
+    },
+  });
   const categories = useQuery({ queryKey: ["home-public-categories"], queryFn: categoryService.getCategories });
   const venues = useQuery({ queryKey: ["home-public-venues"], queryFn: venueService.getVenues });
 
   const mainCategories = categories.data?.slice(0, mainCategoryLimit) ?? [];
 
   const upcoming = (events.data?.content ?? [])
-    .filter(event => Date.parse(event.startDatetime) >= Date.now())
+    .filter(event => Date.parse(event.endDatetime || event.startDatetime) >= Date.now())
     .sort((left, right) => Date.parse(left.startDatetime) - Date.parse(right.startDatetime));
   const withPhotos = upcoming.filter(event => event.thumbnailUrl);
-  const featured = [...withPhotos, ...upcoming.filter(event => !event.thumbnailUrl)].slice(0, 3);
+  const featured = [...withPhotos, ...upcoming.filter(event => !event.thumbnailUrl)].slice(0, 4);
 
   function eventText(event: EventSummary, showDate = true) {
     return <div className="discovery-event-text">
@@ -124,16 +145,30 @@ export default function HomePage() {
     return <span className="discovery-price">{t("discovery.from", { amount })}</span>;
   }
 
-  return <div className="discovery">
-    <main className="discovery-shell">
+  function featuredCard(event: EventSummary, lead = false) {
+    return <Link key={event.id} className={lead ? "discovery-feature discovery-feature--lead" : "discovery-feature"} to={eventLink(event)}>
+      <div className="discovery-image"><EventImage event={event} /></div>
+      <div className="discovery-feature-body">
+        {eventText(event)}
+        <div className="discovery-feature-actions">
+          {price(event)}
+          {!lead && <ArrowRight size={17} aria-hidden="true" />}
+        </div>
+      </div>
+    </Link>;
+  }
+
+  return <>
+    <div className="discovery">
+      <main className="discovery-shell">
       <section className="discovery-hero" aria-labelledby="discovery-title">
         <div>
           <h1 id="discovery-title"><Trans i18nKey="discovery.title" components={{ accent: <span className="discovery-heading-accent" /> }} /> <span aria-hidden="true">✦</span></h1>
           <p className="discovery-intro">{t("discovery.intro")}</p>
         </div>
         <div className="discovery-collage" aria-hidden="true">
-          {withPhotos.length ? withPhotos.slice(0, 2).map(event => <EventImage key={event.id} event={event} eager />)
-            : <div className="discovery-hero-placeholder"><Ticket size={94} strokeWidth={1} /></div>}
+          <img src={heroMockImages[0]} alt="" />
+          <img src={heroMockImages[1]} alt="" />
         </div>
       </section>
 
@@ -163,16 +198,10 @@ export default function HomePage() {
         <QueryState pending={events.isPending} error={events.isError} empty={upcoming.length === 0}
           retry={() => void events.refetch()} />
         {!!featured.length && <div className="discovery-featured">
-          {featured.map((event, index) => <Link key={event.id} className="discovery-feature" to={eventLink(event)}>
-            <div className="discovery-image"><EventImage event={event} /></div>
-            <div className="discovery-feature-body">
-              {eventText(event)}
-              <div className="discovery-feature-actions">
-                {price(event)}
-                {index > 0 && <ArrowRight size={17} aria-hidden="true" />}
-              </div>
-            </div>
-          </Link>)}
+          {featuredCard(featured[0], true)}
+          {featured.length > 1 && <div className="discovery-feature-list">
+            {featured.slice(1).map(event => featuredCard(event))}
+          </div>}
         </div>}
       </Section>
 
@@ -189,6 +218,8 @@ export default function HomePage() {
           </Link></li>)}
         </ul>
       </Section>}
+
+      <MovingLogoStrip />
 
       <Section id="discovery-venues" title={t("home.sections.venues")} link={{ to: "/venues", label: t("discovery.allVenues") }}>
         <QueryState pending={venues.isPending} error={venues.isError} empty={venues.data?.length === 0}
@@ -228,7 +259,9 @@ export default function HomePage() {
                   return <div key={category.id}><Icon size={14} /><span>{category.name}</span></div>;
                 })}
               </div>
-              {withPhotos[1] && <div className="discovery-promo-cover"><EventImage event={withPhotos[1]} /></div>}
+              <div className="discovery-promo-cover">
+                <img src={withPhotos[1]?.thumbnailUrl || heroMockImages[1]} alt="" loading="lazy" />
+              </div>
             </div>
           </div>
           <div className="discovery-promo-device discovery-promo-device-front">
@@ -243,7 +276,7 @@ export default function HomePage() {
               </div>
               <strong className="discovery-promo-screen-title">{t("discovery.featured")}</strong>
               <div className="discovery-promo-cover">
-                {featured[0] ? <EventImage event={featured[0]} /> : <Ticket size={28} />}
+                <img src={featured[0]?.thumbnailUrl || heroMockImages[0]} alt="" loading="lazy" />
               </div>
               {featured[0] && <div className="discovery-promo-event">
                 <strong>{featured[0].title}</strong>
@@ -261,8 +294,10 @@ export default function HomePage() {
           <img className="discovery-promo-qr" src="/promo/mockup-qr.svg" alt={t("discovery.promoMockup")} loading="lazy" />
         </div>
       </section>
-    </main>
 
-    <Footer />
-  </div>;
+      <FaqSection />
+    </main>
+  </div>
+  <Footer />
+</>;
 }

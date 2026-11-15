@@ -6,21 +6,23 @@ export type RefundReason =
   | "EVENT_CANCELLED"
   | "LATE_PAYMENT"
   | "TICKET_ISSUANCE_FAILED"
-  | "DUPLICATE_PAYMENT"
-  | "BUYER_REQUESTED";
+  | "DUPLICATE_PAYMENT";
 
 export interface RefundAdminView {
   refundId: string;
   chargeId: string;
   orderId: string;
   amount: string;
+  currency?: string;
   state: RefundState;
   reason: RefundReason;
   settledBy: string | null;
   externalReference: string | null;
   completedAt: string | null;
   createdAt: string;
-  updatedAt: string;
+  lastAttemptStartedAt?: string | null;
+  lastAttemptFinishedAt?: string | null;
+  lastAttemptOutcome?: string | null;
 }
 
 export interface PageResponse<T> {

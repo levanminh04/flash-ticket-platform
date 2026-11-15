@@ -320,6 +320,8 @@ Các counter cấu hình cho phép 0; percent là integer 1..100; fixed >0. QUAN
 
 GET/PUT `/api/v1/organizer/events/{eventId}/seat-map`, owner Event. PUT chỉ DRAFT + đúng organizer. Input là `SeatMapDraft`; output cùng form đã chuẩn hóa. Lưu full draft một transaction; stable IDs. Ghế không có trong danh sách mới là **xóa nháp**, còn isHidden=true là giữ ghế nhưng không bán. Không xóa nếu tham chiếu còn dùng; có lỗi rollback toàn bộ. Không có ETag cộng tác/merge hai organizer, không lịch sử template/clone.
 
+POST `/api/v1/organizer/events/{eventId}/seat-map/background-image` nhận multipart trường `file` chứa ảnh nền SVG của bản nháp `SEAT_MAP`, chỉ dành cho organizer sở hữu. API kiểm tra SVG và trả `{ "backgroundImageReference": "https://..." }`. Dùng PUT seat-map để lưu tham chiếu này cùng sơ đồ.
+
 ```typescript
 type Bounds = {x:number;y:number;width:number;height:number};
 type SeatLayout = {mode:'grid'|'arc'|'fan';rows:number;seatsPerRow:number;

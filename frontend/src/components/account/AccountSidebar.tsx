@@ -25,16 +25,6 @@ export default function AccountSidebar() {
         </NavLink>
 
         <NavLink
-          to="/my-tickets"
-          className={({ isActive }) =>
-            `profile-sidebar-link ${isActive ? "active" : ""}`
-          }
-        >
-          <ImTicket size={18} />
-          <span>{t("nav.myTickets")}</span>
-        </NavLink>
-
-        <NavLink
           to="/my-orders"
           className={({ isActive }) =>
             `profile-sidebar-link ${isActive ? "active" : ""}`
@@ -42,6 +32,16 @@ export default function AccountSidebar() {
         >
           <HiMiniShoppingBag size={18} />
           <span>{t("nav.myOrders")}</span>
+        </NavLink>
+
+        <NavLink
+          to="/my-tickets"
+          className={({ isActive }) =>
+            `profile-sidebar-link ${isActive ? "active" : ""}`
+          }
+        >
+          <ImTicket size={18} />
+          <span>{t("nav.myTickets")}</span>
         </NavLink>
       </nav>
     </aside>
