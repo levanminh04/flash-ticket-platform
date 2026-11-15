@@ -60,6 +60,9 @@ def fake_kubectl():
         elif '--ignore-not-found' not in arguments:
             sys.exit('Deployment not found')
     elif arguments[:2] == ['get', 'pods']:
+        if 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' in arguments:
+            print(json.dumps({'items': []}))
+            return
         deployment = json.loads((api / 'Deployment.json').read_text())
         count = int((root / 'desired').read_text()) if (root / 'desired').exists() else 1
         image = deployment['spec']['template']['spec']['containers'][0]['image']
@@ -118,6 +121,9 @@ def run_fixtures():
         for path in ('state/k8s', 'api', 'env'):
             (root / path).mkdir(parents=True)
         source = root / 'releases' / SHA / 'deploy/k8s'
+        scripts = source.parent / 'scripts'
+        scripts.mkdir(parents=True)
+        shutil.copyfile(SCRIPT.parent / 'migrate-k8s-discovery.py', scripts / 'migrate-k8s-discovery.py')
         app = source / 'payment-service'
         app.mkdir(parents=True)
         examples = source / 'examples'

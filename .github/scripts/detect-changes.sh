@@ -24,7 +24,7 @@ while IFS= read -r f; do
   while IFS=$'\t' read -r name path runtime; do
     if [[ $f == "$path"/* ]]; then build[$name]=1; fi
     if [[ $runtime == k8s ]]; then
-      if [[ $f == "deploy/k8s/$name/"*.yaml || $f == deploy/k8s/namespace.yaml || $f == deploy/scripts/deploy-k8s-service.sh ]]; then recreate[$name]=1; fi
+      if [[ $f == "deploy/k8s/$name/"*.yaml || $f == deploy/k8s/namespace.yaml || $f == deploy/scripts/deploy-k8s-service.sh || $f == deploy/scripts/migrate-k8s-discovery.py ]]; then recreate[$name]=1; fi
     else
       if [[ $f == "deploy/app/$name.yml" || $f == deploy/app/_common.yml || $f == deploy/scripts/deploy-service.sh ]]; then recreate[$name]=1; fi
     fi

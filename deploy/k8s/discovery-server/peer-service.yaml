@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-server-peers
+  namespace: flash-ticket
+  labels:
+    app.kubernetes.io/name: discovery-server
+    app.kubernetes.io/part-of: flash-ticket
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: discovery-server
+    flash-ticket/discovery-generation: peers
+  ports:
+  - name: http
+    port: 8761
+    targetPort: http
+  clusterIP: None
+  publishNotReadyAddresses: true
