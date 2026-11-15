@@ -23,9 +23,6 @@ data:
   KEYCLOAK_JWK_SET_URI: http://172.31.41.236:8080/realms/flash-ticket/protocol/openid-connect/certs
   KEYCLOAK_AUDIENCE: flash-ticket-api
   PAYMENT_WORKER_ENABLED: 'true'
-  PAYMENT_VNPAY_ENABLED: 'false'
-  PAYMENT_VNPAY_CALLBACKS_ENABLED: 'false'
-  PAYMENT_VNPAY_ENVIRONMENT: sandbox
   VNPAY_API_URL: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
   VNPAY_PAYMENT_URL: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
   VNPAY_RETURN_URL: https://subjacently-unsuppliable-tobi.ngrok-free.dev/api/v1/payments/vnpay/return
