@@ -86,7 +86,22 @@ public final class EventImageStorage {
   }
 
   private Uploaded upload(UUID eventId, MultipartFile file, boolean banner) {
-    byte[] bytes = validate(file, banner);
+    return uploadBytes(eventId, validate(file, banner), false);
+  }
+
+  public Uploaded uploadSeatMapBackground(UUID eventId, MultipartFile file) {
+    if (file == null || file.isEmpty()) throw invalid();
+    if (file.getSize() > maxBytes) throw tooLarge();
+    try (var input = file.getInputStream()) {
+      byte[] bytes = input.readNBytes(maxBytes + 1);
+      if (bytes.length > maxBytes) throw tooLarge();
+      return uploadBytes(eventId, SeatMapSvg.clean(bytes), true);
+    } catch (IOException ex) {
+      throw invalid();
+    }
+  }
+
+  private Uploaded uploadBytes(UUID eventId, byte[] bytes, boolean svg) {
     if (cloud.isBlank() || apiKey.isBlank() || apiSecret.isBlank()) throw unavailable();
     String publicId = folder + "/" + eventId + "/" + UUID.randomUUID();
     var form = new LinkedMultiValueMap<String, Object>();
@@ -95,7 +110,7 @@ public final class EventImageStorage {
         new ByteArrayResource(bytes) {
           @Override
           public String getFilename() {
-            return "image";
+            return svg ? "seat-map.svg" : "image";
           }
         });
     form.add("public_id", publicId);
@@ -124,7 +139,7 @@ public final class EventImageStorage {
                       + Pattern.quote(cloud)
                       + "/image/upload/(v[0-9]+/)?"
                       + Pattern.quote(publicId)
-                      + "\\.(png|jpg|jpeg|webp)")) throw unavailable();
+                      + (svg ? "\\.svg" : "\\.(png|jpg|jpeg|webp)"))) throw unavailable();
       return new Uploaded(uri.toASCIIString(), publicId);
     } catch (RuntimeException ex) {
       // Do not expose request Authorization, provider response or a credential-bearing cause.

@@ -3,9 +3,11 @@ package com.flashticket.event_service.api;
 import com.flashticket.event_service.application.SeatMapService;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/organizer/events/{id}")
@@ -29,6 +31,16 @@ public class SeatMapController {
       @RequestBody SeatMap input) {
     return service.save(id, EventController.actor(jwt), rowVersion, input);
   }
+
+  @PostMapping(path = "/seat-map/background-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public BackgroundImage uploadBackground(
+      @PathVariable UUID id,
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestPart("file") MultipartFile file) {
+    return new BackgroundImage(service.uploadBackground(id, EventController.actor(jwt), file));
+  }
+
+  public record BackgroundImage(String backgroundImageReference) {}
 
   @PutMapping("/ticket-types")
   public EventViews.Owner types(

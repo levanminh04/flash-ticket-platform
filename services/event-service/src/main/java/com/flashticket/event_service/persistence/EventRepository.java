@@ -8,7 +8,9 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.*;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -24,6 +26,8 @@ public class EventRepository {
     this.jdbc = new NamedParameterJdbcTemplate(jdbc);
     this.maps = maps;
   }
+
+  private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
   private static final String SELECT =
       "SELECT e.*,v.name AS venue_name FROM event_schema.tbl_events e LEFT JOIN event_schema.tbl_venues v ON v.id=e.venue_id ";
@@ -46,6 +50,25 @@ public class EventRepository {
       UUID beforeId,
       int size,
       boolean published) {
+    return list(
+        owner, status, query, category, null, null, null, null, true, before, beforeId, size,
+        published);
+  }
+
+  public List<EventData> list(
+      String owner,
+      String status,
+      String query,
+      UUID category,
+      LocalDate fromDate,
+      LocalDate toDate,
+      BigDecimal maxPrice,
+      String venue,
+      boolean includePast,
+      Instant before,
+      UUID beforeId,
+      int size,
+      boolean published) {
     var sql = new StringBuilder(SELECT + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP')");
     var params = new MapSqlParameterSource();
     if (owner != null) {
@@ -57,6 +80,10 @@ public class EventRepository {
       sql.append(" AND e.status=:status");
       params.addValue("status", status);
     }
+    if (published && !includePast && fromDate == null && toDate == null) {
+      sql.append(" AND COALESCE(e.ends_at,e.starts_at)>=:now");
+      params.addValue("now", utc(Instant.now()));
+    }
     if (query != null && !query.isBlank()) {
       sql.append(" AND e.title ILIKE :query ESCAPE '!'");
       params.addValue(
@@ -67,12 +94,36 @@ public class EventRepository {
       sql.append(" AND e.category_id=:category");
       params.addValue("category", category);
     }
+    if (fromDate != null) {
+      sql.append(" AND e.starts_at>=:fromStart");
+      params.addValue("fromStart", utc(fromDate.atStartOfDay(VIETNAM_ZONE).toInstant()));
+    }
+    if (toDate != null) {
+      sql.append(" AND e.starts_at<:toEnd");
+      params.addValue("toEnd", utc(toDate.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant()));
+    }
+    if (maxPrice != null) {
+      sql.append(
+          " AND EXISTS (SELECT 1 FROM event_schema.tbl_ticket_types tt WHERE tt.event_id=e.id AND tt.unit_price<=:maxPrice)");
+      params.addValue("maxPrice", maxPrice);
+    }
+    if (venue != null && !venue.isBlank()) {
+      sql.append(" AND LOWER(v.name)=LOWER(:venue)");
+      params.addValue("venue", venue.trim());
+    }
     if (before != null) {
-      sql.append(" AND (e.created_at,e.id)<(:before,:beforeId)");
+      if (published) {
+        sql.append(" AND (e.starts_at,e.id)>(:before,:beforeId)");
+      } else {
+        sql.append(" AND (e.created_at,e.id)<(:before,:beforeId)");
+      }
       params.addValue("before", utc(before));
       params.addValue("beforeId", beforeId);
     }
-    sql.append(" ORDER BY e.created_at DESC,e.id DESC LIMIT :limit");
+    sql.append(
+        published
+            ? " ORDER BY e.starts_at ASC,e.id ASC LIMIT :limit"
+            : " ORDER BY e.created_at DESC,e.id DESC LIMIT :limit");
     params.addValue("limit", size);
     return jdbc.query(sql.toString(), params, (rs, n) -> row(rs));
   }

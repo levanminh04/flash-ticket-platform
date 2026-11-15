@@ -66,19 +66,35 @@ public record SeatMap(
     }
   }
 
-  public record SeatLayout(
-      String mode,
-      Integer rows,
-      Integer seatsPerRow,
-      BigDecimal gapX,
-      BigDecimal gapY,
-      BigDecimal paddingX,
-      BigDecimal paddingY,
-      BigDecimal offsetX,
-      BigDecimal offsetY,
-      BigDecimal seatRadius,
-      Integer rowStartCharCode,
-      Integer seatStartNumber) {}
+  // Bean properties allow legacy JSON to omit the optional editor settings.
+  public static final class SeatLayout {
+    public String mode;
+    public Integer rows;
+    public Integer seatsPerRow;
+    public BigDecimal gapX;
+    public BigDecimal gapY;
+    public BigDecimal paddingX;
+    public BigDecimal paddingY;
+    public BigDecimal offsetX;
+    public BigDecimal offsetY;
+    public BigDecimal seatRadius;
+    public Integer rowStartCharCode;
+    public Integer seatStartNumber;
+    public BigDecimal rotation;
+    public BigDecimal curve;
+    public BigDecimal stretch;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("pathBasedLayout")
+    private Boolean pathBasedLayout;
+
+    public Boolean getPathBasedLayout() {
+      return pathBasedLayout;
+    }
+
+    public String rowLabelPosition;
+    public String rowAlignment;
+    public String outlineMode;
+  }
 
   public record Seat(
       UUID seatId,

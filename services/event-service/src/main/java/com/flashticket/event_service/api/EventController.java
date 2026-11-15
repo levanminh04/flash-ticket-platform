@@ -3,8 +3,11 @@ package com.flashticket.event_service.api;
 import com.flashticket.event_service.application.EventService;
 import com.flashticket.event_service.web.EventProblem;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -102,9 +105,14 @@ public class EventController {
   public EventViews.Page<EventViews.Public> publicList(
       @RequestParam(required = false) String q,
       @RequestParam(required = false) UUID categoryId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+      @RequestParam(required = false) BigDecimal maxPrice,
+      @RequestParam(required = false) String venue,
+      @RequestParam(required = false, defaultValue = "false") boolean includePast,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return service.listPublic(q, categoryId, size, cursor);
+    return service.listPublic(q, categoryId, from, to, maxPrice, venue, includePast, size, cursor);
   }
 
   @GetMapping("/categories")
