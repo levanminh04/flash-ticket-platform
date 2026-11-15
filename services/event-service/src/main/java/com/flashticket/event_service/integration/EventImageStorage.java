@@ -36,6 +36,12 @@ public final class EventImageStorage {
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record Destroyed(String result) {}
 
+  private enum ImageKind {
+    GENERAL,
+    BANNER,
+    VENUE
+  }
+
   private static final String IMAGE_WEBP = "image/webp";
 
   private final RestClient rest;
@@ -78,15 +84,15 @@ public final class EventImageStorage {
   }
 
   public Uploaded upload(UUID eventId, MultipartFile file) {
-    return upload(eventId, file, false);
+    return uploadBytes(eventId, validate(file, ImageKind.GENERAL), false);
   }
 
   public Uploaded uploadBanner(UUID eventId, MultipartFile file) {
-    return upload(eventId, file, true);
+    return uploadBytes(eventId, validate(file, ImageKind.BANNER), false);
   }
 
-  private Uploaded upload(UUID eventId, MultipartFile file, boolean banner) {
-    return uploadBytes(eventId, validate(file, banner), false);
+  public Uploaded uploadVenue(UUID venueId, MultipartFile file) {
+    return uploadBytes(venueId, validate(file, ImageKind.VENUE), false);
   }
 
   public Uploaded uploadSeatMapBackground(UUID eventId, MultipartFile file) {
@@ -181,7 +187,7 @@ public final class EventImageStorage {
     return "https://api.cloudinary.com/v1_1/" + cloud + "/image/" + action;
   }
 
-  private byte[] validate(MultipartFile file, boolean banner) {
+  private byte[] validate(MultipartFile file, ImageKind kind) {
     if (file == null || file.isEmpty()) throw invalid();
     if (file.getSize() > maxBytes) throw tooLarge();
     String type = file.getContentType();
@@ -205,8 +211,11 @@ public final class EventImageStorage {
           if (IMAGE_WEBP.equals(type)) validateStaticWebp(bytes);
           int width = reader.getWidth(0), height = reader.getHeight(0);
           if (width < 1 || height < 1 || (long) width * height > maxPixels) throw tooLarge();
-          if (banner && (width < 1280 || height < 720 || width * 9L != height * 16L))
+          boolean widescreen = width * 9L == height * 16L;
+          if (kind == ImageKind.BANNER && (width < 1280 || height < 720 || !widescreen))
             throw new EventProblem(422, "INVALID_BANNER_DIMENSIONS", "file");
+          if (kind == ImageKind.VENUE && !widescreen)
+            throw new EventProblem(422, "INVALID_VENUE_IMAGE_RATIO", "file");
           if (reader.read(0) == null) throw invalid();
         } finally {
           reader.dispose();

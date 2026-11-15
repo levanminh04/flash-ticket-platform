@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.springframework.beans.factory.annotation.Value;
@@ -151,9 +152,22 @@ public final class UserStore {
 
   public List<Application> applications(
       String subject, ApplicationStatus status, String after, int limit) {
+    return applications(subject, status, null, after, limit);
+  }
+
+  public List<Application> applications(
+      String subject, ApplicationStatus status, String query, String after, int limit) {
     List<Bson> filters = new ArrayList<>();
     if (subject != null) filters.add(eq("identitySubject", subject));
     if (status != null) filters.add(eq("status", status.name()));
+    if (query != null && !query.isBlank()) {
+      Pattern pattern = Pattern.compile(Pattern.quote(query.trim()), Pattern.CASE_INSENSITIVE);
+      filters.add(
+          or(
+              regex("organizationName", pattern),
+              regex("contactEmail", pattern),
+              regex("taxCode", pattern)));
+    }
     if (after != null) filters.add(gt("_id", after));
     return collection("organizer_applications")
         .find(filters.isEmpty() ? new Document() : and(filters))
