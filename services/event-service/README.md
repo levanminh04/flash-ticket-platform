@@ -66,6 +66,23 @@ trang. Owner/admin có `status`; public có `q` tìm tiêu đề không phân bi
 thường và `categoryId`. `%`/`_` trong `q` được tìm như ký tự thường. Không có total
 count hay bảo đảm snapshot dữ liệu xuyên nhiều request phân trang.
 
+
+### Danh mục địa điểm
+
+`GET /api/v1/venues` trả mảng công khai theo tên và ID. `POST /api/v1/admin/venues`
+(`201`) và `PATCH /api/v1/admin/venues/{venueId}` (`200`) yêu cầu role `ADMIN`
+và dùng `multipart/form-data`. Ba API cùng dùng đối tượng Venue gồm
+`id`, `name`, `address`, `description`, `imageUrl` và `googleMapsUrl`.
+
+- Khi tạo, gửi `name` và `address` (tối đa 255 và 500 ký tự). Mô tả (`description`,
+  tối đa 2000 ký tự), link HTTPS Google Maps (`googleMapsUrl`, tối đa 500 ký tự)
+  và file `image` là tùy chọn. Ảnh cần đúng tỷ lệ 16:9. Upload dùng giới hạn và định dạng ảnh tĩnh của Event Service.
+- Khi cập nhật, trường vắng mặt giữ nguyên. Gửi chuỗi trống để bỏ mô tả hoặc link;
+  gửi file mới để thay ảnh. Các trường tùy chọn chưa có giá trị trả `null`.
+- Chạy [migration Venue](../../deploy/postgres/migrations/2026-11-15-event-venue-details.sql)
+  trên DB hiện hữu trước khi triển khai Event Service. Migration giữ liên kết `venueId`
+  của các sự kiện và cho phép bổ sung thông tin cho các bản ghi cũ.
+
 ## Payload ghi nháp
 
 POST nhận toàn bộ Draft; PUT nhận `{ "rowVersion": "0", "draft": <Draft> }`.

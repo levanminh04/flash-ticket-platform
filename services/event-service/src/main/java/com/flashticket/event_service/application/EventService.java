@@ -189,7 +189,7 @@ public class EventService {
   }
 
   @Transactional(readOnly = true)
-  public List<EventViews.Lookup> venues() {
+  public List<EventViews.Venue> venues() {
     return repository.venues();
   }
 

@@ -95,7 +95,7 @@ spring:
               uri: lb://event-service
               order: 50
               predicates:
-                - Path=/api/v1/events/**,/api/v1/categories/**,/api/v1/venues/**,/api/v1/organizer/**,/api/v1/admin/events/**,/api/v1/admin/cancellation-requests/**
+                - Path=/api/v1/events/**,/api/v1/categories/**,/api/v1/venues/**,/api/v1/admin/venues,/api/v1/admin/venues/**,/api/v1/organizer/**,/api/v1/admin/events/**,/api/v1/admin/cancellation-requests/**
               filters:
                 - name: RequestRateLimiter
                   args:

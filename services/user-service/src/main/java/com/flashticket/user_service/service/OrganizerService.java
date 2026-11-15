@@ -60,6 +60,11 @@ public final class OrganizerService {
     Application current = store.application(id);
     if (current.status() == ApplicationStatus.REJECTED && reason.equals(current.rejectionReason()))
       return current;
+    if (current.status() == ApplicationStatus.PENDING && current.roleGrant() != null)
+      throw new UserException(
+          409,
+          "APPLICATION_ROLE_GRANT_IN_PROGRESS",
+          "Organizer role grant is already in progress for this application");
     throw conflict();
   }
 

@@ -28,9 +28,10 @@ public class AdminOrganizerController {
   @GetMapping
   public Page<ApplicationView> applications(
       @RequestParam(required = false) ApplicationStatus status,
+      @RequestParam(required = false) String q,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return UserController.page(store, null, status, size, cursor);
+    return UserController.page(store, null, status, q, size, cursor);
   }
 
   @GetMapping("/{id}")
