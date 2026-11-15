@@ -96,28 +96,47 @@ def check(root):
     items = pods()
     peers = [p for p in items if p['metadata'].get('labels', {}).get(GENERATION) == 'peers'
              and not p['metadata'].get('deletionTimestamp')]
-    assert len(peers) == 2, 'TWO_PEERS_REQUIRED'
     expected = expected_instances(items)
+    diagnostics = {'expectedCount': len(expected), 'peers': []}
+    errors = []
+    if len(peers) != 2:
+        errors.append('TWO_PEERS_REQUIRED')
     for peer in peers:
         statuses = peer['status'].get('containerStatuses', [])
-        assert statuses and all(s['ready'] and s['restartCount'] == 0 for s in statuses), 'PEER_NOT_STABLE'
+        row = {'name': peer['metadata']['name'], 'ready': bool(statuses) and all(s['ready'] for s in statuses),
+               'restarts': sum(s['restartCount'] for s in statuses)}
+        if not row['ready'] or row['restarts']:
+            errors.append('PEER_NOT_STABLE')
         address = 'http://' + peer['status']['podIP'] + ':8761'
-        assert contains(registry(address), expected), 'PEER_REGISTRY_INCOMPLETE'
+        try:
+            actual = registry(address)
+            row['matching'] = [key for key in expected if contains(actual, {key: expected[key]})]
+            row['missingOrDifferent'] = [key for key in expected if key not in row['matching']]
+            if row['missingOrDifferent']:
+                errors.append('PEER_REGISTRY_INCOMPLETE')
+        except (OSError, ValueError, KeyError) as error:
+            row['queryError'] = type(error).__name__
+            errors.append('PEER_REGISTRY_QUERY_FAILED')
+        diagnostics['peers'].append(row)
+    write(root / 'peer-sync-diagnostics.json', diagnostics)
+    assert not errors, ','.join(sorted(set(errors)))
 
 
 def wait_registry(root):
     # Require two consecutive comparisons; never switch the client Service to an empty registry.
     successes = 0
+    last_error = ''
     for _ in range(60):
         try:
             check(root)
             successes += 1
             if successes == 2:
                 return
-        except (AssertionError, OSError, ValueError, KeyError):
+        except (AssertionError, OSError, ValueError, KeyError) as error:
             successes = 0
+            last_error = str(error)
         time.sleep(5)
-    raise RuntimeError('PEER_SYNC_TIMEOUT')
+    raise RuntimeError('PEER_SYNC_TIMEOUT ' + last_error)
 
 
 def migrate(root):
@@ -151,21 +170,20 @@ def migrate(root):
     kube('apply', '-f', str(root / 'peer-service.json'))
     kube('apply', '-f', str(root / 'configmap.json'))
     config = json.loads(read(root / 'configmap.json')['data']['SPRING_APPLICATION_JSON'])
-    urls = config['eureka']['client']['service-url']['defaultZone']
-    config['eureka']['client']['service-url']['defaultZone'] = 'http://discovery-server-legacy:8761/eureka/,' + urls
+    # Bootstrap từ nguồn đã có registry; không chọn ngẫu nhiên một peer mới còn rỗng.
+    config['eureka']['client']['service-url']['defaultZone'] = 'http://discovery-server-legacy:8761/eureka/'
     bootstrap = read(root / 'statefulset.json')
     bootstrap['spec']['template']['spec']['containers'][0]['env'].append(
         {'name': 'SPRING_APPLICATION_JSON', 'value': json.dumps(config, separators=(',', ':'))})
     apply(root, 'bootstrap-statefulset.json', bootstrap)
     kube('rollout', 'status', 'statefulset/discovery-server', '--timeout=600s')
     wait_registry(root)
-    # Both new peers contain every active app before they can receive client traffic.
-    kube('apply', '-f', str(root / 'service.json'))
-    write(root / 'client-cutover.json', {'completed': True})
-    # Remove the temporary bootstrap URL one peer at a time, retaining the old server until checked.
+    # Giữ client trên legacy trong cả lượt bỏ URL bootstrap; chỉ cutover cấu hình cuối đã kiểm.
     kube('apply', '-f', str(root / 'statefulset.json'))
     kube('rollout', 'status', 'statefulset/discovery-server', '--timeout=600s')
     wait_registry(root)
+    kube('apply', '-f', str(root / 'service.json'))
+    write(root / 'client-cutover.json', {'completed': True})
     print('DISCOVERY_PEERS_SYNCED: legacy retained until final release check')
 
 

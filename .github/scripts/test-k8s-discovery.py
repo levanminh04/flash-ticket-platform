@@ -113,7 +113,14 @@ class MigrationTests(unittest.TestCase):
         return records
 
     def test_success_retains_legacy_until_final_check_and_creates_a_valid_peer_baseline(self):
-        migration.migrate(self.root)
+        original_check = migration.check
+
+        def check_before_cutover(root):
+            self.assertEqual(self.service['spec']['selector'][migration.GENERATION], 'legacy')
+            original_check(root)
+
+        with patch.object(migration, 'check', side_effect=check_before_cutover):
+            migration.migrate(self.root)
         self.assertFalse(self.deleted_legacy)
         self.assertEqual(self.service['spec']['selector'][migration.GENERATION], 'peers')
         migration.finish(self.root)
@@ -124,6 +131,24 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(migration.read(self.root / 'legacy-deployment.json')['spec']['template']['spec']['containers'][0]['image'], OLD_IMAGE)
         self.assertFalse((baseline / 'deployment.json').exists())
         migration.finish(self.root)  # finalization is idempotent after success
+
+    def test_final_peer_rollout_failure_keeps_clients_on_legacy(self):
+        original_kube = self.kube
+
+        def fail_final_rollout(*args):
+            result = original_kube(*args)
+            if args[:2] == ('rollout', 'status') and not self.workload['spec']['template']['spec']['containers'][0]['env']:
+                self.partial = True
+            return result
+
+        with patch.object(migration, 'kube', side_effect=fail_final_rollout):
+            with self.assertRaisesRegex(RuntimeError, 'PEER_SYNC_TIMEOUT PEER_REGISTRY_INCOMPLETE'):
+                migration.migrate(self.root)
+        self.assertEqual(self.service['spec']['selector'][migration.GENERATION], 'legacy')
+        self.assertFalse((self.root / 'client-cutover.json').exists())
+        diagnostics = migration.read(self.root / 'peer-sync-diagnostics.json')
+        self.assertTrue(any(peer['missingOrDifferent'] for peer in diagnostics['peers']))
+        self.assertFalse(self.deleted_legacy)
 
     def test_partial_registry_never_cuts_over_and_can_restore(self):
         self.partial = True
