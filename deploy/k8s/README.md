@@ -146,15 +146,25 @@ Eureka dùng StatefulSet 2 Pod và headless Service. Peer URLs trỏ hai DNS c�
 hostname theo POD_NAME; client tiếp tục dùng discovery-server:8761. Update từng
 ordinal, chờ Ready/Available trước khi thay ordinal tiếp theo. Startup so local
 registry với các instance UP trên peer còn phục vụ; readiness thường không phụ
-thuộc peer để Pod sống sót vẫn phục vụ khi peer kia đang được thay. Cold start
-cả node cho phép registry rỗng nếu peer chưa truy cập được, để app đăng ký lại.
+thuộc peer để Pod sống sót vẫn phục vụ khi peer kia đang được thay. Startup
+không bỏ qua đồng bộ khi peer lỗi DNS/HTTP. Cold start cả node dùng Parallel
+và headless publishNotReadyAddresses: hai HTTP server có thể liên lạc trước
+khi Pod Ready; hai registry rỗng vẫn qua probe để app đăng ký lại.
 
 Lần đầu script tự chuyển Deployment Eureka cũ sang StatefulSet dưới deploy.lock:
 snapshot tài nguyên, giữ client Service riêng Pod legacy, tạo hai peer có URL
-bootstrap tới registry cũ, kiểm mọi app Ready đã có trên cả hai peer rồi mới
-cutover Service. Gỡ URL tạm qua rollout từng peer; chỉ xóa Deployment cũ sau khi
+bootstrap tới registry cũ, kiểm mọi app Ready đã có trên cả hai peer. Giữ client
+trên legacy trong cả lượt gỡ URL tạm/rollout từng peer; kiểm lại đủ registry trên
+cấu hình cuối rồi mới cutover Service. Chỉ xóa Deployment cũ sau khi
 check cuối đạt. Khi lỗi trước hoàn tất, chỉ quay selector về Pod cũ sau khi xác
 nhận registry cũ đủ dữ liệu; giữ cả workload nếu không thể khôi phục an toàn.
+
+Mỗi lần so registry ghi `peer-sync-diagnostics.json` trong revision được bảo vệ:
+peer Ready/restart, instance khớp/thiếu và lỗi truy vấn. Timeout giữ nguyên failure
+và ghi nguyên nhân cuối; không hạ điều kiện để cho deploy qua. Image có label
+`io.flashticket.runtime-tools=curl,jq` để nhận diện bộ công cụ probe/hook; đợt
+khôi phục sau CD thất bại phải build đủ bảy image, vì sáu app còn lại chưa được
+publish ở run lỗi, không apply probe curl/jq lên digest cũ thiếu công cụ.
 
 Backup standalone nằm trong revision migration với prefix `legacy-`. Sau chuyển
 thành công, baseline rollback mới giữ topology 2 peer và image có curl/jq; không

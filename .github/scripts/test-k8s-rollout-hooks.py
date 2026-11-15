@@ -111,8 +111,11 @@ def container_fixtures():
         peer_startup(True)
         state['localApps'] = []
         state['peerStatus'] = 503
-        peer_startup(True)  # Cold bootstrap with no serving peer must remain possible.
-        print('HOOK_PASSED discovery-server: sync gate and cold bootstrap', flush=True)
+        peer_startup(False)  # A transient peer failure must not bypass the sync gate.
+        state['peerStatus'] = 200
+        state['peerApps'] = []
+        peer_startup(True)  # Both HTTP servers can bootstrap empty before either Pod is Ready.
+        print('HOOK_PASSED discovery-server: sync gate, peer failure and empty cold bootstrap', flush=True)
     finally:
         for server in servers:
             server.shutdown()

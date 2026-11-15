@@ -77,18 +77,18 @@ spec:
                 discovery-server-1) peer=discovery-server-0 ;;
                 *) exit 1 ;;
               esac
-              if curl -fsS --max-time 2 -H 'Accept: application/json' "http://${peer}.discovery-server-peers.flash-ticket.svc.cluster.local:8761/eureka/apps" > "$peer_registry"; then
-                jq -e '.applications | type == "object"' "$peer_registry" >/dev/null
-                jq -e --slurpfile peer "$peer_registry" '
+              # Headless Service công bố cả Pod chưa Ready; cold boot vẫn tìm được peer.
+              # Lỗi DNS/HTTP phải chờ lần probe sau, không bỏ qua đồng bộ khi rolling.
+              curl -fsS --max-time 2 -H 'Accept: application/json' "http://${peer}.discovery-server-peers.flash-ticket.svc.cluster.local:8761/eureka/apps" > "$peer_registry"
+              jq -e '.applications | type == "object"' "$peer_registry" >/dev/null
+              jq -e --slurpfile peer "$peer_registry" '
                   def list: if type == "array" then . elif . == null then [] else [.] end;
                   def live:
                     [.applications.application | list | .[] | .instance | list | .[]
                      | select(.status == "UP" and .app != "DISCOVERY-SERVER")
                      | [.instanceId, .ipAddr, (.port."$" | tostring)]];
                   live as $local | ($peer[0] | live) as $remote | ($remote - $local | length) == 0
-                ' "$local_registry" >/dev/null
-              fi
-              # Không có peer khi cả node vừa khởi động: cho registry rỗng bootstrap để app đăng ký.
+              ' "$local_registry" >/dev/null
           periodSeconds: 5
           timeoutSeconds: 8
           failureThreshold: 36
