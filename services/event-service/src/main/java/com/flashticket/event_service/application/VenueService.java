@@ -14,6 +14,10 @@ public class VenueService {
   private final EventRepository repository;
   private final EventImageStorage storage;
 
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "Intentionally shares Spring-managed infrastructure; no dependency accessor is exposed.")
   public VenueService(EventRepository repository, EventImageStorage storage) {
     this.repository = repository;
     this.storage = storage;
