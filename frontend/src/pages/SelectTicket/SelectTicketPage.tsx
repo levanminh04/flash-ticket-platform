@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
@@ -71,6 +71,8 @@ export default function SelectTicketPage() {
   const { i18n, t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preferredTicketType = searchParams.get("ticketType");
   const { keycloak } = useKeycloak();
   const language = i18n.resolvedLanguage || "vi";
 
@@ -99,6 +101,7 @@ export default function SelectTicketPage() {
 
   const [zoom, setZoom] = useState(0);
   const [fitZoom, setFitZoom] = useState(1);
+  const [resetViewKey, setResetViewKey] = useState(0);
 
   useEffect(() => {
     if (keycloak?.authenticated && keycloak?.tokenParsed) {
@@ -168,6 +171,10 @@ export default function SelectTicketPage() {
             for (const key of ["transient_slug", "transient_quantities", "transient_selectedSeats", "transient_selectedStandingSectorId"]) sessionStorage.removeItem(key);
           }
         }
+        if (data.mode === "QUANTITY" && preferredTicketType && !Object.values(nextQuantities).some(Boolean)) {
+          const preferred = types.find(type => type.id === preferredTicketType);
+          if (preferred && preferred.quantityAvailable > 0 && preferred.maxPerOrder > 0) nextQuantities[preferred.id] = 1;
+        }
         setQuantities(nextQuantities);
         setSelectedSeats(nextSeats);
         setSelectedStandingSectorId(nextStanding);
@@ -177,7 +184,7 @@ export default function SelectTicketPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [slug]);
+  }, [slug, preferredTicketType]);
 
   useEffect(() => { void loadSelection(); }, [loadSelection]);
 
@@ -537,8 +544,24 @@ export default function SelectTicketPage() {
     }
   };
 
+  const selectedSeatIds = useMemo(
+    () => selectedSeats.map((seat) => seat.seatId),
+    [selectedSeats],
+  );
+
+  const getSeatColor = useCallback(
+    (sector: PublicSeatSector, seat: PublicSeat) => {
+      const ticketType =
+        ticketTypeById.get(getSeatTicketTypeId(sector, seat)) ||
+        ticketTypeBySectorId.get(sector.id);
+      return seat.colorCode || ticketType?.colorCode || sector.colorCode || "#16a34a";
+    },
+    [ticketTypeById, ticketTypeBySectorId],
+  );
+
   const resetView = () => {
     setZoom(0);
+    setResetViewKey((prev) => prev + 1);
   };
 
   const handleContinue = () => {
@@ -579,6 +602,10 @@ export default function SelectTicketPage() {
   const startDate = startStr ? new Date(startStr) : null;
   const venueName = (event as any)?.venue?.name || (event as any)?.venueName || "";
   const venueAddress = (event as any)?.venue?.address || (event as any)?.venueAddress || "";
+  const eventBannerUrl =
+    event?.images?.find((image) => image.type === "BANNER" && image.url)?.url ||
+    event?.bannerUrl ||
+    "/event-placeholder.svg";
 
   if (isLoading) {
     return (
@@ -599,7 +626,7 @@ export default function SelectTicketPage() {
           <button className="btn btn-primary" onClick={() => void loadSelection()}>{t("home.events.retry")}</button>
           <Link
             to="/"
-            style={{ textDecoration: "underline", color: "var(--primary)" }}
+            style={{ textDecoration: "underline", color: "var(--brand-scale-600)" }}
           >
             {t("selectTicket.returnHome")}
           </Link>
@@ -608,6 +635,12 @@ export default function SelectTicketPage() {
     );
   }
 
+  const eventDetailPath = slug
+    ? `/events/${encodeURIComponent(slug)}`
+    : event?.id
+      ? `/events/${encodeURIComponent(event.id)}`
+      : "/";
+
   return (
     <div className="select-ticket-page">
       <div className="select-ticket-layout">
@@ -615,7 +648,7 @@ export default function SelectTicketPage() {
           <button
             type="button"
             className="select-ticket-back-button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(eventDetailPath)}
           >
             <ArrowLeft size={22} />
             <span>{t("selectTicket.back")}</span>
@@ -649,14 +682,10 @@ export default function SelectTicketPage() {
                   <BuyerSeatMapCanvas
                     seatMap={seatMap}
                     zoom={zoom}
-                    selectedSeatIds={selectedSeats.map((seat) => seat.seatId)}
+                    resetViewKey={resetViewKey}
+                    selectedSeatIds={selectedSeatIds}
                     selectedSectorId={selectedStandingSectorId}
-                    getSeatColor={(sector, seat) => {
-                      const ticketType =
-                        ticketTypeById.get(getSeatTicketTypeId(sector, seat)) ||
-                        ticketTypeBySectorId.get(sector.id);
-                      return seat.colorCode || ticketType?.colorCode || sector.colorCode || "#16a34a";
-                    }}
+                    getSeatColor={getSeatColor}
                     onZoomChange={setZoom}
                     onFitZoom={setFitZoom}
                     onSeatClick={handleSeatClick}
@@ -666,23 +695,6 @@ export default function SelectTicketPage() {
                     {(seatMap.sectors || []).filter(sector => sector.sectorType === "STANDING").map(sector => (
                       <button key={sector.id} type="button" className="btn btn-outline" onClick={() => handleSectorClick(sector)}>{sector.name}</button>
                     ))}
-                  </div>
-                  {hasAssignedSeatTickets && <details className="booking-seat-list">
-                    <summary>{t("selectTicket.seatList")}</summary>
-                    {(seatMap.sectors || []).filter(sector => sector.sectorType === "SEATED").map(sector => <fieldset key={sector.id}>
-                      <legend>{sector.name}</legend>
-                      {sector.seatsData?.map(seat => <button key={seat.id} type="button" aria-label={`${sector.name} — ${seat.seatLabel}`} aria-pressed={selectedSeats.some(selected => selected.seatId === seat.id)} disabled={seat.isActive === false || seat.inventoryStatus !== "AVAILABLE"} onClick={() => handleSeatClick(sector, seat)}>{seat.seatLabel}</button>)}
-                    </fieldset>)}
-                  </details>}
-                  <div className="seat-map-status-legend" aria-label={t("selectTicket.seatLegend")}>
-                    <strong>{t("selectTicket.seatLegend")}</strong>
-                    <div className="seat-map-status-legend-grid">
-                      <span><i className="legend-seat-dot is-available" />{t("selectTicket.seatAvailable")}</span>
-                      <span><i className="legend-seat-dot is-selected" />{t("selectTicket.seatSelected")}</span>
-                      <span><i className="legend-seat-dot is-sold" />{t("selectTicket.seatSold")}</span>
-                      <span><i className="legend-seat-dot is-locked" />{t("selectTicket.seatLocked")}</span>
-                      <span><i className="legend-seat-dot is-unavailable" />{t("selectTicket.seatUnavailable")}</span>
-                    </div>
                   </div>
                 </>
               ) : !hasAssignedSeatTickets && !hasStandingSectorTickets ? (
@@ -758,6 +770,16 @@ export default function SelectTicketPage() {
         </div>
           <div className="booking-sidebar">
             <div className="sidebar-event-card">
+              <img
+                className="event-poster"
+                src={eventBannerUrl}
+                alt={event.title}
+                onError={(e) => {
+                  if (e.currentTarget.getAttribute("src") !== "/event-placeholder.svg") {
+                    e.currentTarget.src = "/event-placeholder.svg";
+                  }
+                }}
+              />
               <div className="sidebar-event-title-bar">
                 <div className="event-title">{event.title}</div>
               </div>
@@ -853,7 +875,7 @@ export default function SelectTicketPage() {
                   {quantityTicketTypes
                     .filter((ticketType) => (quantities[ticketType.id] || 0) > 0)
                     .map((ticketType) => {
-                      const colorCode = ticketType.colorCode || "var(--primary, #16a34a)";
+                      const colorCode = ticketType.colorCode || "var(--brand-scale-600, #946b00)";
                       const selectedQuantity = quantities[ticketType.id] || 0;
                       return (
                         <span
@@ -874,7 +896,7 @@ export default function SelectTicketPage() {
                     })}
                   {selectedSeats.map((seat) => {
                     const ticketType = ticketTypeById.get(seat.ticketTypeId);
-                    const colorCode = ticketType?.colorCode || "var(--primary, #16a34a)";
+                    const colorCode = ticketType?.colorCode || "var(--brand-scale-600, #946b00)";
                     return (
                       <span
                         key={seat.seatId}

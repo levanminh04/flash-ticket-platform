@@ -1,112 +1,134 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKeycloak } from "@react-keycloak/web";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { isAxiosError } from "axios";
 import {
-  RotateCcw,
-  CheckCircle2,
   AlertTriangle,
-  Clock,
-  Search,
-  Copy,
   Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Copy,
   FileText,
-  ShieldAlert,
   LoaderCircle,
+  RotateCw,
+  Search,
+  ShieldAlert,
+  X,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import Swal from "sweetalert2";
+
+import TixAdminTopNav from "../../components/admin/TixAdminTopNav";
 import { hasRealmRole } from "../../lib/auth";
 import {
   adminRefundService,
-  RefundState,
-  RefundReason,
-  RefundAdminView,
+  type RefundAdminView,
+  type RefundReason,
+  type RefundState,
 } from "../../services/adminRefundService";
-import "./admin-refunds.css";
+import "../Organizer/organizer-dashboard.css";
+import "./admin-tix.css";
 
-const TAB_STATES: { state: RefundState; labelKey: string }[] = [
-  { state: "FAILED", labelKey: "adminRefunds.tabs.FAILED" },
-  { state: "PENDING", labelKey: "adminRefunds.tabs.PENDING" },
-  { state: "PROCESSING", labelKey: "adminRefunds.tabs.PROCESSING" },
-  { state: "SUCCEEDED", labelKey: "adminRefunds.tabs.SUCCEEDED" },
-];
-
-function formatVnd(amount: string | number) {
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return "0 ₫";
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+function formatCurrency(amount: number, currency = "VND"): string {
+  if (!Number.isFinite(amount)) return `0 ${currency}`;
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
-function formatDate(isoString: string | null) {
-  if (!isoString) return "—";
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleString("vi-VN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return isoString;
-  }
+function formatDateTime(value: string | null | undefined, locale = "vi-VN"): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-export default function AdminRefundsPage() {
-  const { t } = useTranslation();
+function shortId(value: string | null | undefined): string {
+  if (!value) return "—";
+  return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const TAB_STATES: RefundState[] = ["FAILED", "PENDING", "PROCESSING", "SUCCEEDED"];
+
+const TAB_ICONS: Record<RefundState, typeof AlertTriangle> = {
+  FAILED: AlertTriangle,
+  PENDING: Clock,
+  PROCESSING: RotateCw,
+  SUCCEEDED: CheckCircle2,
+};
+
+export function AdminRefundsPage() {
+  const { t, i18n } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
+
+  const isVi = !i18n.resolvedLanguage?.startsWith("en");
+  const locale = isVi ? "vi-VN" : "en-US";
+  const copyText = (vi: string, en: string) => (isVi ? vi : en);
 
   const [selectedState, setSelectedState] = useState<RefundState>("FAILED");
   const [page, setPage] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeActionRefundId, setActiveActionRefundId] = useState<string | null>(null);
 
-  // Search event refund progress
-  const [eventInput, setEventInput] = useState("");
-  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!copiedId) return;
+    const timer = window.setTimeout(() => setCopiedId(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copiedId]);
 
-  const isAuthenticated = initialized && !!keycloak?.authenticated;
-  const isAdmin = hasRealmRole(keycloak?.tokenParsed, "ADMIN");
+  const isAuthenticated = Boolean(keycloak.authenticated);
+  const isAdmin = hasRealmRole(keycloak.tokenParsed, "ADMIN");
 
-  // Fetch Refunds by State
   const refundsQuery = useQuery({
     queryKey: ["admin-refunds", selectedState, page],
     queryFn: ({ signal }) => adminRefundService.getRefunds(selectedState, page, 20, signal),
-    enabled: isAuthenticated && isAdmin,
-    retry: 1,
+    enabled: initialized && isAuthenticated && isAdmin,
   });
 
-  // Fetch Event Progress
-  const eventProgressQuery = useQuery({
-    queryKey: ["admin-event-refund-progress", activeEventId],
-    queryFn: ({ signal }) =>
-      activeEventId ? adminRefundService.getEventRefundProgress(activeEventId, signal) : null,
-    enabled: isAuthenticated && isAdmin && Boolean(activeEventId),
-    retry: 1,
-  });
-
-  // Mutation: Retry refund
   const retryMutation = useMutation({
     mutationFn: (refundId: string) => adminRefundService.retryRefund(refundId),
-    onSuccess: () => {
-      toast.success(t("adminRefunds.retrySuccess", "Thử lại yêu cầu hoàn thành công."));
-      void queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-      if (activeEventId) {
-        void queryClient.invalidateQueries({ queryKey: ["admin-event-refund-progress"] });
-      }
+    onMutate: (refundId) => {
+      setActiveActionRefundId(refundId);
     },
-    onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        t("adminRefunds.retryFailed", "Thử lại thất bại.");
+    onSuccess: async () => {
+      toast.success(
+        t("adminRefunds.retrySuccess", copyText("Đã gửi yêu cầu thử lại hoàn tiền thành công.", "Refund retry requested.")),
+      );
+      await qc.invalidateQueries({ queryKey: ["admin-refunds"] });
+    },
+    onError: (err) => {
+      const msg = isAxiosError<{ message?: string }>(err)
+        ? err.response?.data?.message || t("adminRefunds.retryFailed", copyText("Thao tác thử lại thất bại.", "Retry failed."))
+        : t("adminRefunds.retryFailed", copyText("Thao tác thử lại thất bại.", "Retry failed."));
       toast.error(msg);
+    },
+    onSettled: () => {
+      setActiveActionRefundId(null);
     },
   });
 
-  // Mutation: Manual settlement
   const manualSettlementMutation = useMutation({
     mutationFn: ({
       refundId,
@@ -115,126 +137,112 @@ export default function AdminRefundsPage() {
       refundId: string;
       externalReference: string;
     }) => adminRefundService.settleRefundManually(refundId, externalReference),
-    onSuccess: () => {
-      toast.success(
-        t("adminRefunds.manualSettlementSuccess", "Ghi nhận hoàn tiền ngoài hệ thống thành công."),
-      );
-      void queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-      if (activeEventId) {
-        void queryClient.invalidateQueries({ queryKey: ["admin-event-refund-progress"] });
-      }
+    onMutate: ({ refundId }) => {
+      setActiveActionRefundId(refundId);
     },
-    onError: (err: unknown) => {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        t("adminRefunds.manualSettlementFailed", "Ghi nhận thất bại.");
-      toast.error(msg);
+    onSuccess: async () => {
+      toast.success(
+        t(
+          "adminRefunds.manualSettlementSuccess",
+          copyText("Đã xác nhận đối soát hoàn tiền thủ công thành công.", "Manual settlement recorded."),
+        ),
+      );
+      await qc.invalidateQueries({ queryKey: ["admin-refunds"] });
+    },
+    onSettled: () => {
+      setActiveActionRefundId(null);
     },
   });
 
-  const handleCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    setCopiedId(id);
-    toast.info(t("adminRefunds.copied", "Đã sao chép mã!"), { autoClose: 1500 });
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(text);
+      toast.success(copyText(`Đã sao chép ${label}`, `Copied ${label}`));
+    } catch {
+      toast.error(copyText("Không thể sao chép vào clipboard.", "Unable to copy to clipboard."));
+    }
   };
 
-  const handleManualSettlementPrompt = async (item: RefundAdminView) => {
-    const result = await Swal.fire({
-      title: t("adminRefunds.manualSettlementTitle", "Ghi nhận hoàn tiền thủ công"),
-      html: `
-        <p style="font-size: 14px; color: #475569; margin-bottom: 12px;">
-          Số tiền: <strong>${formatVnd(item.amount)}</strong><br/>
-          Mã hoàn tiền: <code>${item.refundId}</code>
-        </p>
-      `,
+  const handleManualSettlement = async (item: RefundAdminView) => {
+    const contextText = copyText(
+      `Nhập mã tham chiếu giao dịch hoàn tiền ngoài hệ thống cho giao dịch ${shortId(item.refundId)} (${formatCurrency(Number(item.amount), item.currency || "VND")}).`,
+      `Enter the external refund transaction reference for ${shortId(item.refundId)} (${formatCurrency(Number(item.amount), item.currency || "VND")}).`,
+    );
+
+    await Swal.fire({
+      title: t("adminRefunds.manualSettlementTitle", copyText("Đối soát hoàn tiền thủ công", "Manual refund settlement")),
+      html: `<p class="tix-admin-swal-context">${escapeHtml(contextText)}</p>`,
       input: "text",
-      inputLabel: t("adminRefunds.externalReferenceLabel", "Mã tham chiếu ngân hàng / giao dịch ngoài"),
-      inputPlaceholder: "Ví dụ: FT260312345678, MB-123456789...",
+      inputLabel: t("adminRefunds.externalReferenceLabel", copyText("Mã tham chiếu giao dịch ngoài", "External transaction reference")),
       inputAttributes: {
-        maxlength: "120",
-        autocomplete: "off",
+        maxlength: "255",
+        placeholder: copyText("VD: VCB-FT240123456", "e.g. VCB-FT240123456"),
+        "aria-label": t("adminRefunds.externalReferenceLabel", copyText("Mã tham chiếu giao dịch ngoài", "External transaction reference")),
       },
       showCancelButton: true,
-      confirmButtonText: t("adminRefunds.confirmSettlement", "Xác nhận đã hoàn tiền"),
-      cancelButtonText: t("adminRefunds.cancel", "Hủy bỏ"),
-      confirmButtonColor: "#0f766e",
+      reverseButtons: true,
+      confirmButtonText: t("adminRefunds.confirmSettlement", copyText("Xác nhận đã hoàn tiền", "Confirm settlement")),
+      cancelButtonText: t("adminRefunds.cancel", copyText("Hủy", "Cancel")),
+      buttonsStyling: false,
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      allowEscapeKey: () => !Swal.isLoading(),
+      customClass: {
+        container: "tix-admin-swal-container",
+        popup: "tix-admin-swal-popup",
+        title: "tix-admin-swal-title",
+        htmlContainer: "tix-admin-swal-html",
+        inputLabel: "tix-admin-swal-label",
+        input: "tix-admin-swal-input",
+        validationMessage: "tix-admin-swal-validation",
+        actions: "tix-admin-swal-actions",
+        confirmButton: "tix-admin-swal-confirm-btn",
+        cancelButton: "tix-admin-swal-cancel-btn",
+      },
+      didOpen: () => {
+        const input = Swal.getInput();
+        if (input) setTimeout(() => input.focus(), 60);
+      },
       inputValidator: (val) => {
         const trimmed = val ? val.trim() : "";
         if (!trimmed) {
-          return t("adminRefunds.refRequired", "Vui lòng nhập mã tham chiếu giao dịch ngoài!");
+          return t("adminRefunds.refRequired", copyText("Vui lòng nhập mã tham chiếu giao dịch ngoài.", "Please enter an external reference."));
         }
-        if (trimmed.length > 120) {
-          return t("adminRefunds.refTooLong", "Mã tham chiếu tối đa 120 ký tự.");
+        if (trimmed.length > 255) {
+          return copyText("Mã tham chiếu tối đa 255 ký tự.", "Reference must be at most 255 characters.");
         }
         return null;
       },
+      preConfirm: async (val) => {
+        try {
+          await manualSettlementMutation.mutateAsync({
+            refundId: item.refundId,
+            externalReference: String(val).trim(),
+          });
+        } catch (err) {
+          const msg = isAxiosError<{ message?: string }>(err)
+            ? err.response?.data?.message || t("adminRefunds.manualSettlementFailed", copyText("Ghi nhận hoàn tiền thất bại.", "Settlement failed."))
+            : t("adminRefunds.manualSettlementFailed", copyText("Ghi nhận hoàn tiền thất bại.", "Settlement failed."));
+          Swal.showValidationMessage(msg);
+          return false;
+        }
+      },
     });
-
-    if (result.isConfirmed && result.value) {
-      manualSettlementMutation.mutate({
-        refundId: item.refundId,
-        externalReference: result.value.trim(),
-      });
-    }
   };
 
-  const handleEventSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = eventInput.trim();
-    if (!trimmed) {
-      setActiveEventId(null);
-      return;
-    }
-    setActiveEventId(trimmed);
-  };
-
-  if (!isAuthenticated || !isAdmin) {
-    return (
-      <main className="admin-refunds-page">
-        <div className="admin-refunds-container">
-          <div className="admin-refunds-state">
-            <ShieldAlert size={48} color="#dc2626" style={{ margin: "0 auto 16px" }} />
-            <h2>{t("adminRefunds.accessDeniedTitle", "Truy cập bị từ chối")}</h2>
-            <p>
-              {t(
-                "adminRefunds.accessDeniedDesc",
-                "Bạn cần đăng nhập với tài khoản có quyền Quản trị viên (ADMIN) để xem trang này.",
-              )}
-            </p>
-            {!isAuthenticated && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void keycloak.login()}
-                style={{ marginTop: 16 }}
-              >
-                {t("nav.login", "Đăng nhập")}
-              </button>
-            )}
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  const data = refundsQuery.data;
-  const refunds = data?.items || [];
-  const totalPages = data?.totalPages || 0;
-  const totalElements = data?.totalElements || 0;
-
-  const renderReasonBadge = (reason: RefundReason) => {
+  const renderReasonLabel = (reason: RefundReason) => {
     switch (reason) {
       case "EVENT_CANCELLED":
-        return <span className="badge-reason">{t("adminRefunds.reasons.EVENT_CANCELLED", "Hủy sự kiện")}</span>;
+        return t("adminRefunds.reasons.EVENT_CANCELLED", copyText("Hủy sự kiện", "Event cancelled"));
       case "LATE_PAYMENT":
-        return <span className="badge-reason">{t("adminRefunds.reasons.LATE_PAYMENT", "Thanh toán muộn / hết hạn")}</span>;
+        return t("adminRefunds.reasons.LATE_PAYMENT", copyText("Thanh toán muộn / hết hạn", "Late / expired payment"));
       case "TICKET_ISSUANCE_FAILED":
-        return <span className="badge-reason">{t("adminRefunds.reasons.TICKET_ISSUANCE_FAILED", "Lỗi phát vé")}</span>;
+        return t("adminRefunds.reasons.TICKET_ISSUANCE_FAILED", copyText("Lỗi phát vé", "Ticket issuance failed"));
       case "DUPLICATE_PAYMENT":
-        return <span className="badge-reason">{t("adminRefunds.reasons.DUPLICATE_PAYMENT", "Thanh toán trùng")}</span>;
+        return t("adminRefunds.reasons.DUPLICATE_PAYMENT", copyText("Thanh toán trùng", "Duplicate payment"));
       default:
-        return <span className="badge-reason">{reason}</span>;
+        return reason;
     }
   };
 
@@ -242,315 +250,428 @@ export default function AdminRefundsPage() {
     switch (state) {
       case "FAILED":
         return (
-          <span className="badge badge-state-FAILED">
-            <AlertTriangle size={14} />
-            {t("adminRefunds.states.FAILED", "Thất bại (Cần xử lý)")}
+          <span className="tix-status-badge is-failed">
+            <AlertTriangle size={12} aria-hidden="true" />
+            <span>{copyText("Thất bại", "Failed")}</span>
           </span>
         );
       case "PENDING":
         return (
-          <span className="badge badge-state-PENDING">
-            <Clock size={14} />
-            {t("adminRefunds.states.PENDING", "Chờ gửi cổng")}
+          <span className="tix-status-badge is-pending">
+            <Clock size={12} aria-hidden="true" />
+            <span>{t("adminRefunds.states.PENDING", copyText("Chờ xử lý", "Pending"))}</span>
           </span>
         );
       case "PROCESSING":
         return (
-          <span className="badge badge-state-PROCESSING">
-            <LoaderCircle size={14} className="spin" />
-            {t("adminRefunds.states.PROCESSING", "Đang xử lý")}
+          <span className="tix-status-badge is-processing">
+            <RotateCw size={12} aria-hidden="true" />
+            <span>{t("adminRefunds.states.PROCESSING", copyText("Đang xử lý", "Processing"))}</span>
           </span>
         );
       case "SUCCEEDED":
         return (
-          <span className="badge badge-state-SUCCEEDED">
-            <CheckCircle2 size={14} />
-            {t("adminRefunds.states.SUCCEEDED", "Đã hoàn thành")}
+          <span className="tix-status-badge is-succeeded">
+            <CheckCircle2 size={12} aria-hidden="true" />
+            <span>{t("adminRefunds.states.SUCCEEDED", copyText("Đã ghi nhận hoàn tất", "Recorded as complete"))}</span>
           </span>
         );
       default:
-        return <span className="badge">{state}</span>;
+        return <span className="tix-status-badge">{state}</span>;
     }
   };
 
-  return (
-    <main className="admin-refunds-page">
-      <div className="admin-refunds-container">
-        {/* Header */}
-        <div className="admin-refunds-header">
-          <div>
-            <h1>
-              <RotateCcw size={28} color="#0f766e" />
-              {t("adminRefunds.title", "Quản trị Hoàn tiền")}
-            </h1>
-            <p>
+  const getTabLabel = (state: RefundState) => {
+    switch (state) {
+      case "FAILED":
+        return copyText("Thất bại", "Failed");
+      case "PENDING":
+        return t("adminRefunds.tabs.PENDING", copyText("Chờ xử lý", "Pending"));
+      case "PROCESSING":
+        return t("adminRefunds.tabs.PROCESSING", copyText("Đang xử lý", "Processing"));
+      case "SUCCEEDED":
+        return t("adminRefunds.tabs.SUCCEEDED", copyText("Đã ghi nhận hoàn tất", "Recorded as complete"));
+    }
+  };
+
+  const data = refundsQuery.data;
+  const refunds = data?.items ?? [];
+  const totalPages = data?.totalPages ?? 0;
+  const totalElements = data?.totalElements ?? 0;
+  const showActionsColumn = selectedState === "FAILED";
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visibleRefunds = useMemo(() => {
+    if (!normalizedSearch) return refunds;
+    return refunds.filter((item) => {
+      const reasonText = renderReasonLabel(item.reason).toLowerCase();
+      return (
+        item.refundId.toLowerCase().includes(normalizedSearch) ||
+        item.orderId.toLowerCase().includes(normalizedSearch) ||
+        item.chargeId.toLowerCase().includes(normalizedSearch) ||
+        (item.externalReference ?? "").toLowerCase().includes(normalizedSearch) ||
+        (item.settledBy ?? "").toLowerCase().includes(normalizedSearch) ||
+        (item.lastAttemptOutcome ?? "").toLowerCase().includes(normalizedSearch) ||
+        reasonText.includes(normalizedSearch)
+      );
+    });
+  }, [refunds, normalizedSearch, isVi]);
+
+  if (!initialized) {
+    return (
+      <div className="tix-dashboard-page tix-admin-page">
+        <div className="tix-dashboard-container">
+          <TixAdminTopNav activeTab="refunds" />
+          <div className="tix-orders-card tix-admin-state-box" role="status">
+            <LoaderCircle size={26} className="tix-spin" aria-hidden="true" />
+            <span>{t("adminRefunds.loadingList", copyText("Đang tải danh sách hoàn tiền...", "Loading refunds..."))}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <div className="tix-dashboard-page tix-admin-page">
+        <div className="tix-dashboard-container">
+          <TixAdminTopNav activeTab="refunds" />
+          <div className="tix-orders-card tix-admin-state-box" role="alert">
+            <ShieldAlert size={32} color="#dc2626" aria-hidden="true" />
+            <strong style={{ color: "var(--text-strong, #15171a)" }}>
+              {t("adminRefunds.accessDeniedTitle", copyText("Truy cập bị từ chối", "Access denied"))}
+            </strong>
+            <span>
               {t(
-                "adminRefunds.description",
-                "Theo dõi, thử lại lệnh hoàn tiền qua cổng VNPay hoặc ghi nhận hoàn tiền thủ công ngoài hệ thống.",
+                "adminRefunds.accessDeniedDesc",
+                copyText(
+                  "Bạn cần đăng nhập với tài khoản có quyền Quản trị viên (ADMIN) để xem trang này.",
+                  "You must sign in with an Administrator (ADMIN) account to access this page.",
+                ),
               )}
-            </p>
-          </div>
-        </div>
-
-        {/* Event Progress Lookup Card */}
-        <div className="admin-refunds-progress-card">
-          <div className="progress-card-header">
-            <h2>
-              <Search size={18} color="#0f766e" />
-              {t("adminRefunds.eventLookupTitle", "Tra cứu tiến độ hoàn tiền theo Sự kiện")}
-            </h2>
-            <form onSubmit={handleEventSearch} className="progress-search-form">
-              <input
-                type="text"
-                className="progress-input"
-                placeholder={t("adminRefunds.eventInputPlaceholder", "Nhập mã sự kiện (Event UUID)...")}
-                value={eventInput}
-                onChange={(e) => setEventInput(e.target.value)}
-              />
-              <button type="submit" className="btn btn-secondary">
-                {t("adminRefunds.searchBtn", "Tra cứu")}
-              </button>
-            </form>
-          </div>
-
-          {activeEventId && (
-            <div>
-              {eventProgressQuery.isPending && (
-                <div style={{ padding: "12px 0", color: "#64748b", display: "flex", alignItems: "center", gap: 8 }}>
-                  <LoaderCircle size={16} className="spin" />
-                  {t("adminRefunds.loadingProgress", "Đang tải dữ liệu tiến độ sự kiện...")}
-                </div>
-              )}
-              {eventProgressQuery.isError && (
-                <div style={{ padding: "12px 0", color: "#dc2626" }}>
-                  {t("adminRefunds.eventNotFound", "Không tìm thấy dữ liệu hoàn tiền cho sự kiện này (hoặc sự kiện chưa từng bị hủy).")}
-                </div>
-              )}
-              {eventProgressQuery.data && (
-                <div className="progress-stats-grid">
-                  <div className="progress-stat-item">
-                    <span className="progress-stat-label">{t("adminRefunds.stats.selected", "Tổng đơn chọn hoàn")}</span>
-                    <span className="progress-stat-value">{eventProgressQuery.data.selectedOrderCount}</span>
-                  </div>
-                  <div className="progress-stat-item refunded">
-                    <span className="progress-stat-label">{t("adminRefunds.stats.refunded", "Đã hoàn thành")}</span>
-                    <span className="progress-stat-value">{eventProgressQuery.data.refundedCount}</span>
-                  </div>
-                  <div className="progress-stat-item">
-                    <span className="progress-stat-label">{t("adminRefunds.stats.pending", "Đang xử lý")}</span>
-                    <span className="progress-stat-value">{eventProgressQuery.data.pendingCount}</span>
-                  </div>
-                  <div className="progress-stat-item needs-attention">
-                    <span className="progress-stat-label">{t("adminRefunds.stats.needsAttention", "Cần can thiệp (Lỗi)")}</span>
-                    <span className="progress-stat-value">{eventProgressQuery.data.needsAttentionCount}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div className="admin-refunds-tabs">
-          {TAB_STATES.map((tab) => {
-            const isActive = selectedState === tab.state;
-            return (
-              <button
-                key={tab.state}
-                type="button"
-                className={`refund-tab-btn ${isActive ? "active" : ""}`}
-                onClick={() => {
-                  setSelectedState(tab.state);
-                  setPage(0);
-                }}
-              >
-                {t(tab.labelKey, tab.state)}
-                {isActive && totalElements > 0 && (
-                  <span className="refund-tab-badge">{totalElements}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Table Card */}
-        <div className="admin-refunds-table-card">
-          {refundsQuery.isPending && (
-            <div className="admin-refunds-state">
-              <LoaderCircle size={32} className="spin" color="#0f766e" style={{ margin: "0 auto 12px" }} />
-              <p>{t("adminRefunds.loadingList", "Đang tải danh sách yêu cầu hoàn tiền...")}</p>
-            </div>
-          )}
-
-          {refundsQuery.isError && (
-            <div className="admin-refunds-state">
-              <AlertTriangle size={32} color="#dc2626" style={{ margin: "0 auto 12px" }} />
-              <p>{t("adminRefunds.loadFailed", "Không thể tải danh sách hoàn tiền. Vui lòng thử lại sau.")}</p>
+            </span>
+            {!isAuthenticated && (
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={() => void refundsQuery.refetch()}
+                className="tix-admin-btn tix-admin-btn-primary"
+                onClick={() => void keycloak.login()}
               >
-                {t("adminRefunds.retryBtn", "Tải lại")}
+                {t("nav.login", copyText("Đăng nhập", "Sign in"))}
               </button>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-          {refundsQuery.isSuccess && refunds.length === 0 && (
-            <div className="admin-refunds-state">
-              <CheckCircle2 size={36} color="#10b981" style={{ margin: "0 auto 12px" }} />
-              <p>
-                {t(
-                  "adminRefunds.emptyList",
-                  `Không có yêu cầu hoàn tiền nào ở trạng thái ${selectedState}.`,
+  return (
+    <div className="tix-dashboard-page tix-admin-page">
+      <div className="tix-dashboard-container">
+        <TixAdminTopNav activeTab="refunds" />
+
+        {/* Overview Header */}
+        <div className="tix-overview-header">
+          <div className="tix-overview-header-left">
+            <div className="tix-overview-title-block">
+              <h1 className="tix-overview-main-title">
+                {t("adminRefunds.title", copyText("Quản lý hoàn tiền", "Refund Management"))}
+              </h1>
+              <p className="tix-overview-subtitle">
+                {copyText(
+                  "Theo dõi yêu cầu hoàn tiền, thử lại giao dịch lỗi và ghi nhận đối soát hoàn tiền thủ công.",
+                  "Track refund requests, retry failed refunds, and record manual settlements.",
                 )}
               </p>
             </div>
-          )}
+          </div>
+        </div>
 
-          {refundsQuery.isSuccess && refunds.length > 0 && (
+        {/* Sub-tabs & Search */}
+        <div className="tix-subtabs-row">
+          <div className="tix-subtabs-group" role="group" aria-label={copyText("Trạng thái hoàn tiền", "Refund status")}>
+            {TAB_STATES.map((state) => {
+              const Icon = TAB_ICONS[state];
+              return (
+                <button
+                  key={state}
+                  type="button"
+                  className={`tix-subtab-btn ${selectedState === state ? "active" : ""}`}
+                  onClick={() => {
+                    setSelectedState(state);
+                    setPage(0);
+                  }}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                  <span>{getTabLabel(state)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="tix-search-input-wrap">
+            <Search size={15} aria-hidden="true" />
+            <input
+              type="search"
+              className="tix-search-input"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={copyText("Lọc trên trang hiện tại (mã hoàn, mã đơn, tham chiếu)...", "Filter current page (refund ID, order ID, ref)...")}
+              aria-label={copyText("Tìm giao dịch hoàn tiền trên trang hiện tại", "Filter refund transactions on current page")}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="tix-search-clear-btn"
+                onClick={() => setSearchTerm("")}
+                aria-label={t("organizerHub.clearSearch", copyText("Xóa từ khóa tìm kiếm", "Clear search"))}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Refunds Table Card */}
+        <section className="tix-orders-card" aria-busy={refundsQuery.isFetching}>
+          <div className="tix-card-header" style={{ marginBottom: 16 }}>
+            <div>
+              <h2 className="tix-card-title">
+                {copyText("Danh sách giao dịch hoàn tiền", "Refund Transactions")}
+              </h2>
+              <p className="tix-card-subtitle">
+                {refundsQuery.isSuccess
+                  ? normalizedSearch
+                    ? copyText(
+                        `${visibleRefunds.length} giao dịch khớp trong ${refunds.length} giao dịch trang ${page + 1} (tổng ${totalElements.toLocaleString(locale)})`,
+                        `${visibleRefunds.length} matching in ${refunds.length} items on page ${page + 1} (${totalElements.toLocaleString(locale)} total)`,
+                      )
+                    : copyText(
+                        `Tổng ${totalElements.toLocaleString(locale)} giao dịch`,
+                        `${totalElements.toLocaleString(locale)} total transactions`,
+                      )
+                  : copyText(
+                      "Theo dõi trạng thái xử lý và đối soát từng giao dịch hoàn tiền.",
+                      "Track processing state and settlement details for each refund.",
+                    )}
+              </p>
+            </div>
+          </div>
+
+          {refundsQuery.isPending ? (
+            <div className="tix-admin-state-box" role="status">
+              <LoaderCircle size={26} className="tix-spin" aria-hidden="true" />
+              <span>{t("adminRefunds.loadingList", copyText("Đang tải danh sách yêu cầu hoàn tiền...", "Loading refund transactions..."))}</span>
+            </div>
+          ) : refundsQuery.isError ? (
+            <div className="tix-admin-error-box" role="alert">
+              <span>{t("adminRefunds.loadFailed", copyText("Không thể tải danh sách giao dịch hoàn tiền.", "Failed to load refund transactions."))}</span>
+              <button
+                type="button"
+                className="tix-admin-btn tix-admin-btn-secondary"
+                disabled={refundsQuery.isFetching}
+                onClick={() => void refundsQuery.refetch()}
+              >
+                {t("profile.retry", copyText("Thử lại", "Retry"))}
+              </button>
+            </div>
+          ) : visibleRefunds.length === 0 ? (
+            <div className="tix-admin-state-box">
+              {normalizedSearch ? (
+                <FileText size={28} color="var(--text-muted, #666b74)" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 size={28} color="#16a34a" aria-hidden="true" />
+              )}
+              <span>
+                {normalizedSearch
+                  ? copyText(
+                      "Không tìm thấy giao dịch nào khớp với từ khóa trên trang hiện tại.",
+                      "No transactions match your search on the current page.",
+                    )
+                  : t(
+                      "adminRefunds.emptyList",
+                      copyText("Không có yêu cầu hoàn tiền nào ở trạng thái này.", "No refund requests in this state."),
+                    )}
+              </span>
+            </div>
+          ) : (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table className="admin-refunds-table">
+              <div className="tix-table-wrapper">
+                <table className="tix-orders-table">
                   <thead>
                     <tr>
-                      <th>{t("adminRefunds.table.refundId", "Mã hoàn tiền")}</th>
-                      <th>{t("adminRefunds.table.orderId", "Mã đơn hàng")}</th>
-                      <th>{t("adminRefunds.table.amount", "Số tiền")}</th>
-                      <th>{t("adminRefunds.table.reason", "Lý do hoàn")}</th>
-                      <th>{t("adminRefunds.table.status", "Trạng thái")}</th>
-                      <th>{t("adminRefunds.table.createdAt", "Thời gian tạo")}</th>
-                      <th>{t("adminRefunds.table.actions", "Thao tác")}</th>
+                      <th scope="col">{t("adminRefunds.table.refundId", copyText("Mã hoàn tiền", "Refund ID"))}</th>
+                      <th scope="col">{t("adminRefunds.table.orderId", copyText("Mã đơn hàng", "Order ID"))}</th>
+                      <th scope="col">{t("adminRefunds.table.amount", copyText("Số tiền", "Amount"))}</th>
+                      <th scope="col">{t("adminRefunds.table.reason", copyText("Lý do hoàn", "Reason"))}</th>
+                      <th scope="col">{t("adminRefunds.table.status", copyText("Trạng thái", "Status"))}</th>
+                      <th scope="col">{t("adminRefunds.table.createdAt", copyText("Thời gian tạo", "Created At"))}</th>
+                      <th scope="col">{copyText("Đối soát", "Settlement")}</th>
+                      {showActionsColumn && (
+                        <th scope="col" style={{ textAlign: "left", width: "1%" }}>
+                          {t("adminRefunds.table.actions", copyText("Thao tác", "Actions"))}
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {refunds.map((item) => (
-                      <tr key={item.refundId}>
-                        <td>
-                          <div className="id-cell" title={item.refundId}>
-                            <span>{item.refundId.substring(0, 8)}...</span>
-                            <button
-                              type="button"
-                              className="copy-btn"
-                              onClick={() => handleCopy(item.refundId)}
-                              title="Sao chép đầy đủ UUID"
-                            >
-                              {copiedId === item.refundId ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="id-cell" title={item.orderId}>
-                            <span>{item.orderId.substring(0, 8)}...</span>
-                            <button
-                              type="button"
-                              className="copy-btn"
-                              onClick={() => handleCopy(item.orderId)}
-                              title="Sao chép đầy đủ UUID"
-                            >
-                              {copiedId === item.orderId ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="amount-cell">{formatVnd(item.amount)}</div>
-                        </td>
-                        <td>{renderReasonBadge(item.reason)}</td>
-                        <td>
-                          {renderStateBadge(item.state)}
-                          {item.externalReference && (
-                            <div className="settled-info" title={item.externalReference}>
-                              <strong>Mã GD ngoài:</strong> {item.externalReference}
+                    {visibleRefunds.map((item) => {
+                      const hasSettlementInfo = Boolean(
+                        item.completedAt || item.externalReference || item.settledBy,
+                      );
+                      const isMutatingThisRow =
+                        activeActionRefundId === item.refundId &&
+                        (retryMutation.isPending || manualSettlementMutation.isPending);
+
+                      return (
+                        <tr key={item.refundId}>
+                          <td>
+                            <div className="tix-admin-id-cell">
+                              <span title={item.refundId}>{shortId(item.refundId)}</span>
+                              <button
+                                type="button"
+                                className="tix-admin-copy-icon-btn"
+                                onClick={() => void handleCopy(item.refundId, "Refund ID")}
+                                aria-label={copyText("Sao chép mã hoàn tiền", "Copy Refund ID")}
+                                title={item.refundId}
+                              >
+                                {copiedId === item.refundId ? (
+                                  <Check size={13} aria-hidden="true" />
+                                ) : (
+                                  <Copy size={13} aria-hidden="true" />
+                                )}
+                              </button>
                             </div>
-                          )}
-                          {item.settledBy && (
-                            <div className="settled-info">
-                              <strong>Duyệt bởi:</strong> {item.settledBy.substring(0, 8)}...
+                          </td>
+                          <td>
+                            <div className="tix-admin-id-cell">
+                              <span title={item.orderId}>{shortId(item.orderId)}</span>
+                              <button
+                                type="button"
+                                className="tix-admin-copy-icon-btn"
+                                onClick={() => void handleCopy(item.orderId, "Order ID")}
+                                aria-label={copyText("Sao chép mã đơn hàng", "Copy Order ID")}
+                                title={item.orderId}
+                              >
+                                {copiedId === item.orderId ? (
+                                  <Check size={13} aria-hidden="true" />
+                                ) : (
+                                  <Copy size={13} aria-hidden="true" />
+                                )}
+                              </button>
                             </div>
-                          )}
-                        </td>
-                        <td>{formatDate(item.createdAt)}</td>
-                        <td>
-                          <div className="actions-cell">
-                            {item.state === "FAILED" && (
-                              <>
+                          </td>
+                          <td>
+                            <span className="tix-revenue-text">
+                              {formatCurrency(Number(item.amount), item.currency || "VND")}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="tix-admin-reason-text">
+                              {renderReasonLabel(item.reason)}
+                            </span>
+                          </td>
+                          <td>{renderStateBadge(item.state)}</td>
+                          <td style={{ whiteSpace: "nowrap", color: "var(--text-subtle, #565e69)" }}>
+                            {formatDateTime(item.createdAt, locale)}
+                          </td>
+                          <td>
+                            {hasSettlementInfo ? (
+                              <div className="tix-admin-settlement-meta">
+                                {item.completedAt && (
+                                  <span className="tix-admin-settlement-time">
+                                    {formatDateTime(item.completedAt, locale)}
+                                  </span>
+                                )}
+                                {item.externalReference && (
+                                  <span className="tix-admin-mono" title={item.externalReference}>
+                                    Ref: {item.externalReference}
+                                  </span>
+                                )}
+                                {item.settledBy && (
+                                  <span className="tix-admin-settlement-by" title={item.settledBy}>
+                                    {copyText("Bởi", "By")}: {shortId(item.settledBy)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="tix-admin-empty-text">
+                                {copyText("Chưa đối soát", "Not settled")}
+                              </span>
+                            )}
+                          </td>
+                          {showActionsColumn && (
+                            <td style={{ textAlign: "left", whiteSpace: "nowrap", width: "1%" }}>
+                              <div className="tix-admin-table-actions">
                                 <button
                                   type="button"
-                                  className="action-btn-retry"
-                                  disabled={retryMutation.isPending}
+                                  className="tix-admin-btn tix-admin-btn-primary"
+                                  style={{ minHeight: 32, padding: "5px 12px", fontSize: "0.8rem" }}
+                                  disabled={
+                                    isMutatingThisRow ||
+                                    retryMutation.isPending ||
+                                    manualSettlementMutation.isPending
+                                  }
                                   onClick={() => retryMutation.mutate(item.refundId)}
-                                  title="Gửi lại yêu cầu hoàn tiền sang cổng VNPay"
                                 >
-                                  <RotateCcw size={14} />
-                                  {t("adminRefunds.actions.retry", "Thử lại")}
+                                  <span>{t("adminRefunds.actions.retry", copyText("Thử lại", "Retry"))}</span>
                                 </button>
                                 <button
                                   type="button"
-                                  className="action-btn-manual"
-                                  disabled={manualSettlementMutation.isPending}
-                                  onClick={() => handleManualSettlementPrompt(item)}
-                                  title="Xác nhận đã chuyển khoản/hoàn tiền thủ công cho khách"
+                                  className="tix-admin-btn tix-admin-btn-secondary"
+                                  style={{ minHeight: 32, padding: "5px 12px", fontSize: "0.8rem" }}
+                                  disabled={
+                                    isMutatingThisRow ||
+                                    retryMutation.isPending ||
+                                    manualSettlementMutation.isPending
+                                  }
+                                  onClick={() => void handleManualSettlement(item)}
                                 >
-                                  <FileText size={14} />
-                                  {t("adminRefunds.actions.manual", "Hoàn thủ công")}
+                                  <span>{copyText("Đối soát", "Settle")}</span>
                                 </button>
-                              </>
-                            )}
-
-                            {item.state === "SUCCEEDED" && (
-                              <span style={{ color: "#059669", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                                <CheckCircle2 size={16} />
-                                {t("adminRefunds.actions.completed", "Đã xong")}
-                              </span>
-                            )}
-
-                            {(item.state === "PENDING" || item.state === "PROCESSING") && (
-                              <span style={{ color: "#64748b", fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
-                                <LoaderCircle size={14} className="spin" />
-                                {t("adminRefunds.actions.autoProcessing", "Hệ thống tự xử lý")}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
-              {/* Pagination */}
-              <div className="admin-refunds-pagination">
-                <div>
-                  {t("adminRefunds.paginationInfo", {
-                    total: totalElements,
-                    page: page + 1,
-                    pages: Math.max(totalPages, 1),
-                    defaultValue: `Tổng cộng ${totalElements} bản ghi · Trang ${page + 1}/${Math.max(totalPages, 1)}`,
-                  })}
+              {totalPages > 1 && (
+                <div className="tix-pagination-wrapper">
+                  <div className="tix-pagination-box">
+                    <button
+                      type="button"
+                      className="tix-page-arrow-btn"
+                      disabled={page <= 0}
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      aria-label={t("adminRefunds.prevBtn", copyText("Trang trước", "Previous page"))}
+                    >
+                      <ChevronLeft size={16} aria-hidden="true" />
+                    </button>
+                    <span className="tix-page-indicator">
+                      {page + 1} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="tix-page-arrow-btn"
+                      disabled={page + 1 >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                      aria-label={t("adminRefunds.nextBtn", copyText("Trang sau", "Next page"))}
+                    >
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
-                <div className="pagination-controls">
-                  <button
-                    type="button"
-                    className="page-btn"
-                    disabled={page <= 0}
-                    onClick={() => setPage((prev) => Math.max(0, prev - 1))}
-                  >
-                    {t("adminRefunds.prevBtn", "Trang trước")}
-                  </button>
-                  <button
-                    type="button"
-                    className="page-btn"
-                    disabled={page >= totalPages - 1}
-                    onClick={() => setPage((prev) => prev + 1)}
-                  >
-                    {t("adminRefunds.nextBtn", "Trang sau")}
-                  </button>
-                </div>
-              </div>
+              )}
             </>
           )}
-        </div>
+        </section>
       </div>
-    </main>
+    </div>
   );
 }
+
+export default AdminRefundsPage;

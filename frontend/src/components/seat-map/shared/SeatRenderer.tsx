@@ -1,6 +1,5 @@
 import { memo } from "react";
-import { Group, Line, Path, Rect } from "react-konva";
-import { Armchair as MdOutlineEventSeat } from "lucide-react";
+import { Circle, Group, Line, Path, Rect } from "react-konva";
 
 interface SeatRendererProps {
   id: string;
@@ -12,6 +11,7 @@ interface SeatRendererProps {
   hidden?: boolean;
   disabled?: boolean;
   color?: string;
+  variant?: "circle" | "icon";
   editable?: boolean;
   draggable?: boolean;
   onClick?: (event: any) => void;
@@ -25,9 +25,9 @@ interface SeatRendererProps {
 
 const EVENT_SEAT_ICON_PATH =
   "M15 5v7H9V5h6m0-2H9c-1.1 0-2 .9-2 2v9h10V5c0-1.1-.9-2-2-2zm7 7h-3v3h3v-3zM5 10H2v3h3v-3zm15 5H4v6h2v-4h12v4h2v-6z";
-const EVENT_SEAT_ICON_VIEWBOX = MdOutlineEventSeat.name ? 24 : 24;
+const EVENT_SEAT_ICON_VIEWBOX = 24;
 
-function getSeatFill(status?: string, selected = false, hidden = false, color = "#16a34a") {
+function getSeatFill(status?: string, selected = false, hidden = false, color = "#2bb3a3") {
   if (selected) {
     return color;
   }
@@ -51,7 +51,7 @@ function getSeatFill(status?: string, selected = false, hidden = false, color = 
 
 function getSeatStroke(status?: string, selected = false, color = "#16a34a") {
   if (selected) {
-    return "#ffffff";
+    return "#0f172a";
   }
 
   switch (status) {
@@ -78,6 +78,7 @@ function SeatRendererBase({
   hidden = false,
   disabled = false,
   color,
+  variant = "circle",
   editable = true,
   draggable = false,
   onClick,
@@ -88,10 +89,11 @@ function SeatRendererBase({
   onMouseLeave,
   memoizeEventHandlers: _memoizeEventHandlers,
 }: SeatRendererProps) {
+  const dotRadius = Math.max(radius, 8);
   const iconSize = Math.max(radius * 2.8, 16);
   const iconScale = iconSize / EVENT_SEAT_ICON_VIEWBOX;
   const iconOffset = iconSize / 2;
-  const seatColor = color || "#16a34a";
+  const seatColor = color || "#2bb3a3";
   const fill = getSeatFill(status, selected, hidden, seatColor);
   const stroke = getSeatStroke(status, selected, seatColor);
 
@@ -101,7 +103,7 @@ function SeatRendererBase({
       name="seat-node"
       x={x}
       y={y}
-      opacity={hidden || disabled ? 0.58 : 1}
+      opacity={hidden || disabled ? (variant === "icon" ? 0.58 : 0.5) : 1}
       listening={editable}
       draggable={draggable && !hidden}
       onClick={onClick}
@@ -111,49 +113,83 @@ function SeatRendererBase({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      <Rect
-        name="seat-node"
-        x={-iconOffset}
-        y={-iconOffset}
-        width={iconSize}
-        height={iconSize}
-        fill={selected ? "rgba(255, 255, 255, 0.18)" : "rgba(255, 255, 255, 0)"}
-        cornerRadius={Math.max(4, radius * 0.45)}
-        listening
-        perfectDrawEnabled={false}
-      />
+      {variant === "icon" ? (
+        <>
+          <Rect
+            name="seat-node"
+            x={-iconOffset}
+            y={-iconOffset}
+            width={iconSize}
+            height={iconSize}
+            fill="rgba(255, 255, 255, 0)"
+            cornerRadius={Math.max(4, radius * 0.45)}
+            listening
+            perfectDrawEnabled={false}
+          />
+          <Path
+            name="seat-node"
+            data={EVENT_SEAT_ICON_PATH}
+            x={-iconOffset}
+            y={-iconOffset}
+            scaleX={iconScale}
+            scaleY={iconScale}
+            fill={hidden ? "transparent" : disabled && !selected ? "#94a3b8" : fill}
+            stroke={hidden ? seatColor : stroke}
+            strokeWidth={selected ? 1.35 : 0.75}
+            dash={hidden ? [3, 2] : undefined}
+            shadowColor={selected ? "#1688f0" : undefined}
+            shadowBlur={selected ? 8 : 0}
+            shadowOpacity={selected ? 0.65 : 0}
+            listening
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+          {selected ? (
+            <Line
+              x={0}
+              y={-iconSize * 0.08}
+              points={[-radius * 0.35, 0, -radius * 0.08, radius * 0.28, radius * 0.45, -radius * 0.32]}
+              stroke="#0f172a"
+              strokeWidth={Math.max(1.5, radius * 0.26)}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Circle
+            name="seat-node"
+            radius={dotRadius}
+            fill={hidden ? "transparent" : disabled && !selected ? "#94a3b8" : fill}
+            stroke={hidden ? seatColor : stroke}
+            strokeWidth={selected ? 2 : hidden ? 1.2 : 0.75}
+            dash={hidden ? [3, 2] : undefined}
+            shadowColor={selected ? "#1688f0" : undefined}
+            shadowBlur={selected ? 8 : 0}
+            shadowOpacity={selected ? 0.65 : 0}
+            listening
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
 
-      <Path
-        name="seat-node"
-        data={EVENT_SEAT_ICON_PATH}
-        x={-iconOffset}
-        y={-iconOffset}
-        scaleX={iconScale}
-        scaleY={iconScale}
-        fill={disabled && !selected ? "#94a3b8" : fill}
-        stroke={stroke}
-        strokeWidth={selected ? 1.35 : 0.75}
-        shadowColor={seatColor}
-        shadowBlur={selected ? 10 : 0}
-        shadowOpacity={selected ? 0.55 : 0}
-        shadowOffset={{ x: 0, y: selected ? 2 : 0 }}
-        listening
-        perfectDrawEnabled={false}
-        shadowForStrokeEnabled={false}
-      />
-
-      {selected ? (
-        <Line
-          x={0}
-          y={0}
-          points={[-radius * 0.35, 0, -radius * 0.1, radius * 0.3, radius * 0.52, -radius * 0.36]}
-          stroke="#ffffff"
-          strokeWidth={Math.max(1.5, radius * 0.28)}
-          lineCap="round"
-          lineJoin="round"
-          listening={false}
-        />
-      ) : null}
+          {selected ? (
+            <Line
+              x={0}
+              y={0}
+              points={[-dotRadius * 0.35, 0, -dotRadius * 0.08, dotRadius * 0.3, dotRadius * 0.48, -dotRadius * 0.34]}
+              stroke="#ffffff"
+              strokeWidth={Math.max(1.5, dotRadius * 0.24)}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          ) : null}
+        </>
+      )}
 
     </Group>
   );
@@ -169,6 +205,7 @@ export const SeatRenderer = memo(SeatRendererBase, (previous, next) =>
   previous.hidden === next.hidden &&
   previous.disabled === next.disabled &&
   previous.color === next.color &&
+  previous.variant === next.variant &&
   previous.editable === next.editable &&
   previous.draggable === next.draggable &&
   previous.memoizeEventHandlers === next.memoizeEventHandlers &&

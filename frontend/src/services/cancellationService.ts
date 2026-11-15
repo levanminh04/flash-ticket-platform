@@ -37,10 +37,11 @@ export const cancellationService = {
     eventId: string,
     size = 20,
     cursor?: string,
+    signal?: AbortSignal,
   ): Promise<PageResponse<CancellationRequest>> => {
     const response = await axiosClient.get<PageResponse<CancellationRequest>>(
       `/api/v1/organizer/events/${encodeURIComponent(eventId)}/cancellation-requests`,
-      { params: { size, cursor } },
+      { params: { size, cursor }, signal },
     );
     return response.data;
   },

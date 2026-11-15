@@ -74,7 +74,6 @@ services:
         required: true
     environment:
       <<: *discovery-env
-      EVENT_BOOKING_BASE_URL: http://booking-service:8082
       EVENT_PAYMENT_BASE_URL: http://payment-service:8083
 
   user-service:

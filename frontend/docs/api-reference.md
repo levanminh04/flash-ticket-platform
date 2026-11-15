@@ -134,17 +134,21 @@ curl -s "$BASE/api/v1/me" -H "Authorization: Bearer $TOKEN"
 ```
 Response 200:
 ```json
-{ "userId": "uuid", "identitySubject": "keycloak-sub", "displayName": "Nguyễn Văn A" }
+{ "userId": "uuid", "identitySubject": "keycloak-sub", "displayName": "Nguyễn Văn A", "email": null, "dateOfBirth": null, "address": null, "phoneNumber": null, "avatarUrl": null }
 ```
 
-### 1.2 `PUT /api/v1/me` — đổi tên hiển thị
+### 1.2 `PUT /api/v1/me` — cập nhật hồ sơ
 
 ```bash
 curl -s -X PUT "$BASE/api/v1/me" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"displayName":"Nguyễn Văn B"}'
 ```
-- Request: `displayName` bắt buộc, không rỗng, tối đa 200 ký tự.
+- Gửi các trường cần đổi. `displayName` tối đa 200 ký tự và không được rỗng nếu gửi. `dateOfBirth` dùng DD-MM-YYYY, `address` tối đa 500 ký tự, `phoneNumber` nhận số di động Việt Nam và trả dạng +84. Gửi null để xóa một trường bổ sung. Email lấy từ JWT.
 - Response: `UserProfile`, giống mục 1.1.
+
+#### `PUT /api/v1/me/avatar`
+
+Gửi multipart với trường `file` là JPEG hoặc PNG tối đa 2 MB và 2048 pixel mỗi cạnh. Ảnh được tải lên Cloudinary (folder `flash-ticket/avatars`) và lưu `secure_url` dạng `https://res.cloudinary.com/...` vào `avatarUrl` trong hồ sơ người dùng. Với MongoDB đã khởi tạo, chạy `deploy/mongodb/migrate-user-profile.js` trước khi đưa API mới vào sử dụng.
 
 ### 1.3 `POST /api/v1/organizer-applications` — đăng ký làm organizer
 
@@ -242,7 +246,7 @@ Response `PublicEvent`:
   "endsAt": "2026-12-20T15:00:00Z",
   "venueName": "Nhà hát Lớn",
   "mode": "QUANTITY",
-  "images": [ { "imageId": "uuid", "objectReference": "https://...", "displayOrder": 0 } ],
+  "images": [ { "imageId": "uuid", "objectReference": "https://...", "displayOrder": 0, "role": "BANNER" } ],
   "ticketTypes": [
     { "ticketTypeId": "uuid", "name": "VIP", "unitPrice": "1500000", "currency": "VND",
       "sectorId": null, "configuredQuantity": 100, "colorCode": "#FF0000" }
@@ -274,10 +278,9 @@ Prefix: `/api/v1/organizer/events`
 | `POST` | `/{id}/cancellation-requests` | `{ "rowVersion": "6", "reason": "..." }` | **201** `CancellationRequest` (xin admin huỷ sự kiện đã publish) |
 | `GET` | `/{id}/cancellation-requests?size=&cursor=` | — | `Page<CancellationRequest>` |
 | `GET` | `/{id}/seat-map` | — | `SeatMap` |
-| `PUT` | `/{id}/seat-map?rowVersion=3` | `SeatMap` | `OwnerEvent` |
+| `PUT` | `/{id}/seat-map?rowVersion=3` | `SeatMap` | `SeatMap` |
 | `PUT` | `/{id}/ticket-types` | `{ "rowVersion": "3", "ticketTypes": [ { "ticketTypeId", "sectorId", "name", "unitPrice", "currency", "colorCode" } ] }` | `OwnerEvent` |
 | `POST` | `/{id}/sales-mode` | `{ "rowVersion": "3", "mode": "SEAT_MAP", "confirmDeleteIncompatibleConfiguration": true }` | `OwnerEvent` |
-| `GET` | `/{id}/statistics` | — | `Statistics` |
 
 **`Draft`** (tạo hoặc sửa):
 ```json
@@ -294,7 +297,7 @@ Prefix: `/api/v1/organizer/events`
   "purchaseLimit": 4,
   "images": [ { "imageId": "uuid", "objectReference": "https://...", "displayOrder": 0 } ],
   "ticketTypes": [
-    { "ticketTypeId": "uuid-do-FE-sinh", "name": "VIP", "unitPrice": "1500000",
+    { "ticketTypeId": null, "name": "VIP", "unitPrice": "1500000",
       "currency": "VND", "configuredQuantity": 100, "colorCode": "#FF0000" }
   ],
   "promotions": [
@@ -304,6 +307,7 @@ Prefix: `/api/v1/organizer/events`
 }
 ```
 - `discount.kind`: `FIXED` (dùng `amount`, chuỗi VND) hoặc `PERCENT` (dùng `percent`).
+- Với loại vé mới, gửi `ticketTypeId: null` để backend cấp ID. Khi sửa loại vé đã có, gửi ID hiện tại.
 - `purchaseLimit` > 0: số vé tối đa một người được mua.
 
 ```bash
@@ -322,7 +326,7 @@ curl -s -X POST "$BASE/api/v1/organizer/events" -H "Authorization: Bearer $TOKEN
   "images": [...], "ticketTypes": [...], "promotions": [...], "seatMap": null
 }
 ```
-- `status`: `DRAFT` → `PENDING_APPROVAL` → `APPROVED` → `PUBLISHED`. Ngoài ra có `REJECTED` và `CANCELLED`.
+- `status`: `DRAFT` → `PENDING_APPROVAL` → `APPROVED` → `PUBLISHED`. Ngoài ra có `CANCELLED`. Khi chưa được duyệt, admin dùng `return-to-draft` để đưa sự kiện về `DRAFT`.
 
 **`Summary`:** `{ eventId, title, status, mode, startsAt, endsAt, rowVersion, sourceConfigVersion }`
 
@@ -333,28 +337,23 @@ curl -s -X POST "$BASE/api/v1/organizer/events" -H "Authorization: Bearer $TOKEN
   "reviewReason": null, "eventRowVersion": "6" }
 ```
 
-**`Statistics`:**
-```json
-{ "eventId": "uuid", "asOf": "...", "salesAsOf": "...", "financeAsOf": "...",
-  "purchasedTicketCount": 120, "currency": "VND",
-  "validGross": "18000000", "validRefunds": "0", "feeAmount": "900000", "netAmount": "17100000" }
-```
-
 ### 2.3 Ảnh sự kiện (`ORGANIZER`, timeout 45s)
 
 Prefix: `/api/v1/organizer/events/{eventId}/images`
 
+Trường `file` nhận PNG, JPEG và WebP tĩnh, mặc định tối đa 5 MiB và 16 triệu pixel. Banner phải là 16:9 và tối thiểu 1280 × 720 px. API trả vai trò `BANNER` hoặc `GALLERY` qua trường `role`.
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | `GET` | `/` | — | danh sách ảnh |
-| `POST` | `/` | multipart: `rowVersion`, `displayOrder`, `file` | **201** `OwnerEvent` |
+| `POST` | `/` | multipart: `rowVersion`, `role`, `file`, `displayOrder` (Gallery) | **201** `OwnerEvent` |
 | `PUT` | `/{imageId}` | multipart: `rowVersion`, `file` | `OwnerEvent` (thay ảnh) |
 | `PATCH` | `/{imageId}` | JSON `{ "rowVersion": "4", "displayOrder": 1 }` | `OwnerEvent` |
 | `DELETE` | `/{imageId}?rowVersion=4` | — | `OwnerEvent` |
 
 ```bash
 curl -s -X POST "$BASE/api/v1/organizer/events/<id>/images" -H "Authorization: Bearer $TOKEN" \
-  -F "rowVersion=3" -F "displayOrder=0" -F "file=@poster.jpg"
+  -F "rowVersion=3" -F "role=BANNER" -F "file=@banner.jpg"
 ```
 
 ### 2.4 `SeatMap` (sự kiện `mode = SEAT_MAP`)
@@ -676,7 +675,7 @@ curl -s -X POST "$BASE/api/v1/events/<eventId>/check-ins" -H "Authorization: Bea
 9. (Tuỳ chọn) `POST /orders/{id}/ticket-deliveries`.
 
 ### 6.2 Organizer
-`POST /organizer-applications` → admin duyệt → refresh token → `POST /organizer/events` → upload ảnh, sơ đồ ghế, loại vé → `submit` → admin `approve` → `publish` → xem `statistics` → check-in tại cổng → xem `reconciliation`.
+`POST /organizer-applications` → admin duyệt → refresh token → `POST /organizer/events` → upload ảnh, sơ đồ ghế, loại vé → `submit` → admin `approve` → `publish` → xem `GET /api/v1/organizer/events/{eventId}/sales-summary` → check-in tại cổng → xem `reconciliation`.
 
 ### 6.3 Admin
 Duyệt organizer → duyệt sự kiện (`feeRate`) → xử lý yêu cầu huỷ → theo dõi `refund-progress` và refund `FAILED` (`retry` / `manual-settlement`) → đối soát → payout.

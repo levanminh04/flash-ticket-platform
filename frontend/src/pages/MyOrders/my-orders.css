@@ -1,0 +1,926 @@
+/* ============================================================
+   FLASHTICKET — BUYER ORDERS PAGE (TIX SOFT SQUIRCLE STYLE)
+   Style: Minimalist · Soft Squircle Cards · Synchronized Design
+   ============================================================ */
+
+.buyer-orders {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Header & Filter */
+.buyer-orders-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.buyer-orders-header .profile-page-title {
+  margin: 0;
+}
+
+/* TIX Custom Filter Dropdown (Matches organizer/events/new) */
+.buyer-orders-filter.tix-custom-select-wrap {
+  position: relative;
+  width: min(100%, 240px);
+}
+
+.buyer-orders-filter .tix-custom-select-trigger {
+  list-style: none;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-strong, #15171a);
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 10px 14px;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.15s ease;
+  user-select: none;
+  text-align: left;
+}
+
+.buyer-orders-filter .tix-custom-select-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.buyer-orders-filter .tix-custom-select-trigger:hover,
+.buyer-orders-filter[open] .tix-custom-select-trigger {
+  border-color: var(--text-strong, #15171a);
+  background: #f8fafc;
+}
+
+.buyer-orders-filter .tix-custom-select-trigger:focus-visible {
+  border-color: var(--text-strong, #15171a);
+  box-shadow: 0 0 0 3px rgba(21, 23, 26, 0.08);
+}
+
+.buyer-orders-filter .tix-custom-select-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buyer-orders-filter .tix-custom-select-chevron {
+  color: #64748b;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.buyer-orders-filter[open] .tix-custom-select-chevron {
+  transform: rotate(180deg);
+}
+
+.buyer-orders-filter .tix-custom-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04);
+  padding: 6px;
+  z-index: 100;
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  box-sizing: border-box;
+  animation: tixOrderDropdownFade 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.buyer-orders-filter .tix-custom-select-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.buyer-orders-filter .tix-custom-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-strong, #15171a);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.buyer-orders-filter .tix-custom-select-item:hover {
+  background: #f1f5f9;
+  color: var(--text-strong, #15171a);
+}
+
+.buyer-orders-filter .tix-custom-select-item.is-active {
+  background: #f1f5f9;
+  color: var(--text-strong, #15171a);
+  font-weight: 700;
+}
+
+.buyer-orders-filter .tix-custom-select-item .tix-select-check-icon {
+  color: var(--brand-ink, #b8860b);
+  flex-shrink: 0;
+}
+
+@keyframes tixOrderDropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Empty, Loading & Auth States */
+.buyer-orders-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.buyer-orders-empty,
+.buyer-orders-auth-card {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.buyer-orders-empty-icon {
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.buyer-orders-empty-icon.is-error {
+  color: #dc2626;
+}
+
+.buyer-orders-spinner {
+  color: #15171a;
+  animation: tix-spin 0.9s linear infinite;
+}
+
+@keyframes tix-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.buyer-orders-empty h2,
+.buyer-orders-auth-card h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #15171a;
+}
+
+.buyer-orders-empty p,
+.buyer-orders-auth-card p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 440px;
+}
+
+/* TIX Button Styles */
+.tix-order-btn-primary,
+.tix-order-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  user-select: none;
+}
+
+.tix-order-btn-primary {
+  border: 1.5px solid #15171a;
+  background: #15171a;
+  color: #ffffff;
+}
+
+.tix-order-btn-primary:hover:not(:disabled),
+.tix-order-btn-primary:focus-visible,
+.tix-order-btn-primary:active {
+  background: #15171a;
+  border-color: #15171a;
+  color: #ffffff;
+}
+
+.tix-order-btn-secondary {
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #15171a;
+}
+
+.tix-order-btn-secondary:hover:not(:disabled),
+.tix-order-btn-secondary:focus-visible,
+.tix-order-btn-secondary:active {
+  border-color: #15171a;
+  background: #f8fafc;
+  color: #15171a;
+}
+
+.tix-order-btn-primary:disabled,
+.tix-order-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Order List & Row Cards */
+.buyer-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buyer-orders-row {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.buyer-orders-row:hover {
+  border-color: #cbd5e1;
+}
+
+.buyer-orders-row.is-expanded {
+  border-color: #94a3b8;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* 1. Card Top Bar / Header */
+.buyer-orders-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #f8fafc;
+  border-bottom: 1.5px solid #edf2f7;
+}
+
+.buyer-orders-id-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.buyer-orders-id-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-subtle, #64748b);
+  letter-spacing: 0.01em;
+}
+
+.buyer-orders-id-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1.25px solid #e2e8f0;
+}
+
+.buyer-orders-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-strong, #15171a);
+  letter-spacing: 0.01em;
+}
+
+.buyer-orders-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.buyer-orders-copy-btn:hover {
+  background: #f1f5f9;
+  color: #15171a;
+}
+
+.buyer-orders-copy-btn .is-copied {
+  color: #16a34a;
+}
+
+/* Status Badges (Matches /organizers/apply) */
+.buyer-orders-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  background: var(--surface-subtle, #f1f5f9);
+  color: var(--text-secondary, #475569);
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+}
+
+.buyer-orders-status[data-state="COMPLETED"] {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  box-shadow: 0 1px 3px rgba(4, 120, 87, 0.06);
+}
+
+.buyer-orders-status[data-state="PENDING_PAYMENT"],
+.buyer-orders-status[data-state="ISSUING"] {
+  background: #fff8e7;
+  color: #805c00;
+  border: 1px solid #fed78a;
+  box-shadow: 0 1px 3px rgba(128, 92, 0, 0.06);
+}
+
+.buyer-orders-status[data-state="CANCELLED"],
+.buyer-orders-status[data-state="EXPIRED"],
+.buyer-orders-status[data-state="ISSUANCE_FAILED"] {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  box-shadow: 0 1px 3px rgba(185, 28, 28, 0.06);
+}
+
+/* 2. Card Main Body */
+.buyer-orders-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  background: #ffffff;
+}
+
+.buyer-orders-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.buyer-orders-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subtle, #64748b);
+  flex-shrink: 0;
+}
+
+.buyer-orders-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.buyer-orders-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.buyer-orders-title-extra {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.buyer-orders-submeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.buyer-orders-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.buyer-orders-meta-chip.is-deadline {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #b45309;
+  font-weight: 600;
+  border: 1px solid #fde68a;
+  font-size: 12px;
+}
+
+.buyer-orders-meta-chip.is-discount {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  color: #047857;
+  font-weight: 600;
+  border: 1px solid #a7f3d0;
+  font-size: 12px;
+}
+
+/* Actions & Pricing Area */
+.buyer-orders-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.buyer-orders-total-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.buyer-orders-total-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-subtle, #64748b);
+  letter-spacing: 0.01em;
+}
+
+.buyer-orders-total-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.buyer-orders-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #15171a;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.buyer-orders-toggle:hover {
+  border-color: #15171a;
+  background: #f8fafc;
+}
+
+.buyer-orders-toggle.is-active {
+  background: #15171a;
+  border-color: #15171a;
+  color: #ffffff;
+}
+
+.buyer-orders-row-chevron {
+  transition: transform 0.2s ease;
+}
+
+.buyer-orders-toggle.is-active .buyer-orders-row-chevron {
+  transform: rotate(180deg);
+}
+
+/* 3. Inline Detail Panel */
+.buyer-orders-inline-detail {
+  padding: 20px;
+  border-top: 1.5px solid #edf2f7;
+  background: #fcfdfe;
+}
+
+.buyer-orders-detail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.buyer-orders-detail-direct-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.buyer-orders-detail-direct-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.buyer-orders-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.buyer-orders-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1.25px solid #e2e8f0;
+}
+
+.buyer-orders-item-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.buyer-orders-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.buyer-orders-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.buyer-orders-item-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+}
+
+.buyer-orders-item-quantity {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-subtle, #64748b);
+}
+
+.buyer-orders-seat-pill-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.buyer-orders-seat-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.buyer-orders-item-subtotal {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Issued Ticket IDs per Order Item */
+.buyer-orders-ticket-ids {
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.buyer-orders-ticket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buyer-orders-ticket-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.buyer-orders-ticket-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.buyer-orders-ticket-ordinal {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-subtle, #64748b);
+  min-width: 28px;
+}
+
+.buyer-orders-ticket-id-wrap {
+  background: #f8fafc;
+}
+
+.buyer-orders-ticket-id-wrap .buyer-orders-id {
+  font-size: 12.5px;
+}
+
+.buyer-orders-ticket-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.buyer-orders-ticket-state[data-ticket-state="VALID"] {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.buyer-orders-ticket-state[data-ticket-state="USED"] {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.buyer-orders-ticket-state[data-ticket-state="VOID"] {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.buyer-orders-ticket-hint {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-subtle, #64748b);
+}
+
+.buyer-orders-ticket-hint.is-error {
+  color: #b91c1c;
+}
+
+/* Breakdown Card */
+.buyer-orders-breakdown-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1.25px solid #e2e8f0;
+}
+
+.buyer-orders-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.buyer-orders-breakdown-row.is-discount {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.buyer-orders-breakdown-row.is-total {
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+  font-size: 15px;
+  font-weight: 750;
+  color: #15171a;
+}
+
+.buyer-orders-breakdown-total {
+  font-size: 17px;
+  font-weight: 750;
+  color: #15171a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Detail Actions */
+.buyer-orders-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+/* Standalone Detail Card (when looking up single orderId) */
+.buyer-orders-detail-card {
+  padding: 24px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.buyer-orders-detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.buyer-orders-detail-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #15171a;
+}
+
+/* Pagination Box (Synchronized with /organizer) */
+.buyer-orders-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.tix-orders-pagination-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 8px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.tix-orders-page-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tix-orders-page-btn:hover:not(:disabled) {
+  background: #000000;
+  transform: scale(1.05);
+}
+
+.tix-orders-page-btn:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tix-orders-page-indicator {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .buyer-orders-card-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .buyer-orders-actions-wrap {
+    justify-content: space-between;
+    padding-top: 14px;
+    border-top: 1px solid #f1f5f9;
+  }
+}
+
+@media (max-width: 600px) {
+  .buyer-orders-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .buyer-orders-filter {
+    width: 100%;
+  }
+
+  .buyer-orders-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .buyer-orders-id-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

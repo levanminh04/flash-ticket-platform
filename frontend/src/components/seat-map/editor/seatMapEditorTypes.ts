@@ -11,8 +11,16 @@ export type SeatMapEditorShapeType =
   | "circle"
   | "ellipse";
 export type SeatMapEditorSectorType = "SEATED" | "STANDING";
-export type SeatMapEditorSeatLayoutMode = "grid" | "arc" | "fan";
-export type SeatMapEditorTool = "select" | "rectangle" | "polygon";
+export type SeatMapEditorSeatLayoutMode = "grid" | "arc" | "fan" | "table";
+export type SeatMapEditorTool =
+  | "select"
+  | "seatRows"
+  | "editSeats"
+  | "rectangle"
+  | "polygon";
+export type SeatMapEditorRowLabelPosition = "none" | "left" | "right" | "both";
+export type SeatMapEditorRowAlignment = "left" | "center" | "right";
+export type SeatMapEditorOutlineMode = "auto" | "full" | "none";
 
 export interface SeatMapEditorBounds {
   x: number;
@@ -34,6 +42,13 @@ export interface SeatMapEditorSeatLayoutConfig {
   seatRadius: number;
   rowStartCharCode: number;
   seatStartNumber: number;
+  rotation?: number;
+  curve?: number;
+  stretch?: number;
+  pathBasedLayout?: boolean;
+  rowLabelPosition?: SeatMapEditorRowLabelPosition;
+  rowAlignment?: SeatMapEditorRowAlignment;
+  outlineMode?: SeatMapEditorOutlineMode;
 }
 
 export interface SeatMapEditorSeat {

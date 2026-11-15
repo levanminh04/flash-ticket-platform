@@ -1,667 +1,563 @@
-﻿import { CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  LoaderCircle,
-  CalendarDays as FaCalendarAlt,
-  MapPinned as FaMapMarkedAlt,
-  Ticket as IoTicketSharp,
-} from "lucide-react";
+import { Armchair, ArrowRight, Building2, Calendar, Clock, MapPin, Share2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { useTranslation } from "react-i18next";
-import { categoryService } from "../../services/categoryService";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 import { eventService } from "../../services/eventService";
+import { bookingService } from "../../services/bookingService";
 import { organizerService } from "../../services/organizerService";
-import { venueService } from "../../services/venueService";
-import Blog from "../../components/common/Blog";
+import { categoryService } from "../../services/categoryService";
 import Footer from "../../components/common/Footer";
-import { Category, EventSummary, Venue } from "../../types/api";
-import { partnerLogos } from "../../constants/partners";
+import { descriptionContent } from "../../lib/eventDescription";
+import "./event-detail.css";
+
+const timeZone = "Asia/Ho_Chi_Minh";
+const placeholder = "/event-placeholder.svg";
+type TabKey = "about" | "photos" | "organizer";
 
 export default function EventDetailPage() {
   const { i18n, t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const [event, setEvent] = useState<EventSummary | null>(null);
-  const [venue, setVenue] = useState<Venue | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
-  const language = i18n.resolvedLanguage || "vi";
+  const locale = i18n.resolvedLanguage?.startsWith("en") ? "en-US" : "vi-VN";
+  const [selection, setSelection] = useState<{ eventId: string; ticketId: string }>();
+  const [gallery, setGallery] = useState<{ eventId: string; index: number }>();
+  const [failedPoster, setFailedPoster] = useState<string>();
+  const [activeTab, setActiveTab] = useState<TabKey>("about");
+  const [failedLogo, setFailedLogo] = useState<string>();
+  const [shareFeedback, setShareFeedback] = useState("");
 
   useEffect(() => {
-    categoryService
-      .getCategories()
-      .then((res) => {
-        if (res && Array.isArray(res)) setAllCategories(res);
-      })
-      .catch((err) => console.error("Failed to load categories", err));
-  }, []);
+    setActiveTab("about");
+    setShareFeedback("");
+    window.scrollTo({ top: 0 });
+  }, [slug]);
 
-  useEffect(() => {
-    if (!slug) return;
-    setIsLoading(true);
-    eventService
-      .getEventDetails(slug)
-      .then((data) => {
-        setEvent(data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error("Failed to load event details:", err);
-        setError(t("selectTicket.ticketLoadFailed"));
-      })
-      .finally(() => setIsLoading(false));
-  }, [slug, t]);
+  const eventQuery = useQuery({
+    queryKey: ["public-event-detail", slug],
+    queryFn: ({ signal }) => eventService.getEventDetails(slug!, signal),
+    enabled: Boolean(slug),
+    retry: false,
+  });
+  const event = eventQuery.data;
+  const eventId = event?.id;
+  const organizerSubject = event?.organizer?.id;
+  const categoryId = event?.categoryId || undefined;
 
-  useEffect(() => {
-    if (!event?.venue?.id) return;
-    venueService
-      .getVenues()
-      .then((venues) => {
-        const selectedVenue = venues.find(
-          (v) => v.id === event.venue!.id,
-        );
-        if (selectedVenue) setVenue(selectedVenue);
-      })
-      .catch((err) => console.error("Failed to load venue:", err));
-  }, [event?.venue?.id]);
+  const organizerQuery = useQuery({
+    queryKey: ["public-event-organizer", organizerSubject],
+    queryFn: ({ signal }) => organizerService.getPublicOrganizerBySlug(organizerSubject!, signal),
+    enabled: Boolean(organizerSubject),
+    retry: false,
+  });
 
-  useEffect(() => {
-    const organizer = event?.organizer;
-    const organizerUserId = organizer?.userId || organizer?.id;
-    const needsOrganizerProfile =
-      !organizer?.slug ||
-      !organizer?.logoUrl ||
-      !organizer?.email ||
-      !organizer?.bannerUrl;
+  const availabilityQuery = useQuery({
+    queryKey: ["public-event-availability", eventId],
+    queryFn: ({ signal }) => bookingService.getAvailability(eventId!, signal),
+    enabled: Boolean(eventId),
+  });
 
-    if (!organizerUserId || !needsOrganizerProfile) return;
+  const categoriesQuery = useQuery({
+    queryKey: ["public-categories"],
+    queryFn: categoryService.getCategories,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    organizerService
-      .getOrganizerByUserId(organizerUserId)
-      .then((profile) => {
-        setEvent((current) =>
-          current
-            ? {
-                ...current,
-                organizer: {
-                  ...(current.organizer || {}),
-                  id: profile.id,
-                  userId: profile.userId,
-                  name: profile.name,
-                  slug: profile.slug || undefined,
-                  logoUrl: profile.logoUrl || undefined,
-                  bannerUrl: profile.bannerUrl || undefined,
-                  description: profile.description || undefined,
-                  websiteUrl: profile.websiteUrl || undefined,
-                  isVerified: profile.isVerified ?? undefined,
-                  totalEvents: profile.totalEvents ?? undefined,
-                  totalTicketsSold: profile.totalTicketsSold ?? undefined,
-                  followerCount: profile.followerCount ?? undefined,
-                  averageRating: profile.averageRating ?? undefined,
-                  email: profile.email || undefined,
-                  phone: profile.phone || undefined,
-                },
-              }
-            : current,
-        );
-      })
-      .catch((err) => console.error("Failed to enrich organizer profile:", err));
-  }, [
-    event?.organizer?.bannerUrl,
-    event?.organizer?.email,
-    event?.organizer?.id,
-    event?.organizer?.logoUrl,
-    event?.organizer?.slug,
-    event?.organizer?.userId,
-  ]);
+  const sameCategoryQuery = useQuery({
+    queryKey: ["public-related-events-category", eventId, categoryId],
+    queryFn: ({ signal }) => eventService.getEvents({ category: categoryId, size: 5 }, signal),
+    enabled: Boolean(eventId && categoryId),
+    retry: 1,
+  });
 
-  const categoryNav = (
-    <nav className="category-nav">
-      <div className="container">
-        <ul className="category-list">
-          <li className="category-item">
-            <Link to="/search" className="category-link">
-              {t("common.all")}
-            </Link>
-          </li>
-          {allCategories.length > 0 ? (
-            allCategories.map((category) => (
-              <li className="category-item" key={category.id}>
-                <Link
-                  to={`/search?category=${category.slug || category.id}`}
-                  className="category-link"
-                >
-                  {category.name}
-                </Link>
-              </li>
-            ))
+  const sameCategoryEvents = useMemo(
+    () => (sameCategoryQuery.data?.content ?? []).filter(item => item.id !== eventId).slice(0, 4),
+    [sameCategoryQuery.data, eventId],
+  );
+
+  const shouldUseFallback = Boolean(eventId)
+    && (!categoryId || (sameCategoryQuery.isSuccess && sameCategoryEvents.length === 0));
+
+  const fallbackEventsQuery = useQuery({
+    queryKey: ["public-related-events-upcoming", eventId],
+    queryFn: ({ signal }) => eventService.getEvents({ size: 5 }, signal),
+    enabled: shouldUseFallback,
+    retry: 1,
+  });
+
+  const fallbackEvents = useMemo(
+    () => (fallbackEventsQuery.data?.content ?? []).filter(item => item.id !== eventId).slice(0, 4),
+    [fallbackEventsQuery.data, eventId],
+  );
+
+  const categoryNameById = useMemo(
+    () => new Map((categoriesQuery.data ?? []).map(cat => [cat.id, cat.name])),
+    [categoriesQuery.data],
+  );
+
+  const description = event?.description?.trim() || "";
+  const content = useMemo(() => descriptionContent(description), [description]);
+
+  if (eventQuery.isLoading || !event) {
+    const missing = !eventQuery.error || (isAxiosError(eventQuery.error) && [400, 404].includes(eventQuery.error.response?.status ?? 0));
+    return (
+      <div className="event-editorial">
+        <main className="event-editorial-shell">
+          {eventQuery.isLoading ? (
+            <div role="status" aria-label={t("eventDetail.loading")}>
+              <div className="event-editorial-hero" aria-hidden="true">
+                <div className="event-editorial-poster event-editorial-skeleton" />
+                <div className="event-editorial-skeleton event-editorial-skeleton-copy" />
+              </div>
+              <div className="event-editorial-lower" aria-hidden="true">
+                <div />
+                <div className="event-editorial-skeleton event-editorial-skeleton-copy" />
+              </div>
+            </div>
           ) : (
-            <li className="category-item">
-              <span className="category-link">{t("eventDetail.loading")}</span>
-            </li>
+            <div className="event-editorial-message">
+              <h1>{t(missing ? "eventDetail.notFound" : "eventDetail.loadFailed")}</h1>
+              <Link className="btn btn-primary" to="/search">{t("nav.events")}</Link>
+            </div>
           )}
-        </ul>
+        </main>
+        <Footer />
       </div>
-    </nav>
+    );
+  }
+
+  const organizer = organizerQuery.data ?? (event.organizer?.name ? event.organizer : undefined);
+  const availability = !availabilityQuery.isError && availabilityQuery.data?.eventId === event.id ? availabilityQuery.data : undefined;
+  const byType = new Map(availability?.ticketTypes.map(type => [type.ticketTypeId, Number(type.available)]));
+  const bySector = new Map(availability?.sectors.map(sector => [sector.sectorId, Number(sector.available)]));
+  const sectorColorById = new Map(
+    (event.seatMap?.sectors ?? [])
+      .filter(sector => Boolean(sector.colorCode?.trim()))
+      .map(sector => [sector.id, sector.colorCode!.trim()]),
   );
+  const ticketColor = (ticket: NonNullable<typeof event.ticketTypes>[number]) =>
+    ticket.colorCode?.trim() || (ticket.sectorId ? sectorColorById.get(ticket.sectorId) : undefined);
+  const seatMap = event.mode === "SEAT_MAP";
+  const ticketPrice = (ticket: NonNullable<typeof event.ticketTypes>[number]) => BigInt(ticket.unitPrice ?? ticket.price);
+  const tickets = [...(event.ticketTypes ?? [])].sort((a, b) => ticketPrice(a) < ticketPrice(b) ? -1 : ticketPrice(a) > ticketPrice(b) ? 1 : 0);
+  const remaining = (ticket: typeof tickets[number]) => {
+    const count = byType.get(ticket.id);
+    if (count === undefined || !Number.isSafeInteger(count) || count < 0) return undefined;
+    if (!seatMap || count === 0) return count;
+    const sectorCount = ticket.sectorId ? bySector.get(ticket.sectorId) : undefined;
+    return sectorCount === undefined || !Number.isSafeInteger(sectorCount) || sectorCount < 0
+      ? undefined : Math.min(count, sectorCount);
+  };
+  const canBook = (!seatMap || Boolean(event.seatMap)) && tickets.some(ticket => (remaining(ticket) ?? 0) > 0);
+  const soldOut = tickets.length > 0 && tickets.every(ticket => remaining(ticket) === 0);
 
-  if (isLoading) {
-    return (
-      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-        {categoryNav}
-        <div className="event-detail-loading" role="status" aria-live="polite">
-          <LoaderCircle className="event-detail-loading-icon" size={24} />
-          <span>{t("eventDetail.loading")}</span>
-        </div>
-      </div>
-    );
-  }
+  // Auto-select first available ticket if nothing selected yet or currently selected ticket is invalid
+  const availableTickets = tickets.filter(ticket => (remaining(ticket) ?? 0) > 0);
+  const selectedTicketId = selection?.eventId === event.id
+    ? selection.ticketId
+    : availableTickets[0]?.id;
+  const selectedTicket = tickets.find(ticket => ticket.id === selectedTicketId && (remaining(ticket) ?? 0) > 0);
+  const canContinue = seatMap ? canBook : (canBook && Boolean(selectedTicket));
 
-  if (error || !event) {
-    return (
-      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-        {categoryNav}
-        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-          <p>{error || t("eventDetail.notFound")}</p>
-          <Link
-            to="/"
-            style={{ textDecoration: "underline", color: "var(--primary)" }}
-          >
-            {t("eventDetail.returnHome")}
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const bookPath = `/events/${event.id}/book`;
+  const minPrice = event.minPriceAmount !== undefined ? BigInt(event.minPriceAmount) : event.minPrice ?? (tickets[0] && ticketPrice(tickets[0]));
+  const formatPrice = (amount: bigint | number) => {
+    if (amount === 0 || amount === 0n) return t("eventDetail.free");
+    return `${new Intl.NumberFormat(locale).format(amount)} đ`;
+  };
 
-  const startDatetime = event.schedule?.startDatetime || event.startDatetime;
-  const endDatetime = event.schedule?.endDatetime || event.endDatetime;
-  if (!startDatetime || !endDatetime) {
-    return (
-      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-        {categoryNav}
-        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-          <p>{t("eventDetail.invalidTime")}</p>
-          <Link
-            to="/"
-            style={{ textDecoration: "underline", color: "var(--primary)" }}
-          >
-            {t("eventDetail.returnHome")}
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const start = new Date(event.startDatetime ?? "");
+  const end = new Date(event.endDatetime ?? "");
+  const validStart = Number.isFinite(start.getTime());
+  const validEnd = Number.isFinite(end.getTime());
+  const day = new Intl.DateTimeFormat(locale, { timeZone, day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = new Intl.DateTimeFormat(locale, { timeZone, hour: "2-digit", minute: "2-digit" });
 
-  const startDate = new Date(startDatetime);
-  const endDate = new Date(endDatetime);
-  const venueName = event.venue?.name || event.venueName;
-  const city = event.venue?.city || event.city;
-  const totalCapacity = event.statistics?.totalCapacity ?? event.totalCapacity;
-  const ticketsSold = event.statistics?.ticketsSold ?? event.ticketsSold;
-  const detailAddressLine = [venueName, city].filter(Boolean).join(" • ");
-  const minPrice =
-    event.minPriceAmount ? BigInt(event.minPriceAmount) : event.ticketTypes && event.ticketTypes.length > 0
-      ? Math.min(...event.ticketTypes.map((ticketType) => ticketType.price))
-      : event.minPrice;
-  const bannerUrl =
-    event.images?.find((image) => image.type === "BANNER")?.url ||
-    event.bannerUrl ||
-    event.images?.[0]?.url;
-  const posterUrl =
-    event.images?.find((image) => image.type === "POSTER")?.url ||
-    event.images?.find((image) => image.type === "THUMBNAIL")?.url ||
-    event.thumbnailUrl ||
-    event.images?.[0]?.url ||
-    event.bannerUrl;
-  const fallbackGalleryImages = [
-    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=1200&q=80",
-  ];
-  const venueImageUrl =
-    venue?.imageUrls?.[0] ||
-    "https://images.unsplash.com/photo-1519167758993-b505a9dd0652?auto=format&fit=crop&w=1200&q=80";
-  const otherGalleryImages = [
-    posterUrl,
-    ...(event.images || []).map((image) => image.url),
-  ].filter((url): url is string => Boolean(url));
-  const uniqueOtherImages = Array.from(new Set(otherGalleryImages));
-  const eventGalleryImages = [
-    bannerUrl || fallbackGalleryImages[0],
-    venueImageUrl,
-    ...uniqueOtherImages,
-    ...fallbackGalleryImages,
-  ]
-    .filter((url): url is string => Boolean(url))
-    .slice(0, 5);
-  const ticketTypes = [...(event.ticketTypes || [])].sort(
-    (left, right) => left.price - right.price,
-  );
-  const hasTotalCapacity = typeof totalCapacity === "number";
-  const hasTicketsSold = typeof ticketsSold === "number";
-  const eventDescription =
-    event.description ||
-    event.shortDescription ||
-    t("eventDetail.updatingDescription");
-  const eventTerms = [
-    `${t("eventDetail.time")}: ${startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} ${startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
-    venueName ? `${t("eventDetail.venue")}: ${venueName}${city ? `, ${city}` : ""}` : null,
-    hasTotalCapacity
-      ? `${t("eventDetail.capacity")}: ${totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")}`
-      : null,
-    event.tags && event.tags.length > 0
-      ? `${t("eventDetail.theme")}: ${event.tags.join(", ")}`
-      : null,
-  ].filter((term): term is string => Boolean(term));
-  const organizer = event.organizer;
-  const organizerInitials = organizer?.name
-    ? organizer.name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase()
-    : "OT";
-  const formattedMinPrice =
-    typeof minPrice === "number" || typeof minPrice === "bigint" ? minPrice.toLocaleString(language === "en" ? "en-US" : "vi-VN") : null;
-  const heroMaskId = "event-hero-mask";
-  const heroCardStyle = {
-    "--event-hero-mask": `url(#${heroMaskId})`,
-  } as CSSProperties;
+  const heroImage = event.images?.find(image => image.type === "BANNER" && image.url)?.url
+    || event.bannerUrl || placeholder;
+  const showBackdrop = Boolean(heroImage) && heroImage !== placeholder && heroImage !== failedPoster;
+  const galleryImages = [...new Set((event.images ?? []).flatMap(image => image.type === "GALLERY" && image.url ? [image.url] : []))];
+
+  const onImageError = (image: HTMLImageElement) => {
+    if (image.getAttribute("src") !== placeholder) image.src = placeholder;
+  };
+
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: event.title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShareFeedback(t("eventDetail.linkCopied"));
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setShareFeedback(t("eventDetail.shareFailed"));
+    }
+  };
+
+  const availableTabs = [
+    description ? { id: "about" as const, label: locale === "vi-VN" ? "Giới thiệu" : "Overview" } : null,
+    galleryImages.length > 0 ? { id: "photos" as const, label: locale === "vi-VN" ? "Hình ảnh" : "Photos" } : null,
+    (organizer || organizerQuery.isError) ? { id: "organizer" as const, label: t("eventDetail.organizer") } : null,
+  ].filter((item): item is { id: TabKey; label: string } => Boolean(item));
+
+  const currentTab = availableTabs.some(tab => tab.id === activeTab)
+    ? activeTab
+    : (availableTabs[0]?.id ?? "about");
+
+  const currentCategoryName = categoryId ? categoryNameById.get(categoryId) : undefined;
+  const showingSameCategory = Boolean(categoryId) && sameCategoryEvents.length > 0;
+  const relatedEvents = showingSameCategory ? sameCategoryEvents : fallbackEvents;
+  const relatedPending = (Boolean(categoryId) && sameCategoryQuery.isPending)
+    || (shouldUseFallback && fallbackEventsQuery.isPending);
+  const relatedError = (Boolean(categoryId) && sameCategoryQuery.isError)
+    || (shouldUseFallback && fallbackEventsQuery.isError);
+  const showRelatedSection = relatedPending || relatedError || relatedEvents.length > 0;
+  const exploreMorePath = showingSameCategory && categoryId
+    ? `/search?category=${encodeURIComponent(categoryId)}`
+    : "/search";
+  const relatedCardDate = new Intl.DateTimeFormat(locale, {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   return (
-    <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-      {categoryNav}
-
-      <div
-        style={{
-          width: "100%",
-          height: "400px",
-          position: "relative",
-          backgroundColor: "#f0f0f0",
-        }}
-      >
-        <img
-          src={
-            bannerUrl || "https://via.placeholder.com/1200x400?text=No+Banner"
-          }
-          alt={event.title}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1))",
-          }}
-        />
-      </div>
-
-      <div className="container event-hero-wrap">
-        <svg
-          aria-hidden="true"
-          className="event-hero-mask-defs"
-          focusable="false"
-          width="0"
-          height="0"
-        >
-          <defs>
-            <mask
-              id={heroMaskId}
-              maskUnits="objectBoundingBox"
-              maskContentUnits="objectBoundingBox"
-            >
-              <rect x="0" y="0" width="1" height="1" fill="white" />
-              <ellipse cx="0.466" cy="0" rx="0.022" ry="0.065" fill="black" />
-              <ellipse cx="0.466" cy="1" rx="0.022" ry="0.065" fill="black" />
-            </mask>
-          </defs>
-        </svg>
-
-        <article className="event-hero-card" style={heroCardStyle}>
-          <section className="event-hero-info">
-            {event.categories && event.categories.length > 0 ? (
-              <div className="event-hero-tags">
-                {event.categories.map((category) => (
-                  <span
-                    key={category.id || category.slug || category.name}
-                    className="event-hero-tag"
-                  >
-                    {category.name}
+    <div className="event-editorial">
+      {showBackdrop && (
+        <div className="event-editorial-backdrop" aria-hidden="true">
+          <img src={heroImage} alt="" onError={() => setFailedPoster(heroImage)} />
+          <div className="event-editorial-backdrop-overlay" />
+        </div>
+      )}
+      <main className="event-editorial-shell">
+        <section className="event-editorial-hero" aria-labelledby="event-editorial-title">
+          <img
+            key={heroImage}
+            className="event-editorial-poster"
+            src={heroImage}
+            alt={event.title}
+            onError={e => {
+              setFailedPoster(heroImage);
+              onImageError(e.currentTarget);
+            }}
+          />
+          <div className="event-editorial-intro">
+            <h1 id="event-editorial-title">{event.title}</h1>
+            <div className="event-editorial-meta">
+              {validStart && (
+                <div className="event-editorial-meta-item">
+                  <Calendar size={18} aria-hidden="true" />
+                  <span className="event-editorial-meta-text">
+                    <span className="event-editorial-meta-label">{t("eventDetail.startTime")}:</span>{" "}
+                    {`${time.format(start)} · ${day.format(start)}`}
                   </span>
-                ))}
-              </div>
-            ) : (
-              event.category && (
-                <div className="event-hero-tags">
-                  <span className="event-hero-tag">{event.category.name}</span>
-                </div>
-              )
-            )}
-            <h1 className="event-hero-title">{event.title}</h1>
-            <div className="event-hero-meta-list">
-              <div className="event-hero-meta-item">
-                <FaCalendarAlt size={20} className="event-hero-meta-icon" />
-                <div>
-                  <p className="event-hero-meta-primary">
-                    {startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </p>
-                  <p className="event-hero-meta-secondary">
-                    {startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    -{" "}
-                    {endDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-              <div className="event-hero-meta-item">
-                <FaMapMarkedAlt size={20} className="event-hero-meta-icon" />
-                <div>
-                  <p className="event-hero-meta-primary">
-                    {venueName || t("eventDetail.venueUpdating")}
-                  </p>
-                  <p className="event-hero-meta-secondary">
-                    {detailAddressLine || t("eventDetail.addressUpdating")}
-                  </p>
-                </div>
-              </div>
-              {(hasTotalCapacity || hasTicketsSold) && (
-                <div className="event-hero-meta-item">
-                  <IoTicketSharp size={20} className="event-hero-meta-icon" />
-                  <div>
-                    <p className="event-hero-meta-primary">
-                      {t("eventDetail.soldQuantity")}{" "}
-                      {hasTotalCapacity
-                        ? totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")
-                        : t("eventDetail.unlimited")}
-                    </p>
-                  </div>
                 </div>
               )}
-            </div>
-            <div className="event-hero-separator" />
-            <div className="event-hero-cta-row">
-              <div className="event-hero-price-inline">
-                <p className="event-hero-price-label">{t("eventDetail.minPriceLabel")}</p>
-                <p
-                  className="event-hero-price-value"
-                  style={{ color: "#CC9900" }}
-                >
-                  {formattedMinPrice ? `${formattedMinPrice} đ` : t("eventDetail.free")}
-                </p>
-              </div>
-            </div>
-            <button
-              className="btn btn-primary event-hero-cta-button"
-              onClick={() => navigate(`/events/${slug}/book`)}
-              style={{ backgroundColor: "#CC9900", borderColor: "#CC9900" }}
-            >
-              {t("eventDetail.buyTicket")}
-            </button>
-          </section>
-
-          <div className="event-hero-divider" aria-hidden="true">
-            <span className="event-hero-divider-cap top" />
-            <span className="event-hero-divider-line" />
-            <span className="event-hero-divider-cap bottom" />
-          </div>
-
-          <div className="event-hero-poster">
-            <img
-              src={
-                posterUrl ||
-                "https://via.placeholder.com/800x1000?text=No+Poster"
-              }
-              alt={`${event.title} poster`}
-              className="event-hero-poster-image"
-            />
-            <div className="event-hero-poster-overlay" />
-          </div>
-        </article>
-
-        <section className="event-detail-lower">
-          <div className="event-detail-content-grid">
-            <article className="event-detail-main-card">
-              <div className="event-detail-card-header">
-                <h2>{t("eventDetail.detailTitle")}</h2>
-              </div>
-              <div className="event-detail-description">{eventDescription}</div>
-              <div className="event-detail-card-divider event-detail-card-divider--dashed" />
-              <div className="event-detail-terms">
-                <div className="event-detail-card-header">
-                  <h2>{t("eventDetail.terms")}</h2>
+              {validEnd && (
+                <div className="event-editorial-meta-item">
+                  <Clock size={18} aria-hidden="true" />
+                  <span className="event-editorial-meta-text">
+                    <span className="event-editorial-meta-label">{t("eventDetail.endTime")}:</span>{" "}
+                    {`${time.format(end)} · ${day.format(end)}`}
+                  </span>
                 </div>
-                <ul className="event-detail-terms-list">
-                  {eventTerms.map((term) => (
-                    <li key={term}>{term}</li>
-                  ))}
-                </ul>
+              )}
+              <div className="event-editorial-meta-item">
+                <MapPin size={18} aria-hidden="true" />
+                <span className="event-editorial-meta-text">
+                  {event.venueName || t("profile.unavailable")}
+                </span>
               </div>
-            </article>
+            </div>
 
-            <aside className="event-detail-sidebar">
-              <section className="event-detail-side-card">
-                <div className="event-detail-card-header">
-                  <h2>{t("eventDetail.ticketOptions")}</h2>
-                </div>
-                {ticketTypes.length > 0 ? (
-                  <div className="event-ticket-list">
-                    {ticketTypes.map((ticketType) => (
-                      <div className="event-ticket-item" key={ticketType.id}>
-                        <div>
-                          <div className="event-ticket-item-top">
-                            <p
-                              className="event-ticket-item-name"
-                              style={{
-                                color: ticketType.colorCode || undefined,
-                              }}
-                            >
-                              {ticketType.name}
-                            </p>
-                          </div>
-                          <p className="event-ticket-item-meta">
-                            {ticketType.description?.trim() ||
-                              t("eventDetail.ticketDescriptionFallback")}
-                          </p>
-                        </div>
-                        <div className="event-ticket-item-price">
-                          {ticketType.unitPrice ? `${BigInt(ticketType.unitPrice).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ` : typeof ticketType.price === "number"
-                            ? `${ticketType.price.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`
-                            : t("eventDetail.priceUpdating")}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {shareFeedback && <p className="event-editorial-feedback" role="status">{shareFeedback}</p>}
+
+            <div className="event-editorial-actions">
+              <div className="event-editorial-price-wrap">
+                {minPrice === undefined ? (
+                  <p className="event-editorial-price">{t("eventDetail.priceUpdating")}</p>
                 ) : (
-                  <p className="event-ticket-item-meta">
-                    {t("eventDetail.ticketTypeEmpty")}
+                  <p className="event-editorial-price">
+                    {minPrice !== 0 && minPrice !== 0n && (
+                      <span className="event-editorial-price-label">{t("eventDetail.fromPrice")}</span>
+                    )}
+                    <strong>{formatPrice(minPrice)}</strong>
                   </p>
                 )}
-              </section>
+              </div>
+              <button
+                className="event-editorial-share"
+                type="button"
+                aria-label={t("eventDetail.share")}
+                onClick={() => void share()}
+              >
+                <Share2 size={16} aria-hidden="true" />
+                <span>{t("eventDetail.share")}</span>
+              </button>
+            </div>
+          </div>
+        </section>
 
-              <section className="event-detail-side-card">
-                <div className="event-detail-card-header">
-                  <h2>{t("eventDetail.organizer")}</h2>
-                </div>
-                {organizer?.bannerUrl ? (
-                  <div className="event-organizer-banner">
-                    <img src={organizer.bannerUrl} alt={`${organizer.name} banner`} />
+        <div className="event-editorial-lower">
+          <div className="event-editorial-content">
+            {availableTabs.length > 0 && (
+              <nav className="event-editorial-tabs" aria-label={t("eventDetail.about")}>
+                {availableTabs.map(tab => (
+                  <a
+                    key={tab.id}
+                    href={`#section-${tab.id}`}
+                    aria-current={currentTab === tab.id ? "location" : undefined}
+                    className={`event-editorial-tab${currentTab === tab.id ? " is-active" : ""}`}
+                    onClick={(eventClick) => {
+                      eventClick.preventDefault();
+                      setActiveTab(tab.id);
+                      document.getElementById(`section-${tab.id}`)?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }}
+                  >
+                    {tab.label}
+                  </a>
+                ))}
+              </nav>
+            )}
+
+            <div className="event-editorial-tabpanels">
+              {description && (
+                <section id="section-about" aria-labelledby="heading-about" className="event-editorial-panel">
+                  <h2 id="heading-about" className="event-editorial-section-title">{t("eventDetail.about")}</h2>
+                  <div className="event-editorial-description">{content}</div>
+                </section>
+              )}
+
+              {galleryImages.length > 0 && (
+                <section id="section-photos" aria-labelledby="heading-photos" className="event-editorial-panel">
+                  <div className="event-editorial-section-head">
+                    <h2 id="heading-photos" className="event-editorial-section-title">{t("eventDetail.gallery")}</h2>
+                    <p className="event-editorial-section-subtitle">{t("eventDetail.eventGalleryDescription")}</p>
                   </div>
-                ) : null}
-                <div className="event-organizer-header">
-                  {organizer?.logoUrl ? (
-                    <img
-                      src={organizer.logoUrl}
-                      alt={organizer.name}
-                      className="event-organizer-avatar"
-                    />
-                  ) : (
-                    <div className="event-organizer-avatar event-organizer-avatar-fallback">
-                      {organizerInitials}
-                    </div>
-                  )}
-                  <div className="event-organizer-meta">
-                    <div className="event-organizer-title-row">
-                      <h4>{organizer?.name || t("eventDetail.priceUpdating")}</h4>
-                      {organizer?.isVerified && (
-                        <span className="event-organizer-badge">Verified</span>
+                  <div className="event-editorial-gallery">
+                    {galleryImages.map((url, index) => (
+                      <button
+                        type="button"
+                        key={url}
+                        onClick={() => setGallery({ eventId: event.id, index })}
+                        aria-label={`${t("eventDetail.gallery")} ${index + 1}`}
+                      >
+                        <img src={url} alt="" loading="lazy" onError={e => onImageError(e.currentTarget)} />
+                      </button>
+                    ))}
+                  </div>
+                  <Lightbox
+                    open={gallery?.eventId === event.id}
+                    index={gallery?.index ?? 0}
+                    close={() => setGallery(undefined)}
+                    slides={galleryImages.map(src => ({ src }))}
+                  />
+                </section>
+              )}
+
+              {(organizer || organizerQuery.isError) && (
+                <section id="section-organizer" aria-labelledby="heading-organizer" className="event-editorial-panel">
+                  <h2 id="heading-organizer" className="event-editorial-section-title">{t("eventDetail.organizer")}</h2>
+                  <div className="event-editorial-organizer">
+                    <div className="event-editorial-organizer-logo">
+                      {organizer?.logoUrl && organizer.logoUrl !== failedLogo ? (
+                        <img
+                          src={organizer.logoUrl}
+                          alt=""
+                          loading="lazy"
+                          onError={() => setFailedLogo(organizer.logoUrl ?? undefined)}
+                        />
+                      ) : (
+                        <Building2 size={27} aria-hidden="true" />
                       )}
                     </div>
-                    <p>
-                      {organizer?.description ||
-                        t("eventDetail.organizerDescriptionFallback")}
-                    </p>
-                    {organizer?.slug ? (
-                      <Link
-                        className="event-organizer-profile-link"
-                        to={`/organizers/${organizer.slug}`}
-                      >
-                        {t("eventDetail.organizerProfile")}
+                    <div className="event-editorial-organizer-info">
+                      <h3>{organizer?.name || t("eventDetail.organizer")}</h3>
+                      <p>{organizer?.description || t("profile.unavailable")}</p>
+                    </div>
+                    {organizer?.slug && (
+                      <Link to={`/organizers/${organizer.slug}`} className="event-editorial-organizer-link">
+                        {t("eventDetail.viewOrganizer")} <ArrowRight size={17} aria-hidden="true" />
                       </Link>
-                    ) : null}
+                    )}
                   </div>
-                </div>
-                <div className="event-organizer-stats event-organizer-stats--list">
-                  <div className="event-organizer-stat event-organizer-stat--list">
-                    <span>
-                      <span className="event-organizer-label">Name:</span>{" "}
-                      <span className="event-organizer-value">
-                        {organizer?.name || t("eventDetail.priceUpdating")}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="event-organizer-stat event-organizer-stat--list">
-                    <span>
-                      <span className="event-organizer-label">Describe:</span>{" "}
-                      <span className="event-organizer-value">
-                        {organizer?.description || t("eventDetail.priceUpdating")}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="event-organizer-stat event-organizer-stat--list">
-                    <span>
-                      <span className="event-organizer-label">Email:</span>{" "}
-                      <span className="event-organizer-value">
-                        {organizer?.email || t("eventDetail.priceUpdating")}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="event-organizer-stat event-organizer-stat--list">
-                    <span>
-                      <span className="event-organizer-label">Phone:</span>{" "}
-                      <span className="event-organizer-value">
-                        {organizer?.phone || t("eventDetail.priceUpdating")}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="event-organizer-stat event-organizer-stat--list">
-                    <span>
-                      <span className="event-organizer-label">Web:</span>{" "}
-                      <span className="event-organizer-value">
-                        {organizer?.websiteUrl ? (
-                          <a
-                            href={organizer.websiteUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {organizer.websiteUrl}
-                          </a>
-                        ) : (
-                          t("eventDetail.priceUpdating")
-                        )}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </aside>
-          </div>
-        </section>
-
-        <section className="event-gallery-section" aria-label="Event Gallery">
-          <header className="event-gallery-header">
-            <h2>{t("eventDetail.eventGallery")}</h2>
-            <p>{t("eventDetail.eventGalleryDescription")}</p>
-          </header>
-
-          <div className="event-gallery-grid">
-            <div className="event-gallery-row event-gallery-row-top">
-              <figure className="event-gallery-item event-gallery-item-large">
-                <img
-                  src={eventGalleryImages[0]}
-                  alt={`${event.title} crowd moment`}
-                />
-              </figure>
-              <figure className="event-gallery-item event-gallery-item-small">
-                <img
-                  src={eventGalleryImages[1]}
-                  alt={`${event.title} activity moment`}
-                />
-              </figure>
-            </div>
-
-            <div className="event-gallery-row event-gallery-row-bottom">
-              {eventGalleryImages.slice(2, 5).map((imageUrl, index) => (
-                <figure className="event-gallery-item" key={`${imageUrl}-${index}`}>
-                  <img
-                    src={imageUrl}
-                    alt={`${event.title} performance moment ${index + 1}`}
-                  />
-                </figure>
-              ))}
+                </section>
+              )}
             </div>
           </div>
-        </section>
 
-        <section className="event-trust-strip">
-          <header className="event-trust-header">
-            <h2>{t("eventDetail.acceptedFirst")} <span className="event-trust-title-highlight">{t("eventDetail.acceptedHighlight")}</span></h2>
-          </header>
+          <aside className="event-editorial-tickets" aria-labelledby="event-tickets-title">
+            <h2 id="event-tickets-title">{t("eventDetail.selectTicketType")}</h2>
+            <div className="event-editorial-ticket-list" role={seatMap ? undefined : "radiogroup"} aria-labelledby="event-tickets-title">
+              {tickets.map(ticket => {
+                const count = remaining(ticket);
+                const isSelected = !seatMap && selectedTicket?.id === ticket.id;
+                const isDisabled = count === 0 || count === undefined;
+                const color = ticketColor(ticket);
+                return (
+                  <label
+                    className={`event-editorial-ticket${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}`}
+                    data-has-color={color ? "true" : undefined}
+                    style={color ? ({ "--ticket-color": color } as CSSProperties) : undefined}
+                    key={ticket.id}
+                  >
+                    {!seatMap && (
+                      <input
+                        type="radio"
+                        name="event-ticket-type"
+                        checked={isSelected}
+                        disabled={isDisabled}
+                        onChange={() => setSelection({ eventId: event.id, ticketId: ticket.id })}
+                      />
+                    )}
+                    <span className="event-editorial-ticket-main">
+                      <strong>{ticket.name}</strong>
+                      {count !== undefined && (
+                        <small data-sold-out={count === 0}>
+                          {count === 0 ? t("eventDetail.soldOut") : t("eventDetail.ticketsRemaining", { count })}
+                        </small>
+                      )}
+                    </span>
+                    <strong className="event-editorial-ticket-price">{formatPrice(ticketPrice(ticket))}</strong>
+                  </label>
+                );
+              })}
+            </div>
+            {tickets.length === 0 && <p className="event-editorial-ticket-status">{t("eventDetail.ticketTypeEmpty")}</p>}
+            {availabilityQuery.isPending && <p className="event-editorial-ticket-status" role="status">{t("eventDetail.loading")}</p>}
+            {!availabilityQuery.isPending && !canBook && !soldOut && tickets.length > 0 && (
+              <p className="event-editorial-ticket-status" role="status">{t("eventDetail.availabilityUnavailable")}</p>
+            )}
+            {seatMap && event.seatMap && canBook && (
+              <Link className="event-editorial-seatmap" to={bookPath}>
+                <Armchair size={22} aria-hidden="true" />
+                <span>{t("eventDetail.viewSeatMap")}</span>
+                <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary event-editorial-book"
+              disabled={!canContinue}
+              onClick={() => navigate(selectedTicket ? `${bookPath}?ticketType=${encodeURIComponent(selectedTicket.id)}` : bookPath)}
+            >
+              <span>{t(soldOut ? "eventDetail.soldOut" : seatMap ? "eventDetail.chooseSeats" : "eventDetail.continueTickets")}</span>
+              {canContinue && <ArrowRight size={18} aria-hidden="true" />}
+            </button>
+          </aside>
+        </div>
 
-          <p className="event-trust-copy">
-            {t("eventDetail.trustCopy")}
-          </p>
-
-          <div className="partner-grid event-partner-grid">
-            {partnerLogos.map((partner) => (
-              <div
-                className="partner-logo event-partner-logo"
-                key={partner.id}
-                title={partner.name}
-              >
-                <img src={partner.image} alt={partner.name} />
+        {showRelatedSection && (
+          <section className="event-editorial-related" aria-labelledby="event-related-title">
+            <div className="event-editorial-related-head">
+              <div className="event-editorial-related-heading">
+                <h2 id="event-related-title">{t("eventDetail.youMayLike")}</h2>
+                {!relatedPending && !relatedError && (
+                  <p className="event-editorial-related-subtitle">
+                    {showingSameCategory && currentCategoryName
+                      ? t("eventDetail.youMayLikeSameCategory", { category: currentCategoryName })
+                      : t("eventDetail.youMayLikeUpcoming")}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
-        </section>
-      </div>
+              <Link className="event-editorial-related-more" to={exploreMorePath}>
+                <span>{t("eventDetail.exploreMoreEvents")}</span>
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            </div>
 
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "0 16px",
-          boxSizing: "border-box",
-        }}
-      >
-        <Blog />
-      </div>
+            {relatedPending ? (
+              <div className="event-editorial-related-grid" role="status" aria-label={t("eventDetail.loading")}>
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="event-editorial-related-skeleton" aria-hidden="true" />
+                ))}
+              </div>
+            ) : relatedError ? (
+              <div className="event-editorial-related-error" role="alert">
+                <p>{t("eventDetail.relatedEventsLoadFailed")}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (categoryId && sameCategoryQuery.isError) void sameCategoryQuery.refetch();
+                    if (shouldUseFallback && fallbackEventsQuery.isError) void fallbackEventsQuery.refetch();
+                  }}
+                >
+                  {t("home.events.retry")}
+                </button>
+              </div>
+            ) : (
+              <div className="event-editorial-related-grid">
+                {relatedEvents.map((item) => {
+                  const itemStart = new Date(item.startDatetime);
+                  const validItemStart = Number.isFinite(itemStart.getTime());
+                  const itemCategoryName = item.categoryId ? categoryNameById.get(item.categoryId) : undefined;
+                  const itemMinPrice = item.minPriceAmount !== undefined
+                    ? BigInt(item.minPriceAmount)
+                    : item.minPrice !== undefined
+                      ? BigInt(Math.round(item.minPrice))
+                      : undefined;
+                  const itemImage = item.bannerUrl || placeholder;
+                  return (
+                    <Link
+                      key={item.id}
+                      className="event-editorial-related-card"
+                      to={`/event/${encodeURIComponent(item.slug || item.id)}`}
+                    >
+                      <div className="event-editorial-related-media">
+                        <img
+                          src={itemImage}
+                          alt=""
+                          loading="lazy"
+                          onError={e => onImageError(e.currentTarget)}
+                        />
+                      </div>
+                      <div className="event-editorial-related-body">
+                        <div className="event-editorial-related-meta-top">
+                          {validItemStart && (
+                            <time dateTime={item.startDatetime}>
+                              <Calendar size={13} aria-hidden="true" />
+                              <span>{relatedCardDate.format(itemStart)}</span>
+                            </time>
+                          )}
+                          {itemCategoryName && (
+                            <span className="event-editorial-related-tag">{itemCategoryName}</span>
+                          )}
+                        </div>
+                        <h3>{item.title}</h3>
+                        <p className="event-editorial-related-venue">
+                          <MapPin size={14} aria-hidden="true" />
+                          <span>{item.venueName || t("profile.unavailable")}</span>
+                        </p>
+                        <div className="event-editorial-related-footer">
+                          <span className="event-editorial-related-price">
+                            {itemMinPrice === undefined
+                              ? t("eventDetail.priceUpdating")
+                              : itemMinPrice === 0n
+                                ? t("eventDetail.free")
+                                : `${t("eventDetail.fromPrice")} ${formatPrice(itemMinPrice)}`}
+                          </span>
+                          <span className="event-editorial-related-arrow" aria-hidden="true">
+                            <ArrowRight size={15} />
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+      </main>
       <Footer />
     </div>
   );

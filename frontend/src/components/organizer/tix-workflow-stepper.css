@@ -1,0 +1,182 @@
+/* ============================================================
+   TIX HORIZONTAL WORKFLOW STEPPER WITH CONNECTED NODES
+   Minimalist Soft Squircle Design System
+   ============================================================ */
+
+.tix-workflow-stepper-wrap {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 18px;
+  padding: 16px 28px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.02);
+  margin-bottom: 0;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.tix-workflow-stepper-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  position: relative;
+  gap: 0;
+}
+
+.tix-workflow-step-item {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.tix-workflow-stepper-wrap.is-five-steps {
+  padding: 16px 22px;
+}
+
+.tix-workflow-stepper-wrap.is-five-steps .tix-workflow-connector-line {
+  margin: 0 10px;
+}
+
+.tix-workflow-node-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 2;
+  user-select: none;
+  border-radius: 12px;
+}
+
+.tix-workflow-node-button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.tix-workflow-node-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Node Circle Badge */
+.tix-workflow-node-circle {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+/* 1. Completed State */
+.tix-workflow-step-item.is-completed .tix-workflow-node-circle {
+  background: var(--text-strong, #15171a);
+  border: 1.5px solid var(--text-strong, #15171a);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(21, 23, 26, 0.15);
+}
+
+/* 2. Active / Current State */
+.tix-workflow-step-item.is-active .tix-workflow-node-circle {
+  background: #ffffff;
+  border: 2.5px solid var(--text-strong, #15171a);
+  color: var(--text-strong, #15171a);
+  box-shadow: 0 0 0 4px rgba(21, 23, 26, 0.08);
+}
+
+/* 3. Pending / Upcoming State */
+.tix-workflow-step-item.is-pending .tix-workflow-node-circle {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  color: #94a3b8;
+}
+
+/* Node Text Content */
+.tix-workflow-node-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tix-workflow-node-step-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #666b74);
+  line-height: 1.2;
+}
+
+.tix-workflow-step-item.is-active .tix-workflow-node-step-tag {
+  color: var(--text-strong, #15171a);
+}
+
+.tix-workflow-node-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.tix-workflow-step-item.is-pending .tix-workflow-node-title {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Horizontal Connected Node Line */
+.tix-workflow-connector-line {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  margin: 0 16px;
+  transition: background-color 0.3s ease;
+  position: relative;
+  z-index: 1;
+  border-radius: 999px;
+}
+
+.tix-workflow-connector-line.is-active {
+  background: var(--text-strong, #15171a);
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .tix-workflow-stepper-wrap {
+    padding: 14px 16px;
+  }
+  .tix-workflow-node-title {
+    font-size: 12.5px;
+  }
+  .tix-workflow-connector-line {
+    margin: 0 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .tix-workflow-node-text {
+    display: none;
+  }
+  .tix-workflow-node-button {
+    gap: 0;
+    padding: 0;
+  }
+}

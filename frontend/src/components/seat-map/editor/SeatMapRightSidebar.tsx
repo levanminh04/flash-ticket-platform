@@ -1,31 +1,33 @@
-import { ChangeEvent, ReactNode, RefObject, useState } from "react";
+import { ChangeEvent, RefObject, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Armchair,
   ChevronDown,
-  Circle,
-  Diamond,
-  Download,
-  Ellipsis,
+  ChevronRight,
   Eye,
   EyeOff,
-  Grid3X3,
-  Hexagon,
+  FlipHorizontal2,
+  FlipVertical2,
   Layers3,
   Lock,
   LockOpen,
-  MousePointer2,
-  Pentagon,
-  Pencil,
-  Plus,
-  Square,
+  RotateCcw,
+  Ticket,
   Trash2,
-  Upload,
 } from "lucide-react";
 import {
   SeatMapEditorDocument,
-  SeatMapEditorSectorType,
+  SeatMapEditorOutlineMode,
+  SeatMapEditorRowAlignment,
+  SeatMapEditorRowLabelPosition,
   SeatMapEditorSeat,
+  SeatMapEditorSeatLayoutConfig,
+  SeatMapEditorSectorType,
   SeatMapEditorShape,
+  SeatMapEditorTool,
 } from "./seatMapEditorTypes";
 import { OrganizerPublicTicketType } from "../../../services/organizerWorkspaceService";
 
@@ -34,8 +36,90 @@ interface SeatDropdownOptions {
   seatNumbers: Array<{ value: string; hidden?: boolean }>;
 }
 
+/**
+ * Controlled number input that strips leading zeros (e.g. "00" -> "0") and
+ * restores a valid formatted value on blur without fighting mid-edit typing.
+ */
+function NumericInput({
+  value,
+  min,
+  max,
+  className,
+  id,
+  onCommit,
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  className?: string;
+  id?: string;
+  onCommit: (next: number) => void;
+}) {
+  const [draft, setDraft] = useState(() => String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(String(value));
+    }
+  }, [value, focused]);
+
+  const clampValue = (num: number) => {
+    let result = num;
+    if (min !== undefined) result = Math.max(min, result);
+    if (max !== undefined) result = Math.min(max, result);
+    return result;
+  };
+
+  return (
+    <input
+      id={id}
+      type="number"
+      min={min}
+      max={max}
+      className={className}
+      value={focused ? draft : String(value)}
+      onFocus={() => {
+        setFocused(true);
+        setDraft(String(value));
+      }}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (raw === "" || raw === "-") {
+          setDraft(raw);
+          return;
+        }
+        const normalized = /^-?0\d+$/.test(raw) ? String(Number(raw)) : raw;
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed)) {
+          return;
+        }
+        setDraft(normalized);
+        onCommit(clampValue(parsed));
+      }}
+      onBlur={() => {
+        setFocused(false);
+        const parsed = Number(draft);
+        if (draft === "" || draft === "-" || !Number.isFinite(parsed)) {
+          setDraft(String(value));
+          return;
+        }
+        const clamped = clampValue(parsed);
+        setDraft(String(clamped));
+        onCommit(clamped);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
 interface SeatMapRightSidebarProps {
   assignmentEnabled?: boolean;
+  activeTool?: SeatMapEditorTool;
   document: SeatMapEditorDocument;
   selectedShape: SeatMapEditorShape | null;
   selectedSeat: SeatMapEditorSeat | null;
@@ -49,24 +133,38 @@ interface SeatMapRightSidebarProps {
   onImportJson: (event: ChangeEvent<HTMLInputElement>) => void;
   onImportJsonClick: () => void;
   onExportJson: () => void;
-  onSetActiveTool: (tool: "select" | "polygon" | "rectangle") => void;
+  onSetActiveTool: (tool: SeatMapEditorTool) => void;
   onAddTrapezoid: () => void;
-  onAddDiamond: () => void;
-  onAddHexagon: () => void;
-  onAddCircle: () => void;
-  onAddEllipse: () => void;
+  onAddDiamond?: () => void;
+  onAddHexagon?: () => void;
+  onAddCircle?: () => void;
+  onAddEllipse?: () => void;
   onAddRoundedBlock: () => void;
+  onAddSeatedBlock?: () => void;
+  onAddRoundTable?: () => void;
   onAddConcertOvalTemplate: () => void;
+  onAddFestivalTStageTemplate?: () => void;
+  onAddSlicedRingArc?: () => void;
+  onAddMainStage?: () => void;
+  onAddStage?: () => void;
+  onAddFoh?: () => void;
   onAddVipLeftCurved: () => void;
   onAddVipRightCurved: () => void;
   onAddBottomRingSection: () => void;
   onAddFanSection: () => void;
-  onAddLeftSideRing: () => void;
-  onAddRightSideRing: () => void;
-  onSelectShape: (shapeId: string, additive?: boolean) => void;
+  onAddLeftSideRing?: () => void;
+  onAddRightSideRing?: () => void;
+  onSelectShape: (shapeId: string | null, additive?: boolean) => void;
   onToggleShapeVisibility: (shapeId: string) => void;
   onToggleShapeLocked: (shapeId: string) => void;
   onRemoveShape: (shapeId: string) => void;
+  onCloneShape?: (shapeId: string) => void;
+  onFlipShapeH?: (shapeId: string) => void;
+  onFlipShapeV?: (shapeId: string) => void;
+  onResizeShape?: (
+    shapeId: string,
+    nextBounds: { x: number; y: number; width: number; height: number },
+  ) => void;
   onSetEditingShapeId: (shapeId: string | null) => void;
   onShapeMetaChange: (
     shapeId: string,
@@ -81,6 +179,10 @@ interface SeatMapRightSidebarProps {
   ) => void;
   onSeatLayoutInputChange: (shapeId: string, key: string) => (event: ChangeEvent<HTMLInputElement>) => void;
   onSeatLayoutInputBlur: (shapeId: string, key: string) => void;
+  onUpdateSeatLayoutAndGenerate?: (
+    shapeId: string,
+    patch: Partial<SeatMapEditorSeatLayoutConfig>,
+  ) => void;
   onGenerateSeats: (shapeId: string) => void;
   onRestoreHiddenSeats: (shapeId: string) => void;
   onClearSeats: (shapeId: string) => void;
@@ -98,237 +200,92 @@ interface SeatMapRightSidebarProps {
   onClearDraft: () => void;
   canClearDraft: boolean;
   onCreateSeatTypeForShape?: (shapeId: string) => void;
+  onUpdateShape?: (shapeId: string, updater: (shape: SeatMapEditorShape) => SeatMapEditorShape) => void;
 }
 
-const sectorTypeOptions: Array<{ value: SeatMapEditorSectorType; label: string }> = [
-  { value: "STANDING", label: "seatMap.standingSector" },
-  { value: "SEATED", label: "seatMap.seatedSector" },
+const VENUE_SHAPE_VARIANTS: Array<{
+  id: string;
+  label: string;
+  shapeType: SeatMapEditorShape["shapeType"];
+  defaultCornerRadius: number;
+  defaultFill: string;
+  defaultColor: string;
+  defaultLabel: string;
+}> = [
+  {
+    id: "venue_frame",
+    label: "Khung Venue",
+    shapeType: "roundedRect",
+    defaultCornerRadius: 160,
+    defaultFill: "#f6ebe4",
+    defaultColor: "#e5b89b",
+    defaultLabel: "",
+  },
+  {
+    id: "stage_rect",
+    label: "Sân khấu ngang",
+    shapeType: "stage",
+    defaultCornerRadius: 16,
+    defaultFill: "#1e293b",
+    defaultColor: "#1e293b",
+    defaultLabel: "SÂN KHẤU",
+  },
+  {
+    id: "stage_t",
+    label: "Sân khấu chữ T",
+    shapeType: "stage",
+    defaultCornerRadius: 12,
+    defaultFill: "#1e293b",
+    defaultColor: "#1e293b",
+    defaultLabel: "SÂN KHẤU",
+  },
+  {
+    id: "stage_arc",
+    label: "Sân khấu vòm",
+    shapeType: "stage",
+    defaultCornerRadius: 0,
+    defaultFill: "#1e293b",
+    defaultColor: "#1e293b",
+    defaultLabel: "SÂN KHẤU",
+  },
+  {
+    id: "stage_trapezoid",
+    label: "Hình thang",
+    shapeType: "stage",
+    defaultCornerRadius: 0,
+    defaultFill: "#1e293b",
+    defaultColor: "#1e293b",
+    defaultLabel: "SÂN KHẤU",
+  },
+  {
+    id: "stage_circle",
+    label: "Tròn 360°",
+    shapeType: "ellipse",
+    defaultCornerRadius: 0,
+    defaultFill: "#1e293b",
+    defaultColor: "#1e293b",
+    defaultLabel: "SÂN KHẤU",
+  },
 ];
 
-const seatLayoutFields = [
-  ["rows", "Rows"],
-  ["seatsPerRow", "Seats / Row"],
-  ["gapX", "Gap X"],
-  ["gapY", "Gap Y"],
-  ["paddingX", "Padding X"],
-  ["paddingY", "Padding Y"],
-  ["seatRadius", "Radius"],
-  ["seatStartNumber", "Start No"],
-] as const;
-
-function getTicketTypeSectorId(ticketType: OrganizerPublicTicketType) {
-  return ticketType.eventSectorId || ticketType.sectorId || "";
-}
-
-function getTicketTypeColor(ticketType?: OrganizerPublicTicketType) {
-  return ticketType?.colorCode || "#16a34a";
-}
-
-function getSectorTicketTypes(ticketTypes: OrganizerPublicTicketType[], shape?: SeatMapEditorShape | null) {
-  if (!shape) {
-    return [];
-  }
-
-  return ticketTypes.filter((ticketType) => getTicketTypeSectorId(ticketType) === shape.id);
-}
-
-function isAssignedSeatTicketType(ticketType: OrganizerPublicTicketType) {
-  return ticketType.inventoryMode === "ASSIGNED_SEAT" || ticketType.seatSelectionEnabled === true;
-}
-
-function getSeatAssignableTicketTypes(ticketTypes: OrganizerPublicTicketType[], shape?: SeatMapEditorShape | null) {
-  if (!shape || shape.sectorType !== "SEATED") {
-    return [];
-  }
-
-  return ticketTypes.filter(
-    (ticketType) =>
-      getTicketTypeSectorId(ticketType) === shape.id &&
-      isAssignedSeatTicketType(ticketType),
+function isDecorativeShape(shape: SeatMapEditorShape) {
+  return (
+    shape.mapData?.decorative === true ||
+    shape.shapeType === "stage" ||
+    shape.shapeType === "foh"
   );
 }
 
-function getStandingTicketTypeIds(shape: SeatMapEditorShape) {
-  const ids = shape.ticketTypeIds ?? (shape.ticketTypeId ? [shape.ticketTypeId] : []);
-  return new Set(ids.filter(Boolean));
-}
-
-function TicketTypeColorDot({ ticketType }: { ticketType: OrganizerPublicTicketType }) {
+function isRoundTableShape(shape: SeatMapEditorShape) {
   return (
-    <span
-      className="seat-map-ticket-type-color"
-      style={{ backgroundColor: getTicketTypeColor(ticketType) }}
-      aria-hidden="true"
-    />
-  );
-}
-
-function TicketTypeSingleDropdown({
-  disabled,
-  emptyLabel,
-  noOptionsLabel,
-  onChange,
-  onToggle,
-  open,
-  options,
-  value,
-}: {
-  disabled?: boolean;
-  emptyLabel: string;
-  noOptionsLabel: string;
-  onChange: (ticketTypeId: string) => void;
-  onToggle: () => void;
-  open: boolean;
-  options: OrganizerPublicTicketType[];
-  value: string;
-}) {
-  const selectedTicketType = options.find((ticketType) => ticketType.id === value);
-
-  return (
-    <div className={`seat-map-ticket-type-dropdown ${open ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className="seat-map-ticket-type-dropdown-trigger"
-        disabled={disabled}
-        onClick={onToggle}
-      >
-        <span className="seat-map-ticket-type-trigger-content">
-          {selectedTicketType ? (
-            <>
-              <TicketTypeColorDot ticketType={selectedTicketType} />
-              <span>{selectedTicketType.name}</span>
-            </>
-          ) : (
-            <span className="seat-map-ticket-type-placeholder">{emptyLabel}</span>
-          )}
-        </span>
-        <ChevronDown size={15} />
-      </button>
-      {open ? (
-        <div className="seat-map-ticket-type-dropdown-menu">
-          <button
-            type="button"
-            className="seat-map-ticket-type-dropdown-option is-empty-option"
-            onClick={() => onChange("")}
-          >
-            <span className="seat-map-ticket-type-placeholder">{emptyLabel}</span>
-          </button>
-          {!options.length ? (
-            <p className="seat-map-editor-empty">{noOptionsLabel}</p>
-          ) : (
-            options.map((ticketType) => (
-              <button
-                key={ticketType.id}
-                type="button"
-                className={`seat-map-ticket-type-dropdown-option ${ticketType.id === value ? "is-selected" : ""}`}
-                onClick={() => onChange(ticketType.id)}
-              >
-                <TicketTypeColorDot ticketType={ticketType} />
-                <span>{ticketType.name}</span>
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TicketTypeMultiDropdown({
-  disabled,
-  emptyLabel,
-  noOptionsLabel,
-  onChange,
-  onToggle,
-  open,
-  options,
-  selectedCountLabel,
-  valueIds,
-}: {
-  disabled?: boolean;
-  emptyLabel: string;
-  noOptionsLabel: string;
-  onChange: (ticketTypeIds: string[]) => void;
-  onToggle: () => void;
-  open: boolean;
-  options: OrganizerPublicTicketType[];
-  selectedCountLabel: (count: number) => string;
-  valueIds: string[];
-}) {
-  const selectedTicketTypeIds = new Set(valueIds);
-  const selectedTicketTypes = options.filter((ticketType) => selectedTicketTypeIds.has(ticketType.id));
-  const triggerText =
-    selectedTicketTypes.length === 0
-      ? emptyLabel
-      : selectedTicketTypes.length === 1
-        ? selectedTicketTypes[0].name
-        : selectedCountLabel(selectedTicketTypes.length);
-
-  return (
-    <div className={`seat-map-ticket-type-dropdown ${open ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className="seat-map-ticket-type-dropdown-trigger"
-        disabled={disabled}
-        onClick={onToggle}
-      >
-        <span className="seat-map-ticket-type-trigger-content">
-          {selectedTicketTypes.length === 1 ? <TicketTypeColorDot ticketType={selectedTicketTypes[0]} /> : null}
-          <span className={selectedTicketTypes.length ? "" : "seat-map-ticket-type-placeholder"}>{triggerText}</span>
-        </span>
-        <ChevronDown size={15} />
-      </button>
-      {open ? (
-        <div className="seat-map-ticket-type-dropdown-menu">
-          {!options.length ? (
-            <p className="seat-map-editor-empty">{noOptionsLabel}</p>
-          ) : (
-            options.map((ticketType) => {
-              const checked = selectedTicketTypeIds.has(ticketType.id);
-              const nextIds = checked
-                ? valueIds.filter((ticketTypeId) => ticketTypeId !== ticketType.id)
-                : [...valueIds, ticketType.id];
-
-              return (
-                <label key={ticketType.id} className="seat-map-ticket-type-dropdown-option has-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => onChange(nextIds)}
-                  />
-                  <TicketTypeColorDot ticketType={ticketType} />
-                  <span>{ticketType.name}</span>
-                </label>
-              );
-            })
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ToolButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active?: boolean;
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className={`seat-map-tool-button ${active ? "is-active" : ""}`} onClick={onClick}>
-      {icon}
-      <span>{label}</span>
-    </button>
+    shape.seatLayout?.mode === "table" ||
+    shape.mapData?.presetKind === "round_table"
   );
 }
 
 export default function SeatMapRightSidebar({
-  assignmentEnabled = true,
+  assignmentEnabled = false,
+  activeTool = "select",
   document,
   selectedShape,
   selectedSeat,
@@ -336,402 +293,1139 @@ export default function SeatMapRightSidebar({
   selectedShapeIds,
   editingShapeId,
   seatLayoutInputs,
-  seatDropdownOptions,
   ticketTypes,
   importFileInputRef,
   onImportJson,
-  onImportJsonClick,
-  onExportJson,
   onSetActiveTool,
-  onAddTrapezoid,
-  onAddDiamond,
-  onAddHexagon,
-  onAddCircle,
-  onAddEllipse,
-  onAddRoundedBlock,
-  onAddConcertOvalTemplate,
-  onAddVipLeftCurved,
-  onAddVipRightCurved,
-  onAddBottomRingSection,
-  onAddFanSection,
-  onAddLeftSideRing,
-  onAddRightSideRing,
   onSelectShape,
   onToggleShapeVisibility,
   onToggleShapeLocked,
   onRemoveShape,
+  onFlipShapeH,
+  onFlipShapeV,
+  onResizeShape,
+  onUpdateShape,
   onSetEditingShapeId,
   onShapeMetaChange,
   onSeatLayoutInputChange,
   onSeatLayoutInputBlur,
+  onUpdateSeatLayoutAndGenerate,
   onGenerateSeats,
   onRestoreHiddenSeats,
-  onClearSeats,
   onUpdateSeat,
   onAssignTicketTypeToSeats,
   onHideSeat,
   onHideSelectedSeats,
   onRestoreSeat,
   onRestoreSelectedSeats,
-  onClearDraft,
-  canClearDraft,
   onCreateSeatTypeForShape,
 }: SeatMapRightSidebarProps) {
   const { t } = useTranslation();
-  void onCreateSeatTypeForShape;
-  const [workspaceToolsOpen, setWorkspaceToolsOpen] = useState(true);
-  const [layersOpen, setLayersOpen] = useState(true);
-  const [seatGenerationOpen, setSeatGenerationOpen] = useState(false);
-  const [selectedSeatOpen, setSelectedSeatOpen] = useState(false);
-  const [openTicketTypeDropdown, setOpenTicketTypeDropdown] = useState<string | null>(null);
-  const selectedSectorTicketTypes = getSectorTicketTypes(ticketTypes, selectedShape);
-  const selectedSeatAssignableTicketTypes = getSeatAssignableTicketTypes(ticketTypes, selectedShape);
+  const [layersExpanded, setLayersExpanded] = useState(true);
+  const [bulkTicketTypeId, setBulkTicketTypeId] = useState<string>("");
 
-  const otherSectorTicketTypes = selectedShape
-    ? ticketTypes.filter((ticketType) => {
-        const sectorId = getTicketTypeSectorId(ticketType);
-        return sectorId && sectorId !== selectedShape.id;
-      })
-    : [];
+  const stats = useMemo(() => {
+    let sectorCount = 0;
+    let totalSeats = 0;
+    let standingCount = 0;
+    for (const shape of document.shapes) {
+      if (isDecorativeShape(shape)) continue;
+      sectorCount += 1;
+      if (shape.sectorType === "STANDING") {
+        standingCount += Number(shape.totalCapacity || 0);
+      } else {
+        totalSeats += shape.seats.filter((s) => !s.hidden).length;
+      }
+    }
+    return { sectorCount, totalSeats, standingCount };
+  }, [document.shapes]);
+
+  const isDecorative = selectedShape ? isDecorativeShape(selectedShape) : false;
+  const isRoundTable = selectedShape ? isRoundTableShape(selectedShape) : false;
+  const hiddenSeatsCount = selectedShape
+    ? selectedShape.seats.filter((seat) => seat.hidden).length
+    : 0;
+
+  const currentLayout = selectedShape?.seatLayout;
+  const rotationVal = Number(currentLayout?.rotation ?? 0);
+  const curveVal = Number(currentLayout?.curve ?? 0);
+  const stretchVal = Number(currentLayout?.stretch ?? 0);
+  const rowAlignment: SeatMapEditorRowAlignment = currentLayout?.rowAlignment ?? "center";
+  const rowLabelPos: SeatMapEditorRowLabelPosition = currentLayout?.rowLabelPosition ?? "left";
+  const outlineMode: SeatMapEditorOutlineMode = currentLayout?.outlineMode ?? "auto";
+
+  const selectedSeatIds = selectedSeats.map((s) => s.id);
+  const hasHiddenInSelection = selectedSeats.some((s) => s.hidden);
 
   return (
-    <aside className="seat-map-editor-sidebar">
+    <aside className="seat-map-editor-sidebar smp-inspector" aria-label="Thuộc tính phân khu">
       <input
         ref={importFileInputRef}
         type="file"
-        accept="application/json,.json"
+        accept=".json,application/json"
         style={{ display: "none" }}
         onChange={onImportJson}
       />
 
-      <section className="seat-map-workspace-panel-frame">
-        <div className="seat-map-workspace-panel-title">
-          <span>
-            <MousePointer2 size={16} />
-            <span>{t("seatMap.workspaceTools")}</span>
-          </span>
-          <button type="button" onClick={() => setWorkspaceToolsOpen((current) => !current)} aria-label={t("seatMap.toggleWorkspaceTools")}>
-            <ChevronDown size={16} className={workspaceToolsOpen ? "is-open" : ""} />
-          </button>
-        </div>
-
-        {workspaceToolsOpen ? (
-          <div className="seat-map-workspace-panel-body">
-          <div className="seat-map-tool-grid">
-            <ToolButton icon={<Pentagon size={15} />} label="Trapezoid" onClick={() => { onSetActiveTool("polygon"); onAddTrapezoid(); }} />
-            <ToolButton icon={<Diamond size={15} />} label="Diamond" onClick={() => { onSetActiveTool("polygon"); onAddDiamond(); }} />
-            <ToolButton icon={<Hexagon size={15} />} label="Hexagon" onClick={() => { onSetActiveTool("polygon"); onAddHexagon(); }} />
-            <ToolButton icon={<Circle size={15} />} label="Circle" onClick={() => { onSetActiveTool("rectangle"); onAddCircle(); }} />
-            <ToolButton icon={<Ellipsis size={15} />} label="Ellipse" onClick={() => { onSetActiveTool("rectangle"); onAddEllipse(); }} />
-            <ToolButton icon={<Square size={15} />} label="Rounded" onClick={() => { onSetActiveTool("rectangle"); onAddRoundedBlock(); }} />
-            <ToolButton icon={<Pentagon size={15} />} label="Fan" onClick={() => { onSetActiveTool("select"); onAddFanSection(); }} />
-            <ToolButton icon={<Circle size={15} />} label="Ring" onClick={() => { onSetActiveTool("select"); onAddBottomRingSection(); }} />
-            <ToolButton icon={<Grid3X3 size={15} />} label={t("seatMap.concertTemplate")} onClick={() => { onSetActiveTool("select"); onAddConcertOvalTemplate(); }} />
-            <ToolButton icon={<Pentagon size={15} />} label="Curved L" onClick={() => { onSetActiveTool("select"); onAddVipLeftCurved(); }} />
-            <ToolButton icon={<Pentagon size={15} />} label="Curved R" onClick={() => { onSetActiveTool("select"); onAddVipRightCurved(); }} />
-            <ToolButton icon={<Pentagon size={15} />} label="Side L" onClick={() => { onSetActiveTool("select"); onAddLeftSideRing(); }} />
-            <ToolButton icon={<Pentagon size={15} />} label="Side R" onClick={() => { onSetActiveTool("select"); onAddRightSideRing(); }} />
+      {!selectedShape ? (
+        <>
+          <div className="smp-inspector-section">
+            <div className="smp-inspector-heading">TỔNG QUAN SƠ ĐỒ</div>
+            <div className="smp-kpi-grid">
+              <div className="smp-kpi-box">
+                <span>Phân khu</span>
+                <strong>{stats.sectorCount}</strong>
+              </div>
+              <div className="smp-kpi-box">
+                <span>Ghế ngồi</span>
+                <strong>{stats.totalSeats}</strong>
+              </div>
+              <div className="smp-kpi-box">
+                <span>Đứng</span>
+                <strong>{stats.standingCount}</strong>
+              </div>
+            </div>
+            <p className="smp-inspector-hint">
+              Chọn <strong>Hàng ghế</strong> hoặc <strong>Hình khối</strong> trên thanh công cụ phía trên để vẽ, hoặc bấm chọn một phân khu để tinh chỉnh.
+            </p>
           </div>
+        </>
+      ) : selectedShape.mapData?.isVenueShape === true ? (
+        <>
+          <div className="smp-inspector-section">
+            <div className="smp-inspector-heading">
+              <span>VENUE SHAPE</span>
+              <span className="smp-inspector-badge">KHUNG / SÂN KHẤU</span>
+            </div>
 
-          <div className="seat-map-sidebar-divider" />
-          <div className="seat-map-action-grid">
-            <button type="button" className="seat-map-editor-button secondary compact" onClick={onImportJsonClick}>
-              <Upload size={15} />
-              Import JSON
-            </button>
-            <button type="button" className="seat-map-editor-button secondary compact" onClick={onExportJson}>
-              <Download size={15} />
-              Export JSON
-            </button>
-          </div>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="seat-map-layers-panel-frame">
-        <div className="seat-map-layers-panel-title">
-          <span>
-            <Layers3 size={16} />
-            <span>{t("seatMap.layers")}</span>
-          </span>
-          <span className="seat-map-layers-panel-actions">
-            <Plus size={14} />
-            <button type="button" onClick={() => setLayersOpen((current) => !current)} aria-label={t("seatMap.toggleLayers")}>
-              <ChevronDown size={16} className={layersOpen ? "is-open" : ""} />
-            </button>
-          </span>
-        </div>
-
-        {layersOpen ? (
-          <div className="seat-map-layers-panel-body">
-            {!document.shapes.length ? (
-              <p className="seat-map-editor-empty">{t("seatMap.noShapes")}</p>
-            ) : (
-              <div className="seat-map-layer-list-modern">
-                {document.shapes.map((shape) => {
-                  const active = selectedShapeIds.includes(shape.id);
-
+            <div className="smp-prop-block">
+              <span className="smp-prop-label">Kiểu hình</span>
+              <div className="smp-action-grid-2" style={{ marginTop: 6 }}>
+                {VENUE_SHAPE_VARIANTS.map((variant) => {
+                  const activeVariant = String(selectedShape.mapData?.venueVariant ?? "venue_frame");
+                  const isActive = activeVariant === variant.id;
                   return (
-                    <div key={shape.id} className={`seat-map-layer-row-modern ${active ? "is-active" : ""}`}>
-                      <button type="button" className="seat-map-layer-row-main" onClick={(event) => onSelectShape(shape.id, event.ctrlKey || event.metaKey || event.shiftKey)}>
-                        <span className="seat-map-layer-color" style={{ backgroundColor: shape.color, opacity: shape.visible ? 1 : 0.35 }} />
-                        <span>
-                          <strong>{shape.name}</strong>
-                          <small>{shape.shapeType} · {t("seatMap.seatCount", { count: shape.seatCount })}</small>
-                        </span>
-                      </button>
-                      <div className="seat-map-layer-row-actions">
-                        <button type="button" onClick={() => onToggleShapeVisibility(shape.id)}>{shape.visible ? <Eye size={14} /> : <EyeOff size={14} />}</button>
-                        <button type="button" onClick={() => onSetEditingShapeId(editingShapeId === shape.id ? null : shape.id)}><Pencil size={14} /></button>
-                        <button type="button" onClick={() => onToggleShapeLocked(shape.id)}>{shape.locked ? <LockOpen size={14} /> : <Lock size={14} />}</button>
-                        <button type="button" className="danger" onClick={() => onRemoveShape(shape.id)}><Trash2 size={14} /></button>
-                      </div>
-                      {editingShapeId === shape.id ? (
-                        <div className="seat-map-layer-editor-modern">
-                          <label><span>{t("organizer.name")}</span><input value={shape.name} onChange={(event) => onShapeMetaChange(shape.id, { name: event.target.value })} /></label>
-                          <label><span>{t("seatMap.color")}</span><input type="color" value={shape.color} onChange={(event) => onShapeMetaChange(shape.id, { color: event.target.value })} /></label>
-                          <label>
-                            <span>{t("seatMap.sectorType")}</span>
-                            <select value={shape.sectorType} onChange={(event) => onShapeMetaChange(shape.id, { sectorType: event.target.value as SeatMapEditorSectorType })}>
-                              {sectorTypeOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
-                            </select>
-                          </label>
-                          {shape.sectorType === "STANDING" ? (
-                            <>
-                              <label>
-                                <span>{t("seatMap.maxCapacity")}</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={shape.totalCapacity ?? ""}
-                                  onChange={(event) => {
-                                    const val = event.target.value;
-                                    onShapeMetaChange(shape.id, {
-                                      totalCapacity: val === "" ? undefined : Math.max(0, parseInt(val, 10) || 0),
-                                    });
-                                  }}
-                                />
-                              </label>
-                            </>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
+                    <button
+                      key={variant.id}
+                      type="button"
+                      className={`smp-outline-btn ${isActive ? "is-active" : ""}`}
+                      style={
+                        isActive
+                          ? {
+                              borderColor: "#1688f0",
+                              background: "#eff6ff",
+                              color: "#0f62fe",
+                              fontWeight: 600,
+                            }
+                          : undefined
+                      }
+                      onClick={() => {
+                        onUpdateShape?.(selectedShape.id, (current) => {
+                          const prevLabel = (current.label ?? "").trim();
+                          const shouldSwapLabel =
+                            prevLabel === "" || prevLabel === "SÂN KHẤU" || prevLabel === "MAIN STAGE";
+                          const nextBounds =
+                            variant.id === "stage_t" && current.bounds.height < 180
+                              ? { ...current.bounds, height: 260 }
+                              : variant.id === "stage_circle"
+                                ? {
+                                    ...current.bounds,
+                                    width: Math.min(current.bounds.width, 360),
+                                    height: Math.min(current.bounds.width, 360),
+                                  }
+                                : current.bounds;
+                          return {
+                            ...current,
+                            name:
+                              variant.id === "venue_frame"
+                                ? "Venue Shape"
+                                : shouldSwapLabel || current.name === "Venue Shape"
+                                  ? variant.defaultLabel
+                                  : current.name,
+                            shapeType: variant.shapeType,
+                            color: variant.defaultColor,
+                            label: shouldSwapLabel ? variant.defaultLabel : current.label,
+                            bounds: nextBounds,
+                            mapData: {
+                              ...(current.mapData ?? {}),
+                              decorative: true,
+                              isVenueShape: true,
+                              venueVariant: variant.id,
+                              cornerRadius: variant.defaultCornerRadius,
+                              fill: variant.defaultFill,
+                            },
+                          };
+                        });
+                      }}
+                    >
+                      <span>{variant.label}</span>
+                    </button>
                   );
                 })}
               </div>
-            )}
-          </div>
-        ) : null}
-      </section>
+            </div>
 
-      <section className="seat-map-seat-generation-panel-frame">
-        <div className="seat-map-seat-generation-panel-title">
-          <span>
-            <Grid3X3 size={16} />
-            <span>{t("seatMap.seatGeneration")}</span>
-          </span>
-          <button type="button" onClick={() => setSeatGenerationOpen((current) => !current)} aria-label={t("seatMap.toggleSeatGeneration")}>
-            <ChevronDown size={16} className={seatGenerationOpen ? "is-open" : ""} />
-          </button>
-        </div>
-
-        {seatGenerationOpen ? (
-          <div className="seat-map-seat-generation-panel-body">
-            {!selectedShape ? (
-              <p className="seat-map-editor-empty">{t("seatMap.selectShapeBeforeGenerate")}</p>
-            ) : !assignmentEnabled ? (
-              <p className="seat-map-editor-empty">
-                {t("seatMap.generateSeatsAfterTicketTypes")}
-              </p>
-            ) : selectedShape.sectorType === "STANDING" ? (
-              <p className="seat-map-editor-empty">{t("seatMap.standingNoPhysicalSeats")}</p>
-            ) : (
-              <>
-                <div className="seat-map-form-grid-modern">
-                  {seatLayoutFields.map(([key, label]) => (
-                    <label key={key}>
-                      <span>{label}</span>
-                      <input
-                        type="number"
-                        value={seatLayoutInputs[key] ?? ""}
-                        min={key === "paddingX" || key === "paddingY" ? 0 : 1}
-                        onChange={onSeatLayoutInputChange(selectedShape.id, key)}
-                        onBlur={() => onSeatLayoutInputBlur(selectedShape.id, key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="seat-map-action-grid seat-map-generation-actions">
-                  <button type="button" className="seat-map-editor-button secondary compact" onClick={() => onRestoreHiddenSeats(selectedShape.id)}>{t("seatMap.restoreHidden")}</button>
-                  <button type="button" className="seat-map-editor-button danger compact" onClick={() => onClearSeats(selectedShape.id)}>{t("seatMap.clearSeats")}</button>
-                  <button type="button" className="seat-map-editor-button primary compact" onClick={() => onGenerateSeats(selectedShape.id)}>{t("seatMap.generateSeats")}</button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : null}
-      </section>
-
-      {assignmentEnabled ? <section className="seat-map-selected-seat-panel-frame">
-        <div className="seat-map-selected-seat-panel-title">
-          <span>
-            <MousePointer2 size={16} />
-            <span>{t("seatMap.selectedSeat")}</span>
-          </span>
-          <button type="button" onClick={() => setSelectedSeatOpen((current) => !current)} aria-label={t("seatMap.toggleSelectedSeat")}>
-            <ChevronDown size={16} className={selectedSeatOpen ? "is-open" : ""} />
-          </button>
-        </div>
-
-        {selectedSeatOpen ? (
-          <div className="seat-map-selected-seat-panel-body">
-            {!selectedShape ? (
-              <p className="seat-map-editor-empty">{t("seatMap.selectSectorOrSeat")}</p>
-            ) : selectedShape.sectorType === "STANDING" ? (
-              <div className="seat-map-seat-panel">
-                <label><span>Sector</span><input value={selectedShape.name} readOnly /></label>
-                <div className="seat-map-ticket-type-field">
-                  <span>{t("seatMap.standingTicketTypes")}</span>
-                  <TicketTypeMultiDropdown
-                    disabled={!selectedSectorTicketTypes.length}
-                    emptyLabel={t("seatMap.chooseTicketType")}
-                    noOptionsLabel={t("seatMap.noValidTicketType")}
-                    onChange={(nextIds) => onShapeMetaChange(selectedShape.id, { ticketTypeIds: nextIds })}
-                    onToggle={() =>
-                      setOpenTicketTypeDropdown((current) => current === "standing" ? null : "standing")
+            <div className="smp-prop-row">
+              <span className="smp-prop-label">Vị trí</span>
+              <div className="smp-dual-inputs">
+                <label className="smp-mini-field">
+                  <span>X</span>
+                  <NumericInput
+                    value={Math.round(selectedShape.bounds.x)}
+                    onCommit={(nextX) =>
+                      onUpdateShape?.(selectedShape.id, (current) => ({
+                        ...current,
+                        bounds: { ...current.bounds, x: nextX },
+                      }))
                     }
-                    open={openTicketTypeDropdown === "standing"}
-                    options={selectedSectorTicketTypes}
-                    selectedCountLabel={(count) => t("seatMap.ticketTypeCount", { count })}
-                    valueIds={[...getStandingTicketTypeIds(selectedShape)]}
+                  />
+                </label>
+                <label className="smp-mini-field">
+                  <span>Y</span>
+                  <NumericInput
+                    value={Math.round(selectedShape.bounds.y)}
+                    onCommit={(nextY) =>
+                      onUpdateShape?.(selectedShape.id, (current) => ({
+                        ...current,
+                        bounds: { ...current.bounds, y: nextY },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="smp-prop-row">
+              <span className="smp-prop-label">Kích thước</span>
+              <div className="smp-dual-inputs">
+                <label className="smp-mini-field">
+                  <span>Rộng</span>
+                  <NumericInput
+                    min={40}
+                    value={Math.round(selectedShape.bounds.width)}
+                    onCommit={(nextW) =>
+                      onUpdateShape?.(selectedShape.id, (current) => ({
+                        ...current,
+                        bounds: { ...current.bounds, width: nextW },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="smp-mini-field">
+                  <span>Cao</span>
+                  <NumericInput
+                    min={40}
+                    value={Math.round(selectedShape.bounds.height)}
+                    onCommit={(nextH) =>
+                      onUpdateShape?.(selectedShape.id, (current) => ({
+                        ...current,
+                        bounds: { ...current.bounds, height: nextH },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            {(() => {
+              const activeVariant = String(selectedShape.mapData?.venueVariant ?? "venue_frame");
+              const supportsRadius = activeVariant === "venue_frame" || activeVariant === "stage_rect";
+              if (!supportsRadius) return null;
+              const maxRadius = Math.max(
+                10,
+                Math.floor(Math.min(selectedShape.bounds.width, selectedShape.bounds.height) / 2),
+              );
+              const currentRadius = Math.min(
+                maxRadius,
+                Math.max(0, Number(selectedShape.mapData?.cornerRadius ?? 160)),
+              );
+              return (
+                <div className="smp-prop-row">
+                  <span className="smp-prop-label">Bo góc</span>
+                  <div className="smp-slider-control">
+                    <input
+                      type="range"
+                      min={0}
+                      max={maxRadius}
+                      step={1}
+                      value={currentRadius}
+                      onChange={(e) => {
+                        const r = Number(e.target.value);
+                        onUpdateShape?.(selectedShape.id, (current) => ({
+                          ...current,
+                          mapData: { ...(current.mapData ?? {}), cornerRadius: r },
+                        }));
+                      }}
+                    />
+                    <NumericInput
+                      min={0}
+                      max={maxRadius}
+                      className="smp-slider-num"
+                      value={Math.round(currentRadius)}
+                      onCommit={(r) =>
+                        onUpdateShape?.(selectedShape.id, (current) => ({
+                          ...current,
+                          mapData: { ...(current.mapData ?? {}), cornerRadius: r },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="smp-prop-row">
+              <label className="smp-prop-label" htmlFor="smp-venue-label">
+                Nhãn chữ
+              </label>
+              <input
+                id="smp-venue-label"
+                type="text"
+                className="smp-prop-input"
+                placeholder="Tên nhãn"
+                value={selectedShape.label ?? ""}
+                onChange={(e) =>
+                  onUpdateShape?.(selectedShape.id, (current) => ({
+                    ...current,
+                    label: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="smp-prop-row">
+              <span className="smp-prop-label">Màu sắc</span>
+              <input
+                type="color"
+                className="smp-color-native"
+                value={
+                  typeof selectedShape.mapData?.fill === "string"
+                    ? selectedShape.mapData.fill
+                    : selectedShape.color
+                }
+                onChange={(e) => {
+                  const nextColor = e.target.value;
+                  onUpdateShape?.(selectedShape.id, (current) => ({
+                    ...current,
+                    color: nextColor,
+                    mapData: { ...(current.mapData ?? {}), fill: nextColor },
+                  }));
+                }}
+              />
+            </div>
+
+            <div className="smp-btn-stack" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="smp-outline-btn is-danger"
+                onClick={() => onRemoveShape(selectedShape.id)}
+              >
+                <Trash2 size={14} />
+                <span>Xóa Venue Shape</span>
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* SECTION: PHÂN KHU */}
+          <div className="smp-inspector-section">
+            <div className="smp-inspector-heading">
+              <span>{isDecorative ? "HẠNG MỤC SÂN KHẤU" : "PHÂN KHU"}</span>
+              <span className="smp-inspector-badge">
+                {selectedShape.sectorType === "STANDING"
+                  ? "ĐỨNG"
+                  : isDecorative
+                    ? "KỸ THUẬT"
+                    : `${selectedShape.seats.filter((s) => !s.hidden).length} GHẾ`}
+              </span>
+            </div>
+
+            <div className="smp-prop-row">
+              <label className="smp-prop-label" htmlFor="smp-shape-name">
+                Tên khu
+              </label>
+              <input
+                id="smp-shape-name"
+                type="text"
+                className="smp-prop-input"
+                value={selectedShape.name}
+                onChange={(e) => onShapeMetaChange(selectedShape.id, { name: e.target.value })}
+              />
+            </div>
+
+            {!isDecorative ? (
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Loại khu</span>
+                <div className="smp-seg-group">
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${selectedShape.sectorType !== "STANDING" ? "is-active" : ""}`}
+                    onClick={() => onShapeMetaChange(selectedShape.id, { sectorType: "SEATED" })}
+                  >
+                    Ngồi
+                  </button>
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${selectedShape.sectorType === "STANDING" ? "is-active" : ""}`}
+                    onClick={() => onShapeMetaChange(selectedShape.id, { sectorType: "STANDING" })}
+                  >
+                    Đứng
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedShape.sectorType === "STANDING" && !isDecorative ? (
+              <div className="smp-prop-row">
+                <label className="smp-prop-label" htmlFor="smp-standing-cap">
+                  Sức chứa
+                </label>
+                <NumericInput
+                  id="smp-standing-cap"
+                  min={1}
+                  className="smp-prop-input"
+                  value={selectedShape.totalCapacity ?? 100}
+                  onCommit={(nextCap) =>
+                    onShapeMetaChange(selectedShape.id, {
+                      totalCapacity: nextCap,
+                    })
+                  }
+                />
+              </div>
+            ) : null}
+
+            {onResizeShape && selectedShape.bounds?.width && selectedShape.bounds?.height ? (
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Kích thước</span>
+                <div className="smp-dual-inputs">
+                  <label className="smp-mini-field">
+                    <span>W</span>
+                    <NumericInput
+                      min={40}
+                      value={Math.round(selectedShape.bounds.width)}
+                      onCommit={(nextW) =>
+                        onResizeShape(selectedShape.id, {
+                          x: selectedShape.bounds.x,
+                          y: selectedShape.bounds.y,
+                          width: nextW,
+                          height: selectedShape.bounds.height || 100,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="smp-mini-field">
+                    <span>H</span>
+                    <NumericInput
+                      min={40}
+                      value={Math.round(selectedShape.bounds.height)}
+                      onCommit={(nextH) =>
+                        onResizeShape(selectedShape.id, {
+                          x: selectedShape.bounds.x,
+                          y: selectedShape.bounds.y,
+                          width: selectedShape.bounds.width || 100,
+                          height: nextH,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
+            {!isDecorative && selectedShape.sectorType !== "STANDING" && !isRoundTable ? (
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Khung khu</span>
+                <div className="smp-seg-group">
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${outlineMode !== "none" ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, { outlineMode: "auto" })
+                    }
+                  >
+                    Có viền
+                  </button>
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${outlineMode === "none" ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, { outlineMode: "none" })
+                    }
+                  >
+                    Chỉ ghế
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {!isDecorative && selectedShape.sectorType !== "STANDING" ? (
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Sửa ghế</span>
+                <button
+                  type="button"
+                  className={`smp-outline-btn smp-inline-toggle ${activeTool === "editSeats" ? "is-active" : ""}`}
+                  onClick={() =>
+                    onSetActiveTool(activeTool === "editSeats" ? "select" : "editSeats")
+                  }
+                >
+                  <Armchair size={14} />
+                  <span>{activeTool === "editSeats" ? "Thoát sửa ghế" : "Mở chế độ sửa ghế"}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* SECTION: HÀNG GHẾ & ĐÁNH SỐ */}
+          {!isDecorative && selectedShape.sectorType !== "STANDING" ? (
+            <div className="smp-inspector-section">
+              <div className="smp-inspector-heading">
+                <span>{isRoundTable ? "GHẾ QUANH BÀN" : "HÀNG GHẾ & ĐÁNH SỐ"}</span>
+              </div>
+
+              {isRoundTable ? (
+                <div className="smp-prop-row">
+                  <label className="smp-prop-label" htmlFor="smp-table-seats">
+                    Số ghế
+                  </label>
+                  <input
+                    id="smp-table-seats"
+                    type="number"
+                    min={2}
+                    max={24}
+                    className="smp-prop-input"
+                    value={seatLayoutInputs.seatsPerRow ?? String(currentLayout?.seatsPerRow ?? 8)}
+                    onChange={onSeatLayoutInputChange(selectedShape.id, "seatsPerRow")}
+                    onBlur={() => onSeatLayoutInputBlur(selectedShape.id, "seatsPerRow")}
                   />
                 </div>
-                {!selectedSectorTicketTypes.length && otherSectorTicketTypes.length ? (
-                  <div className="seat-map-ticket-type-other-list">
-                    <span>{t("seatMap.otherSectorTicketTypes")}</span>
-                    {otherSectorTicketTypes.map((ticketType) => (
-                      <small key={ticketType.id}>{ticketType.name}</small>
-                    ))}
+              ) : (
+                <>
+                  <div className="smp-prop-row">
+                    <span className="smp-prop-label">Hàng × Ghế</span>
+                    <div className="smp-dual-inputs">
+                      <label className="smp-mini-field">
+                        <span>H</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={seatLayoutInputs.rows ?? String(currentLayout?.rows ?? 6)}
+                          onChange={onSeatLayoutInputChange(selectedShape.id, "rows")}
+                          onBlur={() => onSeatLayoutInputBlur(selectedShape.id, "rows")}
+                        />
+                      </label>
+                      <label className="smp-mini-field">
+                        <span>G</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={seatLayoutInputs.seatsPerRow ?? String(currentLayout?.seatsPerRow ?? 12)}
+                          onChange={onSeatLayoutInputChange(selectedShape.id, "seatsPerRow")}
+                          onBlur={() => onSeatLayoutInputBlur(selectedShape.id, "seatsPerRow")}
+                        />
+                      </label>
+                    </div>
                   </div>
+
+                  <div className="smp-prop-row">
+                    <span className="smp-prop-label">Bắt đầu</span>
+                    <div className="smp-dual-inputs">
+                      <label className="smp-mini-field">
+                        <span>Hàng</span>
+                        <input
+                          type="text"
+                          maxLength={1}
+                          value={String.fromCharCode(currentLayout?.rowStartCharCode ?? 65)}
+                          onChange={(e) => {
+                            const char = (e.target.value || "A").toUpperCase().charCodeAt(0);
+                            onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                              rowStartCharCode: Math.min(90, Math.max(65, char)),
+                            });
+                          }}
+                        />
+                      </label>
+                      <label className="smp-mini-field">
+                        <span>Số</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={
+                            seatLayoutInputs.seatStartNumber ??
+                            String(currentLayout?.seatStartNumber ?? 1)
+                          }
+                          onChange={onSeatLayoutInputChange(selectedShape.id, "seatStartNumber")}
+                          onBlur={() => onSeatLayoutInputBlur(selectedShape.id, "seatStartNumber")}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="smp-prop-row">
+                    <span className="smp-prop-label">Nhãn hàng</span>
+                    <div className="smp-seg-group">
+                      {(
+                        [
+                          { id: "left", label: "Trái" },
+                          { id: "right", label: "Phải" },
+                          { id: "both", label: "2 bên" },
+                          { id: "none", label: "Ẩn" },
+                        ] as Array<{ id: SeatMapEditorRowLabelPosition; label: string }>
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={`smp-seg-btn ${rowLabelPos === opt.id ? "is-active" : ""}`}
+                          onClick={() =>
+                            onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                              rowLabelPosition: opt.id,
+                            })
+                          }
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="smp-btn-stack">
+                <button
+                  type="button"
+                  className="smp-primary-btn"
+                  onClick={() => onGenerateSeats(selectedShape.id)}
+                >
+                  Sinh lại ghế
+                </button>
+                {hiddenSeatsCount > 0 ? (
+                  <button
+                    type="button"
+                    className="smp-outline-btn"
+                    onClick={() => onRestoreHiddenSeats(selectedShape.id)}
+                  >
+                    <RotateCcw size={14} />
+                    <span>Khôi phục {hiddenSeatsCount} ghế đã ẩn</span>
+                  </button>
                 ) : null}
               </div>
-            ) : !selectedSeat ? (
-              <p className="seat-map-editor-empty">{t("seatMap.selectSeat")}</p>
-            ) : (
-              <div className="seat-map-seat-panel">
-                <label><span>Sector</span><input value={selectedShape.name} readOnly /></label>
-                <label>
-                  <span>Row</span>
-                  <select value={selectedSeat.rowName || ""} onChange={(event) => onUpdateSeat(selectedShape.id, selectedSeat.id, { rowName: event.target.value })}>
-                    <option value="" disabled>--Select Row--</option>
-                    {seatDropdownOptions.rows.map((row) => <option key={row.value} value={row.value}>{row.value}{row.hidden ? " - hide" : ""}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <span>Seat No</span>
-                  <select value={selectedSeat.seatNumber || ""} onChange={(event) => onUpdateSeat(selectedShape.id, selectedSeat.id, { seatNumber: event.target.value })}>
-                    <option value="" disabled>--Select No--</option>
-                    {seatDropdownOptions.seatNumbers.map((seatNumber) => <option key={seatNumber.value} value={seatNumber.value}>{seatNumber.value}{seatNumber.hidden ? " - hide" : ""}</option>)}
-                  </select>
-                </label>
-                <label><span>{t("seatMap.selectedSeats")}</span><input value={t("seatMap.seatCount", { count: selectedSeats.length })} readOnly /></label>
-                <div className="seat-map-ticket-type-field">
-                  <span>{t("ticketsPage.ticketType")}</span>
-                  <TicketTypeSingleDropdown
-                    disabled={!selectedSeatAssignableTicketTypes.length}
-                    emptyLabel={t("seatMap.chooseTicketType")}
-                    noOptionsLabel={t("seatMap.noValidTicketType")}
-                    onChange={(ticketTypeId) => {
-                      const ticketType = ticketTypes.find((item) => item.id === ticketTypeId);
-                      const targetSeatIds = selectedSeats.length ? selectedSeats.map((seat) => seat.id) : [selectedSeat.id];
+            </div>
+          ) : null}
 
-                      setOpenTicketTypeDropdown(null);
-                      if (targetSeatIds.length > 1 && ticketTypeId) {
-                        onAssignTicketTypeToSeats(selectedShape.id, "selected", targetSeatIds.join(","), ticketTypeId);
-                        return;
-                      }
+          {/* SECTION: CĂN HÀNG & BIẾN HÌNH (Seatmap.pro style) */}
+          {!isDecorative && selectedShape.sectorType !== "STANDING" && !isRoundTable ? (
+            <div className="smp-inspector-section">
+              <div className="smp-inspector-heading">CĂN HÀNG & BIẾN HÌNH</div>
 
-                      onUpdateSeat(selectedShape.id, selectedSeat.id, {
-                        ticketTypeId: ticketTypeId || undefined,
-                        colorCode: ticketTypeId ? getTicketTypeColor(ticketType) : undefined,
-                      });
-                    }}
-                    onToggle={() =>
-                      setOpenTicketTypeDropdown((current) => current === "seat" ? null : "seat")
-                    }
-                    open={openTicketTypeDropdown === "seat"}
-                    options={selectedSeatAssignableTicketTypes}
-                    value={selectedSeat.ticketTypeId || ""}
-                  />
-                </div>
-
-                <div className="seat-map-ticket-type-field">
-                  <span>{t("seatMap.assignWholeSector")}</span>
-                  <TicketTypeSingleDropdown
-                    disabled={!selectedSeatAssignableTicketTypes.length}
-                    emptyLabel={t("seatMap.chooseTicketType")}
-                    noOptionsLabel={t("seatMap.noValidTicketType")}
-                    onChange={(ticketTypeId) => {
-                      setOpenTicketTypeDropdown(null);
-                      if (ticketTypeId) {
-                        onAssignTicketTypeToSeats(selectedShape.id, "all", "", ticketTypeId);
-                      }
-                    }}
-                    onToggle={() =>
-                      setOpenTicketTypeDropdown((current) => current === "all" ? null : "all")
-                    }
-                    open={openTicketTypeDropdown === "all"}
-                    options={selectedSeatAssignableTicketTypes}
-                    value=""
-                  />
-                </div>
-
-                <div className="seat-map-action-grid">
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Căn hàng</span>
+                <div className="smp-seg-group">
                   <button
                     type="button"
-                    className="seat-map-editor-button danger compact"
-                    onClick={() => {
-                      const targetSeatIds = selectedSeats.length ? selectedSeats.map((seat) => seat.id) : [selectedSeat.id];
-                      if (targetSeatIds.length > 1) {
-                        onHideSelectedSeats(selectedShape.id, targetSeatIds);
-                      } else {
-                        onHideSeat(selectedShape.id, selectedSeat.id);
-                      }
-                    }}
+                    className={`smp-seg-btn ${rowAlignment === "left" ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, { rowAlignment: "left" })
+                    }
+                    title="Căn trái"
                   >
-                    <EyeOff size={15} />{t("seatMap.hideSeat")}
+                    <AlignLeft size={14} />
                   </button>
                   <button
                     type="button"
-                    className="seat-map-editor-button secondary compact"
-                    onClick={() => {
-                      const targetSeatIds = selectedSeats.length ? selectedSeats.map((seat) => seat.id) : [selectedSeat.id];
-                      if (targetSeatIds.length > 1) {
-                        onRestoreSelectedSeats(selectedShape.id, targetSeatIds);
-                      } else {
-                        onRestoreSeat(selectedShape.id, selectedSeat.id);
-                      }
-                    }}
+                    className={`smp-seg-btn ${rowAlignment === "center" ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, { rowAlignment: "center" })
+                    }
+                    title="Căn giữa"
                   >
-                    <Eye size={15} />{t("seatMap.showSeat")}
+                    <AlignCenter size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${rowAlignment === "right" ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, { rowAlignment: "right" })
+                    }
+                    title="Căn phải"
+                  >
+                    <AlignRight size={14} />
                   </button>
                 </div>
               </div>
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label" title="Path-based Layout (Path-based Seat Arrangement)">
+                  Path-based
+                </span>
+                <div className="smp-seg-group">
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${!currentLayout?.pathBasedLayout ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        pathBasedLayout: false,
+                      })
+                    }
+                    title="Path-based: OFF"
+                  >
+                    OFF
+                  </button>
+                  <button
+                    type="button"
+                    className={`smp-seg-btn ${currentLayout?.pathBasedLayout ? "is-active" : ""}`}
+                    onClick={() =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        pathBasedLayout: true,
+                      })
+                    }
+                    title="Path-based: ON"
+                  >
+                    ON
+                  </button>
+                </div>
+              </div>
+
+              {(onFlipShapeH || onFlipShapeV) ? (
+                <div className="smp-prop-row">
+                  <span className="smp-prop-label">Lật</span>
+                  <div className="smp-seg-group">
+                    {onFlipShapeH ? (
+                      <button
+                        type="button"
+                        className="smp-seg-btn"
+                        onClick={() => onFlipShapeH(selectedShape.id)}
+                        title="Lật ngang"
+                      >
+                        <FlipHorizontal2 size={14} />
+                      </button>
+                    ) : null}
+                    {onFlipShapeV ? (
+                      <button
+                        type="button"
+                        className="smp-seg-btn"
+                        onClick={() => onFlipShapeV(selectedShape.id)}
+                        title="Lật dọc"
+                      >
+                        <FlipVertical2 size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Xoay</span>
+                <div className="smp-slider-control">
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={rotationVal}
+                    onChange={(e) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        rotation: Number(e.target.value),
+                      })
+                    }
+                  />
+                  <NumericInput
+                    min={-180}
+                    max={180}
+                    className="smp-slider-num"
+                    value={rotationVal}
+                    onCommit={(nextRot) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        rotation: nextRot,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Độ cong</span>
+                <div className="smp-slider-control">
+                  <input
+                    type="range"
+                    min={-100}
+                    max={100}
+                    step={1}
+                    value={curveVal}
+                    onChange={(e) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        curve: Number(e.target.value),
+                      })
+                    }
+                  />
+                  <NumericInput
+                    min={-100}
+                    max={100}
+                    className="smp-slider-num"
+                    value={curveVal}
+                    onCommit={(nextCurve) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        curve: nextCurve,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Giãn quạt</span>
+                <div className="smp-slider-control">
+                  <input
+                    type="range"
+                    min={-100}
+                    max={100}
+                    step={1}
+                    value={stretchVal}
+                    onChange={(e) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        stretch: Number(e.target.value),
+                      })
+                    }
+                  />
+                  <NumericInput
+                    min={-100}
+                    max={100}
+                    className="smp-slider-num"
+                    value={stretchVal}
+                    onCommit={(nextStretch) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        stretch: nextStretch,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Giãn ghế</span>
+                <div className="smp-slider-control">
+                  <input
+                    type="range"
+                    min={-8}
+                    max={26}
+                    step={1}
+                    value={Math.min(26, Math.max(-8, Math.round((currentLayout?.gapX ?? 22) - 22)))}
+                    onChange={(e) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        gapX: Math.min(48, Math.max(14, 22 + Number(e.target.value))),
+                      })
+                    }
+                  />
+                  <NumericInput
+                    min={-8}
+                    max={26}
+                    className="smp-slider-num"
+                    value={Math.round((currentLayout?.gapX ?? 22) - 22)}
+                    onCommit={(delta) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        gapX: 22 + delta,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="smp-prop-row">
+                <span className="smp-prop-label">Giãn hàng</span>
+                <div className="smp-slider-control">
+                  <input
+                    type="range"
+                    min={-8}
+                    max={26}
+                    step={1}
+                    value={Math.min(26, Math.max(-8, Math.round((currentLayout?.gapY ?? 22) - 22)))}
+                    onChange={(e) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        gapY: Math.min(48, Math.max(14, 22 + Number(e.target.value))),
+                      })
+                    }
+                  />
+                  <NumericInput
+                    min={-8}
+                    max={26}
+                    className="smp-slider-num"
+                    value={Math.round((currentLayout?.gapY ?? 22) - 22)}
+                    onCommit={(delta) =>
+                      onUpdateSeatLayoutAndGenerate?.(selectedShape.id, {
+                        gapY: 22 + delta,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* SECTION: GHẾ ĐANG CHỌN */}
+          {(selectedSeat || selectedSeats.length > 0) && !isDecorative ? (
+            <div className="smp-inspector-section">
+              <div className="smp-inspector-heading">
+                <span>
+                  {selectedSeats.length > 1
+                    ? `ĐANG CHỌN ${selectedSeats.length} GHẾ`
+                    : selectedSeat
+                      ? `GHẾ ${selectedSeat.rowName || ""}${selectedSeat.seatNumber || selectedSeat.label}`
+                      : "GHẾ ĐANG CHỌN"}
+                </span>
+              </div>
+
+              {selectedSeat && selectedSeats.length <= 1 ? (
+                <div className="smp-prop-row">
+                  <span className="smp-prop-label">Nhãn ghế</span>
+                  <div className="smp-dual-inputs">
+                    <label className="smp-mini-field">
+                      <span>Hàng</span>
+                      <input
+                        type="text"
+                        value={selectedSeat.rowName || ""}
+                        onChange={(e) =>
+                          onUpdateSeat(selectedShape.id, selectedSeat.id, {
+                            rowName: e.target.value.toUpperCase(),
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="smp-mini-field">
+                      <span>Số</span>
+                      <input
+                        type="text"
+                        value={selectedSeat.seatNumber || ""}
+                        onChange={(e) =>
+                          onUpdateSeat(selectedShape.id, selectedSeat.id, {
+                            seatNumber: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="smp-btn-stack">
+                {selectedSeats.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      className="smp-outline-btn"
+                      onClick={() => onHideSelectedSeats(selectedShape.id, selectedSeatIds)}
+                    >
+                      <EyeOff size={14} />
+                      <span>Ẩn {selectedSeats.length} ghế đã chọn</span>
+                    </button>
+                    {hasHiddenInSelection ? (
+                      <button
+                        type="button"
+                        className="smp-outline-btn"
+                        onClick={() => onRestoreSelectedSeats(selectedShape.id, selectedSeatIds)}
+                      >
+                        <Eye size={14} />
+                        <span>Hiện lại ghế đã ẩn</span>
+                      </button>
+                    ) : null}
+                  </>
+                ) : selectedSeat ? (
+                  <button
+                    type="button"
+                    className="smp-outline-btn"
+                    onClick={() =>
+                      selectedSeat.hidden
+                        ? onRestoreSeat(selectedShape.id, selectedSeat.id)
+                        : onHideSeat(selectedShape.id, selectedSeat.id)
+                    }
+                  >
+                    {selectedSeat.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                    <span>{selectedSeat.hidden ? "Hiện lại ghế này" : "Ẩn ghế này (lối đi)"}</span>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {/* SECTION: GÁN LOẠI VÉ */}
+          {assignmentEnabled && !isDecorative ? (
+            (() => {
+              const shapeTicketTypes = ticketTypes.filter(
+                (tt) => (tt.sectorId ?? tt.eventSectorId) === selectedShape.id,
+              );
+              const activeBulkTicketTypeId = shapeTicketTypes.some((tt) => tt.id === bulkTicketTypeId)
+                ? bulkTicketTypeId
+                : "";
+              return (
+            <div className="smp-inspector-section">
+              <div className="smp-inspector-heading">
+                <span>GÁN LOẠI VÉ</span>
+                {onCreateSeatTypeForShape ? (
+                  <button
+                    type="button"
+                    className="smp-link-btn"
+                    onClick={() => onCreateSeatTypeForShape(selectedShape.id)}
+                  >
+                    + Tạo loại vé
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="smp-prop-row">
+                <label className="smp-prop-label" htmlFor="smp-ticket-type">
+                  Loại vé
+                </label>
+                <select
+                  id="smp-ticket-type"
+                  className="smp-prop-select"
+                  value={selectedShape.ticketTypeId || ""}
+                  onChange={(e) =>
+                    onShapeMetaChange(selectedShape.id, {
+                      ticketTypeId: e.target.value,
+                      ticketTypeIds: e.target.value ? [e.target.value] : [],
+                    })
+                  }
+                >
+                  <option value="">-- Chưa gán loại vé --</option>
+                  {shapeTicketTypes.map((tt) => (
+                    <option key={tt.id} value={tt.id}>
+                      {tt.name} ({Number(tt.price || 0).toLocaleString("vi-VN")}đ)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedShape.sectorType !== "STANDING" && selectedSeats.length > 0 ? (
+                <div className="smp-prop-row">
+                  <span className="smp-prop-label">Cho ghế chọn</span>
+                  <div className="smp-dual-inputs">
+                    <select
+                      className="smp-prop-select"
+                      value={activeBulkTicketTypeId}
+                      onChange={(e) => setBulkTicketTypeId(e.target.value)}
+                    >
+                      <option value="">Chọn vé...</option>
+                      {shapeTicketTypes.map((tt) => (
+                        <option key={tt.id} value={tt.id}>
+                          {tt.name} ({Number(tt.price || 0).toLocaleString("vi-VN")}đ)
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="smp-outline-btn"
+                      disabled={!activeBulkTicketTypeId}
+                      onClick={() =>
+                        onAssignTicketTypeToSeats(
+                          selectedShape.id,
+                          selectedSeats.length > 1 ? "selected" : "seat",
+                          selectedSeats[0]?.id || "",
+                          activeBulkTicketTypeId,
+                        )
+                      }
+                    >
+                      <Ticket size={13} />
+                      <span>Gán</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+              );
+            })()
+          ) : null}
+        </>
+      )}
+
+      {/* SECTION: DANH SÁCH PHÂN KHU (LAYERS) */}
+      <div className="smp-inspector-section smp-layers-section">
+        <button
+          type="button"
+          className="smp-layers-toggle"
+          onClick={() => setLayersExpanded((prev) => !prev)}
+        >
+          <span className="smp-layers-toggle-left">
+            <Layers3 size={14} />
+            <span>DANH SÁCH PHÂN KHU ({document.shapes.length})</span>
+          </span>
+          {layersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        </button>
+
+        {layersExpanded ? (
+          <div className="smp-layers-list">
+            {document.shapes.length === 0 ? (
+              <div className="smp-layers-empty">
+                {t("seatMap.noLayers", "Chưa có phân khu nào.")}
+              </div>
+            ) : (
+              document.shapes.map((shape) => {
+                const isSelected = selectedShapeIds.includes(shape.id);
+                const isEditingName = editingShapeId === shape.id;
+                const countLabel = isDecorativeShape(shape)
+                  ? "SK"
+                  : shape.sectorType === "STANDING"
+                    ? `${shape.totalCapacity ?? 0} GA`
+                    : `${shape.seats.filter((s) => !s.hidden).length}g`;
+                return (
+                  <div
+                    key={shape.id}
+                    className={`smp-layer-item ${isSelected ? "is-selected" : ""}`}
+                    onClick={(e) => onSelectShape(shape.id, e.shiftKey)}
+                  >
+                    <span className="smp-layer-dot" style={{ background: shape.color }} />
+                    {isEditingName ? (
+                      <input
+                        type="text"
+                        className="smp-layer-name-input"
+                        value={shape.name}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => onShapeMetaChange(shape.id, { name: e.target.value })}
+                        onBlur={() => onSetEditingShapeId(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === "Escape") {
+                            onSetEditingShapeId(null);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="smp-layer-name"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          onSetEditingShapeId(shape.id);
+                        }}
+                      >
+                        {shape.name}
+                      </span>
+                    )}
+                    <span className="smp-layer-count">{countLabel}</span>
+                    <div className="smp-layer-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => onToggleShapeLocked(shape.id)}
+                        title={shape.locked ? "Mở khóa" : "Khóa vị trí"}
+                      >
+                        {shape.locked ? <Lock size={13} /> : <LockOpen size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleShapeVisibility(shape.id)}
+                        title={shape.visible === false ? "Hiện" : "Ẩn"}
+                      >
+                        {shape.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveShape(shape.id)}
+                        title="Xóa"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         ) : null}
-      </section> : null}
-
-      <div className="seat-map-action-grid seat-map-publish-actions">
-        <button
-          type="button"
-          className="seat-map-editor-button danger compact"
-          onClick={onClearDraft}
-          disabled={!canClearDraft}
-        >
-          {t("seatMap.restore")}
-        </button>
       </div>
     </aside>
   );

@@ -1,0 +1,258 @@
+/* ==========================================================================
+   MovingLogoStrip — Infinite Payment Logo Marquee (OpenRouter Inspired)
+   Monochrome to Brand Color · Balanced Optical Heights · Seamless Loop
+   ========================================================================== */
+
+.moving-logo-strip {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding-block: clamp(20px, 2.5vw, 32px);
+  margin-bottom: clamp(32px, 4vw, 48px);
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+}
+
+.moving-logo-sr-control {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  z-index: 10;
+  padding: 6px 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-120%);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.moving-logo-sr-control:focus {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  outline: 2px solid var(--brand-ink, #b78200);
+  outline-offset: 2px;
+}
+
+.moving-logo-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+}
+
+.moving-logo-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--ft-marquee-gap, 68px);
+  padding-right: var(--ft-marquee-gap, 68px);
+  animation: ft-marquee-slide 75s linear infinite;
+  will-change: transform;
+}
+
+@keyframes ft-marquee-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Pause marquee on hover, focus, or when manual paused state is toggled */
+.moving-logo-strip:hover .moving-logo-group,
+.moving-logo-strip:focus-within .moving-logo-group,
+.moving-logo-strip.is-paused .moving-logo-group {
+  animation-play-state: paused;
+}
+
+/* Logo Items */
+.moving-logo-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  filter: grayscale(1);
+  opacity: 0.65;
+  transition: filter 200ms ease, opacity 200ms ease;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-decoration: none;
+}
+
+.moving-logo-item:hover,
+.moving-logo-item:focus-visible {
+  filter: grayscale(0);
+  opacity: 1;
+}
+
+.moving-logo-item:focus-visible {
+  outline: 2px solid var(--brand-ink, #b78200);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.moving-logo-item img {
+  display: block;
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Optical Alignment — balancing visual weight per brand asset */
+.moving-logo-item[data-brand="momo"] img {
+  height: 24px;
+}
+
+.moving-logo-item[data-brand="vnpay"] img {
+  height: 23px;
+}
+
+.moving-logo-item[data-brand="zalopay"] img {
+  height: 20px;
+}
+
+.moving-logo-item[data-brand="payos"] img {
+  height: 22px;
+}
+
+.moving-logo-item[data-brand="paypal"] img {
+  height: 20px;
+}
+
+.moving-logo-item[data-brand="visa"] img {
+  height: 17px;
+}
+
+.moving-logo-item[data-brand="mastercard"] img {
+  height: 22px;
+}
+
+.moving-logo-item[data-brand="apple_pay"] img {
+  height: 21px;
+}
+
+.moving-logo-item[data-brand="google_pay"] img {
+  height: 20px;
+}
+
+/* Tablet responsive adjustments */
+@media (max-width: 900px) {
+  .moving-logo-group {
+    --ft-marquee-gap: 52px;
+    padding-right: 52px;
+    gap: 52px;
+    animation-duration: 60s;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 600px) {
+  .moving-logo-group {
+    --ft-marquee-gap: 40px;
+    padding-right: 40px;
+    gap: 40px;
+    animation-duration: 48s;
+  }
+
+  .moving-logo-strip {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 5%,
+      black 95%,
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 5%,
+      black 95%,
+      transparent 100%
+    );
+  }
+
+  .moving-logo-item[data-brand="momo"] img {
+    height: 20px;
+  }
+  .moving-logo-item[data-brand="vnpay"] img {
+    height: 19px;
+  }
+  .moving-logo-item[data-brand="zalopay"] img {
+    height: 17px;
+  }
+  .moving-logo-item[data-brand="payos"] img {
+    height: 18px;
+  }
+  .moving-logo-item[data-brand="paypal"] img {
+    height: 17px;
+  }
+  .moving-logo-item[data-brand="visa"] img {
+    height: 14px;
+  }
+  .moving-logo-item[data-brand="mastercard"] img {
+    height: 18px;
+  }
+  .moving-logo-item[data-brand="apple_pay"] img {
+    height: 17px;
+  }
+  .moving-logo-item[data-brand="google_pay"] img {
+    height: 16px;
+  }
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .moving-logo-strip {
+    mask-image: none;
+    -webkit-mask-image: none;
+    overflow: visible;
+  }
+
+  .moving-logo-track {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .moving-logo-group {
+    animation: none !important;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-right: 0;
+    gap: 20px 40px;
+    width: 100%;
+  }
+
+  /* Only display the first single cycle of 9 logos under reduced motion */
+  .moving-logo-group[aria-hidden="true"],
+  .moving-logo-group .moving-logo-repeat-extra {
+    display: none !important;
+  }
+}

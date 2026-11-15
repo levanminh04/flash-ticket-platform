@@ -1,0 +1,1646 @@
+/* ============================================================
+   FLASHTICKET — ORGANIZER DASHBOARD (TIX STYLE)
+   Style: Minimalist · Soft Squircle Cards · Floating Top Nav
+   Brand Colors: Deep Charcoal (var(--text-strong)), Gold Accent (var(--brand-ink)),
+   Clean White (#FFFFFF), Soft Blue-Gray (#F6F8FB)
+   Typography: Synchronized with Profile, Discovery, Event-Search
+   ============================================================ */
+
+.tix-dashboard-page {
+  width: 100%;
+  min-height: 100vh;
+  background-color: #f6f8fb;
+  background-image: 
+    radial-gradient(at 15% 10%, rgba(224, 231, 255, 0.45) 0px, transparent 45%),
+    radial-gradient(at 85% 12%, rgba(243, 232, 255, 0.4) 0px, transparent 45%),
+    radial-gradient(at 50% 95%, rgba(254, 240, 248, 0.3) 0px, transparent 50%);
+  padding: clamp(16px, 2.5vw, 28px);
+  box-sizing: border-box;
+  color: var(--text-strong, #15171a);
+  font-family: var(--font-family, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tix-dashboard-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ============================================================
+   1. TOP NAVIGATION BAR (FLOATING PILL MENU)
+   ============================================================ */
+.tix-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+/* Left Brand / Logo — đồng bộ 100% với Navbar và các page cơ sở */
+.tix-topbar .logo,
+.tix-topbar .logo:hover,
+.tix-topbar .logo:active,
+.tix-topbar .logo:focus,
+.tix-topbar .logo:focus-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-strong, #15171a);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 38px;
+  letter-spacing: -0.96px;
+  text-decoration: none;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--font-family, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+}
+
+.tix-topbar .logo span {
+  color: var(--text-strong, #15171a);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 38px;
+  letter-spacing: -0.96px;
+  font-family: inherit;
+}
+
+.tix-topbar .nav-brand-cat {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: brightness(0) drop-shadow(.3px 0 currentColor) drop-shadow(-.3px 0 currentColor);
+  display: block;
+}
+
+/* Center Floating Pill Navigation */
+.tix-pill-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--text-strong, #15171a);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(21, 23, 26, 0.15);
+}
+
+.tix-pill-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-secondary-on-dark, rgba(255, 255, 255, 0.7));
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tix-pill-item:hover {
+  color: var(--text-on-dark, #ffffff);
+}
+
+.tix-pill-item.active {
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Right User Profile & Language Switcher (Đồng bộ theo Navbar) */
+.tix-topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tix-topbar-divider {
+  width: 1.5px;
+  height: 20px;
+  background: color-mix(in srgb, var(--text-strong, #15171a) 28%, transparent);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.tix-account-dropdown {
+  position: relative;
+}
+
+.tix-topbar-right .account-trigger.tix-account-trigger,
+.tix-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 12px 4px 6px !important;
+  border-radius: 999px !important;
+  list-style: none;
+  background: transparent;
+  border: none;
+  transition: all 0.15s ease;
+  user-select: none;
+  color: var(--text-strong, #15171a);
+  outline: none;
+}
+
+.tix-account-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.tix-topbar-right .account-trigger.tix-account-trigger:hover,
+.tix-topbar-right .account-trigger.tix-account-trigger:focus,
+.tix-topbar-right .account-trigger.tix-account-trigger:focus-visible,
+.tix-topbar-right .tix-account-dropdown[open] .account-trigger.tix-account-trigger,
+.tix-account-trigger:hover,
+.tix-account-dropdown[open] .tix-account-trigger {
+  background: rgba(204, 153, 0, 0.08) !important;
+  color: var(--brand-ink, #b8860b) !important;
+  border-radius: 999px !important;
+}
+
+.tix-nav-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid #cbd5e1;
+}
+
+.tix-nav-account-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-account-dropdown[open] .account-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.tix-account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid var(--border, #e2e6ed);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04);
+  padding: 6px;
+  z-index: 1000;
+  animation: tixDropdownFade 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tix-user-info-box {
+  padding: 8px 12px 6px;
+}
+
+.tix-user-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-user-role {
+  font-size: 11px;
+  color: var(--text-muted, #666b74);
+  font-weight: 500;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-account-menu hr {
+  margin: 6px 0;
+  border: none;
+  border-top: 1px solid #f1f5f9;
+}
+
+.tix-account-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong, #15171a);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.tix-account-menu .dropdown-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.tix-account-menu .dropdown-item.logout {
+  color: #ef4444;
+}
+
+.tix-account-menu .dropdown-item.logout:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* ============================================================
+   2. ORGANIZER GENERAL OVERVIEW HEADER
+   ============================================================ */
+.tix-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+}
+
+.tix-overview-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tix-overview-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tix-overview-main-title {
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-strong, #15171a);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.tix-overview-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-subtle, #565e69);
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+.tix-overview-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.tix-overview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-overview-badge svg {
+  color: var(--text-muted, #666b74);
+}
+
+.tix-overview-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.tix-primary-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tix-primary-cta-btn:hover {
+  background: #2b303a;
+  transform: translateY(-1px);
+  color: #ffffff;
+}
+
+.tix-event-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+  text-decoration: none;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.tix-event-link-pill:hover {
+  border-color: #cbd5e1;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-event-link-url {
+  color: var(--brand-ink, #805c00);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.tix-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-status-badge[data-status="PUBLISHED"] {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+/* ============================================================
+   3. SUB-TABS & DATE FILTER ROW
+   ============================================================ */
+.tix-subtabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tix-subtabs-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+
+.tix-subtab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-subtle, #565e69);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.tix-subtab-btn:hover {
+  border-color: #cbd5e1;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-subtab-btn.active {
+  background: var(--text-strong, #15171a);
+  border-color: var(--text-strong, #15171a);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.tix-no-event-hint {
+  font-size: 13px;
+  color: var(--text-muted, #666b74);
+  font-style: italic;
+}
+
+.tix-top-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.tix-top-create-btn:hover {
+  background: #2b303a;
+  color: #ffffff;
+}
+
+.tix-subtabs-heading {
+  display: inline-flex;
+  align-items: center;
+}
+
+.tix-subtabs-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  letter-spacing: -0.01em;
+}
+
+.tix-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tix-date-select-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 148px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.tix-date-btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tix-date-select-btn:hover,
+.tix-dropdown-wrap.is-open .tix-date-select-btn {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: #cbd5e1;
+}
+
+.tix-chevron-icon {
+  color: var(--text-muted, #666b74);
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tix-chevron-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.tix-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 100%;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--border, #e2e6ed);
+  padding: 5px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  animation: tixDropdownFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes tixDropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tix-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-subtle, #565e69);
+  font-weight: 500;
+  font-size: 13px;
+  text-align: left;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.tix-dropdown-item:hover {
+  background: var(--surface-subtle, #f7f8fa);
+  color: var(--text-strong, #15171a);
+}
+
+.tix-dropdown-item.is-active {
+  background: #f1f5f9;
+  color: var(--text-strong, #15171a);
+  font-weight: 700;
+}
+
+.tix-check-icon {
+  color: var(--text-strong, #15171a);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   4. KPI METRIC CARDS (4-CARD GRID)
+   ============================================================ */
+.tix-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.tix-kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 104px;
+  box-sizing: border-box;
+}
+
+.tix-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tix-kpi-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+  letter-spacing: -0.01em;
+}
+
+.tix-kpi-icon-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tix-kpi-value-lg {
+  font-size: clamp(22px, 2.2vw, 26px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-strong, #15171a);
+  line-height: 1.2;
+}
+
+.tix-kpi-unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+  margin-left: 4px;
+}
+
+.tix-kpi-sub-stats {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tix-kpi-sub-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tix-kpi-sub-item span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #666b74);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tix-kpi-sub-item span:last-child {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-kpi-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted, #666b74);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.tix-kpi-cr-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+/* ============================================================
+   5. MIDDLE ROW: TICKET SALES & TICKETS TYPE
+   ============================================================ */
+.tix-middle-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 62fr) minmax(0, 38fr);
+  gap: 20px;
+}
+
+/* Left Card: Ticket Sales Chart */
+.tix-chart-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  padding: 22px 24px 18px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.tix-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.tix-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--text-strong, #15171a);
+  margin: 0;
+}
+
+.tix-card-subtitle {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-subtle, #565e69);
+  margin: 3px 0 0;
+}
+
+.tix-card-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-ink, #805c00);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.tix-card-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+
+
+/* Area Chart Styling (Biểu đồ miền nét vẽ ấm, dải màu gradient nhạt dần theo mẫu ảnh) */
+.tix-area-chart-container {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 290px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tix-area-chart-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+.tix-chart-axis-label {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-muted, #666b74);
+  font-family: inherit;
+}
+
+.tix-area-stroke {
+  filter: drop-shadow(0 2px 4px rgba(200, 90, 50, 0.18));
+}
+
+.tix-chart-floating-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: -8px;
+}
+
+.tix-chart-floating-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--text-strong, #15171a);
+}
+
+.tix-tooltip-date {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.tix-tooltip-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.tix-tooltip-value strong {
+  color: #fb923c;
+  font-weight: 750;
+}
+
+.tix-tooltip-revenue {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+/* Right Card: Pure Top Selling Events */
+.tix-tickets-type-card,
+.tix-top-events-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.tix-tickets-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  flex: 1;
+}
+
+.tix-ticket-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+  background: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.tix-ticket-item-row:hover {
+  border-color: #cbd5e1;
+  background: #fbfdff;
+}
+
+.tix-ticket-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tix-event-rank-badge {
+  font-size: 11px;
+  font-weight: 750;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-subtle, #565e69);
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-event-rank-badge.rank-1 {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+}
+
+.tix-event-rank-badge.rank-2 {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.tix-event-rank-badge.rank-3 {
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+}
+
+.tix-ticket-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tix-ticket-name {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.tix-ticket-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tix-ticket-price-sub {
+  font-size: 12px;
+  color: var(--brand-ink, #805c00);
+  font-weight: 700;
+}
+
+.tix-meta-sep {
+  font-size: 10px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-ticket-date-sub {
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+  font-weight: 400;
+}
+
+.tix-ticket-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.tix-ticket-qty-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+}
+
+.tix-ticket-qty-badge small {
+  color: var(--text-muted, #666b74);
+  font-weight: 500;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.tix-more-menu-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted, #666b74);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tix-more-menu-btn:hover {
+  color: var(--text-strong, #15171a);
+  background: var(--surface-subtle, #f1f5f9);
+  border-color: var(--border, #e2e6ed);
+}
+
+.tix-top-events-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 16px;
+  gap: 6px;
+  flex: 1;
+}
+
+.tix-top-events-empty .tix-empty-icon {
+  color: var(--text-muted, #666b74);
+  margin-bottom: 4px;
+}
+
+.tix-top-events-empty .tix-empty-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-top-events-empty .tix-empty-desc {
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.45;
+}
+
+.tix-more-menu-btn:hover {
+  color: var(--text-strong, #15171a);
+  background: var(--surface-subtle, #f1f5f9);
+}
+
+/* ============================================================
+   6. BOTTOM ROW: MY ORDERS TABLE
+   ============================================================ */
+.tix-orders-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.tix-orders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.tix-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 999px;
+  padding: 6px 14px;
+  width: min(100%, 280px);
+  min-height: 36px;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.tix-search-input-wrap.tix-hub-search-wrap {
+  width: min(100%, 400px);
+}
+
+.tix-search-input-wrap:focus-within {
+  border-color: #cbd5e1;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.04);
+}
+
+.tix-search-input-wrap svg {
+  color: var(--text-muted, #666b74);
+  flex-shrink: 0;
+}
+
+.tix-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-search-input::placeholder {
+  color: var(--text-muted, #666b74);
+}
+
+.tix-search-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: var(--text-muted, #666b74);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tix-search-clear-btn:hover {
+  background: #cbd5e1;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-orders-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.tix-filter-select-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.tix-filter-select-btn:hover,
+.tix-dropdown-wrap.is-open .tix-filter-select-btn {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: #cbd5e1;
+}
+
+.tix-dropdown-menu--status {
+  width: max-content;
+  min-width: 175px;
+  right: auto;
+  left: 0;
+}
+
+.tix-dropdown-menu--pagesize {
+  width: max-content;
+  min-width: 170px;
+  right: auto;
+  left: 0;
+}
+
+.tix-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  white-space: nowrap;
+}
+
+.tix-export-btn:hover {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: #cbd5e1;
+  color: var(--text-strong, #15171a);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+/* Table Style */
+.tix-table-wrapper {
+  overflow-x: auto;
+  border-radius: 0;
+}
+
+.tix-orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+.tix-orders-table thead,
+.tix-orders-table thead tr {
+  border-radius: 0;
+}
+
+.tix-orders-table thead th {
+  padding: 12px 14px;
+  background: #f1f5f9;
+  color: var(--text-strong, #334155);
+  font-size: 12px;
+  font-weight: 700;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  border-radius: 0 !important;
+}
+
+.tix-orders-table thead th:first-child {
+  border-radius: 0 !important;
+}
+
+.tix-orders-table thead th:last-child {
+  border-radius: 0 !important;
+  text-align: right;
+}
+
+.tix-orders-table tbody td {
+  padding: 14px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--text-strong, #15171a);
+  vertical-align: middle;
+  font-size: 13px;
+}
+
+.tix-orders-table tbody tr:hover td {
+  background: #fbfdff;
+}
+
+.tix-order-id-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tix-order-id-code {
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-order-status-pill {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.tix-status-completed {
+  color: #10b981;
+}
+
+.tix-status-cancelled {
+  color: #f97316;
+}
+
+.tix-client-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tix-client-name {
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-client-email {
+  font-size: 12px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-orders-table tbody td:last-child {
+  text-align: right;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+}
+
+/* Event Table Custom Cells */
+.tix-event-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 240px;
+}
+
+.tix-event-title-main {
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  font-size: 14px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-event-id-sub {
+  font-size: 11px;
+  color: var(--text-muted, #666b74);
+  font-family: monospace;
+}
+
+.tix-schedule-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+}
+
+.tix-schedule-time {
+  color: var(--text-subtle, #565e69);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tix-venue-cell {
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.tix-sold-count {
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tix-sold-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tix-sold-cell strong {
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+}
+
+.tix-sold-cell span {
+  font-size: 12px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-progress-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 90px;
+}
+
+.tix-progress-bar-bg {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #f1f3f7;
+  overflow: hidden;
+}
+
+.tix-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--text-strong, #15171a);
+  transition: width 0.3s ease;
+}
+
+.tix-progress-bar-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle, #565e69);
+  width: 28px;
+  text-align: right;
+}
+
+.tix-revenue-text {
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shadcn UI Data-Table Action Menu */
+.tix-row-action-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.tix-row-action-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  outline: none;
+}
+
+.tix-row-action-trigger:hover,
+.tix-row-action-trigger.is-open {
+  background: transparent;
+  border: none;
+  color: var(--text-strong, #0f172a);
+}
+
+.tix-row-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 195px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e6ed);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: tixDropdownFade 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.tix-row-action-menu.open-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.tix-action-menu-label {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  text-align: left;
+}
+
+.tix-action-menu-separator {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 3px -1px;
+}
+
+.tix-action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong, #0f172a);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: inherit;
+  text-decoration: none;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.tix-action-menu-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.tix-action-menu-item svg {
+  color: #64748b;
+  flex-shrink: 0;
+  transition: color 0.12s ease;
+}
+
+.tix-action-menu-item:hover svg {
+  color: #0f172a;
+}
+
+.tix-status-badge.is-published {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.tix-status-badge.is-draft {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-status-badge.is-cancelled {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.tix-status-badge.is-pending {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.tix-status-badge.is-approved {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+/* Pagination Box with White Rounded Container */
+.tix-pagination-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.tix-pagination-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 8px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.tix-page-arrow-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tix-page-arrow-btn:hover:not(:disabled) {
+  background: #000000;
+  transform: scale(1.05);
+}
+
+.tix-page-arrow-btn:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tix-page-indicator {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   7. RESPONSIVE DESIGN (TABLETS & PHONES)
+   ============================================================ */
+@media (max-width: 1080px) {
+  .tix-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tix-middle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .tix-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tix-pill-nav {
+    overflow-x: auto;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tix-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tix-overview-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

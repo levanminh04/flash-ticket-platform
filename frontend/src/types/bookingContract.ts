@@ -21,6 +21,7 @@ export interface Availability {
 export interface OrderView {
   orderId: string;
   eventId: string;
+  eventTitle?: string | null;
   state: "PENDING_PAYMENT" | "ISSUING" | "COMPLETED" | "CANCELLED" | "EXPIRED" | "ISSUANCE_FAILED";
   customerEmail: string;
   currency: "VND";
@@ -35,4 +36,12 @@ export interface OrderView {
     quantity: number; unitPrice: string; lineSubtotal: string; sectorId: string | null;
     seats: { seatId: string; seatLabel: string; rowName: string; seatNumber: string }[];
   }[];
+}
+
+export interface BuyerOrdersPage {
+  items: OrderView[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 }

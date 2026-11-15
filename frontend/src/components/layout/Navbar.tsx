@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import {
   ArrowRight,
+  BarChart3,
   ChevronDown,
   Clock3,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   LogIn,
   LogOut,
   RotateCcw,
+  Scale,
   Search,
   ShoppingBag,
   UserPlus,
@@ -26,7 +28,7 @@ import { useTranslation } from "react-i18next";
 import { confirmDestructiveAction } from "../../lib/swal";
 import { hasRealmRole } from "../../lib/auth";
 import { eventService } from "../../services/eventService";
-import { userService, UserProfile } from "../../services/userService";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { EventSummary } from "../../types/api";
 import { CHATBOT_PROMPT_EVENT } from "../chatbot/FloatingChatbot";
 import LanguageSwitcher from "../common/LanguageSwitcher";
@@ -38,7 +40,6 @@ function getSuggestionImage(event: EventSummary) {
   return (
     event.thumbnailUrl ||
     event.bannerUrl ||
-    event.images?.find((image) => image.type === "THUMBNAIL")?.url ||
     event.images?.find((image) => image.type === "BANNER")?.url ||
     "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=500&auto=format&fit=crop"
   );
@@ -113,7 +114,7 @@ const Navbar = () => {
   const { keycloak, initialized } = useKeycloak();
   const { i18n, t } = useTranslation();
   const location = useLocation();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { data: profile = null, refetch: refetchProfile } = useUserProfile();
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -197,29 +198,18 @@ const Navbar = () => {
   }, [isAuthenticated, t]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setProfile(null);
-      return;
-    }
+    setAvatarBroken(false);
+  }, [profile?.avatarUrl]);
 
-    let cancelled = false;
-
-    const loadProfile = async () => {
-      const data = await userService.getProfile();
-      if (!cancelled) {
-        setProfile(data);
-        setAvatarBroken(false);
-      }
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      void refetchProfile();
     };
-
-    void loadProfile();
-
-    window.addEventListener(PROFILE_UPDATED_EVENT, loadProfile);
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
     return () => {
-      cancelled = true;
-      window.removeEventListener(PROFILE_UPDATED_EVENT, loadProfile);
+      window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
     };
-  }, [isAuthenticated]);
+  }, [refetchProfile]);
 
   useEffect(() => {
     const keyword = searchTerm.trim();
@@ -338,7 +328,17 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className="navbar discovery-navbar" data-discovery-header={location.pathname === "/" || location.pathname === "/search" ? true : undefined} aria-label={t("nav.home")}>
+    <nav
+      className="navbar discovery-navbar"
+      data-discovery-header={
+        ["/", "/search", "/profile", "/organizers/apply", "/admin/organizers", "/my-tickets", "/my-orders", "/payment-result", "/payment/result"].includes(location.pathname) ||
+        /^\/events?\/[^/]+\/?$/.test(location.pathname) ||
+        /^\/organizers\/[^/]+\/?$/.test(location.pathname)
+          ? true
+          : undefined
+      }
+      aria-label={t("nav.home")}
+    >
       <div className="container nav-container">
         <div className="nav-left">
           <Link
@@ -541,17 +541,26 @@ const Navbar = () => {
               </summary>
 
               <div className="dropdown-menu">
+                <div className="nav-user-info-box">
+                  <div className="nav-user-name">{accountName}</div>
+                  <div className="nav-user-email">
+                    {profile?.email ||
+                      (keycloak.tokenParsed?.email as string | undefined) ||
+                      (isOrganizer ? t("organizer.organizerRole", { defaultValue: "Ban tổ chức" }) : "")}
+                  </div>
+                </div>
+                <hr />
                 <Link to="/profile" className="dropdown-item">
                   <UserRound size={17} />
                   {t("nav.personalProfile")}
                 </Link>
-                <Link to="/my-tickets" className="dropdown-item">
-                  <Ticket size={17} />
-                  {t("nav.myTickets")}
-                </Link>
                 <Link to="/my-orders" className="dropdown-item">
                   <ShoppingBag size={17} />
                   {t("nav.myOrders")}
+                </Link>
+                <Link to="/my-tickets" className="dropdown-item">
+                  <Ticket size={17} />
+                  {t("nav.myTickets")}
                 </Link>
                 <hr />
                 {isOrganizer ? (
@@ -559,7 +568,7 @@ const Navbar = () => {
                     <LayoutDashboard size={17} />
                     {t("nav.organizerWorkspace")}
                   </Link>
-                ) : hasOrganizerApplication ? (
+                ) : isAdmin ? null : hasOrganizerApplication ? (
                   <div className="dropdown-item dropdown-item-muted">
                     <Clock3 size={17} />
                     {t("nav.organizerPending")}
@@ -568,6 +577,12 @@ const Navbar = () => {
                   <Link to="/organizers/apply" className="dropdown-item">
                     <UserPlus size={17} />
                     {t("nav.organizerApply")}
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link to="/admin/sales" className="dropdown-item">
+                    <BarChart3 size={17} />
+                    {t("nav.adminSales", "Thống kê doanh số")}
                   </Link>
                 )}
                 {isAdmin && (
@@ -580,6 +595,12 @@ const Navbar = () => {
                   <Link to="/admin/organizers" className="dropdown-item">
                     <LayoutDashboard size={17} />
                     {t("nav.adminOrganizerReview")}
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link to="/admin/reconciliation" className="dropdown-item">
+                    <Scale size={17} />
+                    {t("nav.adminReconciliation", "Đối soát & chi trả")}
                   </Link>
                 ) : null}
                 {isAdmin ? (

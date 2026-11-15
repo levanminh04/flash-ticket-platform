@@ -266,6 +266,74 @@
   }
 }
 
+.tix-public-organizer-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 68px);
+}
+
+.tix-public-organizer-page {
+  min-height: auto;
+  flex: 1;
+}
+
+.tix-public-organizer-page .tix-profile-banner-wrap.is-readonly,
+.tix-public-organizer-page .tix-profile-avatar-box.is-readonly {
+  cursor: default;
+}
+
+.tix-public-organizer-page .tix-public-banner-action {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+}
+
+.tix-public-organizer-page .tix-public-banner-action .tix-public-follow-btn {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
+}
+
+.tix-public-organizer-page .tix-public-follow-btn.is-following {
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  border: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-public-organizer-page .tix-public-follow-btn.is-following:hover:not(:disabled) {
+  background: var(--surface-subtle, #f8fafc);
+  color: var(--text-strong, #15171a);
+  border-color: #cbd5e1;
+}
+
+.tix-public-organizer-page .tix-public-state-card {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 20px;
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.tix-public-organizer-page .tix-public-state-card h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 750;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-public-organizer-page .tix-public-state-card p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-subtle, #565e69);
+  max-width: 460px;
+}
+
 @media (max-width: 760px) {
   .public-organizer-hero {
     min-height: 520px;

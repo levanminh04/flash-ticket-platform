@@ -10,6 +10,7 @@ import {
 } from "./seatMapEditorTypes";
 import {
   buildSeatMapEditorDocument,
+  cloneShape,
   createCircleShape,
   createEditorDraftKey,
   createDiamondShape,
@@ -17,8 +18,12 @@ import {
   createHexagonShape,
   createPolygonShape,
   createRectangleShape,
+  createSeatRowsShapeFromBounds,
   createTrapezoidShape,
   deserializeEditorDocument,
+  EDITOR_GRID_CELL_SIZE,
+  flipShapeHorizontally,
+  flipShapeVertically,
   generateSeatsForShape,
   moveSeatWithinShape,
   restoreHiddenSeats,
@@ -33,10 +38,15 @@ import {
   createCatBottomRingPreset,
   createConcertOvalTemplate,
   createFanPreset,
+  createFestivalTStageTemplate,
   createFohPreset,
   createLeftSideRingPreset,
+  createMainStagePreset,
   createRightSideRingPreset,
   createRoundedBlockPreset,
+  createRoundTablePreset,
+  createSeatedBlockPreset,
+  createSlicedRingArcPreset,
   createStagePreset,
   createVipLeftCurvedPreset,
   createVipRightCurvedPreset,
@@ -62,8 +72,7 @@ function ensureSelection(selectedShapeIds: string[], document: SeatMapEditorDocu
   }
 
   const availableIds = new Set(document.shapes.map((shape) => shape.id));
-  const nextSelectedShapeIds = selectedShapeIds.filter((shapeId) => availableIds.has(shapeId));
-  return nextSelectedShapeIds.length ? nextSelectedShapeIds : [document.shapes[0].id];
+  return selectedShapeIds.filter((shapeId) => availableIds.has(shapeId));
 }
 
 function cloneDocument(document: SeatMapEditorDocument) {
@@ -110,7 +119,12 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     const rawDraft = window.localStorage.getItem(draftKey);
     const draftDocument = rawDraft ? deserializeEditorDocument(rawDraft) : null;
 
-    const nextDocument = draftDocument ?? sourceDocument;
+    const nextDocument = draftDocument
+      ? {
+          ...draftDocument,
+          referenceImageUrl: draftDocument.referenceImageUrl ?? sourceDocument?.referenceImageUrl,
+        }
+      : sourceDocument;
     setDocument(nextDocument);
     setViewport(getCenteredViewport(nextDocument));
     setSelectedShapeIds([]);
@@ -127,7 +141,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
 
   useEffect(() => {
     setViewport(getCenteredViewport(sourceDocument));
-    setReferenceImageVisible(false);
+    setReferenceImageVisible(Boolean(sourceDocument?.referenceImageUrl));
   }, [eventId, sourceDocument]);
 
   useEffect(() => {
@@ -172,43 +186,43 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
   };
 
   const undo = () => {
-    setDocument((current) => {
-      if (!current) {
-        return current;
-      }
+    if (!document || !undoStack.length) {
+      return;
+    }
 
-      const previousDocument = undoStack[undoStack.length - 1];
-      if (!previousDocument) {
-        return current;
-      }
+    const previousDocument = undoStack[undoStack.length - 1];
+    if (!previousDocument) {
+      return;
+    }
 
-      setUndoStack((history) => history.slice(0, -1));
-      setRedoStack((history) => [...history.slice(-49), cloneDocument(current)]);
-      setSelectedShapeIds(ensureSelection(selectedShapeIds, previousDocument));
-      setSelectedSeatId(null);
-      setSelectedSeatIds([]);
-      return cloneDocument(previousDocument);
-    });
+    const snapshot = cloneDocument(document);
+    const restored = cloneDocument(previousDocument);
+    setUndoStack((history) => history.slice(0, -1));
+    setRedoStack((history) => [...history.slice(-49), snapshot]);
+    setDocument(restored);
+    setSelectedShapeIds((current) => ensureSelection(current, restored));
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
   };
 
   const redo = () => {
-    setDocument((current) => {
-      if (!current) {
-        return current;
-      }
+    if (!document || !redoStack.length) {
+      return;
+    }
 
-      const nextDocument = redoStack[redoStack.length - 1];
-      if (!nextDocument) {
-        return current;
-      }
+    const nextDocument = redoStack[redoStack.length - 1];
+    if (!nextDocument) {
+      return;
+    }
 
-      setRedoStack((history) => history.slice(0, -1));
-      setUndoStack((history) => [...history.slice(-49), cloneDocument(current)]);
-      setSelectedShapeIds(ensureSelection(selectedShapeIds, nextDocument));
-      setSelectedSeatId(null);
-      setSelectedSeatIds([]);
-      return cloneDocument(nextDocument);
-    });
+    const snapshot = cloneDocument(document);
+    const restored = cloneDocument(nextDocument);
+    setRedoStack((history) => history.slice(0, -1));
+    setUndoStack((history) => [...history.slice(-49), snapshot]);
+    setDocument(restored);
+    setSelectedShapeIds((current) => ensureSelection(current, restored));
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
   };
 
   const selectShape = (shapeId: string | null, additive = false) => {
@@ -277,6 +291,77 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
       setSelectedSeatId(nextSelection.includes(seatId) ? seatId : nextSelection[0] ?? null);
       return nextSelection;
     });
+  };
+
+  const selectSeatsInShape = (shapeId: string, seatIds: string[], additive = false) => {
+    setSelectedShapeIds(shapeId ? [shapeId] : []);
+    setSelectedSeatIds((current) => {
+      const merged = additive
+        ? Array.from(new Set([...current, ...seatIds]))
+        : Array.from(new Set(seatIds));
+      setSelectedSeatId(merged[0] ?? null);
+      return merged;
+    });
+  };
+
+  const createSeatRowsFromBounds = (bounds: SeatMapEditorShape["bounds"]) => {
+    updateDocument((current) => {
+      const nextShape = createSeatRowsShapeFromBounds(bounds, current.shapes);
+      const nextDocument = {
+        ...current,
+        shapes: sortShapesByZIndex([...current.shapes, nextShape]),
+      };
+      setSelectedShapeIds([nextShape.id]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return nextDocument;
+    });
+  };
+
+  const cloneShapeById = (shapeId: string) => {
+    updateDocument((current) => {
+      const target = current.shapes.find((shape) => shape.id === shapeId);
+      if (!target) {
+        return current;
+      }
+      const cloned = cloneShape(
+        target,
+        current.shapes,
+        current.width || 1280,
+        current.height || 860,
+      );
+      const nextDocument = {
+        ...current,
+        shapes: sortShapesByZIndex([...current.shapes, cloned]),
+      };
+      setSelectedShapeIds([cloned.id]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      return nextDocument;
+    });
+  };
+
+  const flipShapeH = (shapeId: string) => {
+    updateDocument((current) => ({
+      ...current,
+      shapes: sortShapesByZIndex(
+        current.shapes.map((shape) =>
+          shape.id === shapeId ? flipShapeHorizontally(shape) : shape,
+        ),
+      ),
+    }));
+  };
+
+  const flipShapeV = (shapeId: string) => {
+    updateDocument((current) => ({
+      ...current,
+      shapes: sortShapesByZIndex(
+        current.shapes.map((shape) =>
+          shape.id === shapeId ? flipShapeVertically(shape) : shape,
+        ),
+      ),
+    }));
   };
 
   const addRectangle = () => {
@@ -399,18 +484,112 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     });
   };
 
-  const addConcertOvalTemplate = () => {
+  const openOrCreateVenueShape = () => {
+    const existing = document?.shapes.find((shape) => shape.mapData?.isVenueShape === true);
+    if (existing) {
+      setSelectedShapeIds([existing.id]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return;
+    }
+
     updateDocument((current) => {
-      const templateShapes = createConcertOvalTemplate(current);
+      const baseWidth = 1040;
+      const baseHeight = 620;
+      const baseX = Math.round((current.width - baseWidth) / 2);
+      const baseY = Math.round((current.height - baseHeight) / 2);
+      const template = createRectangleShape(0, current);
+      const venueShape: SeatMapEditorShape = {
+        ...template,
+        name: "Venue Shape",
+        label: "",
+        shapeType: "roundedRect",
+        color: "#e5b89b",
+        bounds: {
+          x: baseX,
+          y: baseY,
+          width: baseWidth,
+          height: baseHeight,
+        },
+        sectorType: "SEATED",
+        seats: [],
+        seatCount: 0,
+        zIndex: 0,
+        mapData: {
+          decorative: true,
+          isVenueShape: true,
+          venueVariant: "venue_frame",
+          cornerRadius: 160,
+          fill: "#f6ebe4",
+        },
+      };
+      const shiftedShapes = current.shapes.map((shape, idx) => ({
+        ...shape,
+        zIndex: idx + 1,
+      }));
       const nextDocument = {
         ...current,
-        shapes: sortShapesByZIndex([...current.shapes, ...templateShapes]),
+        shapes: sortShapesByZIndex([venueShape, ...shiftedShapes]),
       };
-      setSelectedShapeIds(
-        templateShapes
-          .filter((shape) => shape.mapData?.decorative !== true)
-          .map((shape) => shape.id),
-      );
+      setSelectedShapeIds([venueShape.id]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return nextDocument;
+    });
+  };
+
+  const addConcertOvalTemplate = () => {
+    updateDocument((current) => {
+      const normalizedDoc: SeatMapEditorDocument = {
+        ...current,
+        width: Math.max(current.width || 1280, 1280),
+        height: Math.max(current.height || 860, 860),
+        shapes: [],
+      };
+      const templateShapes = createConcertOvalTemplate(normalizedDoc);
+      const nextDocument = {
+        ...normalizedDoc,
+        shapes: sortShapesByZIndex(templateShapes),
+      };
+      setSelectedShapeIds([]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return nextDocument;
+    });
+  };
+
+  const addFestivalTStageTemplate = () => {
+    updateDocument((current) => {
+      const normalizedDoc: SeatMapEditorDocument = {
+        ...current,
+        width: Math.max(current.width || 1280, 1280),
+        height: Math.max(current.height || 820, 820),
+        shapes: [],
+      };
+      const templateShapes = createFestivalTStageTemplate(normalizedDoc);
+      const nextDocument = {
+        ...normalizedDoc,
+        shapes: sortShapesByZIndex(templateShapes),
+      };
+      setSelectedShapeIds([]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return nextDocument;
+    });
+  };
+
+  const addSlicedRingArc = () => {
+    updateDocument((current) => {
+      const sliceShapes = createSlicedRingArcPreset(current);
+      const nextDocument = {
+        ...current,
+        shapes: sortShapesByZIndex([...current.shapes, ...sliceShapes]),
+      };
+      setSelectedShapeIds(sliceShapes.map((shape) => shape.id));
       setSelectedSeatId(null);
       setSelectedSeatIds([]);
       setActiveTool("select");
@@ -449,6 +628,34 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     }));
   };
 
+  const syncLayoutSpacingForBounds = (
+    shape: SeatMapEditorShape,
+    nextBounds: SeatMapEditorShape["bounds"],
+  ): SeatMapEditorShape["seatLayout"] => {
+    if (!shape.seats.length || !shape.seatLayout) {
+      return shape.seatLayout;
+    }
+    const isSeatedGrid = shape.mapData?.presetType === "seated_grid";
+    const padX = isSeatedGrid
+      ? EDITOR_GRID_CELL_SIZE / 2
+      : Math.min(Math.max(12, nextBounds.width * 0.09), nextBounds.width * 0.25);
+    const padY = isSeatedGrid
+      ? EDITOR_GRID_CELL_SIZE / 2
+      : Math.min(Math.max(14, nextBounds.height * 0.14), nextBounds.height * 0.28);
+
+    return {
+      ...shape.seatLayout,
+      gapX:
+        shape.seatLayout.seatsPerRow > 1
+          ? Math.max(8, Math.round((nextBounds.width - padX * 2) / (shape.seatLayout.seatsPerRow - 1)))
+          : shape.seatLayout.gapX,
+      gapY:
+        shape.seatLayout.rows > 1
+          ? Math.max(8, Math.round((nextBounds.height - padY * 2) / (shape.seatLayout.rows - 1)))
+          : shape.seatLayout.gapY,
+    };
+  };
+
   const resizeShape = (
     shapeId: string,
     nextBounds: SeatMapEditorShape["bounds"],
@@ -458,6 +665,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
       ...shape,
       bounds: nextBounds,
       points: nextPoints ?? shape.points,
+      seatLayout: syncLayoutSpacingForBounds(shape, nextBounds),
       seats: scaleSeatsWithinBounds(shape.seats, shape.bounds, nextBounds),
     }));
   };
@@ -472,6 +680,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
       ...shape,
       bounds: nextBounds,
       points: scalePolygonPoints(shape.points, scaleX, scaleY),
+      seatLayout: syncLayoutSpacingForBounds(shape, nextBounds),
       seats: scaleSeatsWithinBounds(shape.seats, shape.bounds, nextBounds),
     }));
   };
@@ -525,6 +734,13 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
         ...patch,
       },
     }));
+  };
+
+  const updateSeatLayoutAndGenerate = (
+    shapeId: string,
+    patch: Partial<SeatMapEditorSeatLayoutConfig>,
+  ) => {
+    updateShape(shapeId, (shape) => generateSeatsForShape(shape, patch));
   };
 
   const regenerateSeats = (shapeId: string) => {
@@ -581,6 +797,31 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     });
 
     setSelectedShapeIds((current) => current.filter((currentShapeId) => currentShapeId !== shapeId));
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
+  };
+
+  const removeShapes = (shapeIds: string[]) => {
+    const targetIds = new Set(shapeIds);
+    if (!targetIds.size) {
+      return;
+    }
+
+    updateDocument((current) => {
+      const nextShapes = current.shapes
+        .filter((shape) => !targetIds.has(shape.id))
+        .map((shape, index) => ({
+          ...shape,
+          zIndex: index,
+        }));
+
+      return {
+        ...current,
+        shapes: nextShapes,
+      };
+    });
+
+    setSelectedShapeIds((current) => current.filter((currentShapeId) => !targetIds.has(currentShapeId)));
     setSelectedSeatId(null);
     setSelectedSeatIds([]);
   };
@@ -722,6 +963,20 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     updateShape(shapeId, (shape) => restoreHiddenSeats(shape));
   };
 
+  const setReferenceImageUrl = (nextUrl?: string) => {
+    updateDocument((current) => {
+      const normalized = nextUrl?.trim() || undefined;
+      if (current.referenceImageUrl === normalized) {
+        return current;
+      }
+      return {
+        ...current,
+        referenceImageUrl: normalized,
+      };
+    });
+    setReferenceImageVisible(Boolean(nextUrl?.trim()));
+  };
+
   const clearDraft = () => {
     if (eventId) {
       window.localStorage.removeItem(createEditorDraftKey(eventId));
@@ -737,16 +992,22 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
   };
 
   const replaceDocument = (nextDocument: SeatMapEditorDocument) => {
-    setDocument(nextDocument);
-    setViewport(getCenteredViewport(nextDocument));
-    setReferenceImageVisible(false);
-    setSelectedShapeIds(ensureSelection([], nextDocument));
+    if (document) {
+      setUndoStack((history) => [...history.slice(-49), cloneDocument(document)]);
+      setRedoStack([]);
+    }
+    const mergedDocument: SeatMapEditorDocument = {
+      ...nextDocument,
+      referenceImageUrl: nextDocument.referenceImageUrl ?? document?.referenceImageUrl ?? sourceDocument?.referenceImageUrl,
+    };
+    setDocument(mergedDocument);
+    setViewport(getCenteredViewport(mergedDocument));
+    setReferenceImageVisible(Boolean(mergedDocument.referenceImageUrl));
+    setSelectedShapeIds([]);
     setSelectedSeatId(null);
     setSelectedSeatIds([]);
     setActiveTool("select");
     setHasDraft(Boolean(eventId));
-    setUndoStack([]);
-    setRedoStack([]);
   };
 
   return {
@@ -771,9 +1032,14 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     addEllipse,
     addFanSection: () => addPresetShape(createFanPreset),
     addConcertOvalTemplate,
+    addFestivalTStageTemplate,
+    addSlicedRingArc,
     addFoh: () => addPresetShape(createFohPreset),
+    addMainStage: () => addPresetShape(createMainStagePreset),
     addStage: () => addPresetShape(createStagePreset),
+    addSeatedBlock: () => addPresetShape(createSeatedBlockPreset),
     addRoundedBlock: () => addPresetShape(createRoundedBlockPreset),
+    addRoundTable: () => addPresetShape(createRoundTablePreset),
     addBottomRingSection: () => addPresetShape(createCatBottomRingPreset),
     addLeftSideRing: () => addPresetShape(createLeftSideRingPreset),
     addRightSideRing: () => addPresetShape(createRightSideRingPreset),
@@ -785,6 +1051,10 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     clearSeatSelection,
     clearSeats,
     clearSelection,
+    cloneShapeById,
+    createSeatRowsFromBounds,
+    flipShapeH,
+    flipShapeV,
     hideSeat,
     hideSelectedSeats,
     moveSeat,
@@ -792,8 +1062,10 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     moveSeatBlock,
     resizeSeatBlock,
     moveShapeZIndex,
+    openOrCreateVenueShape,
     regenerateSeats,
     removeShape,
+    removeShapes,
     replaceDocument,
     resetViewport: () => setViewport(getCenteredViewport(document)),
     resizeShape,
@@ -802,9 +1074,11 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     restoreSelectedSeats,
     redo,
     selectSeat,
+    selectSeatsInShape,
     selectShape,
     selectShapes,
     setActiveTool,
+    setReferenceImageUrl,
     setReferenceImageVisible,
     setViewport,
     toggleShapeLocked,
@@ -814,6 +1088,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     translateShapesBy,
     undo,
     updateSeatLayout,
+    updateSeatLayoutAndGenerate,
     updateShape,
   };
 }

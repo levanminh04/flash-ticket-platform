@@ -2,15 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { useTranslation } from "react-i18next";
-import { QrCode, Ticket, X } from "lucide-react";
+import { toast } from "react-toastify";
+import {
+  Check,
+  Copy,
+  LoaderCircle,
+  LogIn,
+  QrCode,
+  Ticket,
+  X,
+} from "lucide-react";
 import AccountSidebar from "../../components/account/AccountSidebar";
-import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import OrderLookupForm, { orderIdPattern } from "../../components/common/OrderLookupForm";
+import Footer from "../../components/common/Footer";
 import { ticketService, OrderTicketsView, TicketView } from "../../services/ticketService";
 import { paymentProblem } from "../../services/paymentService";
+import "./my-tickets.css";
 
 export default function MyTicketsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
   const [params, setParams] = useSearchParams();
   const orderId = (params.get("orderId") || "").toLowerCase();
@@ -24,116 +34,273 @@ export default function MyTicketsPage() {
   const selectedTicket = selected?.scope === scope ? selected.ticket : null;
   const [qrUrl, setQrUrl] = useState("");
   const [qrError, setQrError] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const authenticated = initialized && keycloak.authenticated;
   const validId = orderIdPattern.test(orderId);
+  const isEn = i18n.resolvedLanguage === "en";
+
+  const handleCopyTicketId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+    } catch {
+      toast.error(isEn ? "Could not copy the ticket ID." : "Không thể sao chép mã vé.");
+      return;
+    }
+
+    setCopiedId(id);
+    window.setTimeout(() => {
+      setCopiedId(prev => (prev === id ? null : prev));
+    }, 1500);
+  };
 
   useEffect(() => {
-    setStored(null); setError(""); setSelected(null);
-    if (!authenticated || !validId) { setLoading(false); return; }
+    setStored(null);
+    setError("");
+    setSelected(null);
+    if (!authenticated || !validId) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
-    void ticketService.getOrderTickets(orderId, controller.signal).then(data => { if (!controller.signal.aborted) setStored({ scope, data }); }).catch(error => {
-      if (!controller.signal.aborted) setError(paymentProblem(error).message || t("ticketV1.loadFailed"));
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void ticketService
+      .getOrderTickets(orderId, controller.signal)
+      .then(result => {
+        if (!controller.signal.aborted) setStored({ scope, data: result });
+      })
+      .catch(err => {
+        if (!controller.signal.aborted) setError(paymentProblem(err).message || t("ticketV1.loadFailed"));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [authenticated, scope, orderId, validId, refresh, t]);
 
   useEffect(() => {
-    setQrUrl(""); setQrError("");
+    setQrUrl("");
+    setQrError("");
     if (!selectedTicket || !authenticated) return;
     const controller = new AbortController();
     const dialog = dialogRef.current;
     dialog?.showModal();
     let objectUrl = "";
-    void ticketService.getQrImage(selectedTicket.ticketId, controller.signal).then(blob => {
-      if (!controller.signal.aborted) { objectUrl = URL.createObjectURL(blob); setQrUrl(objectUrl); }
-    }).catch(() => { if (!controller.signal.aborted) setQrError(t("ticketV1.qrFailed")); });
-    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); dialog?.close(); triggerRef.current?.focus(); };
+    void ticketService
+      .getQrImage(selectedTicket.ticketId, controller.signal)
+      .then(blob => {
+        if (!controller.signal.aborted) {
+          objectUrl = URL.createObjectURL(blob);
+          setQrUrl(objectUrl);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setQrError(t("ticketV1.qrFailed"));
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      dialog?.close();
+      triggerRef.current?.focus();
+    };
   }, [selectedTicket, authenticated, t]);
+
+  const issuanceTone = (state: OrderTicketsView["issuanceState"]) =>
+    state === "COMPLETED" ? "is-success" : state === "FAILED" ? "is-danger" : "is-warning";
+
+  const ticketStateTone = (state: TicketView["state"]) =>
+    state === "VALID" ? "is-success" : state === "VOID" ? "is-danger" : "is-neutral";
 
   return (
     <div className="my-tickets-page">
-      <AccountCategoryNav />
       <div className="container account-layout-container">
         <AccountSidebar />
         <main className="account-main-content ticket-v1-page">
-          <h1 className="profile-page-title">{t("nav.myTickets")}</h1>
-          <section className="profile-card profile-editor-card">
-            <div className="profile-editor-header">
-              <p>{t("ticketV1.lookupNotice")}</p>
-            </div>
-            {!initialized ? (
-              <p role="status">{t("ticketV1.loading")}</p>
-            ) : !authenticated ? (
-              <div>
-                <p>{t("paymentV1.loginRequired")}</p>
-                <button className="btn btn-primary" onClick={() => void keycloak.login({ redirectUri: window.location.href })}>
-                  {t("auth.signIn")}
-                </button>
-              </div>
-            ) : (
-              <>
-                <OrderLookupForm key={orderId} orderId={orderId} onLookup={id => {
-                  if (id === orderId) setRefresh(value => value + 1);
-                  else setParams({ orderId: id });
-                }} />
-                {orderId && !validId && <p role="status">{t("paymentV1.missingOrder")}</p>}
-                {validId && (
-                  <div className="payment-v1-refresh">
-                    <button className="btn btn-outline" disabled={loading} onClick={() => setRefresh(value => value + 1)}>
-                      {t("paymentV1.refresh")}
-                    </button>
-                    {loading && <span role="status">{t("ticketV1.loading")}</span>}
-                  </div>
-                )}
-                {error && <p role="alert" className="payment-v1-error">{error}</p>}
-              </>
-            )}
-          </section>
+          <div className="ticket-v1-header">
+            <h1 className="profile-page-title">{t("nav.myTickets")}</h1>
+          </div>
 
-          {data && authenticated && (
-            <section className="profile-card profile-editor-card ticket-results-card" aria-label={t("nav.myTickets")}>
-              <div className="profile-editor-header">
-                <h2>{t(`issuanceState.${data.issuanceState}`)}</h2>
-                {data.issuanceState === "PENDING" && <p>{t("ticketV1.pendingNotice")}</p>}
-                {data.issuanceState === "FAILED" && <p>{t("ticketV1.failedNotice")}</p>}
-                {data.issuanceState === "COMPLETED" && data.tickets.length === 0 && <p>{t("ticketV1.empty")}</p>}
-              </div>
-              {data.issuanceState === "COMPLETED" && data.tickets.length > 0 && (
-                <div className="ticket-v1-list">
-                  {data.tickets.map(ticket => (
-                    <article key={ticket.ticketId} className="ticket-v1-item">
-                      <Ticket size={22} aria-hidden="true" />
-                      <div>
-                        <h3>{ticket.ticketTypeName}</h3>
-                        <p>{ticket.seatLabel || t("ticketV1.noSeat")}</p>
-                        <p className="ticket-v1-state">{t(`ticketState.${ticket.state}`)}</p>
-                      </div>
-                      {ticket.state === "VALID" && (
-                        <button className="btn btn-outline" onClick={event => {
-                          triggerRef.current = event.currentTarget;
-                          setSelected({ scope, ticket });
-                        }}>
-                          <QrCode size={18} aria-hidden="true" />
-                          {t("ticketV1.viewQr")}
-                        </button>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
-              <Link className="payment-v1-return" to={`/payment-result?orderId=${orderId}`}>{t("paymentV1.checkPayment")}</Link>
+          {!initialized ? (
+            <section className="tix-tickets-state-card" role="status">
+              <LoaderCircle className="tix-tickets-spinner" size={24} aria-hidden="true" />
+              <p>{t("ticketV1.loading")}</p>
             </section>
+          ) : !authenticated ? (
+            <section className="tix-tickets-state-card">
+              <span className="tix-tickets-state-icon">
+                <LogIn size={24} aria-hidden="true" />
+              </span>
+              <p>{t("paymentV1.loginRequired")}</p>
+              <button
+                type="button"
+                className="tix-ticket-btn-primary"
+                onClick={() => void keycloak.login({ redirectUri: window.location.href })}
+              >
+                {t("auth.signIn")}
+              </button>
+            </section>
+          ) : (
+            <>
+              <section className="tix-tickets-lookup-card">
+                <p className="tix-tickets-notice">{t("ticketV1.lookupNotice")}</p>
+                <OrderLookupForm
+                  key={orderId}
+                  orderId={orderId}
+                  onLookup={id => {
+                    if (id === orderId) setRefresh(value => value + 1);
+                    else setParams({ orderId: id });
+                  }}
+                />
+                {orderId && !validId && (
+                  <p role="status" className="tix-tickets-hint">{t("paymentV1.missingOrder")}</p>
+                )}
+                {error && <p role="alert" className="tix-tickets-error">{error}</p>}
+              </section>
+
+              {validId && loading && !data && (
+                <section className="tix-tickets-state-card" role="status">
+                  <LoaderCircle className="tix-tickets-spinner" size={24} aria-hidden="true" />
+                  <p>{t("ticketV1.loading")}</p>
+                </section>
+              )}
+
+              {data && (
+                <section className="tix-tickets-results-card" aria-label={t("nav.myTickets")}>
+                  <header className="tix-tickets-results-header">
+                    <div className="tix-tickets-results-title-wrap">
+                      <div className="tix-tickets-results-title-row">
+                        <h2>{t(`issuanceState.${data.issuanceState}`)}</h2>
+                        <span className={`tix-ticket-badge ${issuanceTone(data.issuanceState)}`}>
+                          {t(`issuanceState.${data.issuanceState}`)}
+                        </span>
+                      </div>
+                      {data.issuanceState === "PENDING" && (
+                        <p className="tix-tickets-results-desc">{t("ticketV1.pendingNotice")}</p>
+                      )}
+                      {data.issuanceState === "FAILED" && (
+                        <p className="tix-tickets-results-desc">{t("ticketV1.failedNotice")}</p>
+                      )}
+                      {data.issuanceState === "COMPLETED" && data.tickets.length === 0 && (
+                        <p className="tix-tickets-results-desc">{t("ticketV1.empty")}</p>
+                      )}
+                    </div>
+                  </header>
+
+                  <div className="tix-tickets-results-body">
+                    {data.issuanceState === "COMPLETED" && data.tickets.length > 0 && (
+                      <ul className="tix-tickets-list">
+                        {data.tickets.map(ticket => (
+                          <li key={ticket.ticketId} className="tix-ticket-card">
+                            <div className="tix-ticket-main">
+                              <span className="tix-ticket-icon" aria-hidden="true">
+                                <Ticket size={20} />
+                              </span>
+                              <div className="tix-ticket-info">
+                                <div className="tix-ticket-title-row">
+                                  <h3>{ticket.ticketTypeName}</h3>
+                                  <span className={`tix-ticket-badge ${ticketStateTone(ticket.state)}`}>
+                                    {t(`ticketState.${ticket.state}`)}
+                                  </span>
+                                </div>
+
+                                <div className="tix-ticket-id-row">
+                                  <span className="tix-ticket-ordinal">#{ticket.ordinal}</span>
+                                  <div className="tix-ticket-id-pill">
+                                    <span className="tix-ticket-id-code">{ticket.ticketId}</span>
+                                    <button
+                                      type="button"
+                                      className="tix-ticket-copy-btn"
+                                      onClick={() => void handleCopyTicketId(ticket.ticketId)}
+                                      aria-label={ticket.ticketId}
+                                      title={ticket.ticketId}
+                                    >
+                                      {copiedId === ticket.ticketId ? (
+                                        <Check size={13} className="is-copied" aria-hidden="true" />
+                                      ) : (
+                                        <Copy size={13} aria-hidden="true" />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {ticket.seatLabel && (
+                                  <p className="tix-ticket-seat">{ticket.seatLabel}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {ticket.state === "VALID" && (
+                              <button
+                                type="button"
+                                className="tix-ticket-btn-primary"
+                                onClick={event => {
+                                  triggerRef.current = event.currentTarget;
+                                  setSelected({ scope, ticket });
+                                }}
+                              >
+                                <QrCode size={16} aria-hidden="true" />
+                                <span>{t("ticketV1.viewQr")}</span>
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="tix-tickets-footer-bar">
+                      <Link className="tix-ticket-btn-secondary" to="/my-orders">
+                        {isEn ? "My orders" : "Đơn hàng của tôi"}
+                      </Link>
+                      <Link className="tix-ticket-btn-primary" to={`/payment-result?orderId=${orderId}`}>
+                        {t("paymentV1.checkPayment")}
+                      </Link>
+                    </div>
+                  </div>
+                </section>
+              )}
+            </>
           )}
-          {selectedTicket && authenticated && <dialog className="ticket-qr-dialog" ref={dialogRef} onCancel={() => setSelected(null)} aria-labelledby="ticket-qr-title">
-            <header><h2 id="ticket-qr-title">{selectedTicket.ticketTypeName}</h2><button className="btn btn-outline" aria-label={t("common.close")} onClick={() => setSelected(null)}><X size={20} /></button></header>
-            {qrError ? <p role="alert">{qrError}</p> : qrUrl ? <img src={qrUrl} alt={t("ticketV1.qrAlt", { seat: selectedTicket.seatLabel || selectedTicket.ordinal })} width={280} height={280} /> : <p role="status">{t("ticketV1.loading")}</p>}
-            <p>{t("ticketV1.qrPrivacy")}</p>
-          </dialog>}
+
+          {selectedTicket && authenticated && (
+            <dialog
+              className="tix-qr-dialog"
+              ref={dialogRef}
+              onCancel={() => setSelected(null)}
+              onClick={event => {
+                if (event.target === dialogRef.current) setSelected(null);
+              }}
+              aria-label={t("ticketV1.viewQr")}
+            >
+              <div className="tix-qr-dialog-surface">
+                <button
+                  type="button"
+                  className="tix-qr-close-btn"
+                  aria-label={t("common.close")}
+                  onClick={() => setSelected(null)}
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+                <div className="tix-qr-frame">
+                  {qrError ? (
+                    <p role="alert" className="tix-tickets-error">{qrError}</p>
+                  ) : qrUrl ? (
+                    <img
+                      src={qrUrl}
+                      alt={t("ticketV1.qrAlt", { seat: selectedTicket.seatLabel || selectedTicket.ordinal })}
+                      width={260}
+                      height={260}
+                    />
+                  ) : (
+                    <LoaderCircle className="tix-tickets-spinner" size={24} aria-hidden="true" />
+                  )}
+                </div>
+              </div>
+            </dialog>
+          )}
         </main>
       </div>
+      <Footer />
     </div>
   );
 }
