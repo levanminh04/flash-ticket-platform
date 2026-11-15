@@ -5,6 +5,8 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -46,6 +48,16 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                     .requestMatchers("/api/v1/me", "/api/v1/me/avatar")
                     .hasAnyRole("BUYER", "ORGANIZER", "ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/organizer-applications")
+                    .access(
+                        AuthorizationManagers.allOf(
+                            AuthorityAuthorizationManager.hasRole("BUYER"),
+                            (authentication, context) ->
+                                new org.springframework.security.authorization
+                                    .AuthorizationDecision(
+                                    authentication.get().getAuthorities().stream()
+                                        .noneMatch(
+                                            role -> "ROLE_ADMIN".equals(role.getAuthority())))))
                     .requestMatchers(HttpMethod.GET, "/api/v1/organizer-applications")
                     .hasAnyRole("BUYER", "ORGANIZER")
                     .requestMatchers(

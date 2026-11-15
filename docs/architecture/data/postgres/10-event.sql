@@ -13,7 +13,8 @@ CREATE TABLE categories (
 );
 CREATE TABLE venues (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name nonempty_text NOT NULL,
-  address nonempty_text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+  address nonempty_text NOT NULL, description text, image_url text, google_maps_url text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organizer_subject nonempty_text NOT NULL,

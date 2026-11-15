@@ -16,6 +16,14 @@ public final class EventViews {
 
   public record Lookup(UUID id, String name, String address) {}
 
+  public record Venue(
+      UUID id,
+      String name,
+      String address,
+      String description,
+      String imageUrl,
+      String googleMapsUrl) {}
+
   public record Summary(
       UUID eventId,
       String title,

@@ -183,12 +183,16 @@ public class EventRepository {
                 "SELECT EXISTS(SELECT 1 FROM event_schema.tbl_categories WHERE id=:id)",
                 Map.of("id", draft.categoryId()),
                 Boolean.class))) throw EventProblem.invalid("categoryId");
-    if (draft.venueId() != null
-        && !Boolean.TRUE.equals(
-            jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM event_schema.tbl_venues WHERE id=:id)",
-                Map.of("id", draft.venueId()),
-                Boolean.class))) throw EventProblem.invalid("venueId");
+    if (draft.venueId() != null && !venueExists(draft.venueId()))
+      throw EventProblem.invalid("venueId");
+  }
+
+  public boolean venueExists(UUID id) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM event_schema.tbl_venues WHERE id=:id)",
+            Map.of("id", id),
+            Boolean.class));
   }
 
   public void insert(UUID id, String organizer, DraftConfiguration draft) {
@@ -266,13 +270,84 @@ public class EventRepository {
             new EventViews.Lookup(rs.getObject("id", UUID.class), rs.getString("name"), null));
   }
 
-  public List<EventViews.Lookup> venues() {
+  private static final String VENUE_COLUMNS =
+      "id,name,address,description,image_url,google_maps_url";
+
+  public List<EventViews.Venue> venues() {
     return jdbc.query(
-        "SELECT id,name,address FROM event_schema.tbl_venues ORDER BY name,id",
+        "SELECT " + VENUE_COLUMNS + " FROM event_schema.tbl_venues ORDER BY name,id",
         Map.of(),
-        (rs, n) ->
-            new EventViews.Lookup(
-                rs.getObject("id", UUID.class), rs.getString("name"), rs.getString("address")));
+        EventRepository::mapVenue);
+  }
+
+  public EventViews.Venue createVenue(
+      UUID id,
+      String name,
+      String address,
+      String description,
+      String googleMapsUrl,
+      String imageUrl) {
+    return jdbc.queryForObject(
+        """
+        INSERT INTO event_schema.tbl_venues(id,name,address,description,google_maps_url,image_url)
+        VALUES (:id,:name,:address,NULLIF(:description,''),NULLIF(:googleMapsUrl,''),:imageUrl)
+        RETURNING
+        """
+            + VENUE_COLUMNS,
+        venueParameters(id, name, address, description, googleMapsUrl, imageUrl),
+        EventRepository::mapVenue);
+  }
+
+  public Optional<EventViews.Venue> updateVenue(
+      UUID id,
+      String name,
+      String address,
+      String description,
+      String googleMapsUrl,
+      String imageUrl) {
+    return jdbc
+        .query(
+            """
+            UPDATE event_schema.tbl_venues
+            SET name=COALESCE(:name,name), address=COALESCE(:address,address),
+                description=CASE WHEN CAST(:description AS text) IS NULL THEN description
+                                 ELSE NULLIF(:description,'') END,
+                google_maps_url=CASE WHEN CAST(:googleMapsUrl AS text) IS NULL THEN google_maps_url
+                                     ELSE NULLIF(:googleMapsUrl,'') END,
+                image_url=COALESCE(:imageUrl,image_url)
+            WHERE id=:id
+            RETURNING
+            """
+                + VENUE_COLUMNS,
+            venueParameters(id, name, address, description, googleMapsUrl, imageUrl),
+            EventRepository::mapVenue)
+        .stream()
+        .findFirst();
+  }
+
+  private static MapSqlParameterSource venueParameters(
+      UUID id,
+      String name,
+      String address,
+      String description,
+      String googleMapsUrl,
+      String imageUrl) {
+    return new MapSqlParameterSource("id", id)
+        .addValue("name", name)
+        .addValue("address", address)
+        .addValue("description", description)
+        .addValue("googleMapsUrl", googleMapsUrl)
+        .addValue("imageUrl", imageUrl);
+  }
+
+  private static EventViews.Venue mapVenue(ResultSet rs, int row) throws SQLException {
+    return new EventViews.Venue(
+        rs.getObject("id", UUID.class),
+        rs.getString("name"),
+        rs.getString("address"),
+        rs.getString("description"),
+        rs.getString("image_url"),
+        rs.getString("google_maps_url"));
   }
 
   private void replaceChildren(UUID id, DraftConfiguration draft) {
