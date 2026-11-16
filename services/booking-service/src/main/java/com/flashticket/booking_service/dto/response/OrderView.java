@@ -19,6 +19,7 @@ import lombok.Getter;
 public final class OrderView {
   @NotNull private final UUID orderId;
   @NotNull private final UUID eventId;
+  private final String eventTitle;
   @NotNull private final OrderState state;
   @NotBlank @Email private final String customerEmail;
   @NotNull private final Currency currency;

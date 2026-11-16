@@ -7,9 +7,9 @@ import com.flashticket.booking_service.dto.snapshot.PromotionConfig;
 import com.flashticket.booking_service.entity.PromotionUsage;
 import com.flashticket.booking_service.enums.*;
 import com.flashticket.booking_service.exception.*;
-import com.flashticket.booking_service.mapper.OrderMapper;
 import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.OrderRepository;
+import com.flashticket.booking_service.order.service.OrderViewAssembler;
 import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
 import com.flashticket.booking_service.promotion.service.PromotionService;
@@ -30,7 +30,7 @@ public class PromotionServiceImpl implements PromotionService {
   private final OrderRepository orderRepository;
   private final EventSalesSnapshotRepository eventSalesSnapshotRepository;
   private final ReservationRepository reservationRepository;
-  private final OrderMapper orderMapper;
+  private final OrderViewAssembler orderViewAssembler;
   private final ApplicationEventPublisher applicationEventPublisher;
 
   @Value("${booking.reservation.lock-timeout}")
@@ -92,7 +92,7 @@ public class PromotionServiceImpl implements PromotionService {
                   .configuration()
                   .code()
                   .trim()
-                  .toUpperCase(Locale.ROOT))) return orderMapper.toView(lockedOrder);
+                  .toUpperCase(Locale.ROOT))) return orderViewAssembler.toView(lockedOrder);
       throw new BusinessException(ErrorCode.ORDER_ALREADY_HAS_PROMOTION);
     }
     var matchingPromotions =
@@ -150,7 +150,7 @@ public class PromotionServiceImpl implements PromotionService {
     orderRepository.save(lockedOrder);
     applicationEventPublisher.publishEvent(
         new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
-    return orderMapper.toView(lockedOrder);
+    return orderViewAssembler.toView(lockedOrder);
   }
 
   private BigDecimal calculatePromotionDiscount(

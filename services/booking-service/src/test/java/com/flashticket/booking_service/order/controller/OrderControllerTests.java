@@ -236,6 +236,7 @@ class OrderControllerTests {
             new OrderView(
                 id,
                 UUID.randomUUID(),
+                null,
                 OrderState.CANCELLED,
                 "buyer@example.com",
                 Currency.VND,
@@ -318,6 +319,7 @@ class OrderControllerTests {
             new OrderView(
                 id,
                 UUID.randomUUID(),
+                null,
                 OrderState.PENDING_PAYMENT,
                 "buyer@example.com",
                 Currency.VND,
@@ -422,6 +424,7 @@ class OrderControllerTests {
         new OrderView(
             orderId,
             eventId,
+            null,
             OrderState.PENDING_PAYMENT,
             "buyer@example.com",
             Currency.VND,
@@ -538,6 +541,7 @@ class OrderControllerTests {
             new OrderView(
                 id,
                 eventId,
+                "Đêm nhạc Việt – 東京",
                 OrderState.PENDING_PAYMENT,
                 "buyer@example.com",
                 Currency.VND,
@@ -557,6 +561,7 @@ class OrderControllerTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orderId").value(id.toString()))
         .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+        .andExpect(jsonPath("$.eventTitle").value("Đêm nhạc Việt – 東京"))
         .andExpect(jsonPath("$.state").value("PENDING_PAYMENT"))
         .andExpect(jsonPath("$.total").value("180"))
         .andExpect(jsonPath("$.status").doesNotExist());
@@ -604,6 +609,7 @@ class OrderControllerTests {
         new OrderView(
             id,
             UUID.randomUUID(),
+            "Đêm nhạc Việt – 東京",
             OrderState.COMPLETED,
             "buyer@example.com",
             Currency.VND,
@@ -631,6 +637,7 @@ class OrderControllerTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].orderId").value(id.toString()))
         .andExpect(jsonPath("$.items[0].state").value("COMPLETED"))
+        .andExpect(jsonPath("$.items[0].eventTitle").value("Đêm nhạc Việt – 東京"))
         .andExpect(jsonPath("$.page").value(2))
         .andExpect(jsonPath("$.size").value(5))
         .andExpect(jsonPath("$.totalElements").value(11))

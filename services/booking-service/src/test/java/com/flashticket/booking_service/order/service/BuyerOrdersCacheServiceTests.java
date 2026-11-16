@@ -46,6 +46,7 @@ class BuyerOrdersCacheServiceTests {
               new OrderView(
                   ORDER,
                   EVENT,
+                  "Đêm nhạc Việt – 東京",
                   OrderState.COMPLETED,
                   "buyer@example.com",
                   Currency.VND,

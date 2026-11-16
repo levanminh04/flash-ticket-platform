@@ -13,7 +13,7 @@ booking:
     key-prefix: ${BOOKING_SALES_STATISTICS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:sales-statistics:v1:}
   buyer-orders-cache:
     ttl: ${BOOKING_BUYER_ORDERS_CACHE_TTL:PT24H}
-    key-prefix: ${BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:buyer-orders:v1:}
+    key-prefix: ${BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:buyer-orders:v2:}
   event-cancellation:
     enabled: true
     poll-interval: PT5S

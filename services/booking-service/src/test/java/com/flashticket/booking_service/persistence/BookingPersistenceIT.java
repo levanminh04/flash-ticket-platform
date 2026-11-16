@@ -111,6 +111,7 @@ import tools.jackson.databind.json.JsonMapper;
   com.flashticket.booking_service.promotion.service.impl.PromotionServiceImpl.class,
   OrderServiceImpl.class,
   OrderMapperImpl.class,
+  com.flashticket.booking_service.order.service.OrderViewAssembler.class,
   MappingValueConverter.class,
   JacksonAutoConfiguration.class,
   BookingJsonConfig.class,
@@ -11229,6 +11230,209 @@ class BookingPersistenceIT {
 
   @Test
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void buyerOrderSectorLookupUsesOneBatchRegardlessOfPageSize() {
+    var statistics =
+        em.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+    boolean originallyEnabled = statistics.isStatisticsEnabled();
+    try {
+      String standingBuyer = "buyer-standing-batch-" + UUID.randomUUID();
+      String quantityBuyer = "buyer-quantity-batch-" + UUID.randomUUID();
+      var quantityConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 20);
+      for (int i = 0; i < 7; i++) {
+        // Mỗi đơn thuộc sector khác nhau: first-level cache không che được N+1.
+        var standingConfig =
+            seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.STANDING, 20, 20);
+        var standing =
+            orderService.createOrder(
+                standingBuyer, UUID.randomUUID(), createOrderRequest(standingConfig, 1));
+        // Mọi trang đều chứa dữ liệu legacy, không phụ thuộc thứ tự created_at.
+        jdbc.update(
+            "update booking_schema.tbl_order_items set selection_snapshot = '{\"schemaVersion\":1,\"seats\":null}'::jsonb where order_id = ?",
+            standing.getOrderId());
+        orderService.createOrder(
+            quantityBuyer, UUID.randomUUID(), createOrderRequest(quantityConfig, 1));
+      }
+      statistics.setStatisticsEnabled(true);
+      for (int pageSize : List.of(2, 6)) {
+        statistics.clear();
+        var standingPage = orderService.getOrders(standingBuyer, null, 0, pageSize);
+        long standingQueries = statistics.getPrepareStatementCount();
+        assertThat(standingPage.getItems())
+            .hasSize(pageSize)
+            .allSatisfy(order -> assertThat(order.getItems().getFirst().getSeats()).isEmpty());
+        assertThat(standingPage.getTotalElements()).isEqualTo(7);
+        assertThat(standingQueries)
+            .as("IDs/title + count + orders/items + sector batch, pageSize=%s", pageSize)
+            .isEqualTo(4);
+
+        statistics.clear();
+        var quantityPage = orderService.getOrders(quantityBuyer, null, 0, pageSize);
+        long quantityQueries = statistics.getPrepareStatementCount();
+        assertThat(quantityPage.getItems()).hasSize(pageSize);
+        assertThat(quantityQueries)
+            .as("QUANTITY must not load sectors, pageSize=%s", pageSize)
+            .isEqualTo(3);
+      }
+    } finally {
+      statistics.setStatisticsEnabled(originallyEnabled);
+      statistics.clear();
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void loadsBuyerOrderTitlesAfterIdPagination() {
+    var statistics =
+        em.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+    boolean originallyEnabled = statistics.isStatisticsEnabled();
+    try {
+      String buyer = "buyer-titles-" + UUID.randomUUID();
+      var namedConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 20);
+      var nullConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 20);
+      var absentConfig = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 20);
+      var standingConfig =
+          seedOrderCreationConfiguration(SalesMode.SEAT_MAP, SectorType.STANDING, 30, 20);
+      var first =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(namedConfig, 1));
+      var repeated =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(namedConfig, 1));
+      orderService.cancelOrder(buyer, repeated.getOrderId());
+      orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(nullConfig, 1));
+      orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(absentConfig, 1));
+      orderService.createOrder(
+          buyer,
+          UUID.randomUUID(),
+          new CreateOrderRequest(
+              standingConfig.eventId(),
+              "buyer@example.com",
+              new OrderSelection.StandingSelection(
+                  standingConfig.sectors().getFirst().sectorId(),
+                  standingConfig.ticketTypes().stream()
+                      .map(type -> new OrderSelection.QuantityItem(type.ticketTypeId(), 1))
+                      .toList())));
+      orderService.createOrder(
+          "other-" + buyer, UUID.randomUUID(), createOrderRequest(namedConfig, 1));
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=jsonb_set(configuration_snapshot, '{eventTitle}', to_jsonb(cast(? as text))) where event_id=?",
+          "Đêm nhạc Việt – 東京",
+          namedConfig.eventId());
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=jsonb_set(configuration_snapshot, '{eventTitle}', 'null'::jsonb) where event_id=?",
+          nullConfig.eventId());
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=configuration_snapshot - 'eventTitle' where event_id=?",
+          absentConfig.eventId());
+      jdbc.update(
+          "update booking_schema.tbl_order_items set selection_snapshot='{\"schemaVersion\":1}'::jsonb where order_id in (?, ?)",
+          first.getOrderId(),
+          repeated.getOrderId());
+      // Cố định thời gian bằng nhau; UUID phải được sắp theo PostgreSQL, không theo UUID.compareTo.
+      jdbc.update(
+          "update booking_schema.tbl_orders set created_at='2026-11-01T00:00:00Z' where buyer_subject=?",
+          buyer);
+      var expectedIds =
+          jdbc.queryForList(
+              "select id from booking_schema.tbl_orders where buyer_subject=? order by created_at desc, id desc",
+              UUID.class,
+              buyer);
+      statistics.setStatisticsEnabled(true);
+      statistics.clear();
+      var fullPage = orderService.getOrders(buyer, null, 0, 10);
+      assertThat(statistics.getPrepareStatementCount()).isEqualTo(4);
+      assertThat(fullPage.getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactlyElementsOf(expectedIds);
+      assertThat(fullPage.getTotalElements()).isEqualTo(5);
+      for (var view : fullPage.getItems()) {
+        if (view.getEventId().equals(namedConfig.eventId())) {
+          assertThat(view.getEventTitle()).isEqualTo("Đêm nhạc Việt – 東京");
+          assertThat(view.getItems().getFirst().getSeats()).isEmpty();
+        } else if (view.getEventId().equals(standingConfig.eventId())) {
+          assertThat(view.getEventTitle()).isEqualTo("Concert");
+          assertThat(view.getItems()).hasSize(2);
+        } else {
+          assertThat(view.getEventTitle()).isNull();
+        }
+      }
+      for (int page = 0; page < 3; page++) {
+        var result = orderService.getOrders(buyer, null, page, 2);
+        assertThat(result.getItems())
+            .extracting(OrderView::getOrderId)
+            .containsExactlyElementsOf(expectedIds.subList(page * 2, Math.min(page * 2 + 2, 5)));
+        assertThat(result.getTotalElements()).isEqualTo(5);
+        assertThat(result.getTotalPages()).isEqualTo(3);
+      }
+      assertThat(orderService.getOrders(buyer, OrderState.CANCELLED, 0, 2).getItems())
+          .extracting(OrderView::getOrderId)
+          .containsExactly(repeated.getOrderId());
+      assertThat(
+              orderService.getOrders(buyer, OrderState.PENDING_PAYMENT, 0, 10).getTotalElements())
+          .isEqualTo(4);
+      statistics.clear();
+      var pastEnd = orderService.getOrders(buyer, null, 9, 2);
+      assertThat(pastEnd.getItems()).isEmpty();
+      assertThat(pastEnd.getTotalElements()).isEqualTo(5);
+      assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+    } finally {
+      statistics.setStatisticsEnabled(originallyEnabled);
+      statistics.clear();
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void loadsBuyerOrderDetailTitleWithoutChangingOwnership() {
+    var statistics =
+        em.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+    boolean originallyEnabled = statistics.isStatisticsEnabled();
+    try {
+      String buyer = "buyer-detail-title-" + UUID.randomUUID();
+      var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 10);
+      var created =
+          orderService.createOrder(buyer, UUID.randomUUID(), createOrderRequest(config, 1));
+      assertThat(created.getEventTitle()).isNull();
+      jdbc.update(
+          "update booking_schema.tbl_order_items set selection_snapshot='{\"schemaVersion\":1,\"seats\":null}'::jsonb where order_id=?",
+          created.getOrderId());
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=jsonb_set(configuration_snapshot, '{eventTitle}', to_jsonb(cast(? as text))) where event_id=?",
+          "Đêm nhạc Việt – 東京",
+          config.eventId());
+      statistics.setStatisticsEnabled(true);
+      statistics.clear();
+      var detail = orderService.getOrder(buyer, created.getOrderId());
+      assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+      assertThat(detail.getEventTitle()).isEqualTo("Đêm nhạc Việt – 東京");
+      assertThat(detail.getItems().getFirst().getSeats()).isEmpty();
+      for (UUID orderId : List.of(created.getOrderId(), UUID.randomUUID())) {
+        statistics.clear();
+        assertThatThrownBy(() -> orderService.getOrder("other-" + buyer, orderId))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ORDER_NOT_FOUND);
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
+      }
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=jsonb_set(configuration_snapshot, '{eventTitle}', 'null'::jsonb) where event_id=?",
+          config.eventId());
+      assertThat(orderService.getOrder(buyer, created.getOrderId()).getEventTitle()).isNull();
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set configuration_snapshot=configuration_snapshot - 'eventTitle' where event_id=?",
+          config.eventId());
+      assertThat(orderService.getOrder(buyer, created.getOrderId()).getEventTitle()).isNull();
+    } finally {
+      statistics.setStatisticsEnabled(originallyEnabled);
+      statistics.clear();
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void listsBuyerOrdersNewestFirstWithTotals() {
     try {
       var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 50, 20);
@@ -12011,10 +12215,11 @@ class BookingPersistenceIT {
       assertThat(buyerOrdersCacheService.getOrders(buyer, null, 0, 10).getItems()).isEmpty();
       buyerOrdersCacheService.getOrders(buyer, null, 0, 10);
       org.mockito.Mockito.verify(orders)
-          .findOrderIdsByBuyerSubject(
+          .findBuyerOrderPageWithTitles(
               org.mockito.ArgumentMatchers.eq(buyer),
               org.mockito.ArgumentMatchers.isNull(),
-              org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class));
+              org.mockito.ArgumentMatchers.eq(10),
+              org.mockito.ArgumentMatchers.eq(0L));
       String emptyGeneration = redis.get(generationKey);
       var transaction = new TransactionTemplate(transactionManager);
       UUID key = UUID.randomUUID();

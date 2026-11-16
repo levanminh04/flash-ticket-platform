@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.order.repository;
 
+import com.flashticket.booking_service.dto.projection.BuyerOrderPageRow;
 import com.flashticket.booking_service.dto.projection.DailyOrderSalesTotals;
 import com.flashticket.booking_service.dto.projection.DailyTicketSalesTotals;
 import com.flashticket.booking_service.dto.projection.EventOrderSalesTotals;
@@ -67,26 +68,43 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   Optional<Order> findLockedByIdAndBuyerSubject(UUID id, String buyerSubject);
 
-  Optional<Order> findByIdAndBuyerSubject(UUID id, String buyerSubject);
+  @Query(
+      "select distinct o from Order o left join fetch o.items where o.id = :id and o.buyerSubject = :buyerSubject")
+  Optional<Order> findByIdAndBuyerSubject(
+      @Param("id") UUID id, @Param("buyerSubject") String buyerSubject);
 
-  // Deferred join bước 1: chỉ phân trang trên tbl_orders để DB làm limit/offset + count.
+  // PostgreSQL: phân trang đơn trước join tên; không fetch items hoặc cả JSON cấu hình.
   @Query(
       value =
           """
-          select o.id from Order o
-          where o.buyerSubject = :buyerSubject
-            and (:state is null or o.lifecycleState = :state)
+          select p.id as "orderId",
+                 s.configuration_snapshot ->> 'eventTitle' as "eventTitle"
+          from (
+            select o.id, o.event_id, o.created_at
+            from booking_schema.tbl_orders o
+            where o.buyer_subject = :buyerSubject
+              and (cast(:state as text) is null or o.lifecycle_state = cast(:state as text))
+            order by o.created_at desc, o.id desc
+            limit :pageSize offset :pageOffset
+          ) p
+          left join booking_schema.tbl_event_sales_snapshots s on s.event_id = p.event_id
+          order by p.created_at desc, p.id desc
           """,
-      countQuery =
-          """
-          select count(o) from Order o
-          where o.buyerSubject = :buyerSubject
-            and (:state is null or o.lifecycleState = :state)
-          """)
-  Page<UUID> findOrderIdsByBuyerSubject(
+      nativeQuery = true)
+  List<BuyerOrderPageRow> findBuyerOrderPageWithTitles(
       @Param("buyerSubject") String buyerSubject,
-      @Param("state") OrderState state,
-      Pageable pageable);
+      @Param("state") String state,
+      @Param("pageSize") int pageSize,
+      @Param("pageOffset") long pageOffset);
+
+  @Query(
+      """
+      select count(o) from Order o
+      where o.buyerSubject = :buyerSubject
+        and (:state is null or o.lifecycleState = :state)
+      """)
+  long countBuyerOrdersBySubjectAndState(
+      @Param("buyerSubject") String buyerSubject, @Param("state") OrderState state);
 
   // Deferred join bước 2: nạp đơn + item của đúng các id trên trang, không kèm Pageable
   // nên Hibernate không phải phân trang trong bộ nhớ khi fetch join collection.
