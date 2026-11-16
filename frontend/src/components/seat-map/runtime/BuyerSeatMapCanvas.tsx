@@ -1,18 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Group,
   Layer,
-  Image as CanvasImage,
-  Rect,
   Stage,
 } from "react-konva";
 import { PublicSeatMap, PublicSeatSector, PublicSeat } from "../../../types/api";
-import { SectorRenderer } from "../shared/SectorRenderer";
+import { SectorRenderer, SharedSector } from "../shared/SectorRenderer";
 import { SeatRenderer } from "../shared/SeatRenderer";
 
 interface BuyerSeatMapCanvasProps {
   seatMap: PublicSeatMap;
   zoom: number;
+  resetViewKey?: number;
   selectedSeatIds: string[];
   selectedSectorId?: string | null;
   getSeatColor?: (sector: PublicSeatSector, seat: PublicSeat) => string;
@@ -21,6 +20,18 @@ interface BuyerSeatMapCanvasProps {
   onSeatClick: (sector: PublicSeatSector, seat: PublicSeat) => void;
   onSectorClick?: (sector: PublicSeatSector) => void;
 }
+
+interface DecorationItem {
+  id: string;
+  label?: string;
+  colorCode?: string;
+  shape?: Record<string, unknown>;
+}
+
+const DISABLED_SEAT_STATUSES = new Set(["RESERVED", "SOLD", "BLOCKED", "LOCKED"]);
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 3;
+const WHEEL_ZOOM_STEP = 1.08;
 
 function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -41,8 +52,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function getSectorBounds(sector: PublicSeatSector) {
-  const mapData = sector.mapData ?? {};
+function getSectorBounds(mapData: Record<string, unknown> = {}) {
   const bounds = mapData.bounds as Record<string, unknown> | undefined;
   const x = asNumber(bounds?.x ?? mapData.x) ?? 0;
   const y = asNumber(bounds?.y ?? mapData.y) ?? 0;
@@ -50,6 +60,31 @@ function getSectorBounds(sector: PublicSeatSector) {
   const height = Math.max(asNumber(bounds?.height ?? mapData.height) ?? 120, 24);
 
   return { x, y, width, height };
+}
+
+function extendBoundsWithShape(
+  acc: { minX: number; minY: number; maxX: number; maxY: number },
+  mapData: Record<string, unknown> = {},
+) {
+  const bounds = getSectorBounds(mapData);
+  acc.minX = Math.min(acc.minX, bounds.x);
+  acc.minY = Math.min(acc.minY, bounds.y);
+  acc.maxX = Math.max(acc.maxX, bounds.x + bounds.width);
+  acc.maxY = Math.max(acc.maxY, bounds.y + bounds.height);
+
+  const rawPoints = mapData.points;
+  if (Array.isArray(rawPoints)) {
+    for (let i = 0; i < rawPoints.length; i += 2) {
+      const px = asNumber(rawPoints[i]);
+      const py = asNumber(rawPoints[i + 1]);
+      if (px !== null && py !== null) {
+        acc.minX = Math.min(acc.minX, px);
+        acc.minY = Math.min(acc.minY, py);
+        acc.maxX = Math.max(acc.maxX, px);
+        acc.maxY = Math.max(acc.maxY, py);
+      }
+    }
+  }
 }
 
 function getSeatRadius(sector: PublicSeatSector) {
@@ -66,9 +101,17 @@ function getSeatPosition(seat: PublicSeat) {
   };
 }
 
+function normalizeSeatStatus(status?: string) {
+  if (status === "HELD") return "RESERVED";
+  if (status === "PURCHASED") return "SOLD";
+  if (status === "UNAVAILABLE") return "BLOCKED";
+  return status;
+}
+
 export default function BuyerSeatMapCanvas({
   seatMap,
   zoom,
+  resetViewKey = 0,
   selectedSeatIds,
   selectedSectorId,
   getSeatColor,
@@ -78,45 +121,134 @@ export default function BuyerSeatMapCanvas({
   onSectorClick,
 }: BuyerSeatMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 620 });
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const wheelRafRef = useRef<number | null>(null);
+  const pendingWheelRef = useRef<{
+    nextScale: number;
+    nextPanX: number;
+    nextPanY: number;
+  } | null>(null);
+  const lastWheelZoomRef = useRef<number | null>(null);
 
-  const maxSectorRight = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).x + getSectorBounds(s).width));
-  const maxSectorBottom = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).y + getSectorBounds(s).height));
+  const onSeatClickRef = useRef(onSeatClick);
+  onSeatClickRef.current = onSeatClick;
+  const onSectorClickRef = useRef(onSectorClick);
+  onSectorClickRef.current = onSectorClick;
+  const onZoomChangeRef = useRef(onZoomChange);
+  onZoomChangeRef.current = onZoomChange;
 
-  // Add bottom/right padding so seats do not sit on the edge.
-  const fallbackWidth = maxSectorRight + 80;
-  const fallbackHeight = maxSectorBottom + 80;
-  const maxSeatRight = Math.max(
-    0,
-    ...(seatMap.sectors ?? []).flatMap((sector) => {
-      const radius = getSeatRadius(sector);
-      return (sector.seatsData ?? []).map((seat) => getSeatPosition(seat).x + radius);
-    }),
+  const selectedSeatIdSet = useMemo(() => new Set(selectedSeatIds), [selectedSeatIds]);
+
+  const decorations = useMemo(
+    () =>
+      Array.isArray(seatMap.mapConfig?.decorations)
+        ? (seatMap.mapConfig.decorations as DecorationItem[])
+        : [],
+    [seatMap.mapConfig?.decorations],
   );
-  const maxSeatBottom = Math.max(
-    0,
-    ...(seatMap.sectors ?? []).flatMap((sector) => {
-      const radius = getSeatRadius(sector);
-      return (sector.seatsData ?? []).map((seat) => getSeatPosition(seat).y + radius);
-    }),
+
+  const decorationSectors = useMemo<SharedSector[]>(
+    () =>
+      [...decorations]
+        .sort((left, right) => {
+          const isFrame = (item: DecorationItem) => {
+            const shape = item.shape ?? {};
+            if (shape.isVenueShape === true && shape.venueVariant === "venue_frame") {
+              return true;
+            }
+            const shapeType = String(shape.shapeType ?? "");
+            const cornerRadius = asNumber(shape.cornerRadius) ?? 0;
+            const fill = String(shape.fill ?? "").toLowerCase();
+            const label = (item.label ?? "").trim();
+            return (
+              shapeType === "roundedRect" &&
+              cornerRadius >= 80 &&
+              (fill === "#f6ebe4" || /^venue\s*shape$/i.test(label))
+            );
+          };
+          return Number(isFrame(right)) - Number(isFrame(left));
+        })
+        .map((decoration) => ({
+          id: decoration.id,
+          name: decoration.label,
+          colorCode: decoration.colorCode,
+          mapData: decoration.shape,
+        })),
+    [decorations],
   );
 
-  const documentWidth = seatMap.backgroundWidth && seatMap.backgroundWidth > 0 ? seatMap.backgroundWidth : Math.max(fallbackWidth, maxSeatRight + 60, 640);
-  const documentHeight = seatMap.backgroundHeight && seatMap.backgroundHeight > 0 ? seatMap.backgroundHeight : Math.max(fallbackHeight, maxSeatBottom + 60, 600);
-  const decorations = Array.isArray(seatMap.mapConfig?.decorations) ? seatMap.mapConfig.decorations as { id: string; label?: string; colorCode?: string; shape?: Record<string, unknown> }[] : [];
+  const sectorEntries = useMemo(
+    () =>
+      (seatMap.sectors ?? []).map((sector) => {
+        const bounds = getSectorBounds(sector.mapData);
+        const seatRadius = getSeatRadius(sector);
+        const colorCode = sector.colorCode || "#16a34a";
+        const isStandingSector = String(sector.sectorType || "").toUpperCase() === "STANDING";
+        const hasSeats = (sector.seatsData?.length ?? 0) > 0;
+        const sharedSector: SharedSector = {
+          id: sector.id,
+          name: sector.name,
+          sectorType: sector.sectorType,
+          colorCode,
+          bounds,
+          mapData: sector.mapData,
+        };
 
-  useEffect(() => {
-    setBackgroundImage(null);
-    if (!seatMap.backgroundImageUrl) return;
-    const url = new URL(seatMap.backgroundImageUrl, window.location.origin);
-    if (!["http:", "https:"].includes(url.protocol)) return;
-    const image = new window.Image();
-    image.onload = () => setBackgroundImage(image);
-    image.src = url.href;
-    return () => { image.onload = null; };
-  }, [seatMap.backgroundImageUrl]);
+        return {
+          sector,
+          sharedSector,
+          seatRadius,
+          colorCode,
+          isStandingSector,
+          hasSeats,
+        };
+      }),
+    [seatMap.sectors],
+  );
+
+  const contentBounds = useMemo(() => {
+    const acc = {
+      minX: Infinity,
+      minY: Infinity,
+      maxX: -Infinity,
+      maxY: -Infinity,
+    };
+
+    for (const decoration of decorations) {
+      extendBoundsWithShape(acc, decoration.shape);
+    }
+
+    for (const sector of seatMap.sectors ?? []) {
+      extendBoundsWithShape(acc, sector.mapData);
+      const seatPad = Math.max(getSeatRadius(sector) * 2, 14);
+      for (const seat of sector.seatsData ?? []) {
+        const pos = getSeatPosition(seat);
+        acc.minX = Math.min(acc.minX, pos.x - seatPad);
+        acc.minY = Math.min(acc.minY, pos.y - seatPad);
+        acc.maxX = Math.max(acc.maxX, pos.x + seatPad);
+        acc.maxY = Math.max(acc.maxY, pos.y + seatPad);
+      }
+    }
+
+    if (!Number.isFinite(acc.minX) || !Number.isFinite(acc.minY)) {
+      const fallbackWidth = seatMap.backgroundWidth && seatMap.backgroundWidth > 0 ? seatMap.backgroundWidth : 800;
+      const fallbackHeight = seatMap.backgroundHeight && seatMap.backgroundHeight > 0 ? seatMap.backgroundHeight : 600;
+      return {
+        minX: 0,
+        minY: 0,
+        width: fallbackWidth,
+        height: fallbackHeight,
+      };
+    }
+
+    return {
+      minX: acc.minX,
+      minY: acc.minY,
+      width: Math.max(acc.maxX - acc.minX, 120),
+      height: Math.max(acc.maxY - acc.minY, 120),
+    };
+  }, [decorations, seatMap.backgroundHeight, seatMap.backgroundWidth, seatMap.sectors]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -137,40 +269,131 @@ export default function BuyerSeatMapCanvas({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => () => {
+    if (wheelRafRef.current !== null) {
+      window.cancelAnimationFrame(wheelRafRef.current);
+    }
+  }, []);
+
+  const horizontalPadding = 36;
+  const topPadding = viewportSize.width <= 900 ? 20 : 84;
+  const bottomPadding = 28;
+  const availableWidth = Math.max(viewportSize.width - horizontalPadding * 2, 180);
+  const availableHeight = Math.max(viewportSize.height - topPadding - bottomPadding, 180);
+
   const fitZoom = clamp(
-    Math.min(viewportSize.width / documentWidth, viewportSize.height / documentHeight) * 0.9,
-    0.1,
-    3,
+    Math.min(availableWidth / contentBounds.width, availableHeight / contentBounds.height),
+    MIN_ZOOM,
+    MAX_ZOOM,
   );
   const effectiveZoom = zoom > 0 ? zoom : fitZoom;
-  const baseX = (viewportSize.width - documentWidth * effectiveZoom) / 2;
-  const baseY = (viewportSize.height - documentHeight * effectiveZoom) / 2;
+  const prevEffectiveZoomRef = useRef(effectiveZoom);
+
+  const getCenteredOrigin = useCallback(
+    (scale: number) => ({
+      x:
+        horizontalPadding +
+        (availableWidth - contentBounds.width * scale) / 2 -
+        contentBounds.minX * scale,
+      y:
+        topPadding +
+        (availableHeight - contentBounds.height * scale) / 2 -
+        contentBounds.minY * scale,
+    }),
+    [availableHeight, availableWidth, contentBounds.height, contentBounds.minX, contentBounds.minY, contentBounds.width, topPadding],
+  );
+
+  const baseOrigin = useMemo(
+    () => getCenteredOrigin(effectiveZoom),
+    [effectiveZoom, getCenteredOrigin],
+  );
 
   useEffect(() => {
     if (zoom <= 0) {
+      prevEffectiveZoomRef.current = fitZoom;
+      lastWheelZoomRef.current = null;
       setPanOffset({ x: 0, y: 0 });
+      return;
     }
-  }, [zoom]);
-  useEffect(() => { onFitZoom?.(fitZoom); }, [fitZoom, onFitZoom]);
 
-  const worldStyle = useMemo(
+    const prevScale = prevEffectiveZoomRef.current;
+    if (Math.abs(effectiveZoom - prevScale) > 1e-6) {
+      if (lastWheelZoomRef.current !== null && Math.abs(lastWheelZoomRef.current - effectiveZoom) < 1e-6) {
+        lastWheelZoomRef.current = null;
+      } else if (prevScale > 0) {
+        const ratio = effectiveZoom / prevScale;
+        setPanOffset((prev) => ({
+          x: prev.x * ratio,
+          y: prev.y * ratio,
+        }));
+      }
+      prevEffectiveZoomRef.current = effectiveZoom;
+    }
+  }, [effectiveZoom, fitZoom, zoom, resetViewKey]);
+
+  useEffect(() => {
+    onFitZoom?.(fitZoom);
+  }, [fitZoom, onFitZoom]);
+
+  const stageTransform = useMemo(
     () => ({
-      x: baseX + panOffset.x,
-      y: baseY + panOffset.y,
+      x: baseOrigin.x + panOffset.x,
+      y: baseOrigin.y + panOffset.y,
       scaleX: effectiveZoom,
       scaleY: effectiveZoom,
-      draggable: true,
     }),
-    [baseX, baseY, effectiveZoom, panOffset.x, panOffset.y],
+    [baseOrigin.x, baseOrigin.y, effectiveZoom, panOffset.x, panOffset.y],
   );
 
   const handleWheel = (event: any) => {
     event.evt.preventDefault();
-    const oldScale = effectiveZoom;
-    const direction = event.evt.deltaY > 0 ? -1 : 1;
-    const nextScale = clamp(direction > 0 ? oldScale * 1.08 : oldScale / 1.08, 0.1, 3);
+    const stage = event.target.getStage();
+    const pointer = stage?.getPointerPosition();
 
-    onZoomChange(nextScale);
+    const baseScale = pendingWheelRef.current?.nextScale ?? stage?.scaleX() ?? effectiveZoom;
+    const baseScaleOrigin = getCenteredOrigin(baseScale);
+    const currentWorldX = pendingWheelRef.current
+      ? baseScaleOrigin.x + pendingWheelRef.current.nextPanX
+      : (stage?.x() ?? baseOrigin.x + panOffset.x);
+    const currentWorldY = pendingWheelRef.current
+      ? baseScaleOrigin.y + pendingWheelRef.current.nextPanY
+      : (stage?.y() ?? baseOrigin.y + panOffset.y);
+
+    const direction = event.evt.deltaY > 0 ? -1 : 1;
+    const nextScale = clamp(
+      direction > 0 ? baseScale * WHEEL_ZOOM_STEP : baseScale / WHEEL_ZOOM_STEP,
+      MIN_ZOOM,
+      MAX_ZOOM,
+    );
+
+    if (Math.abs(nextScale - baseScale) < 1e-6) {
+      return;
+    }
+
+    const nextBase = getCenteredOrigin(nextScale);
+    let nextPanX = panOffset.x;
+    let nextPanY = panOffset.y;
+
+    if (pointer) {
+      const worldPointX = (pointer.x - currentWorldX) / baseScale;
+      const worldPointY = (pointer.y - currentWorldY) / baseScale;
+      nextPanX = pointer.x - worldPointX * nextScale - nextBase.x;
+      nextPanY = pointer.y - worldPointY * nextScale - nextBase.y;
+    }
+
+    pendingWheelRef.current = { nextScale, nextPanX, nextPanY };
+
+    if (wheelRafRef.current === null) {
+      wheelRafRef.current = window.requestAnimationFrame(() => {
+        wheelRafRef.current = null;
+        const pending = pendingWheelRef.current;
+        pendingWheelRef.current = null;
+        if (!pending) return;
+        lastWheelZoomRef.current = pending.nextScale;
+        setPanOffset({ x: pending.nextPanX, y: pending.nextPanY });
+        onZoomChangeRef.current(pending.nextScale);
+      });
+    }
   };
 
   return (
@@ -181,74 +404,107 @@ export default function BuyerSeatMapCanvas({
       <Stage
         width={viewportSize.width}
         height={viewportSize.height}
+        x={stageTransform.x}
+        y={stageTransform.y}
+        scaleX={stageTransform.scaleX}
+        scaleY={stageTransform.scaleY}
+        draggable
         onWheel={handleWheel}
+        onDragStart={(event) => {
+          if (event.target !== event.target.getStage()) {
+            return;
+          }
+          const container = event.target.getStage()?.container();
+          if (container) {
+            container.style.cursor = "grabbing";
+          }
+        }}
+        onDragEnd={(event) => {
+          if (event.target !== event.target.getStage()) {
+            return;
+          }
+          const stage = event.target.getStage();
+          const container = stage?.container();
+          if (container) {
+            container.style.cursor = "";
+          }
+          if (!stage) {
+            return;
+          }
+          setPanOffset({
+            x: stage.x() - baseOrigin.x,
+            y: stage.y() - baseOrigin.y,
+          });
+        }}
       >
         <Layer>
-          <Group
-            {...worldStyle}
-            onDragEnd={(event) => {
-              setPanOffset({
-                x: event.target.x() - baseX,
-                y: event.target.y() - baseY,
-              });
-            }}
-          >
-            <Rect width={documentWidth} height={documentHeight} fill="#1d1e22" listening={false} />
-            {backgroundImage && <CanvasImage image={backgroundImage} width={documentWidth} height={documentHeight} listening={false} />}
-            {decorations.map(decoration => (
-              <SectorRenderer key={decoration.id} sector={{ id: decoration.id, name: decoration.label, colorCode: decoration.colorCode, mapData: decoration.shape }} listening={false} showDepth={false} />
+          <Group>
+            {decorationSectors.map((decorationSector) => (
+              <SectorRenderer
+                key={decorationSector.id}
+                sector={decorationSector}
+                listening={false}
+                showDepth={false}
+                showGuides={false}
+              />
             ))}
 
-            {(seatMap.sectors ?? []).map((sector) => {
-              const bounds = getSectorBounds(sector);
-              const seatRadius = getSeatRadius(sector);
-              const colorCode = sector.colorCode || "#16a34a";
-              const isStandingSector = String(sector.sectorType || "").toUpperCase() === "STANDING";
+            {sectorEntries.map(({ sector, sharedSector, seatRadius, colorCode, isStandingSector, hasSeats }) => {
               const canSelectSector = Boolean(onSectorClick) && isStandingSector;
 
               return (
                 <Group key={sector.id}>
                   <SectorRenderer
-                    sector={{
-                      id: sector.id,
-                      name: sector.name,
-                      sectorType: sector.sectorType,
-                      colorCode,
-                      bounds,
-                      mapData: sector.mapData,
-                    }}
+                    sector={sharedSector}
                     selected={selectedSectorId === sector.id}
                     listening={canSelectSector}
-                    onClick={(event) => {
-                      event.cancelBubble = true;
-                      onSectorClick?.(sector);
-                    }}
-                    onTap={(event) => {
-                      event.cancelBubble = true;
-                      onSectorClick?.(sector);
-                    }}
-                    onMouseEnter={(event) => {
-                      const container = event.target.getStage()?.container();
-                      if (container && canSelectSector) {
-                        container.style.cursor = "pointer";
-                      }
-                    }}
-                    onMouseLeave={(event) => {
-                      const container = event.target.getStage()?.container();
-                      if (container) {
-                        container.style.cursor = "";
-                      }
-                    }}
+                    onClick={
+                      canSelectSector
+                        ? (event) => {
+                            event.cancelBubble = true;
+                            onSectorClickRef.current?.(sector);
+                          }
+                        : undefined
+                    }
+                    onTap={
+                      canSelectSector
+                        ? (event) => {
+                            event.cancelBubble = true;
+                            onSectorClickRef.current?.(sector);
+                          }
+                        : undefined
+                    }
+                    onMouseEnter={
+                      canSelectSector
+                        ? (event) => {
+                            const container = event.target.getStage()?.container();
+                            if (container) {
+                              container.style.cursor = "pointer";
+                            }
+                          }
+                        : undefined
+                    }
+                    onMouseLeave={
+                      canSelectSector
+                        ? (event) => {
+                            const container = event.target.getStage()?.container();
+                            if (container) {
+                              container.style.cursor = "";
+                            }
+                          }
+                        : undefined
+                    }
                     showDepth
-                    showLabel={false}
+                    showLabel={!hasSeats}
+                    dimmedForSeats={hasSeats}
                   />
 
                   {(sector.seatsData ?? []).map((seat) => {
-                    const isSelected = selectedSeatIds.includes(seat.id);
-                    const disabledStatuses = new Set(["RESERVED", "SOLD", "BLOCKED", "LOCKED"]);
+                    const isSelected = selectedSeatIdSet.has(seat.id);
+                    const rawStatus = String(seat.inventoryStatus || "").toUpperCase();
                     const disabled =
                       seat.isActive === false ||
-                      disabledStatuses.has(String(seat.inventoryStatus || "").toUpperCase()) ||
+                      DISABLED_SEAT_STATUSES.has(rawStatus) ||
                       seat.inventoryStatus !== "AVAILABLE";
                     const x = asNumber(seat.coordX) ?? 0;
                     const y = asNumber(seat.coordY) ?? 0;
@@ -260,12 +516,14 @@ export default function BuyerSeatMapCanvas({
                         x={x}
                         y={y}
                         radius={seatRadius}
-                        status={seat.inventoryStatus === "HELD" ? "RESERVED" : seat.inventoryStatus === "PURCHASED" ? "SOLD" : seat.inventoryStatus === "UNAVAILABLE" ? "BLOCKED" : seat.inventoryStatus}
+                        status={normalizeSeatStatus(seat.inventoryStatus)}
                         selected={isSelected}
                         disabled={disabled}
                         color={getSeatColor?.(sector, seat) ?? seat.colorCode ?? colorCode}
-                        onClick={() => onSeatClick(sector, seat)}
-                        onTap={() => onSeatClick(sector, seat)}
+                        variant="icon"
+                        memoizeEventHandlers
+                        onClick={() => onSeatClickRef.current(sector, seat)}
+                        onTap={() => onSeatClickRef.current(sector, seat)}
                         onMouseEnter={(e) => {
                           const container = e.target.getStage()?.container();
                           if (container) {

@@ -1,4 +1,6 @@
 :root {
+  --event-banner-ratio: 16 / 9;
+  --event-gallery-thumbnail-ratio: 3 / 4;
   /* Vàng là màu hành động; chữ trên nền trắng dùng biến ink đậm hơn. */
   --brand: #cc9900;
   --brand-hover: #dfb329;
@@ -6,6 +8,7 @@
   --brand-ink: #805c00;
   --brand-soft: #fff4cc;
   --brand-on-dark: #f4d773;
+  --brand-gradient-text: linear-gradient(135deg, #8c5d00 0%, #b47800 45%, #d99b00 100%);
   --on-brand: #1b1d21;
   --primary: var(--brand);
   --primary-light: var(--brand-soft);
@@ -62,7 +65,7 @@
   --text-secondary: #555b65;
   --text-muted: #666b74;
 
-  --border: #e2e8f0; /* Slate 200 */
+  --border: #e2e6ed; /* Soft Border Color */
 
   /* Smooth Radii */
   --radius-sm: 12px;

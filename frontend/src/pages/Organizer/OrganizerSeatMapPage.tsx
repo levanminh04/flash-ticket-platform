@@ -1,13 +1,22 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
+import TixOrganizerTopNav from "../../components/organizer/TixOrganizerTopNav";
+import TixEventWorkflowStepper from "../../components/organizer/TixEventWorkflowStepper";
+import "./organizer-event-create.css";
 import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasShell";
 import SeatMapRightSidebar from "../../components/seat-map/editor/SeatMapRightSidebar";
+import SeatMapTopToolbar, {
+  SeatMapShapeMenuKey,
+} from "../../components/seat-map/editor/SeatMapTopToolbar";
 import {
   buildDefaultSeatLayoutConfig,
   createEditorDraftKey,
   exportEditorDocument,
+  exportEditorDocumentToSvg,
+  generateSeatsForShape,
   importEditorDocument,
   translateShape,
 } from "../../components/seat-map/editor/seatMapEditorUtils";
@@ -26,7 +35,7 @@ import {
   asNumber,
   polarToCartesian,
 } from "../../components/seat-map/shared/sectorPathUtils";
-import { editorSeatMap, editorTickets, readSeatMapOwner, saveSeatMapOwner } from "../../services/organizerSeatMapV1";
+import { editorSeatMap, editorTickets, readSeatMapOwner, saveSeatMapOwner, uploadSeatMapBackground } from "../../services/organizerSeatMapV1";
 import { useOrganizerGate } from "./useOrganizerGate";
 import {
   dispatchOrganizerWorkflowDirty,
@@ -281,10 +290,13 @@ export default function OrganizerSeatMapPage() {
   const [seatMap, setSeatMap] = useState<OrganizerSeatMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
+  const [showGrid, setShowGrid] = useState(true);
   const [seatLayoutInputs, setSeatLayoutInputs] = useState<Record<SeatLayoutFieldKey, string>>(DEFAULT_LAYOUT_INPUTS);
   const [, setUnsavedChanges] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const svgFileInputRef = useRef<HTMLInputElement | null>(null);
   const hasInitializedDocumentRef = useRef(false);
   const ignoreNextDocumentChangeRef = useRef(false);
 
@@ -328,6 +340,7 @@ export default function OrganizerSeatMapPage() {
   }, [eventId, isSectorSetupPhase, ready]);
 
   const editorSource = seatMap;
+  const [resetViewSignal, setResetViewSignal] = useState(0);
   const ticketTypes = organizerTicketTypes;
   const ticketTypeById = useMemo(
     () => new Map(ticketTypes.map((ticketType) => [ticketType.id, ticketType] as const)),
@@ -369,7 +382,14 @@ export default function OrganizerSeatMapPage() {
     addEllipse,
     addFanSection,
     addConcertOvalTemplate,
+    addFestivalTStageTemplate,
+    addSlicedRingArc,
+    addMainStage,
+    addStage,
+    addFoh,
+    addSeatedBlock,
     addRoundedBlock,
+    addRoundTable,
     addBottomRingSection,
     addLeftSideRing,
     addRightSideRing,
@@ -377,12 +397,18 @@ export default function OrganizerSeatMapPage() {
     addVipRightCurved,
     clearDraft,
     clearSeats,
+    cloneShapeById,
+    createSeatRowsFromBounds,
+    flipShapeH,
+    flipShapeV,
     hideSeat,
     hideSelectedSeats,
     moveSeat,
     moveSeatBlock,
+    openOrCreateVenueShape,
     regenerateSeats,
     removeShape,
+    removeShapes,
     replaceDocument,
     resizeSeatBlock,
     resizeShape,
@@ -391,9 +417,11 @@ export default function OrganizerSeatMapPage() {
     restoreSelectedSeats,
     redo,
     selectSeat,
+    selectSeatsInShape,
     selectShape,
     selectShapes,
     setActiveTool,
+    setReferenceImageUrl,
     setReferenceImageVisible,
     setViewport,
     toggleShapeLocked,
@@ -403,6 +431,7 @@ export default function OrganizerSeatMapPage() {
     translateShapesBy,
     undo,
     updateSeatLayout,
+    updateSeatLayoutAndGenerate,
     updateShape,
     updateSeat,
   } = useSeatMapEditorState(editorDraftId, editorSource);
@@ -546,41 +575,77 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    updateShape(shapeId, (shape) => ({
-      ...shape,
-      ...(patch.name !== undefined ? { name: patch.name, label: patch.name } : {}),
-      ...(patch.color !== undefined ? { color: patch.color } : {}),
-      ...(patch.sectorType !== undefined
-        ? {
-            sectorType: patch.sectorType,
-            seats: patch.sectorType === "STANDING" ? [] : shape.seats,
-            seatCount: patch.sectorType === "STANDING" ? 0 : shape.seatCount,
-          }
-        : {}),
-      ...("totalCapacity" in patch ? { totalCapacity: patch.totalCapacity } : {}),
-      ...(patch.ticketTypeId !== undefined
-        ? {
-            ticketTypeId: patch.ticketTypeId || undefined,
-            ticketTypeName: ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeId)?.name ?? undefined,
-            ticketTypeIds: patch.ticketTypeId ? [patch.ticketTypeId] : [],
-            ticketTypeNames: patch.ticketTypeId
-              ? [ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeId)?.name ?? ""].filter(Boolean)
-              : [],
-          }
-        : {}),
-      ...(patch.ticketTypeIds !== undefined
-        ? {
-            ticketTypeIds: patch.ticketTypeIds,
-            ticketTypeNames: patch.ticketTypeIds
-              .map((ticketTypeId) => ticketTypes.find((ticketType) => ticketType.id === ticketTypeId)?.name ?? "")
-              .filter(Boolean),
-            ticketTypeId: patch.ticketTypeIds[0] || undefined,
-            ticketTypeName: patch.ticketTypeIds[0]
-              ? ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeIds?.[0])?.name ?? undefined
-              : undefined,
-          }
-        : {}),
-    }));
+    updateShape(shapeId, (shape) => {
+      let nextShape: SeatMapEditorShape = {
+        ...shape,
+        ...(patch.name !== undefined ? { name: patch.name, label: patch.name } : {}),
+        ...(patch.color !== undefined
+          ? {
+              color: patch.color,
+              mapData: {
+                ...(shape.mapData ?? {}),
+                fill: patch.color,
+              },
+            }
+          : {}),
+        ...(patch.sectorType !== undefined
+          ? {
+              sectorType: patch.sectorType,
+              seats: patch.sectorType === "STANDING" ? [] : shape.seats,
+              seatCount: patch.sectorType === "STANDING" ? 0 : shape.seatCount,
+              totalCapacity:
+                patch.sectorType === "STANDING"
+                  ? shape.totalCapacity && shape.totalCapacity >= 1
+                    ? shape.totalCapacity
+                    : 500
+                  : shape.totalCapacity,
+            }
+          : {}),
+        ...("totalCapacity" in patch ? { totalCapacity: patch.totalCapacity } : {}),
+        ...(patch.ticketTypeId !== undefined
+          ? (() => {
+              const assignedTicket = patch.ticketTypeId ? ticketTypeById.get(patch.ticketTypeId) : undefined;
+              return {
+                ticketTypeId: patch.ticketTypeId || undefined,
+                ticketTypeName: assignedTicket?.name ?? undefined,
+                ticketTypeIds: patch.ticketTypeId ? [patch.ticketTypeId] : [],
+                ticketTypeNames: assignedTicket?.name ? [assignedTicket.name] : [],
+                ...(shape.sectorType === "SEATED"
+                  ? {
+                      seats: shape.seats.map((seat) =>
+                        seat.hidden === true
+                          ? seat
+                          : {
+                              ...seat,
+                              ticketTypeId: patch.ticketTypeId || undefined,
+                              colorCode: assignedTicket?.colorCode ?? undefined,
+                            },
+                      ),
+                    }
+                  : {}),
+              };
+            })()
+          : {}),
+        ...(patch.ticketTypeIds !== undefined
+          ? {
+              ticketTypeIds: patch.ticketTypeIds,
+              ticketTypeNames: patch.ticketTypeIds
+                .map((ticketTypeId) => ticketTypes.find((ticketType) => ticketType.id === ticketTypeId)?.name ?? "")
+                .filter(Boolean),
+              ticketTypeId: patch.ticketTypeIds[0] || undefined,
+              ticketTypeName: patch.ticketTypeIds[0]
+                ? ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeIds?.[0])?.name ?? undefined
+                : undefined,
+            }
+          : {}),
+      };
+
+      if (patch.sectorType === "SEATED" && nextShape.seats.length === 0) {
+        nextShape = generateSeatsForShape(nextShape);
+      }
+
+      return nextShape;
+    });
 
     if (patch.ticketTypeIds !== undefined && currentShape.sectorType === "STANDING") {
       toast.success(`Đã gán ${patch.ticketTypeIds.length} loại vé cho khu đứng "${currentShape.name}".`);
@@ -803,8 +868,35 @@ export default function OrganizerSeatMapPage() {
     regenerateSeats(shapeId);
   };
 
+  const handleUpdateSeatLayoutAndGenerate = (
+    shapeId: string,
+    patch: Parameters<typeof updateSeatLayoutAndGenerate>[1],
+  ) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể thay đổi sơ đồ ghế cho sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    updateSeatLayoutAndGenerate(shapeId, patch);
+  };
+
+  const handleFlipShapeH = (shapeId: string) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể lật sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    flipShapeH(shapeId);
+  };
+
+  const handleFlipShapeV = (shapeId: string) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể lật sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    flipShapeV(shapeId);
+  };
+
   const handlePublish = async () => {
-    if (!eventId || !document || publishing) {
+    if (!eventId || !document || publishing || uploadingBackground) {
       return;
     }
 
@@ -815,10 +907,16 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
+    const isSellableStandingShape = (shape: SeatMapEditorShape) =>
+      shape.visible !== false &&
+      shape.sectorType === "STANDING" &&
+      shape.mapData?.decorative !== true &&
+      shape.shapeType !== "stage" &&
+      shape.shapeType !== "foh";
+
     const invalidStandingSector = publishDocument.shapes.find(
       (shape) =>
-        shape.visible !== false &&
-        shape.sectorType === "STANDING" &&
+        isSellableStandingShape(shape) &&
         (!shape.totalCapacity || shape.totalCapacity < 1),
     );
     if (invalidStandingSector) {
@@ -829,8 +927,7 @@ export default function OrganizerSeatMapPage() {
     const unassignedStandingSector = !isSectorSetupPhase
       ? publishDocument.shapes.find(
           (shape) =>
-            shape.visible !== false &&
-            shape.sectorType === "STANDING" &&
+            isSellableStandingShape(shape) &&
             getStandingShapeTicketTypeIds(shape).length === 0,
         )
       : null;
@@ -840,7 +937,7 @@ export default function OrganizerSeatMapPage() {
     }
 
     const mismatchedStandingTicketTypeSector = publishDocument.shapes
-      .filter((shape) => shape.visible !== false && shape.sectorType === "STANDING")
+      .filter((shape) => isSellableStandingShape(shape))
       .flatMap((shape) =>
         getStandingShapeTicketTypeIds(shape).map((ticketTypeId) => ({
           shape,
@@ -897,7 +994,7 @@ export default function OrganizerSeatMapPage() {
       setUnsavedChanges(false);
       dispatchOrganizerWorkflowSaveResult(true);
       toast.success("Đã lưu sơ đồ.");
-      navigate(`/organizer/events/${eventId}/configure-seating?step=${isSectorSetupPhase ? "pricing" : "review"}`);
+      navigate(`/organizer/events/${eventId}/edit?step=${isSectorSetupPhase ? "tickets" : "review"}`);
     } catch (error) {
       dispatchOrganizerWorkflowSaveResult(false);
       const status = (error as { response?: { status?: number } })?.response?.status;
@@ -930,6 +1027,46 @@ export default function OrganizerSeatMapPage() {
     importFileInputRef.current?.click();
   };
 
+  const handleExportSvg = () => {
+    if (!document || !eventId) {
+      return;
+    }
+
+    const svgContent = exportEditorDocumentToSvg(document, true);
+    const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+    const objectUrl = window.URL.createObjectURL(blob);
+    const anchor = window.document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = `seat-map-${eventId}.svg`;
+    anchor.click();
+    window.URL.revokeObjectURL(objectUrl);
+    toast.success("Đã xuất sơ đồ ghế ra tệp SVG.");
+  };
+
+  const handleImportSvgClick = () => {
+    svgFileInputRef.current?.click();
+  };
+
+  const handleImportSvg = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !eventId || uploadingBackground || publishing) return;
+    setUploadingBackground(true);
+    try {
+      const reference = await uploadSeatMapBackground(eventId, file);
+      setReferenceImageUrl(reference);
+      setUnsavedChanges(true);
+      toast.success("Đã tải ảnh nền SVG. Lưu sơ đồ để áp dụng.");
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      toast.error(status === 413 ? "File SVG vượt quá dung lượng cho phép."
+        : status === 422 ? "SVG không hợp lệ hoặc chứa nội dung không được hỗ trợ."
+        : "Không tải được ảnh nền SVG.");
+    } finally {
+      setUploadingBackground(false);
+    }
+  };
+
   const handleImportJson = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -960,8 +1097,74 @@ export default function OrganizerSeatMapPage() {
   };
 
   const handleDeleteSelected = () => {
-    selectedShapeIds.forEach(handleRemoveShape);
+    if (selectedShape && selectedSeatIds.length > 0) {
+      if (selectedSeatIds.length === 1) {
+        handleHideSeat(selectedShape.id, selectedSeatIds[0]);
+      } else {
+        handleHideSelectedSeats(selectedShape.id, selectedSeatIds);
+      }
+      return;
+    }
+
+    if (!selectedShapeIds.length) {
+      return;
+    }
+
+    const blockedShape = selectedShapeIds.find(
+      (shapeId) => publishedSectorIds.has(shapeId) && hasCommittedSectorState(shapeId),
+    );
+    if (blockedShape) {
+      toast.error("Không thể xóa sector đã có loại vé hoặc ghế đã giữ/đã bán.");
+      return;
+    }
+
+    if (selectedShapeIds.length === 1) {
+      removeShape(selectedShapeIds[0]);
+    } else {
+      removeShapes(selectedShapeIds);
+    }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toUpperCase() ?? "";
+      if (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          if (canRedo) redo();
+        } else if (canUndo) {
+          undo();
+        }
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        if (canRedo) redo();
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (selectedSeatIds.length > 0 || selectedShapeIds.length > 0) {
+          event.preventDefault();
+          handleDeleteSelected();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canRedo, canUndo, redo, selectedSeatIds, selectedShapeIds, undo]);
 
   const handleCreateSeatTypeForShape = (shapeId: string) => {
     if (!eventId) {
@@ -972,7 +1175,7 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    navigate(`/organizer/events/${eventId}/configure-seating?step=pricing`);
+    navigate(`/organizer/events/${eventId}/edit?step=tickets`);
   };
 
   return (
@@ -983,14 +1186,44 @@ export default function OrganizerSeatMapPage() {
           ? "Tạo các khu vực đứng hoặc ngồi trước khi cấu hình loại vé."
           : "Sinh ghế, gán loại vé và lưu sơ đồ để gửi duyệt."
       }
-      actions={<>
-        <button type="button" className="btn btn-secondary" onClick={() => navigate(`/organizer/events/${eventId}/configure-seating`)}>Quay lại cấu hình</button>
-        <button type="button" className="btn btn-primary" disabled={loading || !document || publishing} onClick={() => void handlePublish()}>Lưu sơ đồ</button>
-      </>}
       hideTopBar
-      className="organizer-seat-map-page"
+      hideSidebar
+      hideHeader
+      requireOrganizer
+      className="organizer-hub-page organizer-seat-map-page"
     >
-      <div className="seat-map-editor-shell">
+      <div className="tix-event-create-page">
+        <div
+          className="tix-event-create-container"
+          style={{ maxWidth: "1360px", margin: "0 auto" }}
+        >
+          <TixOrganizerTopNav activeTab="create" />
+
+          <div className="tix-create-header-wrap">
+            <div className="tix-create-title-row">
+              <div className="tix-create-title-block">
+                <h1>Chỉnh sửa sự kiện</h1>
+                <p>
+                  Thiết lập thông tin sự kiện, thời gian diễn ra và phương thức bán vé để mở bán trên FlashTicket.
+                </p>
+              </div>
+              {eventId && (
+                <span className="tix-create-status-badge is-draft">Bản nháp</span>
+              )}
+            </div>
+          </div>
+
+          <TixEventWorkflowStepper
+            currentStep={isSectorSetupPhase ? "sectors" : "tickets"}
+            mode="SEAT_MAP"
+            eventId={eventId}
+            hasImages={Boolean(eventDetail)}
+            hasSectors={Boolean(eventDetail?.seatMap?.sectors?.length)}
+            hasTickets={Boolean(eventDetail?.ticketTypes?.length)}
+            onStepClick={(step) => navigate(`/organizer/events/${eventId}/edit?step=${step}`)}
+          />
+
+          <div className="seat-map-editor-shell" style={{ margin: 0, minHeight: "auto" }}>
 
         {loading ? (
           <section className="organizer-panel organizer-empty-state">
@@ -1002,11 +1235,108 @@ export default function OrganizerSeatMapPage() {
             <p>Không mở được trình vẽ. Hãy quay lại bản nháp rồi thử lại.</p>
           </section>
         ) : (
-          <main className="seat-map-editor-main">
+          <div className="seat-map-workbench-frame">
+            <input
+              ref={svgFileInputRef}
+              type="file"
+              accept=".svg,image/svg+xml"
+              style={{ display: "none" }}
+              onChange={handleImportSvg}
+            />
+            <SeatMapTopToolbar
+              activeTool={activeTool}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              hasSelectedShape={selectedShapeIds.length > 0}
+              selectedSeatCount={selectedSeats.filter((s) => !s.hidden).length}
+              selectedShapeHiddenSeatCount={
+                selectedShape ? selectedShape.seats.filter((s) => s.hidden).length : 0
+              }
+              onSelectTool={setActiveTool}
+              onOpenOrCreateVenueShape={openOrCreateVenueShape}
+              isVenueShapeSelected={Boolean(selectedShape?.mapData?.isVenueShape === true)}
+              onAddShapeMenu={(key: SeatMapShapeMenuKey) => {
+                switch (key) {
+                  case "rectangle":
+                    addSeatedBlock();
+                    break;
+                  case "standing_rect":
+                    addRoundedBlock();
+                    break;
+                  case "trapezoid":
+                    addTrapezoid();
+                    break;
+                  case "fan":
+                    addFanSection();
+                    break;
+                  case "ring":
+                    addBottomRingSection();
+                    break;
+                  case "radial_sectors":
+                    addSlicedRingArc();
+                    break;
+                  case "curved_left":
+                    addVipLeftCurved();
+                    break;
+                  case "curved_right":
+                    addVipRightCurved();
+                    break;
+                  case "stage":
+                    addMainStage();
+                    break;
+                  case "t_stage":
+                    addStage();
+                    break;
+                  case "foh":
+                    addFoh();
+                    break;
+                  case "stadium_bowl":
+                    addConcertOvalTemplate();
+                    break;
+                  case "concert_t_stage":
+                    addFestivalTStageTemplate();
+                    break;
+                }
+              }}
+              onDuplicateSelected={() => {
+                if (selectedShapeIds.length === 1) {
+                  cloneShapeById(selectedShapeIds[0]);
+                }
+              }}
+              onResetView={() => setResetViewSignal((prev) => prev + 1)}
+              showGrid={showGrid}
+              onToggleGrid={() => setShowGrid((prev) => !prev)}
+              onUndo={undo}
+              onRedo={redo}
+              onDeleteSelected={handleDeleteSelected}
+              onHideSelectedSeats={() => {
+                const visibleIds = selectedSeats.filter((s) => !s.hidden).map((s) => s.id);
+                if (selectedShape && visibleIds.length > 0) {
+                  handleHideSelectedSeats(selectedShape.id, visibleIds);
+                }
+              }}
+              onRestoreHiddenSeats={() => {
+                if (!selectedShape) return;
+                const hiddenIds = selectedSeats.filter((s) => s.hidden).map((s) => s.id);
+                if (hiddenIds.length > 0) {
+                  restoreSelectedSeats(selectedShape.id, hiddenIds);
+                } else {
+                  restoreAllSeats(selectedShape.id);
+                }
+              }}
+              onImportJson={handleImportJsonClick}
+              onExportJson={handleExportJson}
+              onImportSvg={handleImportSvgClick}
+              onExportSvg={handleExportSvg}
+              onResetDraft={handleClearDraft}
+            />
+            <main className="seat-map-editor-main" style={{ margin: 0 }}>
             <SeatMapCanvasShell
               document={document}
               viewport={viewport}
               referenceImageVisible={referenceImageVisible}
+              showGrid={showGrid}
+              externalResetViewKey={resetViewSignal}
               activeTool={activeTool}
               selectedShapeIds={selectedShapeIds}
               selectedSeatId={selectedSeatId}
@@ -1016,6 +1346,13 @@ export default function OrganizerSeatMapPage() {
               onResizeSeatBlock={handleResizeSeatBlock}
               onResizeShape={handleResizeShape}
               onSelectSeat={selectSeat}
+              onSelectSeatsInShape={selectSeatsInShape}
+              onCreateSeatRowsFromBounds={createSeatRowsFromBounds}
+              onCloneSelectedShape={
+                selectedShapeIds.length === 1
+                  ? () => cloneShapeById(selectedShapeIds[0])
+                  : undefined
+              }
               onSelectShape={selectShape}
               onSelectShapes={selectShapes}
               onTransformPolygon={handleTransformPolygon}
@@ -1034,6 +1371,7 @@ export default function OrganizerSeatMapPage() {
 
             <SeatMapRightSidebar
               assignmentEnabled={!isSectorSetupPhase}
+              activeTool={activeTool}
               document={document}
               selectedShape={selectedShape}
               selectedSeat={selectedSeat}
@@ -1054,7 +1392,14 @@ export default function OrganizerSeatMapPage() {
               onAddCircle={addCircle}
               onAddEllipse={addEllipse}
               onAddRoundedBlock={addRoundedBlock}
+              onAddSeatedBlock={addSeatedBlock}
+              onAddRoundTable={addRoundTable}
               onAddConcertOvalTemplate={addConcertOvalTemplate}
+              onAddFestivalTStageTemplate={addFestivalTStageTemplate}
+              onAddSlicedRingArc={addSlicedRingArc}
+              onAddMainStage={addMainStage}
+              onAddStage={addStage}
+              onAddFoh={addFoh}
               onAddVipLeftCurved={addVipLeftCurved}
               onAddVipRightCurved={addVipRightCurved}
               onAddBottomRingSection={addBottomRingSection}
@@ -1065,10 +1410,16 @@ export default function OrganizerSeatMapPage() {
               onToggleShapeVisibility={handleToggleShapeVisibility}
               onToggleShapeLocked={toggleShapeLocked}
               onRemoveShape={handleRemoveShape}
+              onCloneShape={cloneShapeById}
+              onFlipShapeH={handleFlipShapeH}
+              onFlipShapeV={handleFlipShapeV}
+              onResizeShape={handleResizeShape}
+              onUpdateShape={updateShape}
               onSetEditingShapeId={setEditingShapeId}
               onShapeMetaChange={handleShapeMetaChange}
               onSeatLayoutInputChange={handleSeatLayoutInputChange}
               onSeatLayoutInputBlur={handleSeatLayoutInputBlur}
+              onUpdateSeatLayoutAndGenerate={handleUpdateSeatLayoutAndGenerate}
               onGenerateSeats={handleRegenerateSeats}
               onRestoreHiddenSeats={restoreAllSeats}
               onClearSeats={handleClearSeats}
@@ -1083,7 +1434,40 @@ export default function OrganizerSeatMapPage() {
               onCreateSeatTypeForShape={handleCreateSeatTypeForShape}
             />
           </main>
+          </div>
         )}
+          </div>
+
+          <div className="tix-form-actions-bar">
+            <button
+              type="button"
+              className="tix-btn-secondary"
+              onClick={() =>
+                navigate(
+                  `/organizer/events/${eventId}/edit?step=${isSectorSetupPhase ? "sectors" : "tickets"}`
+                )
+              }
+            >
+              <ArrowLeft size={16} />
+              <span>Quay lại</span>
+            </button>
+            <button
+              type="button"
+              className="tix-btn-primary"
+              disabled={loading || !document || publishing || uploadingBackground}
+              onClick={() => void handlePublish()}
+            >
+              {publishing ? (
+                <>
+                  <Loader2 size={16} className="tix-spin-icon" />
+                  <span>Đang lưu…</span>
+                </>
+              ) : (
+                <span>Lưu sơ đồ</span>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </OrganizerLayout>
   );

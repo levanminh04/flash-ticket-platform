@@ -1457,6 +1457,7 @@ class EventFlowTests {
         .isEqualTo(Long.valueOf(approved.sourceConfigVersion()));
     mvc.perform(get("/api/v1/events/" + created.eventId()))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.categoryId").value(CATEGORY.toString()))
         .andExpect(jsonPath("$.ticketTypes[0].unitPrice").value("100005"))
         .andExpect(jsonPath("$.organizerSubject").value("organizer-a"))
         .andExpect(jsonPath("$.feeRate").doesNotExist());

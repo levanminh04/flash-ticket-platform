@@ -1,0 +1,1620 @@
+/* ============================================================
+   FLASHTICKET — ADMIN WORKSPACE (TIX STYLE)
+   Synchronized with organizer-dashboard.css & TixOrganizerTopNav
+   ============================================================ */
+
+.tix-admin-page .tix-status-badge.is-pending {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.tix-admin-page .tix-status-badge.is-processing {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.tix-admin-page .tix-status-badge.is-active,
+.tix-admin-page .tix-status-badge.is-succeeded {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.tix-admin-page .tix-status-badge.is-rejected,
+.tix-admin-page .tix-status-badge.is-failed {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.tix-admin-page .tix-admin-split-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.35fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.tix-admin-page .tix-admin-app-list,
+.tix-admin-page .tix-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.tix-admin-page .tix-admin-app-item,
+.tix-admin-page .tix-admin-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #efeae1;
+  background:
+    radial-gradient(ellipse 65% 85% at 88% 50%, rgba(254, 240, 214, 0.22) 0%, rgba(253, 245, 230, 0.08) 60%, transparent 85%),
+    linear-gradient(135deg, #fffdfa 0%, #fefcf8 50%, #fef9f0 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  color: var(--text-strong, #15171a);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  font-family: inherit;
+}
+
+.tix-admin-page .tix-admin-list-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.tix-admin-page .tix-admin-list-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-list-item-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-list-item-meta {
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-app-item:hover:not(:disabled):not(.is-selected),
+.tix-admin-page .tix-admin-list-item:hover:not(:disabled):not(.is-selected) {
+  border-color: #e2d9cc;
+  box-shadow: 0 4px 14px rgba(180, 130, 20, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03);
+  transform: translateY(-1px);
+}
+
+.tix-admin-page .tix-admin-app-item.is-selected,
+.tix-admin-page .tix-admin-list-item.is-selected {
+  border: 1.5px solid #d4a017;
+  background:
+    radial-gradient(ellipse 70% 90% at 85% 50%, rgba(254, 230, 180, 0.35) 0%, rgba(253, 242, 215, 0.18) 60%, transparent 85%),
+    linear-gradient(135deg, #fffdf8 0%, #fef8eb 50%, #fdf2d8 100%);
+  box-shadow: 0 4px 18px rgba(212, 160, 23, 0.16), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.tix-admin-page .tix-admin-app-item:disabled,
+.tix-admin-page .tix-admin-list-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tix-admin-page .tix-admin-app-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tix-admin-page .tix-admin-app-icon {
+  color: var(--text-subtle, #565e69);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tix-admin-page .tix-admin-app-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tix-admin-page .tix-admin-app-copy strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-admin-page .tix-admin-app-copy span {
+  font-size: 12px;
+  color: var(--text-subtle, #565e69);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-admin-page .tix-admin-app-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tix-admin-page .tix-admin-review-groups {
+  display: flex;
+  flex-direction: column;
+}
+
+.tix-admin-page .tix-admin-review-group {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-review-group:first-of-type {
+  padding-top: 0;
+}
+
+.tix-admin-page .tix-admin-review-group:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.tix-admin-page .tix-admin-review-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-strong, #15171a);
+  background: transparent;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.tix-admin-page .tix-admin-review-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 0 10px;
+}
+
+.tix-admin-page .tix-admin-review-group-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-decided-at {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-decided-label {
+  color: var(--text-subtle, #565e69);
+  font-weight: 500;
+}
+
+.tix-admin-page .tix-admin-decided-at time {
+  color: var(--text-strong, #15171a);
+  font-weight: 550;
+}
+
+.tix-admin-page .tix-admin-review-dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.tix-admin-page .tix-admin-review-dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 155px) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tix-admin-page .tix-admin-review-dl dt {
+  color: var(--text-subtle, #565e69);
+  font-weight: 500;
+}
+
+.tix-admin-page .tix-admin-review-dl dd {
+  margin: 0;
+  font-weight: 550;
+  color: var(--text-strong, #15171a);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.tix-admin-page .tix-admin-review-dl dd em {
+  color: #94a3b8;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-admin-review-dl a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-strong, #15171a);
+  text-decoration: underline;
+}
+
+.tix-admin-page .tix-admin-detail-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.tix-admin-page .tix-admin-detail-group {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tix-admin-page .tix-admin-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #15171a);
+  margin: 0;
+}
+
+.tix-admin-page .tix-admin-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tix-admin-page .tix-admin-dl-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-dl-row dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+  flex-shrink: 0;
+}
+
+.tix-admin-page .tix-admin-dl-row dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.tix-admin-page .tix-admin-dl-row dd a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-strong, #15171a);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tix-admin-page .tix-admin-dl-row dd a:hover {
+  color: var(--brand-ink, #805c00);
+}
+
+.tix-admin-page .tix-admin-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-actions-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.tix-admin-page .tix-admin-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tix-admin-page .tix-admin-btn-primary {
+  background: var(--text-strong, #15171a);
+  color: #ffffff;
+}
+
+.tix-admin-page .tix-admin-btn-primary:hover:not(:disabled) {
+  background: #282c32;
+}
+
+.tix-admin-page .tix-admin-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.tix-admin-page .tix-admin-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.tix-admin-page .tix-admin-btn-danger-outline {
+  background: #ffffff;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.tix-admin-page .tix-admin-btn-danger-outline:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.tix-admin-page .tix-admin-btn-secondary {
+  background: #ffffff;
+  border-color: var(--border, #e2e6ed);
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: #cbd5e1;
+}
+
+.tix-admin-page .tix-admin-fee-form {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-fee-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  flex: 1;
+}
+
+.tix-admin-page .tix-admin-fee-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-input {
+  min-height: 38px;
+  padding: 7px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tix-admin-page .tix-admin-input:focus {
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
+}
+
+.tix-admin-page .tix-admin-id-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-table-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.tix-admin-page .tix-admin-reason-cell {
+  min-width: 220px;
+  max-width: 360px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tix-admin-page .tix-admin-copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted, #666b74);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tix-admin-page .tix-admin-copy-icon-btn:hover {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: var(--border, #e2e6ed);
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-error-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tix-admin-page .tix-admin-success-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-admin-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-subtle, #565e69);
+  font-size: 14px;
+}
+
+.tix-admin-page .tix-spin {
+  animation: tixAdminSpin 0.8s linear infinite;
+}
+
+@keyframes tixAdminSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tix-admin-page .tix-admin-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tix-admin-page .tix-admin-reason-text {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text-strong, #15171a);
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-settlement-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--text-subtle, #565e69);
+  font-variant-numeric: tabular-nums;
+}
+
+.tix-admin-page .tix-admin-settlement-time {
+  color: var(--text-strong, #15171a);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-settlement-by {
+  font-size: 12px;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-admin-page .tix-admin-muted-dash {
+  color: var(--text-muted, #666b74);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.tix-admin-page .tix-admin-empty-text {
+  color: #94a3b8;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-orders-table thead th:last-child,
+.tix-admin-page .tix-orders-table tbody td:last-child {
+  text-align: left;
+}
+
+.tix-admin-page .tix-orders-table tbody td:last-child {
+  font-weight: inherit;
+}
+
+/* SweetAlert2 modal đồng bộ thiết kế tối giản FlashTicket */
+.tix-admin-swal-container {
+  padding: 16px !important;
+  backdrop-filter: blur(2px);
+}
+
+.tix-admin-swal-popup {
+  width: min(100%, 480px) !important;
+  padding: 28px 28px 24px !important;
+  border-radius: 20px !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.16) !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+}
+
+.tix-admin-swal-title {
+  margin: 0 0 8px 0 !important;
+  padding: 0 !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  color: #111827 !important;
+  text-align: left !important;
+}
+
+.tix-admin-swal-html {
+  margin: 0 0 18px 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+.tix-admin-swal-context {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.tix-admin-swal-context strong {
+  color: #111827;
+  font-weight: 600;
+}
+
+.tix-admin-swal-label {
+  display: block;
+  margin: 0 0 6px 0 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+  text-align: left !important;
+}
+
+.tix-admin-swal-input {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  border: 1px solid #d1d5db !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+  font-family: inherit !important;
+  box-sizing: border-box !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.tix-admin-swal-input:focus {
+  outline: none !important;
+  border-color: #b78200 !important;
+  box-shadow: 0 0 0 1px #b78200 !important;
+}
+
+.tix-admin-swal-input::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+.tix-admin-swal-validation {
+  margin: 10px 0 0 0 !important;
+  padding: 10px 14px !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca !important;
+  border-radius: 8px !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  text-align: left !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.tix-admin-swal-validation::before {
+  display: none !important;
+}
+
+.tix-admin-swal-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  margin: 20px 0 0 0 !important;
+  padding: 0 !important;
+}
+
+.tix-admin-swal-cancel-btn {
+  order: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  min-width: 88px !important;
+  padding: 9px 22px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+.tix-admin-swal-cancel-btn:hover {
+  background: #f9fafb !important;
+  border-color: #9ca3af !important;
+  color: #111827 !important;
+}
+
+.tix-admin-swal-confirm-btn {
+  order: 2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  padding: 9px 20px !important;
+  background: #b78200 !important;
+  border: 1px solid #b78200 !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+  box-shadow: none !important;
+}
+
+.tix-admin-swal-confirm-btn:hover {
+  background: #a37400 !important;
+  border-color: #a37400 !important;
+}
+
+.tix-admin-swal-confirm-btn:disabled,
+.tix-admin-swal-cancel-btn:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+.tix-admin-swal-popup .swal2-loader {
+  border-color: #b78200 transparent #b78200 transparent !important;
+}
+
+@media (max-width: 480px) {
+  .tix-admin-swal-popup {
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
+  }
+
+  .tix-admin-swal-actions {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .tix-admin-swal-cancel-btn {
+    order: 2 !important;
+  }
+
+  .tix-admin-swal-confirm-btn {
+    order: 1 !important;
+  }
+
+  .tix-admin-swal-actions button {
+    width: 100% !important;
+  }
+}
+
+.tix-admin-page .tix-admin-ticket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tix-admin-page .tix-admin-ticket-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e6ed);
+  font-size: 13px;
+}
+
+@media (max-width: 1024px) {
+  .tix-admin-page .tix-admin-split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tix-admin-page .tix-admin-dl-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tix-admin-page .tix-admin-dl-row dd {
+    text-align: left;
+  }
+}
+
+.tix-admin-page .tix-admin-rich-description {
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-rich-description em.tix-admin-empty-text {
+  color: #94a3b8;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-admin-rich-description > *:first-child {
+  margin-top: 0;
+}
+
+.tix-admin-page .tix-admin-rich-description > *:last-child {
+  margin-bottom: 0;
+}
+
+.tix-admin-page .tix-admin-rich-description p + p {
+  margin-top: 0.75em;
+}
+
+.tix-admin-page .tix-admin-rich-description h1,
+.tix-admin-page .tix-admin-rich-description h2,
+.tix-admin-page .tix-admin-rich-description h3,
+.tix-admin-page .tix-admin-rich-description h4 {
+  margin: 0.9em 0 0.4em;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.tix-admin-page .tix-admin-rich-description ul,
+.tix-admin-page .tix-admin-rich-description ol {
+  padding-inline-start: 1.5em;
+  margin-block: 0.65em;
+}
+
+.tix-admin-page .tix-admin-rich-description ul {
+  list-style: disc;
+}
+
+.tix-admin-page .tix-admin-rich-description ol {
+  list-style: decimal;
+}
+
+.tix-admin-page .tix-admin-rich-description li + li {
+  margin-top: 0.3em;
+}
+
+.tix-admin-page .tix-admin-rich-description blockquote {
+  margin: 0.75em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--border, #e2e6ed);
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-rich-description pre {
+  white-space: pre-wrap;
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.tix-admin-page .tix-admin-rich-description a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* =========================================================================
+   Event Review Preview Hero, Compact Ticket Grid, Promotions & Seat Map
+   ========================================================================= */
+
+.tix-admin-page .tix-admin-event-hero {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: var(--surface, #ffffff);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.tix-admin-page .tix-admin-event-poster {
+  position: relative;
+  border: 1px solid var(--border, #e2e6ed);
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface-subtle, #f8fafc);
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  cursor: pointer;
+  display: block;
+}
+
+.tix-admin-page .tix-admin-event-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.tix-admin-page .tix-admin-event-poster:hover img {
+  transform: scale(1.03);
+}
+
+.tix-admin-page .tix-admin-event-poster-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-admin-event-hero-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-event-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tix-admin-page .tix-admin-event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border, #e2e6ed);
+  background: var(--surface-subtle, #f8fafc);
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-event-title-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tix-admin-page .tix-admin-event-title-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-subtle, #64748b);
+  flex: 0 0 auto;
+}
+
+.tix-admin-page .tix-admin-event-hero-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.3;
+  color: var(--text-main, #1e2329);
+  word-break: break-word;
+}
+
+.tix-admin-page .tix-admin-event-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tix-admin-page .tix-admin-event-meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-event-meta-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  color: var(--text-subtle, #64748b);
+}
+
+.tix-admin-page .tix-admin-event-meta-strong {
+  color: var(--text-main, #1e2329);
+  font-weight: 600;
+}
+
+.tix-admin-page .tix-admin-organizer-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--border, #e2e6ed);
+  display: block;
+}
+
+.tix-admin-page .tix-admin-gallery-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-gallery-thumb {
+  width: 64px;
+  height: 44px;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e2e6ed);
+  background: var(--surface-subtle, #f8fafc);
+  cursor: pointer;
+}
+
+.tix-admin-page .tix-admin-gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tix-admin-page .tix-admin-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-ticket-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: var(--surface-subtle, #f8fafc);
+}
+
+.tix-admin-page .tix-admin-ticket-card-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-ticket-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+}
+
+.tix-admin-page .tix-admin-ticket-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main, #1e2329);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tix-admin-page .tix-admin-ticket-price {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main, #1e2329);
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-promo-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-promo-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: var(--surface-subtle, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tix-admin-page .tix-admin-promo-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tix-admin-page .tix-admin-promo-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tix-admin-page .tix-admin-promo-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.tix-admin-page .tix-admin-promo-meta {
+  font-size: 12px;
+  color: var(--text-subtle, #64748b);
+}
+
+.tix-admin-page .tix-admin-seatmap-card {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  cursor: zoom-in;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tix-admin-page .tix-admin-seatmap-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.tix-admin-page .tix-admin-seatmap-card img {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  display: block;
+}
+
+@media (max-width: 960px) {
+  .tix-admin-page .tix-admin-event-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .tix-admin-page .tix-admin-ticket-grid,
+  .tix-admin-page .tix-admin-promo-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   ADMIN SALES & RECONCILIATION EXTENSIONS
+   ============================================================ */
+
+.tix-admin-page .tix-admin-custom-range-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+}
+
+.tix-admin-page .tix-admin-custom-range-fields {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-inline-field input[type="date"] {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.tix-admin-page .tix-admin-inline-warn {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.tix-admin-page .tix-admin-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-segmented button {
+  border: none;
+  background: transparent;
+  color: var(--text-subtle, #565e69);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.tix-admin-page .tix-admin-segmented button.is-active {
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.tix-admin-page .tix-tooltip-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  margin-bottom: 2px;
+}
+
+.tix-admin-page .tix-admin-top-event-link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 12px;
+  transition: background-color 0.15s ease;
+}
+
+.tix-admin-page .tix-admin-top-event-link:hover {
+  background: #f8fafc;
+}
+
+.tix-admin-page .tix-admin-inline-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tix-admin-page .tix-admin-icon-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.tix-admin-page .tix-admin-icon-copy:hover {
+  color: var(--text-strong, #15171a);
+  background: #f1f5f9;
+}
+
+.tix-admin-page .tix-admin-lookup-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-lookup-form .tix-search-input-wrap {
+  min-width: 310px;
+  max-width: 100%;
+}
+
+.tix-admin-page .tix-admin-recon-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tix-admin-page .tix-admin-recon-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-recon-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tix-admin-page .tix-admin-recon-submeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-recon-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-recon-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #f8fafc;
+}
+
+.tix-admin-page .tix-admin-recon-step.is-done {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.tix-admin-page .tix-admin-recon-step .tix-step-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 750;
+  flex-shrink: 0;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.tix-admin-page .tix-admin-recon-step.is-done .tix-step-dot {
+  background: #059669;
+  color: #ffffff;
+}
+
+.tix-admin-page .tix-admin-recon-step strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-page .tix-admin-recon-step small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-subtle, #565e69);
+}
+
+.tix-admin-page .tix-admin-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tix-admin-page .tix-admin-finance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+}
+
+.tix-admin-page .tix-admin-finance-card.is-highlight {
+  border-color: #a7f3d0;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+}
+
+.tix-admin-page .tix-admin-finance-val {
+  font-size: 20px;
+  font-weight: 750;
+  color: var(--text-strong, #15171a);
+  letter-spacing: -0.02em;
+}
+
+.tix-admin-page .tix-admin-finance-val.is-refund {
+  color: #b45309;
+}
+
+.tix-admin-page .tix-admin-finance-val.is-net {
+  color: #065f46;
+}
+
+.tix-admin-page .tix-admin-warn-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tix-admin-page .tix-admin-warn-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tix-admin-page .tix-admin-recon-form {
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e2e6ed);
+}
+
+.tix-admin-page .tix-admin-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e6ed);
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.tix-admin-page .tix-admin-textarea:focus {
+  outline: none;
+  border-color: #15171a;
+}
+
+.tix-admin-page .tix-admin-textarea:disabled {
+  background: #f1f5f9;
+  color: var(--text-subtle, #64748b);
+  cursor: not-allowed;
+}
+
+.tix-admin-page .tix-admin-kpi-sub-stats {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.tix-admin-page .tix-admin-kpi-sub-stats .tix-kpi-sub-item {
+  min-width: 0;
+}
+
+.tix-admin-page .tix-admin-kpi-sub-stats .tix-kpi-sub-item span:first-child {
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-org-cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tix-admin-page .tix-admin-cell-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tix-admin-page .tix-admin-organizer-avatar-fallback {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid var(--border, #e2e6ed);
+  color: var(--text-subtle, #565e69);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tix-admin-page .tix-orders-toolbar {
+  margin-bottom: 14px;
+}
+
+.tix-admin-page .tix-admin-table-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.tix-admin-page .tix-admin-table-search {
+  width: min(100%, 340px);
+  min-width: 280px;
+  flex-shrink: 0;
+}
+
+.tix-admin-page .tix-admin-table-controls {
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .tix-admin-page .tix-admin-recon-steps,
+  .tix-admin-page .tix-admin-finance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tix-admin-page .tix-admin-table-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tix-admin-page .tix-admin-table-search,
+  .tix-admin-page .tix-admin-lookup-form .tix-search-input-wrap {
+    min-width: 0;
+    width: 100%;
+  }
+}

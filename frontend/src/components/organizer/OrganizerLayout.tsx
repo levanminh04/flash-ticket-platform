@@ -1,9 +1,19 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { useNavigate } from "react-router-dom";
-import { LoaderCircle, ShieldAlert } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  LoaderCircle,
+  Lock,
+  LogIn,
+  RotateCcw,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
+import Navbar from "../layout/Navbar";
+import Footer from "../common/Footer";
 import OrganizerSidebar from "./OrganizerSidebar";
 import OrganizerTopBar from "./OrganizerTopBar";
 import OrganizerEventWorkspaceNav from "./OrganizerEventWorkspaceNav";
@@ -16,11 +26,13 @@ import {
 import { userService, UserProfile } from "../../services/userService";
 
 type OrganizerLayoutProps = {
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   actions?: ReactNode;
   requireOrganizer?: boolean;
   hideTopBar?: boolean;
+  hideSidebar?: boolean;
+  hideHeader?: boolean;
   className?: string;
   children: ReactNode;
   showWorkflowNav?: boolean;
@@ -103,11 +115,13 @@ function OrganizerEventHeaderActions({ eventId }: OrganizerEventHeaderActionsPro
 }
 
 export default function OrganizerLayout({
-  title,
-  description,
+  title = "",
+  description = "",
   actions,
   requireOrganizer = true,
   hideTopBar = false,
+  hideSidebar = false,
+  hideHeader = false,
   className,
   children,
   showWorkflowNav = false,
@@ -142,52 +156,96 @@ export default function OrganizerLayout({
 
   if (!initialized) {
     return (
-      <div className="organizer-page organizer-loading-page">
-        <div className="organizer-page-loading" role="status" aria-live="polite">
-          <LoaderCircle className="organizer-loading-icon" size={32} />
-          <h1>{t("organizer.loadingPage")}</h1>
-          <p>{t("organizer.loadingWorkspace")}</p>
-        </div>
+      <div className="tix-auth-guard-page">
+        <Navbar />
+        <main className="tix-auth-guard-main">
+          <div className="tix-auth-guard-card is-loading">
+            <LoaderCircle className="tix-spin-icon" size={32} />
+            <span style={{ fontSize: "14.5px", fontWeight: 500, color: "var(--text-muted, #666b74)" }}>
+              {t("common.loading", "Đang tải...")}
+            </span>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
 
   if (requireOrganizer && !keycloak.authenticated) {
     return (
-      <div className="organizer-page organizer-state-page">
-        <div className="container organizer-state-card">
-          <ShieldAlert size={28} />
-          <h1>{t("organizer.loginWorkspace")}</h1>
-          <p>{t("organizer.loginWorkspaceDescription")}</p>
-          <button className="btn btn-primary" onClick={() => keycloak.login()}>
-            {t("auth.signIn")}
-          </button>
-        </div>
+      <div className="tix-auth-guard-page">
+        <Navbar />
+        <main className="tix-auth-guard-main">
+          <div className="tix-auth-guard-card">
+            <div className="tix-auth-guard-icon-wrap">
+              <Lock size={28} />
+            </div>
+            <h1 className="tix-auth-guard-title">{t("organizer.loginWorkspace")}</h1>
+            <p className="tix-auth-guard-desc">{t("organizer.loginWorkspaceDescription")}</p>
+            <div className="tix-auth-guard-actions">
+              <button
+                type="button"
+                className="tix-btn-primary"
+                onClick={() => void keycloak.login({ redirectUri: window.location.href })}
+              >
+                <LogIn size={16} />
+                <span>{t("auth.signIn", "Đăng nhập")}</span>
+              </button>
+              <Link to="/" className="tix-btn-secondary">
+                <ArrowLeft size={16} />
+                <span>{t("organizer.backToHome", "Về trang chủ")}</span>
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
 
   if (requireOrganizer && !hasOrganizerTokenRole) {
     return (
-      <div className="organizer-page organizer-state-page">
-        <div className="container organizer-state-card">
-          <ShieldAlert size={28} />
-          <h1>
-            {hasOrganizerProfileRole
-              ? t("organizer.refreshLoginTitle")
-              : t("organizer.organizerRoleMissing")}
-          </h1>
-          <p>
-            {hasOrganizerProfileRole
-              ? t("organizer.refreshLoginDescription")
-              : t("organizer.organizerRoleMissingDescription")}
-          </p>
-          {hasOrganizerProfileRole ? (
-            <button className="btn btn-primary" type="button" onClick={refreshLoginSession}>
-              {t("organizer.refreshLogin")}
-            </button>
-          ) : null}
-        </div>
+      <div className="tix-auth-guard-page">
+        <Navbar />
+        <main className="tix-auth-guard-main">
+          <div className="tix-auth-guard-card">
+            <div className="tix-auth-guard-icon-wrap is-warning">
+              <ShieldAlert size={28} />
+            </div>
+            <h1 className="tix-auth-guard-title">
+              {hasOrganizerProfileRole
+                ? t("organizer.refreshLoginTitle")
+                : t("organizer.organizerRoleMissing")}
+            </h1>
+            <p className="tix-auth-guard-desc">
+              {hasOrganizerProfileRole
+                ? t("organizer.refreshLoginDescription")
+                : t("organizer.organizerRoleMissingDescription")}
+            </p>
+            <div className="tix-auth-guard-actions">
+              {hasOrganizerProfileRole ? (
+                <button
+                  className="tix-btn-primary"
+                  type="button"
+                  onClick={refreshLoginSession}
+                >
+                  <RotateCcw size={16} />
+                  <span>{t("organizer.refreshLogin")}</span>
+                </button>
+              ) : (
+                <Link to="/organizers/apply" className="tix-btn-primary">
+                  <Sparkles size={16} />
+                  <span>{t("organizer.applyOrganizerBtn", "Đăng ký làm Nhà tổ chức")}</span>
+                </Link>
+              )}
+              <Link to="/" className="tix-btn-secondary">
+                <ArrowLeft size={16} />
+                <span>{t("organizer.backToHome", "Về trang chủ")}</span>
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
@@ -195,37 +253,41 @@ export default function OrganizerLayout({
   return (
     <div
       className={`organizer-page ${isSidebarCollapsed ? "is-sidebar-collapsed" : ""} ${
-        className || ""
-      }`}
+        hideSidebar ? "is-no-sidebar" : ""
+      } ${className || ""}`}
     >
-      <OrganizerSidebar
-        isCollapsed={isSidebarCollapsed}
-        onToggle={() =>
-          setIsSidebarCollapsed((value) => {
-            const nextValue = !value;
-            localStorage.setItem("organizer_sidebar_collapsed", String(nextValue));
-            return nextValue;
-          })
-        }
-      />
+      {!hideSidebar && (
+        <OrganizerSidebar
+          isCollapsed={isSidebarCollapsed}
+          onToggle={() =>
+            setIsSidebarCollapsed((value) => {
+              const nextValue = !value;
+              localStorage.setItem("organizer_sidebar_collapsed", String(nextValue));
+              return nextValue;
+            })
+          }
+        />
+      )}
 
-      <div className="organizer-layout">
-        <main className={`organizer-main organizer-main-full ${showWorkflowNav ? "has-workflow-nav" : ""}`}>
-          <header className="organizer-header">
-            <div className="organizer-header-title-area">
-              <h1 className="organizer-title">{title}</h1>
-              {description ? (
-                <p className="organizer-description">{description}</p>
-              ) : null}
-            </div>
-            <div className="organizer-header-right">
-              {showWorkflowNav ? <OrganizerEventHeaderActions eventId={eventId} /> : null}
-              {!hideTopBar ? <OrganizerTopBar /> : null}
-              {actions ? (
-                <div className="organizer-header-actions">{actions}</div>
-              ) : null}
-            </div>
-          </header>
+      <div className={`organizer-layout ${hideSidebar ? "is-no-sidebar-layout" : ""}`}>
+        <main className={`organizer-main organizer-main-full ${showWorkflowNav ? "has-workflow-nav" : ""} ${hideSidebar ? "is-no-sidebar-main" : ""}`}>
+          {!hideHeader && (
+            <header className="organizer-header">
+              <div className="organizer-header-title-area">
+                <h1 className="organizer-title">{title}</h1>
+                {description ? (
+                  <p className="organizer-description">{description}</p>
+                ) : null}
+              </div>
+              <div className="organizer-header-right">
+                {showWorkflowNav ? <OrganizerEventHeaderActions eventId={eventId} /> : null}
+                {!hideTopBar ? <OrganizerTopBar /> : null}
+                {actions ? (
+                  <div className="organizer-header-actions">{actions}</div>
+                ) : null}
+              </div>
+            </header>
+          )}
 
           {showWorkflowNav ? (
             <OrganizerEventWorkspaceNav eventId={eventId} />

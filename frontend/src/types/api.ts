@@ -103,6 +103,7 @@ export interface EventSummary {
     url: string;
     isPrimary?: boolean;
   }[];
+  categoryId?: string | null;
   categories?: {
     id?: string;
     name: string;

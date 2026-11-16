@@ -1,12 +1,7 @@
 import axiosClient from "../lib/axiosClient";
 import { gatewayFallbackClient, userDirectClient } from "../lib/internalServiceClients";
 
-export type OrganizerImageType =
-  | "BANNER"
-  | "POSTER"
-  | "SEAT_MAP"
-  | "GALLERY"
-  | "THUMBNAIL";
+export type OrganizerImageType = "BANNER" | "GALLERY" | "SEAT_MAP";
 
 import { ticketService, CheckInResult } from "./ticketService";
 
@@ -50,6 +45,12 @@ export interface OrganizerProfile {
 export interface ApplyOrganizerPayload {
   organizationName: string;
   shortDescription: string;
+  contactEmail: string;
+  contactPhone: string;
+  websiteUrl?: string | null;
+  socialPageUrl: string;
+  headquartersAddress: string;
+  taxCode: string;
 }
 
 export interface OrganizerApplication {
@@ -57,6 +58,12 @@ export interface OrganizerApplication {
   identitySubject: string;
   organizationName: string;
   shortDescription: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  websiteUrl?: string | null;
+  socialPageUrl?: string | null;
+  headquartersAddress?: string | null;
+  taxCode?: string | null;
   status: "PENDING" | "ACTIVE" | "REJECTED";
   rejectionReason: string | null;
   decidedBySubject: string | null;
@@ -76,29 +83,6 @@ export interface OrganizerEventImageUpdatePayload {
   altText?: string | null;
   displayOrder?: number | null;
   imageType?: OrganizerImageType | null;
-}
-
-async function userServicePost<TResponse, TPayload>(
-  path: string,
-  payload?: TPayload,
-): Promise<TResponse> {
-  try {
-    const response = await gatewayFallbackClient.post<TResponse>(path, payload);
-    return response.data;
-  } catch {
-    const response = await userDirectClient.post<TResponse>(path, payload);
-    return response.data;
-  }
-}
-
-async function userServiceDelete<TResponse>(path: string): Promise<TResponse> {
-  try {
-    const response = await gatewayFallbackClient.delete<TResponse>(path);
-    return response.data;
-  } catch {
-    const response = await userDirectClient.delete<TResponse>(path);
-    return response.data;
-  }
 }
 
 async function uploadOrganizerProfileImage(
@@ -139,40 +123,79 @@ export const organizerService = {
     return response.data;
   },
 
-  followOrganizer: async (organizerProfileId: string): Promise<FollowResponse> =>
-    userServicePost<FollowResponse, undefined>(
-      `/api/organizers/${encodeURIComponent(organizerProfileId)}/follow`,
-    ),
+  getMyApplications: async (
+    signal?: AbortSignal,
+    cursor?: string,
+  ): Promise<{ items: OrganizerApplication[]; nextCursor: string | null }> => {
+    const response = await axiosClient.get<{ items: OrganizerApplication[]; nextCursor: string | null }>(
+      "/api/v1/organizer-applications",
+      { signal, params: { cursor } },
+    );
+    return response.data;
+  },
+
+  getMyApplicationById: async (
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<OrganizerApplication> => {
+    const response = await axiosClient.get<OrganizerApplication>(
+      `/api/v1/organizer-applications/${encodeURIComponent(id)}`,
+      { signal },
+    );
+    return response.data;
+  },
+
+  followOrganizer: async (organizerProfileId: string): Promise<FollowResponse> => {
+    const response = await axiosClient.put<{
+      organizerSubject: string;
+      following: boolean;
+      followerCount: number;
+    }>(`/api/v1/organizers/${encodeURIComponent(organizerProfileId)}/follow`);
+    return {
+      organizerProfileId: response.data.organizerSubject,
+      organizerName: "",
+      isFollowing: response.data.following,
+      followerCount: response.data.followerCount,
+    };
+  },
 
   unfollowOrganizer: async (
     organizerProfileId: string,
-  ): Promise<FollowResponse> =>
-    userServiceDelete<FollowResponse>(
-      `/api/organizers/${encodeURIComponent(organizerProfileId)}/follow`,
-    ),
+  ): Promise<FollowResponse> => {
+    const response = await axiosClient.delete<{
+      organizerSubject: string;
+      following: boolean;
+      followerCount: number;
+    }>(`/api/v1/organizers/${encodeURIComponent(organizerProfileId)}/follow`);
+    return {
+      organizerProfileId: response.data.organizerSubject,
+      organizerName: "",
+      isFollowing: response.data.following,
+      followerCount: response.data.followerCount,
+    };
+  },
 
   isFollowingOrganizer: async (
     organizerProfileId: string,
   ): Promise<boolean> => {
-    const path = `/api/organizers/${encodeURIComponent(organizerProfileId)}/is-following`;
-
-    try {
-      const response = await gatewayFallbackClient.get<{ isFollowing: boolean }>(path);
-      return response.data.isFollowing;
-    } catch {
-      const response = await userDirectClient.get<{ isFollowing: boolean }>(path);
-      return response.data.isFollowing;
-    }
+    const response = await axiosClient.get<{
+      organizerSubject: string;
+      following: boolean;
+      followerCount: number;
+    }>(`/api/v1/organizers/${encodeURIComponent(organizerProfileId)}/follow`);
+    return response.data.following;
   },
 
   getAdminApplications: async (
     status: OrganizerApplication["status"],
     cursor: string | null,
     signal?: AbortSignal,
+    query?: string,
   ) => {
+    const q = query?.trim() || undefined;
     const response = await axiosClient.get<{ items: OrganizerApplication[]; nextCursor: string | null }>(
       "/api/v1/admin/organizer-applications",
-      { params: { status, size: 20, cursor: cursor ?? undefined }, signal },
+      { params: { status, size: 20, cursor: cursor ?? undefined, q }, signal },
     );
     return response.data;
   },
@@ -192,16 +215,27 @@ export const organizerService = {
     return response.data;
   },
 
-  getPublicOrganizerBySlug: async (slug: string): Promise<OrganizerProfile> => {
-    const path = `/api/organizers/public/${encodeURIComponent(slug)}`;
-
-    try {
-      const response = await gatewayFallbackClient.get<OrganizerProfile>(path);
-      return response.data;
-    } catch {
-      const response = await userDirectClient.get<OrganizerProfile>(path);
-      return response.data;
-    }
+  getPublicOrganizerBySlug: async (slug: string, signal?: AbortSignal): Promise<OrganizerProfile> => {
+    const response = await axiosClient.get<{
+      organizerSubject: string;
+      organizationName: string;
+      shortDescription: string;
+      followerCount: number;
+      logoUrl?: string | null;
+      bannerUrl?: string | null;
+    }>(`/api/v1/organizers/${encodeURIComponent(slug)}`, { signal });
+    const data = response.data;
+    return {
+      id: data.organizerSubject,
+      userId: data.organizerSubject,
+      name: data.organizationName,
+      slug: data.organizerSubject,
+      description: data.shortDescription,
+      followerCount: data.followerCount,
+      logoUrl: data.logoUrl ?? null,
+      bannerUrl: data.bannerUrl ?? null,
+      isVerified: true,
+    };
   },
 
   getMyOrganizerProfile: async (): Promise<OrganizerProfile> => {

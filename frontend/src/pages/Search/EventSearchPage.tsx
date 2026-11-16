@@ -35,9 +35,19 @@ export default function EventSearchPage() {
   const trigger = useRef<HTMLButtonElement | null>(null);
   const categories = useQuery({ queryKey: ["search-categories"], queryFn: () => categoryService.getCategories() });
   const results = useInfiniteQuery({
-    queryKey: ["editorial-events", search, category, cursor],
+    queryKey: ["editorial-events", search, category, filters.from, filters.to, filters.price, filters.venue, cursor],
     initialPageParam: cursor,
-    queryFn: ({ pageParam }) => eventService.getEvents({ search, category, cursor: pageParam, size: 12 }),
+    queryFn: ({ pageParam }) =>
+      eventService.getEvents({
+        search,
+        category,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        maxPrice: filters.price || undefined,
+        venue: filters.venue || undefined,
+        cursor: pageParam,
+        size: 12,
+      }),
     getNextPageParam: (last, _, __, cursors) => last.nextCursor && !cursors.includes(last.nextCursor) ? last.nextCursor : undefined,
   });
 
@@ -108,23 +118,24 @@ export default function EventSearchPage() {
   const events = Array.from(new Map(results.data?.pages.flatMap(page => page.content).map(event => [event.id, event])).values());
   const venueQuery = useQuery({ queryKey: ["venues"], queryFn: venueService.getVenues });
   const venues = [...new Set(venueQuery.data?.map(venue => venue.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale));
-  const visible = events.filter(event => {
-    const day = dateKey(new Date(event.startDatetime));
-    const price = event.minPrice;
-    return (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to)
-      && (!filters.venue || event.venueName === filters.venue)
-      && (!filters.price || (price !== undefined && event.ticketTypes?.some(ticket => ticket.price === price && ticket.currency === "VND") && price <= Number(filters.price)));
-  });
-  const findingVenueEvents = Boolean(filters.venue && !visible.length && results.hasNextPage && !results.isError);
-  const { fetchNextPage, isFetching } = results;
-  useEffect(() => {
-    if (findingVenueEvents && !isFetching) void fetchNextPage({ cancelRefetch: false });
-  }, [findingVenueEvents, isFetching, fetchNextPage]);
+  const now = Date.now();
+  const hasDateFilter = Boolean(filters.from || filters.to);
+  const visible = events
+    .filter(event => {
+      const day = dateKey(new Date(event.startDatetime));
+      const price = event.minPrice;
+      const isUpcomingOrOngoing = hasDateFilter || Date.parse(event.endDatetime || event.startDatetime) >= now;
+      return isUpcomingOrOngoing
+        && (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to)
+        && (!filters.venue || event.venueName === filters.venue)
+        && (!filters.price || (price !== undefined && event.ticketTypes?.some(ticket => ticket.price === price && ticket.currency === "VND") && price <= Number(filters.price)));
+    })
+    .sort((a, b) => Date.parse(a.startDatetime) - Date.parse(b.startDatetime));
 
-  const spotlight = list ? [] : visible.slice(0, 3);
+  const spotlight = list ? [] : visible.slice(0, 4);
   const groups = new Map<string, EventSummary[]>();
   const month = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: zone });
-  for (const event of visible.slice(spotlight.length).sort((a, b) => Date.parse(a.startDatetime) - Date.parse(b.startDatetime))) {
+  for (const event of visible.slice(spotlight.length)) {
     const label = month.format(new Date(event.startDatetime));
     const group = groups.get(label) ?? [];
     group.push(event);
@@ -148,9 +159,9 @@ export default function EventSearchPage() {
         {kind !== "row" && <time dateTime={event.startDatetime}><Calendar size={14} />{date.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: zone })}</time>}
         <h3>{event.title}</h3>
         <p><MapPin size={14} /><span>{event.venueName || t("searchPage.locationUpdating")}</span></p>
-        <strong className="explore-price">{price ? copy(`Từ ${price}`, `From ${price}`) : t("searchPage.priceUpdating")}</strong>
+        {kind !== "lead" && (<strong className="explore-price">{price ? copy(`Từ ${price}`, `From ${price}`) : t("searchPage.priceUpdating")}</strong>)}
       </div>
-      <span className="explore-arrow"><ArrowRight size={18} /></span>
+      {kind === "lead" ? (<strong className="explore-price">{price ? copy(`Từ ${price}`, `From ${price}`) : t("searchPage.priceUpdating")}</strong>) : <span className="explore-arrow"><ArrowRight size={18} /></span>}
     </Link>;
   }
 
@@ -178,7 +189,7 @@ export default function EventSearchPage() {
           <p>{copy("Khám phá các sự kiện âm nhạc, thể thao, hội thảo và nhiều hoạt động hấp dẫn khác.", "Discover music, sports, workshops and more events near you.")}</p></div>
       </section>
       <form className="explore-search" role="search" aria-label={copy("Tìm sự kiện", "Find events")} onSubmit={event => { event.preventDefault(); changeMain(keyword.trim(), category); }}>
-        <label><Search size={20} /><input aria-label={t("searchPage.keyword")} value={keyword} onChange={event => setKeyword(event.target.value)} placeholder={copy("Tìm tên sự kiện, nghệ sĩ...", "Search events, artists...")} /></label>
+        <label><Search size={20} /><input aria-label={t("searchPage.keyword")} value={keyword} onChange={event => setKeyword(event.target.value)} placeholder={copy("Tìm theo tên sự kiện...", "Search by event name...")} /></label>
         <details className="explore-category" ref={categoryMenu} onKeyDown={event => {
           if (event.key !== "Escape" || !event.currentTarget.open) return;
           event.stopPropagation();
@@ -215,6 +226,7 @@ export default function EventSearchPage() {
         {panel && <form id="explore-filter" className="explore-popover" data-panel={panel} onSubmit={event => {
           event.preventDefault();
           const next = new URLSearchParams(params);
+          next.delete("cursor");
           Object.entries(draft).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key));
           setParams(next);
           setPanel(null);
@@ -280,23 +292,32 @@ export default function EventSearchPage() {
 
       <section className="explore-results" aria-labelledby="explore-results-title">
         <div className="explore-results-head">
-          <h2 id="explore-results-title">{copy(`${visible.length} sự kiện đang hiển thị`, `${visible.length} events shown`)}</h2>
+          <h2 id="explore-results-title">
+            {results.hasNextPage
+              ? copy(`${visible.length} sự kiện đã tải (còn thêm kết quả)`, `${visible.length} events loaded (more available)`)
+              : copy(`${visible.length} sự kiện phù hợp`, `${visible.length} matching events`)}
+          </h2>
           <div className="explore-toggle" data-list={list}>
             <button type="button" aria-label={copy("Bố cục nổi bật", "Editorial view")} aria-pressed={!list} onClick={() => setList(false)}><LayoutGrid size={18} aria-hidden="true" /></button>
             <button type="button" aria-label={copy("Bố cục danh sách", "List view")} aria-pressed={list} onClick={() => setList(true)}><List size={18} aria-hidden="true" /></button>
           </div>
         </div>
-        {(results.isPending || findingVenueEvents) ? <div className="explore-skeleton" role="status" aria-label={t("searchPage.loading")} /> : results.isError && !results.data ?
+        {results.isPending ? <div className="explore-skeleton" role="status" aria-label={t("searchPage.loading")} /> : results.isError && !results.data ?
           <div className="explore-state" role="alert"><p>{t("home.events.error")}</p><button className="explore-primary" onClick={() => void results.refetch()}>{t("home.events.retry")}</button></div>
           : !visible.length ? <div className="explore-state" role="status"><h3>{t("searchPage.noResults")}</h3><p>{t("searchPage.noResultsHint")}</p><button onClick={clear}>{t("searchPage.clearFilters")}</button></div>
           : <>
-            {spotlight.length > 0 && <div className="explore-spotlight" data-single={spotlight.length === 1}>{spotlight.map((event, index) => card(event, index === 0 ? "lead" : "side"))}</div>}
+            {spotlight.length > 0 && <div className="explore-spotlight" data-single={spotlight.length === 1}>
+              {card(spotlight[0], "lead")}
+              {spotlight.length > 1 && <div className="explore-spotlight-list">
+                {spotlight.slice(1).map(event => card(event, "side"))}
+              </div>}
+            </div>}
             <div className="explore-groups" data-list={list}>
               {[...groups].map(([label, items]) => <section key={label}><h2>{label}</h2>{items.map(event => card(event, "row"))}</section>)}
             </div>
           </>}
         {results.isFetchNextPageError && <p role="alert" className="explore-state">{t("home.events.error")}</p>}
-        {results.hasNextPage && !findingVenueEvents && <button className="explore-more" type="button" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+        {results.hasNextPage && <button className="explore-more" type="button" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
           {results.isFetchingNextPage ? t("searchPage.loading") : results.isFetchNextPageError ? t("home.events.retry") : copy("Xem thêm sự kiện", "Load more events")}<ArrowRight size={18} />
         </button>}
       </section>

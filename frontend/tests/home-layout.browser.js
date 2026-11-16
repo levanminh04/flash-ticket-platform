@@ -27,7 +27,7 @@ async (page) => {
     startDatetime: "2027-12-12T19:00:00", minPrice: 250000 + i * 50000,
     venueName: "Nhà hát Thành phố", city: "Hồ Chí Minh", category: categories[i % 2],
     bannerUrl: `https://images.unsplash.com/${i % 2 ? "photo-1516280440614-37939bbacd81" : "photo-1493225457124-a3eb161ffa5f"}?w=1000&auto=format&fit=crop`,
-    images: [{ type: "POSTER", url: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=600&auto=format&fit=crop" }, { type: "BANNER", url: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1000&auto=format&fit=crop" }],
+    images: [{ type: "GALLERY", url: "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=600&auto=format&fit=crop" }, { type: "BANNER", url: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1000&auto=format&fit=crop" }],
   }));
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
@@ -42,7 +42,7 @@ async (page) => {
         eventId: event.id, title: event.title, description: "Fixture minh họa",
         startsAt: event.startDatetime, endsAt: "2027-12-12T22:00:00", venueName: event.venueName,
         mode: "QUANTITY", seatMap: null,
-        images: [{ imageId: event.id, objectReference: event.bannerUrl, displayOrder: 0 }],
+        images: [{ imageId: event.id, objectReference: event.bannerUrl, displayOrder: 0, role: "BANNER" }],
         ticketTypes: [{ ticketTypeId: event.id + "-type", name: "Vé fixture", unitPrice: String(event.minPrice), currency: "VND", sectorId: null, configuredQuantity: "100", colorCode: "#cc9900" }],
       })), nextCursor: null };
     }

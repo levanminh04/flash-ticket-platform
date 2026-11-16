@@ -28,13 +28,9 @@ export interface UserProfile {
 }
 
 export const userService = {
-  getProfile: async (): Promise<UserProfile | null> => {
-    try {
-      const response = await axiosClient.get<UserProfile>("/api/v1/me");
-      return response.data;
-    } catch {
-      return null;
-    }
+  getProfile: async (): Promise<UserProfile> => {
+    const response = await axiosClient.get<UserProfile>("/api/v1/me");
+    return response.data;
   },
 
   uploadAvatar: async (file: File): Promise<UserProfile> => {

@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Swal from "sweetalert2";
 import { toast } from "react-toastify";
 import { Ticket as GiTicket, TicketsPlane as LuTicketsPlane } from "lucide-react";
-import { organizerService } from "../../services/organizerService";
 import { organizerWorkspaceService } from "../../services/organizerWorkspaceService";
 import {
   ORGANIZER_WORKFLOW_DIRTY_EVENT,
@@ -246,7 +245,6 @@ export default function OrganizerEventWorkspaceNav({
     Boolean(eventId);
   const isFinalSeatMapStep = steps[currentStepIndex]?.label === "workspaceNav.finishSeatMap";
   const isLayoutStep = steps[currentStepIndex]?.label === "workspaceNav.layout";
-  const isMediaStep = Boolean(eventId && steps[currentStepIndex]?.path === `${eventPath}/media`);
 
   const isUsableLayout = (layout: Awaited<ReturnType<typeof organizerWorkspaceService.getLayout>>) =>
     Boolean(
@@ -267,17 +265,6 @@ export default function OrganizerEventWorkspaceNav({
     });
   };
 
-  const hasSeatMapImage = async () => {
-    if (!eventId) return false;
-    const images = await organizerService.getEventImages(eventId);
-    return images.some(
-      (image) =>
-        image.imageType === "SEAT_MAP" &&
-        image.isDeleted !== true &&
-        Boolean(image.imageUrl),
-    );
-  };
-
   useEffect(() => {
     if (!eventId || isPublishedEvent) {
       setCanContinueCurrentStep(true);
@@ -292,16 +279,6 @@ export default function OrganizerEventWorkspaceNav({
     const resolvePrerequisite = async () => {
       if (setupMode !== "SEAT_MAP") {
         return { allowed: true, message: null };
-      }
-
-      if (isMediaStep) {
-        const hasUploadedSeatMap = await hasSeatMapImage().catch(() => false);
-        return hasUploadedSeatMap
-          ? { allowed: true, message: null }
-          : {
-              allowed: false,
-              message: t("workspaceNav.requireSeatMapImage"),
-            };
       }
 
       if (currentLabel === "workspaceNav.layout") {
@@ -365,7 +342,6 @@ export default function OrganizerEventWorkspaceNav({
     eventId,
     hasSavedCurrentStep,
     isPublishedEvent,
-    isMediaStep,
     isSeatMapTicketTypesStep,
     location.search,
     setupMode,

@@ -508,7 +508,7 @@ sequenceDiagram
   * Body: Object `SeatMap` (tọa độ canvas, các sector, các ghế x, y, rowName, seatNumber).
 * **`PUT /api/v1/organizer/events/{id}/ticket-types`**: Cập nhật các hạng vé và gán sector.
 * **`POST /api/v1/organizer/events/{id}/sales-mode`**: Chuyển đổi mode bán vé (`QUANTITY` hoặc `SEAT_MAP`).
-* **`GET /api/v1/organizer/events/{id}/statistics`**: Xem thống kê báo cáo bán vé (Tổng vé bán, doanh thu, tỷ lệ lấp đầy).
+* **`GET /api/v1/organizer/events/{eventId}/sales-summary`**: Xem số đơn, số vé đã bán và doanh số vé từ Booking.
 
 #### 3. Quản lý hình ảnh sự kiện (Event Images - Branch `dev/tuyen`)
 * **`GET /api/v1/organizer/events/{id}/images`**: Lấy danh sách ảnh của sự kiện.

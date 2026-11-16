@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   Ellipse,
   Group,
@@ -12,7 +11,13 @@ import {
   Text,
   Transformer,
 } from "react-konva";
-import { SeatMapEditorDocument, SeatMapEditorViewport } from "./seatMapEditorTypes";
+import {
+  SeatMapEditorDocument,
+  SeatMapEditorShape,
+  SeatMapEditorTool,
+  SeatMapEditorViewport,
+} from "./seatMapEditorTypes";
+import { EDITOR_GRID_CELL_SIZE, estimateSeatGridFromBounds } from "./seatMapEditorUtils";
 import { SectorRenderer } from "../shared/SectorRenderer";
 import { SeatRenderer } from "../shared/SeatRenderer";
 import {
@@ -23,7 +28,7 @@ import {
   polarToCartesian,
 } from "../shared/sectorPathUtils";
 
-const MIN_SCALE = 0.25;
+const MIN_SCALE = 0.05;
 const MAX_SCALE = 4;
 const ZOOM_RATIO = 1.08;
 const DEFAULT_VIEWPORT_WIDTH = 960;
@@ -43,7 +48,9 @@ function useHtmlImage(src?: string) {
     }
 
     const nextImage = new window.Image();
-    nextImage.crossOrigin = "anonymous";
+    if (!src.startsWith("data:") && !src.startsWith("blob:")) {
+      nextImage.crossOrigin = "anonymous";
+    }
     nextImage.src = src;
 
     const handleLoad = () => setImage(nextImage);
@@ -61,12 +68,17 @@ export interface SeatMapEditorCanvasProps {
   document: SeatMapEditorDocument;
   viewport: SeatMapEditorViewport;
   referenceImageVisible: boolean;
+  showGrid?: boolean;
+  activeTool?: SeatMapEditorTool;
   selectedShapeIds: string[];
   selectedSeatId: string | null;
   selectedSeatIds: string[];
   onClearSeatSelection: () => void;
   onSelectShape: (shapeId: string | null, additive?: boolean) => void;
   onSelectSeat: (shapeId: string, seatId: string | null, additive?: boolean) => void;
+  onSelectSeatsInShape?: (shapeId: string, seatIds: string[], additive?: boolean) => void;
+  onCreateSeatRowsFromBounds?: (bounds: { x: number; y: number; width: number; height: number }) => void;
+  onSetActiveTool?: (tool: SeatMapEditorTool) => void;
   onViewportChange: (viewport: SeatMapEditorViewport) => void;
   onResizeShape: (
     shapeId: string,
@@ -90,27 +102,6 @@ export interface SeatMapEditorCanvasProps {
     previousBounds: { x: number; y: number; width: number; height: number },
     nextBounds: { x: number; y: number; width: number; height: number },
   ) => void;
-}
-
-function getSeatBlockBounds(seats: Array<{ x: number; y: number }>, seatRadius: number = 0) {
-  if (!seats.length) {
-    return null;
-  }
-
-  const xs = seats.map((seat) => seat.x);
-  const ys = seats.map((seat) => seat.y);
-  const minX = Math.min(...xs);
-  const minY = Math.min(...ys);
-  const maxX = Math.max(...xs);
-  const maxY = Math.max(...ys);
-
-  const padding = 4;
-  return {
-    x: minX - seatRadius - padding,
-    y: minY - seatRadius - padding,
-    width: Math.max(maxX - minX + (seatRadius + padding) * 2, 1),
-    height: Math.max(maxY - minY + (seatRadius + padding) * 2, 1),
-  };
 }
 
 function getMapDataObject(value: unknown): Record<string, unknown> {
@@ -205,38 +196,106 @@ function getRadialPathData(shape: SeatMapEditorDocument["shapes"][number]) {
     : createFanSectorPath(config);
 }
 
+interface RowLabelMarker {
+  key: string;
+  text: string;
+  x: number;
+  y: number;
+  rotation: number;
+}
+
+function computeShapeRowLabels(shape: SeatMapEditorShape): RowLabelMarker[] {
+  const pos = shape.seatLayout?.rowLabelPosition ?? "left";
+  if (pos === "none" || shape.seatLayout?.mode === "table") {
+    return [];
+  }
+
+  const labeledSeats = shape.seats.filter((seat) => Boolean(seat.rowName));
+  if (labeledSeats.length === 0) {
+    return [];
+  }
+
+  const rowsMap = new Map<string, typeof labeledSeats>();
+  labeledSeats.forEach((seat) => {
+    const rowKey = seat.rowName ?? "";
+    const list = rowsMap.get(rowKey);
+    if (list) {
+      list.push(seat);
+    } else {
+      rowsMap.set(rowKey, [seat]);
+    }
+  });
+
+  const markers: RowLabelMarker[] = [];
+  const offsetDist = Math.max((shape.seatLayout?.seatRadius ?? 6) + 11, 16);
+  const fallbackRotRad = ((shape.seatLayout?.rotation ?? 0) * Math.PI) / 180;
+
+  rowsMap.forEach((rowSeats, rowName) => {
+    if (rowSeats.length === 0 || rowSeats.every((seat) => seat.hidden)) return;
+    const first = rowSeats[0];
+    const last = rowSeats[rowSeats.length - 1];
+    const dx = last.x - first.x;
+    const dy = last.y - first.y;
+    const dist = Math.hypot(dx, dy);
+    const ux = dist > 1 ? dx / dist : Math.cos(fallbackRotRad);
+    const uy = dist > 1 ? dy / dist : Math.sin(fallbackRotRad);
+    const angleDeg = (Math.atan2(uy, ux) * 180) / Math.PI;
+    const readableAngle =
+      angleDeg > 90 ? angleDeg - 180 : angleDeg < -90 ? angleDeg + 180 : angleDeg;
+
+    if (pos === "left" || pos === "both") {
+      markers.push({
+        key: `${shape.id}-${rowName}-L`,
+        text: rowName,
+        x: first.x - ux * offsetDist,
+        y: first.y - uy * offsetDist,
+        rotation: readableAngle,
+      });
+    }
+    if (pos === "right" || pos === "both") {
+      markers.push({
+        key: `${shape.id}-${rowName}-R`,
+        text: rowName,
+        x: last.x + ux * offsetDist,
+        y: last.y + uy * offsetDist,
+        rotation: readableAngle,
+      });
+    }
+  });
+
+  return markers;
+}
+
 export default function SeatMapEditorCanvas({
   document,
   viewport,
   referenceImageVisible,
+  activeTool = "select",
   selectedShapeIds,
   selectedSeatId,
   selectedSeatIds,
   onClearSeatSelection,
   onSelectShape,
   onSelectSeat,
+  onSelectSeatsInShape,
+  onCreateSeatRowsFromBounds,
+  onSetActiveTool,
   onViewportChange,
   onResizeShape,
   onSelectShapes,
   onTransformPolygon,
   onTranslateShape,
   onTranslateShapes,
-  onMoveSeat,
-  onMoveSeatBlock,
+  onMoveSeat: _onMoveSeat,
+  onMoveSeatBlock: _onMoveSeatBlock,
   resetViewKey = 0,
-  onResizeSeatBlock,
+  showGrid = true,
+  onResizeSeatBlock: _onResizeSeatBlock,
 }: SeatMapEditorCanvasProps) {
-  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const transformerRef = useRef<any>(null);
-  const seatOverlayTransformerRef = useRef<any>(null);
   const nodeRefs = useRef<Record<string, any>>({});
-  const seatOverlayNodeRefs = useRef<Record<string, any>>({});
   const dragOriginRef = useRef<Record<string, { x: number; y: number }>>({});
-  const seatDragOriginRef = useRef<Record<string, { x: number; y: number }>>({});
-  const seatBlockDragOriginRef = useRef<
-    Record<string, { x: number; y: number; width: number; height: number }>
-  >({});
   const panStartRef = useRef<{
     pointerX: number;
     pointerY: number;
@@ -245,16 +304,11 @@ export default function SeatMapEditorCanvas({
     moved: boolean;
   } | null>(null);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const drawRowsStartRef = useRef<{ x: number; y: number } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 640 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectionBox, setSelectionBox] = useState<BoundsLike | null>(null);
-  const [seatBlockGuide, setSeatBlockGuide] = useState<{
-    shapeId: string;
-    showVertical: boolean;
-    showHorizontal: boolean;
-    lineX: number;
-    lineY: number;
-  } | null>(null);
+  const [drawRowsBox, setDrawRowsBox] = useState<BoundsLike | null>(null);
   const lastFitKeyRef = useRef<string | null>(null);
   const referenceImage = useHtmlImage(document.referenceImageUrl);
   const stageOffset = useMemo(
@@ -296,23 +350,74 @@ export default function SeatMapEditorCanvas({
     }
     lastFitKeyRef.current = fitKey;
 
-    const horizontalPadding = 56;
-    const topPadding = 96;
+    const visibleShapes = document.shapes.filter((shape) => shape.visible !== false);
+    const horizontalPadding = 48;
+    const topPadding = 76;
+    const bottomPadding = visibleShapes.length > 0 ? 86 : 28;
     const availableWidth = Math.max(viewportSize.width - horizontalPadding * 2, 320);
-    const availableHeight = viewportSize.height - topPadding - 24;
+    const availableHeight = Math.max(viewportSize.height - topPadding - bottomPadding, 260);
+
+    let contentMinX = 0;
+    let contentMinY = 0;
+    let contentMaxX = document.width;
+    let contentMaxY = document.height;
+
+    if (visibleShapes.length > 0) {
+      contentMinX = Infinity;
+      contentMinY = Infinity;
+      contentMaxX = -Infinity;
+      contentMaxY = -Infinity;
+      for (const shape of visibleShapes) {
+        const b = getShapeSelectionBounds(shape);
+        contentMinX = Math.min(contentMinX, b.x);
+        contentMinY = Math.min(contentMinY, b.y);
+        contentMaxX = Math.max(contentMaxX, b.x + b.width);
+        contentMaxY = Math.max(contentMaxY, b.y + b.height);
+        const pad = Math.max((shape.seatLayout?.seatRadius ?? 7) * 2, 14);
+        for (const seat of shape.seats) {
+          if (seat.hidden) continue;
+          contentMinX = Math.min(contentMinX, seat.x - pad);
+          contentMinY = Math.min(contentMinY, seat.y - pad);
+          contentMaxX = Math.max(contentMaxX, seat.x + pad);
+          contentMaxY = Math.max(contentMaxY, seat.y + pad);
+        }
+      }
+      if (!Number.isFinite(contentMinX) || !Number.isFinite(contentMinY)) {
+        contentMinX = 0;
+        contentMinY = 0;
+        contentMaxX = document.width;
+        contentMaxY = document.height;
+      }
+    }
+
+    const contentWidth = Math.max(contentMaxX - contentMinX, 120);
+    const contentHeight = Math.max(contentMaxY - contentMinY, 120);
+
     const nextScale = clamp(
-      Math.min(availableWidth / document.width, availableHeight / document.height),
+      Math.min(availableWidth / contentWidth, availableHeight / contentHeight, 1.2),
       MIN_SCALE,
       MAX_SCALE,
     );
 
+    const centeredX =
+      horizontalPadding +
+      (availableWidth - contentWidth * nextScale) / 2 -
+      contentMinX * nextScale -
+      stageOffset.x;
+    const centeredY =
+      topPadding +
+      (availableHeight - contentHeight * nextScale) / 2 -
+      contentMinY * nextScale -
+      stageOffset.y;
+
     onViewportChange({
       scale: nextScale,
-      x: (viewportSize.width - document.width * nextScale) / 2 - stageOffset.x,
-      y: topPadding - stageOffset.y,
+      x: centeredX,
+      y: centeredY,
     });
   }, [
     document.height,
+    document.shapes,
     document.width,
     onViewportChange,
     resetViewKey,
@@ -340,25 +445,6 @@ export default function SeatMapEditorCanvas({
       .filter(Boolean);
 
     transformer.nodes(selectedNodes.length === 1 ? selectedNodes : []);
-    transformer.getLayer()?.batchDraw();
-  }, [selectedShapeIds, document.shapes]);
-
-  useEffect(() => {
-    const transformer = seatOverlayTransformerRef.current;
-    if (!transformer) {
-      return;
-    }
-
-    const selectedShapeId = selectedShapeIds[0];
-    const selectedShape = document.shapes.find((shape) => shape.id === selectedShapeId);
-    const selectedNode = selectedShapeId ? seatOverlayNodeRefs.current[selectedShapeId] : null;
-
-    if (selectedShape && selectedShape.seats.length && selectedNode) {
-      transformer.nodes([selectedNode]);
-    } else {
-      transformer.nodes([]);
-    }
-
     transformer.getLayer()?.batchDraw();
   }, [selectedShapeIds, document.shapes]);
 
@@ -422,7 +508,18 @@ export default function SeatMapEditorCanvas({
   });
 
   const handleMouseDown = (event: any) => {
-    if (event.evt.button === 2) {
+    if (activeTool === "seatRows" && event.evt.button === 0) {
+      const pointer = getWorldPointer(event);
+      if (!pointer) {
+        return;
+      }
+      event.evt.preventDefault();
+      drawRowsStartRef.current = pointer;
+      setDrawRowsBox({ x: pointer.x, y: pointer.y, width: 0, height: 0 });
+      return;
+    }
+
+    if (event.evt.button === 2 || (activeTool === "editSeats" && event.evt.button === 0 && event.target.attrs?.name !== "seat-node")) {
       const pointer = getWorldPointer(event);
       if (!pointer) {
         return;
@@ -464,6 +561,25 @@ export default function SeatMapEditorCanvas({
   };
 
   const handleMouseMove = (event: any) => {
+    const drawRowsStart = drawRowsStartRef.current;
+    if (drawRowsStart) {
+      const pointer = getWorldPointer(event);
+      if (!pointer) {
+        return;
+      }
+      event.evt.preventDefault();
+      const snappedStart = {
+        x: Math.round(drawRowsStart.x / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+        y: Math.round(drawRowsStart.y / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+      };
+      const snappedEnd = {
+        x: Math.round(pointer.x / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+        y: Math.round(pointer.y / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+      };
+      setDrawRowsBox(normalizeSelectionBox(snappedStart, snappedEnd));
+      return;
+    }
+
     const selectionStart = selectionStartRef.current;
     if (selectionStart) {
       const pointer = getWorldPointer(event);
@@ -502,9 +618,69 @@ export default function SeatMapEditorCanvas({
     });
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (event?: any) => {
+    const drawRowsStart = drawRowsStartRef.current;
+    if (drawRowsStart) {
+      const finishedBox = drawRowsBox;
+      drawRowsStartRef.current = null;
+      setDrawRowsBox(null);
+      if (finishedBox && finishedBox.width >= 40 && finishedBox.height >= 32) {
+        onCreateSeatRowsFromBounds?.(finishedBox);
+      }
+      return;
+    }
+
     const selectionStart = selectionStartRef.current;
     if (selectionStart && selectionBox) {
+      const isSmallClick = selectionBox.width < 6 && selectionBox.height < 6;
+      const additive = Boolean(event?.evt?.shiftKey || event?.evt?.ctrlKey || event?.evt?.metaKey);
+
+      if (activeTool === "editSeats") {
+        selectionStartRef.current = null;
+        setSelectionBox(null);
+        if (isSmallClick) {
+          const pointer = getWorldPointer(event);
+          const clickedInsideSeatedShape = pointer
+            ? document.shapes.some(
+                (shape) =>
+                  shape.visible !== false &&
+                  shape.seats.length > 0 &&
+                  pointer.x >= shape.bounds.x &&
+                  pointer.x <= shape.bounds.x + shape.bounds.width &&
+                  pointer.y >= shape.bounds.y &&
+                  pointer.y <= shape.bounds.y + shape.bounds.height,
+              )
+            : false;
+          if (!clickedInsideSeatedShape) {
+            onClearSeatSelection();
+          }
+          return;
+        }
+
+        const candidateShapes = selectedShapeIds.length
+          ? document.shapes.filter((shape) => selectedShapeIds.includes(shape.id))
+          : document.shapes.filter((shape) => shape.visible !== false && shape.seats.length > 0);
+
+        for (const shape of candidateShapes) {
+          const matchedSeatIds = shape.seats
+            .filter(
+              (seat) =>
+                !seat.hidden &&
+                seat.x >= selectionBox.x &&
+                seat.x <= selectionBox.x + selectionBox.width &&
+                seat.y >= selectionBox.y &&
+                seat.y <= selectionBox.y + selectionBox.height,
+            )
+            .map((seat) => seat.id);
+
+          if (matchedSeatIds.length > 0) {
+            onSelectSeatsInShape?.(shape.id, matchedSeatIds, additive);
+            return;
+          }
+        }
+        return;
+      }
+
       const selectedIds = document.shapes
         .filter((shape) => shape.visible !== false && shape.mapData?.decorative !== true)
         .filter((shape) => shape.shapeType !== "stage" && shape.shapeType !== "foh")
@@ -527,6 +703,7 @@ export default function SeatMapEditorCanvas({
 
     if (!panStart.moved) {
       onClearSeatSelection();
+      onSelectShape(null);
     }
   };
 
@@ -543,24 +720,13 @@ export default function SeatMapEditorCanvas({
     );
     return [...regularShapes, ...overlayShapes];
   }, [document.shapes]);
-  const stageBlockWidth = Math.min(document.width * 0.76, 620);
-  const stageBlockHeight = 135;
-  const stageBlockX = (document.width - stageBlockWidth) / 2;
-  const stageBlockY = 92;
-  const stageBlockPath = `
-    M ${stageBlockX} ${stageBlockY}
-    Q ${stageBlockX + stageBlockWidth / 2} ${stageBlockY - 34}
-      ${stageBlockX + stageBlockWidth} ${stageBlockY}
-    L ${stageBlockX + stageBlockWidth} ${stageBlockY + 28}
-    C ${stageBlockX + stageBlockWidth * 0.82} ${stageBlockY + stageBlockHeight},
-      ${stageBlockX + stageBlockWidth * 0.18} ${stageBlockY + stageBlockHeight},
-      ${stageBlockX} ${stageBlockY + 28}
-    Z
-  `;
   return (
     <div
       ref={containerRef}
       className={`organizer-seat-map-canvas-shell${isPanning ? " is-panning" : ""}`}
+      style={{
+        cursor: activeTool === "seatRows" || drawRowsBox ? "crosshair" : undefined,
+      }}
       onContextMenu={(event) => event.preventDefault()}
     >
       <Stage
@@ -583,27 +749,47 @@ export default function SeatMapEditorCanvas({
             y={0}
             width={viewportSize.width}
             height={viewportSize.height}
-            cornerRadius={24}
-            fill="#0f172a"
-            stroke="rgba(148, 163, 184, 0.34)"
-            strokeWidth={1}
-          />
-          <Rect
-            name="seat-map-background"
-            x={0}
-            y={0}
-            width={viewportSize.width}
-            height={viewportSize.height}
-            fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-            fillLinearGradientEndPoint={{ x: viewportSize.width, y: viewportSize.height }}
-            fillLinearGradientColorStops={[0, "#0b1220", 0.5, "#102231", 1, "#0d1d2b"]}
-            cornerRadius={24}
-            opacity={0.98}
+            fill="transparent"
+            stroke="transparent"
+            strokeWidth={0}
           />
         </Layer>
 
         <Layer>
           <Group {...worldStyle}>
+            {showGrid ? (() => {
+              const step = EDITOR_GRID_CELL_SIZE;
+              const safeScale = Math.max(viewport.scale, 0.05);
+              const minX = Math.floor((-worldStyle.x / safeScale) / step) * step - step * 2;
+              const maxX = Math.ceil(((viewportSize.width - worldStyle.x) / safeScale) / step) * step + step * 2;
+              const minY = Math.floor((-worldStyle.y / safeScale) / step) * step - step * 2;
+              const maxY = Math.ceil(((viewportSize.height - worldStyle.y) / safeScale) / step) * step + step * 2;
+              const lines: JSX.Element[] = [];
+              const strokeWidth = 1 / safeScale;
+              for (let gx = minX; gx <= maxX; gx += step) {
+                lines.push(
+                  <Line
+                    key={`gx-${gx}`}
+                    points={[gx, minY, gx, maxY]}
+                    stroke="rgba(148, 163, 184, 0.26)"
+                    strokeWidth={strokeWidth}
+                    listening={false}
+                  />,
+                );
+              }
+              for (let gy = minY; gy <= maxY; gy += step) {
+                lines.push(
+                  <Line
+                    key={`gy-${gy}`}
+                    points={[minX, gy, maxX, gy]}
+                    stroke="rgba(148, 163, 184, 0.26)"
+                    strokeWidth={strokeWidth}
+                    listening={false}
+                  />,
+                );
+              }
+              return lines;
+            })() : null}
             {referenceImageVisible && referenceImage ? (
               <KonvaImage
                 image={referenceImage}
@@ -622,7 +808,26 @@ export default function SeatMapEditorCanvas({
               }
 
               const isSelected = selectedShapeIds.includes(shape.id);
-              const draggable = !shape.locked;
+              const draggable =
+                !shape.locked && activeTool !== "editSeats" && activeTool !== "seatRows";
+              const showSeatsForShape = shape.seats.length > 0;
+              const handleShapeDoubleClick = () => {
+                onSelectShape(shape.id, false);
+                if (shape.seats.length > 0) {
+                  onSetActiveTool?.("editSeats");
+                }
+              };
+
+              const handleShapeNodeClick = (event: any) => {
+                const additive = isAdditiveSelection(event.evt as any);
+                if (
+                  activeTool === "editSeats" ||
+                  (isSelected && selectedSeatIds.length > 0 && !additive)
+                ) {
+                  return;
+                }
+                onSelectShape(shape.id, additive);
+              };
 
               return (
                 <Group key={shape.id}>
@@ -632,6 +837,8 @@ export default function SeatMapEditorCanvas({
                       name: shape.name,
                       label: shape.label,
                       sectorType: shape.sectorType,
+                      totalCapacity: shape.totalCapacity,
+                      seatCount: shape.seatCount,
                       shapeType: shape.shapeType,
                       color: shape.color,
                       bounds: shape.bounds,
@@ -642,7 +849,8 @@ export default function SeatMapEditorCanvas({
                     draggable={false}
                     pointsAreRelative
                     showDepth
-                    showLabel={false}
+                    showLabel={!showSeatsForShape}
+                    dimmedForSeats={showSeatsForShape}
                     listening={false}
                   />
                   {shape.shapeType === "polygon" && shape.points.length >= 6 ? (
@@ -657,11 +865,13 @@ export default function SeatMapEditorCanvas({
                         points={shape.points}
                         closed
                         draggable={draggable}
-                        fill="rgba(0, 0, 0, 0)"
+                        fill="rgba(0, 0, 0, 0.01)"
                         stroke="rgba(0, 0, 0, 0)"
                         strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
-                        onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
-                        onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                        onClick={handleShapeNodeClick}
+                        onTap={handleShapeNodeClick}
+                        onDblClick={handleShapeDoubleClick}
+                        onDblTap={handleShapeDoubleClick}
                         onDragStart={() => {
                           dragOriginRef.current[shape.id] = {
                             x: shape.bounds.x,
@@ -715,8 +925,10 @@ export default function SeatMapEditorCanvas({
                       fill="rgba(0, 0, 0, 0.01)"
                       stroke="rgba(0, 0, 0, 0)"
                       strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
-                      onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
-                      onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                      onClick={handleShapeNodeClick}
+                      onTap={handleShapeNodeClick}
+                      onDblClick={handleShapeDoubleClick}
+                      onDblTap={handleShapeDoubleClick}
                       onDragStart={() => {
                         dragOriginRef.current[shape.id] = { x: 0, y: 0 };
                       }}
@@ -756,11 +968,13 @@ export default function SeatMapEditorCanvas({
                         radiusX={shape.bounds.width / 2}
                         radiusY={shape.bounds.height / 2}
                         draggable={draggable}
-                        fill="rgba(0, 0, 0, 0)"
+                        fill="rgba(0, 0, 0, 0.01)"
                         stroke="rgba(0, 0, 0, 0)"
                         strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
-                        onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
-                        onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                        onClick={handleShapeNodeClick}
+                        onTap={handleShapeNodeClick}
+                        onDblClick={handleShapeDoubleClick}
+                        onDblTap={handleShapeDoubleClick}
                         onDragStart={() => {
                           dragOriginRef.current[shape.id] = {
                             x: shape.bounds.x + shape.bounds.width / 2,
@@ -829,11 +1043,13 @@ export default function SeatMapEditorCanvas({
                         height={shape.bounds.height}
                         cornerRadius={20}
                         draggable={draggable}
-                        fill="rgba(0, 0, 0, 0)"
+                        fill="rgba(0, 0, 0, 0.01)"
                         stroke="rgba(0, 0, 0, 0)"
                         strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
-                        onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
-                        onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                        onClick={handleShapeNodeClick}
+                        onTap={handleShapeNodeClick}
+                        onDblClick={handleShapeDoubleClick}
+                        onDblTap={handleShapeDoubleClick}
                         onDragStart={() => {
                           dragOriginRef.current[shape.id] = {
                             x: shape.bounds.x,
@@ -845,8 +1061,15 @@ export default function SeatMapEditorCanvas({
                           if (!origin) {
                             return;
                           }
-                          const nextX = event.target.x();
-                          const nextY = event.target.y();
+                          const isGridLocked = shape.mapData?.presetType === "seated_grid";
+                          const rawX = event.target.x();
+                          const rawY = event.target.y();
+                          const nextX = isGridLocked
+                            ? Math.round(rawX / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE
+                            : rawX;
+                          const nextY = isGridLocked
+                            ? Math.round(rawY / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE
+                            : rawY;
                           const targetShapeIds = getShapeMoveTargetIds(shape.id);
                           const deltaX = nextX - origin.x;
                           const deltaY = nextY - origin.y;
@@ -861,12 +1084,30 @@ export default function SeatMapEditorCanvas({
                           const node = event.target;
                           const scaleX = node.scaleX();
                           const scaleY = node.scaleY();
-                          const nextBounds = {
-                            x: node.x(),
-                            y: node.y(),
-                            width: Math.max(node.width() * scaleX, 24),
-                            height: Math.max(node.height() * scaleY, 24),
-                          };
+                          const isGridLocked = shape.mapData?.presetType === "seated_grid";
+                          const rawX = node.x();
+                          const rawY = node.y();
+                          const rawW = Math.max(node.width() * scaleX, 24);
+                          const rawH = Math.max(node.height() * scaleY, 24);
+                          const nextBounds = isGridLocked
+                            ? {
+                                x: Math.round(rawX / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+                                y: Math.round(rawY / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+                                width: Math.max(
+                                  EDITOR_GRID_CELL_SIZE * 2,
+                                  Math.round(rawW / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+                                ),
+                                height: Math.max(
+                                  EDITOR_GRID_CELL_SIZE,
+                                  Math.round(rawH / EDITOR_GRID_CELL_SIZE) * EDITOR_GRID_CELL_SIZE,
+                                ),
+                              }
+                            : {
+                                x: rawX,
+                                y: rawY,
+                                width: rawW,
+                                height: rawH,
+                              };
 
                           onResizeShape(shape.id, nextBounds);
                           node.scaleX(1);
@@ -882,259 +1123,75 @@ export default function SeatMapEditorCanvas({
                     </>
                   )}
 
-                  <Text
-                    x={shape.bounds.x}
-                    y={shape.bounds.y + shape.bounds.height + 12}
-                    text={`${shape.seatCount} seats`}
-                    fontSize={12}
-                    fill="rgba(226, 232, 240, 0.86)"
-                    listening={false}
-                  />
-
-                  {shape.seats.map((seat) => {
-                    const isSeatSelected = selectedSeatId === seat.id || selectedSeatIds.includes(seat.id);
-                    const isSeatHidden = seat.hidden === true;
-                    const seatEditingEnabled = shape.locked;
-
-                    return (
-                      <Group key={seat.id}>
-                        <SeatRenderer
-                          id={seat.id}
-                          x={seat.x}
-                          y={seat.y}
-                          radius={getShapeSeatRadius(shape)}
-                          status={seat.inventoryStatus}
-                          selected={isSeatSelected}
-                          hidden={isSeatHidden}
-                          disabled={!seatEditingEnabled}
-                          color={seat.colorCode ?? shape.color}
-                          editable={seatEditingEnabled}
-                          draggable={seatEditingEnabled && !isSeatHidden}
-                          memoizeEventHandlers
-                          onClick={(event) => {
-                            if (!seatEditingEnabled) {
-                              return;
-                            }
-                            event.cancelBubble = true;
-                            onSelectSeat(shape.id, seat.id, true);
-                          }}
-                          onTap={(event) => {
-                            if (!seatEditingEnabled) {
-                              return;
-                            }
-                            event.cancelBubble = true;
-                            onSelectSeat(shape.id, seat.id, true);
-                          }}
-                          onDragStart={() => {
-                            seatDragOriginRef.current[seat.id] = {
-                              x: seat.x,
-                              y: seat.y,
-                            };
-                          }}
-                          onDragEnd={(event) => {
-                            const nextX = event.target.x();
-                            const nextY = event.target.y();
-                            onMoveSeat(shape.id, seat.id, nextX, nextY);
-                          }}
-                        />
-                      </Group>
-                    );
-                  })}
-
-                  {isSelected && shape.seats.length ? (() => {
-                    const seatBlockBounds = getSeatBlockBounds(shape.seats, getShapeSeatRadius(shape));
-                    if (!seatBlockBounds) {
-                      return null;
-                    }
-                    const frameX = seatBlockBounds.x;
-                    const frameY = seatBlockBounds.y;
-                    const frameWidth = Math.max(seatBlockBounds.width, 18);
-                    const frameHeight = Math.max(seatBlockBounds.height, 18);
-                    const shapeCenterX = shape.bounds.x + shape.bounds.width / 2;
-                    const shapeCenterY = shape.bounds.y + shape.bounds.height / 2;
-
-                    return (
-                      <>
-                        <Rect
-                          ref={(node) => {
-                            seatOverlayNodeRefs.current[shape.id] = node;
-                          }}
-                          name="seat-block-node"
-                          x={frameX}
-                          y={frameY}
-                          width={frameWidth}
-                          height={frameHeight}
-                          cornerRadius={12}
-                          stroke="rgba(34, 197, 94, 0.9)"
-                          strokeWidth={1.5}
-                          dash={[8, 6]}
-                          hitStrokeWidth={14}
-                          fillEnabled={false}
-                          draggable
-                          onClick={(event) => {
-                            event.cancelBubble = true;
-                            onSelectShape(shape.id, false);
-                          }}
-                          onTap={(event) => {
-                            event.cancelBubble = true;
-                            onSelectShape(shape.id, false);
-                          }}
-                          onDragStart={(event) => {
-                            seatBlockDragOriginRef.current[shape.id] = {
-                              x: frameX,
-                              y: frameY,
-                              width: frameWidth,
-                              height: frameHeight,
-                            };
-                            event.target.opacity(0.9);
-                          }}
-                          onDragMove={(event) => {
-                            const origin = seatBlockDragOriginRef.current[shape.id];
-                            if (!origin) {
-                              return;
-                            }
-
-                            const nextCenterX = event.target.x() + origin.width / 2;
-                            const nextCenterY = event.target.y() + origin.height / 2;
-                            const showVertical = Math.abs(nextCenterX - shapeCenterX) <= 8;
-                            const showHorizontal = Math.abs(nextCenterY - shapeCenterY) <= 8;
-
-                            setSeatBlockGuide({
-                              shapeId: shape.id,
-                              showVertical,
-                              showHorizontal,
-                              lineX: shapeCenterX,
-                              lineY: shapeCenterY,
-                            });
-                          }}
-                          onDragEnd={(event) => {
-                            const origin = seatBlockDragOriginRef.current[shape.id];
-                            if (!origin) {
-                              return;
-                            }
-
-                            const nextX = event.target.x();
-                            const nextY = event.target.y();
-                            const nextCenterX = nextX + origin.width / 2;
-                            const nextCenterY = nextY + origin.height / 2;
-                            const snapVertical = Math.abs(nextCenterX - shapeCenterX) <= 8;
-                            const snapHorizontal = Math.abs(nextCenterY - shapeCenterY) <= 8;
-
-                            const snapDeltaX = snapVertical ? shapeCenterX - nextCenterX : 0;
-                            const snapDeltaY = snapHorizontal ? shapeCenterY - nextCenterY : 0;
-                            const deltaX = nextX - origin.x + snapDeltaX;
-                            const deltaY = nextY - origin.y + snapDeltaY;
-
-                            onMoveSeatBlock(shape.id, deltaX, deltaY);
-                            event.target.opacity(1);
-                            event.target.position({ x: origin.x, y: origin.y });
-                            setSeatBlockGuide(null);
-                          }}
-                          onTransformStart={() => {
-                            seatBlockDragOriginRef.current[shape.id] = {
-                              x: frameX,
-                              y: frameY,
-                              width: frameWidth,
-                              height: frameHeight,
-                            };
-                          }}
-                          onTransformEnd={(event) => {
-                            const origin = seatBlockDragOriginRef.current[shape.id];
-                            if (!origin) {
-                              return;
-                            }
-
-                            const node = event.target;
-                            const scaleX = node.scaleX();
-                            const scaleY = node.scaleY();
-                            const nextBounds = {
-                              x: node.x(),
-                              y: node.y(),
-                              width: Math.max(node.width() * scaleX, 18),
-                              height: Math.max(node.height() * scaleY, 18),
-                            };
-
-                            onResizeSeatBlock(
-                              shape.id,
-                              {
-                                x: origin.x,
-                                y: origin.y,
-                                width: origin.width,
-                                height: origin.height,
-                              },
-                              nextBounds,
-                            );
-
-                            node.scaleX(1);
-                            node.scaleY(1);
-                            node.position({ x: origin.x, y: origin.y });
-                            node.size({ width: origin.width, height: origin.height });
-                            setSeatBlockGuide(null);
-                          }}
-                        />
-
-                        {seatBlockGuide?.shapeId === shape.id && seatBlockGuide.showVertical ? (
-                          <Line
-                            points={[
-                              seatBlockGuide.lineX,
-                              shape.bounds.y,
-                              seatBlockGuide.lineX,
-                              shape.bounds.y + shape.bounds.height,
-                            ]}
-                            stroke="rgba(34, 197, 94, 0.92)"
-                            strokeWidth={1.2}
-                            dash={[6, 5]}
+                  {showSeatsForShape && (isSelected || activeTool === "editSeats")
+                    ? computeShapeRowLabels(shape).map((marker) => (
+                        <Group
+                          key={marker.key}
+                          x={marker.x}
+                          y={marker.y}
+                          rotation={marker.rotation}
+                          listening={false}
+                        >
+                          <Text
+                            x={-16}
+                            y={-5}
+                            width={32}
+                            align="center"
+                            text={marker.text}
+                            fontSize={10}
+                            fontStyle="700"
+                            fill="#334155"
                             listening={false}
+                            shadowColor="rgba(255, 255, 255, 0.9)"
+                            shadowBlur={2}
                           />
-                        ) : null}
+                        </Group>
+                      ))
+                    : null}
 
-                        {seatBlockGuide?.shapeId === shape.id && seatBlockGuide.showHorizontal ? (
-                          <Line
-                            points={[
-                              shape.bounds.x,
-                              seatBlockGuide.lineY,
-                              shape.bounds.x + shape.bounds.width,
-                              seatBlockGuide.lineY,
-                            ]}
-                            stroke="rgba(34, 197, 94, 0.92)"
-                            strokeWidth={1.2}
-                            dash={[6, 5]}
-                            listening={false}
-                          />
-                        ) : null}
-                      </>
-                    );
-                  })() : null}
+                  {showSeatsForShape
+                    ? shape.seats.map((seat) => {
+                        const isSeatSelected = selectedSeatId === seat.id || selectedSeatIds.includes(seat.id);
+                        const isSeatHidden = seat.hidden === true;
+                        const seatEditingEnabled = shape.locked || activeTool === "editSeats";
+
+                        return (
+                          <Group key={seat.id}>
+                            <SeatRenderer
+                              id={seat.id}
+                              x={seat.x}
+                              y={seat.y}
+                              radius={getShapeSeatRadius(shape)}
+                              status={seat.inventoryStatus}
+                              selected={isSeatSelected}
+                              hidden={isSeatHidden}
+                              disabled={false}
+                              color={seat.colorCode ?? shape.color}
+                              editable={seatEditingEnabled}
+                              draggable={false}
+                              memoizeEventHandlers
+                              onClick={(event) => {
+                                if (!seatEditingEnabled) {
+                                  return;
+                                }
+                                event.cancelBubble = true;
+                                onSelectSeat(shape.id, seat.id, true);
+                              }}
+                              onTap={(event) => {
+                                if (!seatEditingEnabled) {
+                                  return;
+                                }
+                                event.cancelBubble = true;
+                                onSelectSeat(shape.id, seat.id, true);
+                              }}
+                            />
+                          </Group>
+                        );
+                      })
+                    : null}
                 </Group>
               );
             })}
-
-            <Path
-              data={stageBlockPath}
-              fill="#1e293b"
-              stroke="#475569"
-              strokeWidth={2.5}
-              listening={false}
-              shadowColor="rgba(0, 0, 0, 0.45)"
-              shadowBlur={10}
-              shadowOffset={{ x: 0, y: 6 }}
-              shadowOpacity={0.65}
-            />
-            <Text
-              x={stageBlockX}
-              y={stageBlockY + 28}
-              width={stageBlockWidth}
-              align="center"
-              text={t("seatMap.stage")}
-              fontSize={34}
-              fontStyle="700"
-              fill="#94a3b8"
-              listening={false}
-              shadowColor="rgba(0, 0, 0, 0.5)"
-              shadowBlur={4}
-              shadowOffset={{ x: 0, y: 2 }}
-              shadowOpacity={1}
-            />
 
             {selectionBox ? (
               <Rect
@@ -1142,22 +1199,60 @@ export default function SeatMapEditorCanvas({
                 y={selectionBox.y}
                 width={selectionBox.width}
                 height={selectionBox.height}
-                fill="rgba(34, 197, 94, 0.12)"
-                stroke="rgba(255, 255, 255, 0.92)"
+                fill="rgba(22, 136, 240, 0.14)"
+                stroke="#1688f0"
                 strokeWidth={1.5}
-                dash={[8, 6]}
+                dash={[6, 4]}
                 listening={false}
               />
             ) : null}
 
+            {drawRowsBox && drawRowsBox.width > 12 && drawRowsBox.height > 12 ? (() => {
+              const gridEstimate = estimateSeatGridFromBounds(drawRowsBox);
+              const sizeText = `${gridEstimate.cols}x${gridEstimate.rows}`;
+              const labelFontSize = Math.max(
+                14,
+                Math.min(
+                  Math.round(22 / Math.max(viewport.scale, 0.35)),
+                  Math.floor(drawRowsBox.height * 0.55),
+                  Math.floor(drawRowsBox.width * 0.28),
+                ),
+              );
+              return (
+                <Group listening={false}>
+                  <Rect
+                    x={drawRowsBox.x}
+                    y={drawRowsBox.y}
+                    width={drawRowsBox.width}
+                    height={drawRowsBox.height}
+                    fill="rgba(22, 136, 240, 0.12)"
+                    stroke="rgba(22, 136, 240, 0.28)"
+                    strokeWidth={1 / Math.max(viewport.scale, 0.35)}
+                  />
+                  <Text
+                    x={drawRowsBox.x}
+                    y={drawRowsBox.y}
+                    width={drawRowsBox.width}
+                    height={drawRowsBox.height}
+                    align="center"
+                    verticalAlign="middle"
+                    text={sizeText}
+                    fontSize={labelFontSize}
+                    fontStyle="600"
+                    fill="#111827"
+                  />
+                </Group>
+              );
+            })() : null}
+
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
-              borderStroke="#ffffff"
+              borderStroke="#1688f0"
               borderStrokeWidth={1.5}
-              anchorStroke="#ffffff"
-              anchorFill="#19454f"
-              anchorSize={9}
+              anchorStroke="#1688f0"
+              anchorFill="#ffffff"
+              anchorSize={8}
               ignoreStroke
               enabledAnchors={[
                 "top-left",
@@ -1173,32 +1268,6 @@ export default function SeatMapEditorCanvas({
                 ...nextBox,
                 width: Math.max(nextBox.width, 24),
                 height: Math.max(nextBox.height, 24),
-              })}
-            />
-
-            <Transformer
-              ref={seatOverlayTransformerRef}
-              rotateEnabled={false}
-              borderStroke="rgba(34, 197, 94, 0.95)"
-              borderStrokeWidth={1.5}
-              anchorStroke="rgba(22, 163, 74, 1)"
-              anchorFill="#dcfce7"
-              anchorSize={8}
-              ignoreStroke
-              enabledAnchors={[
-                "top-left",
-                "top-center",
-                "top-right",
-                "middle-right",
-                "bottom-right",
-                "bottom-center",
-                "bottom-left",
-                "middle-left",
-              ]}
-              boundBoxFunc={(_, nextBox) => ({
-                ...nextBox,
-                width: Math.max(nextBox.width, 18),
-                height: Math.max(nextBox.height, 18),
               })}
             />
           </Group>
