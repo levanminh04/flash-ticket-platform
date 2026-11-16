@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.flashticket.ticket_service.exception.GlobalExceptionHandler;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ class TicketApiTests {
     operations = new FakeOperations();
     mvc =
         MockMvcBuilders.standaloneSetup(new TicketApiController(operations))
-            .setControllerAdvice(new TicketApiExceptionHandler())
+            .setControllerAdvice(new GlobalExceptionHandler(), new TicketApiExceptionHandler())
             .build();
     Jwt jwt = Jwt.withTokenValue("test-only").header("alg", "RS256").subject(ACTOR).build();
     principal = new JwtAuthenticationToken(jwt);
@@ -58,6 +59,14 @@ class TicketApiTests {
         .andExpect(jsonPath("$.tickets[0].qrToken").doesNotExist());
     assertThat(operations.orderId).isEqualTo(ORDER);
     assertThat(operations.actor).isEqualTo(ACTOR);
+  }
+
+  @Test
+  void unavailableOrderTicketsPreserveNotFoundStatus() throws Exception {
+    operations.failure = new TicketProblem(404, "RESOURCE_NOT_FOUND");
+    mvc.perform(get("/api/v1/orders/" + ORDER + "/tickets").principal(principal))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
   }
 
   @Test

@@ -1863,4 +1863,53 @@ class EventFlowTests {
     assertThat(jdbc.queryForObject("SELECT row_version FROM event_schema.tbl_events", Long.class))
         .isEqualTo(1L);
   }
+
+  @Test
+  void adminCreatesAndUpdatesVenuesWhileLegacyVenuesRemainReadable() throws Exception {
+    mvc.perform(get("/api/v1/venues"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value(VENUE.toString()))
+        .andExpect(jsonPath("$[0].description").value(org.hamcrest.Matchers.nullValue()));
+
+    var request =
+        multipart("/api/v1/admin/venues")
+            .param("name", "  Venue mới  ")
+            .param("address", "  10 Đường Mẫu  ")
+            .param("googleMapsUrl", "https://maps.app.goo.gl/example");
+    mvc.perform(request.with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+        .andExpect(status().isForbidden());
+
+    mvc.perform(
+            multipart("/api/v1/admin/venues")
+                .param("name", "  Venue mới  ")
+                .param("address", "  10 Đường Mẫu  ")
+                .param("googleMapsUrl", "https://maps.app.goo.gl/example")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.name").value("Venue mới"))
+        .andExpect(jsonPath("$.address").value("10 Đường Mẫu"))
+        .andExpect(jsonPath("$.googleMapsUrl").value("https://maps.app.goo.gl/example"));
+
+    mvc.perform(
+            multipart(
+                    org.springframework.http.HttpMethod.PATCH,
+                    "/api/v1/admin/venues/{venueId}",
+                    VENUE)
+                .param("description", "Mô tả bổ sung")
+                .param("googleMapsUrl", "https://www.google.com/maps/search/?api=1&query=Venue")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(VENUE.toString()))
+        .andExpect(jsonPath("$.description").value("Mô tả bổ sung"));
+
+    mvc.perform(
+            multipart(
+                    org.springframework.http.HttpMethod.PATCH,
+                    "/api/v1/admin/venues/{venueId}",
+                    VENUE)
+                .param("googleMapsUrl", "https://www.google.com.example.test/maps")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+  }
 }

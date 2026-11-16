@@ -74,7 +74,7 @@ public class UserController {
         try {
           if (!value.matches("[0-9]{2}-[0-9]{2}-[0-9]{4}")) throw invalidProfile();
           LocalDate date = LocalDate.parse(value, BIRTH_DATE);
-          if (date.getYear() < 1 || date.isAfter(LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))))
+          if (date.getYear() < 1900 || date.isAfter(LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))))
             throw invalidProfile();
         } catch (java.time.format.DateTimeParseException ex) {
           throw invalidProfile();
@@ -217,10 +217,20 @@ public class UserController {
 
   static Page<ApplicationView> page(
       UserStore store, String subject, ApplicationStatus status, int size, String cursor) {
+    return page(store, subject, status, null, size, cursor);
+  }
+
+  static Page<ApplicationView> page(
+      UserStore store,
+      String subject,
+      ApplicationStatus status,
+      String query,
+      int size,
+      String cursor) {
     if (size < 1 || size > 100)
       throw new UserException(400, "INVALID_PAGE_SIZE", "Page size must be between 1 and 100");
     if (cursor != null) canonicalId(cursor);
-    var rows = store.applications(subject, status, cursor, size + 1);
+    var rows = store.applications(subject, status, query, cursor, size + 1);
     boolean more = rows.size() > size;
     var items = rows.stream().limit(size).map(ApplicationView::of).toList();
     return new Page<>(items, more ? items.getLast().id() : null);

@@ -121,7 +121,7 @@ public class EventController {
   }
 
   @GetMapping("/venues")
-  public List<EventViews.Lookup> venues() {
+  public List<EventViews.Venue> venues() {
     return service.venues();
   }
 

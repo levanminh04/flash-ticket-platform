@@ -273,6 +273,29 @@ class EventImageStorageTests {
     }
   }
 
+  @Test
+  void venueRequiresSixteenByNineWithoutBannerMinimum() throws Exception {
+    var builder =
+        RestClient.builder()
+            .requestInterceptor(
+                (request, body, execution) -> {
+                  String id = publicId(body);
+                  return response(
+                      "{\"public_id\":\""
+                          + id
+                          + "\",\"secure_url\":\"https://res.cloudinary.com/test/image/upload/"
+                          + id
+                          + ".png\"}",
+                      HttpStatus.OK);
+                });
+    var storage = storage(builder, 1024, 1000);
+    var wide = new MockMultipartFile("file", "venue.png", "image/png", png(16, 9));
+    assertThat(storage.uploadVenue(EVENT, wide).objectReference()).endsWith(".png");
+    assertThatThrownBy(() -> storage.uploadVenue(EVENT, file()))
+        .isInstanceOfSatisfying(
+            EventProblem.class, p -> assertThat(p.code()).isEqualTo("INVALID_VENUE_IMAGE_RATIO"));
+  }
+
   private void assertUnavailable(EventImageStorage storage, MockMultipartFile file) {
     assertThatThrownBy(() -> storage.upload(EVENT, file))
         .isInstanceOfSatisfying(
