@@ -29,7 +29,7 @@ public class BuyerOrdersCacheService {
   @Value("${booking.buyer-orders-cache.ttl:PT24H}")
   private Duration cacheTtl;
 
-  @Value("${booking.buyer-orders-cache.key-prefix:flash-ticket:dev:booking:buyer-orders:v1:}")
+  @Value("${booking.buyer-orders-cache.key-prefix:flash-ticket:dev:booking:buyer-orders:v2:}")
   private String keyPrefix;
 
   public OrderPage getOrders(String buyerSubject, OrderState state, int page, int size) {

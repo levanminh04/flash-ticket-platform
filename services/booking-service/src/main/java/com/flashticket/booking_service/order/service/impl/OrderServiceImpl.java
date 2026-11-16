@@ -34,7 +34,6 @@ import com.flashticket.booking_service.enums.SectorType;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.mapper.MappingValueConverter;
-import com.flashticket.booking_service.mapper.OrderMapper;
 import com.flashticket.booking_service.mapper.OutboxMessageMapper;
 import com.flashticket.booking_service.messaging.repository.InboxMessageRepository;
 import com.flashticket.booking_service.messaging.repository.OutboxMessageRepository;
@@ -42,6 +41,7 @@ import com.flashticket.booking_service.order.event.BuyerOrdersChangedEvent;
 import com.flashticket.booking_service.order.repository.IdempotencyRequestRepository;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
+import com.flashticket.booking_service.order.service.OrderViewAssembler;
 import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
 import com.flashticket.booking_service.reservation.repository.ReservationRepository;
@@ -389,7 +389,7 @@ public class OrderServiceImpl implements OrderService {
 
   private final OrderRepository orderRepository;
   private final IdempotencyRequestRepository idempotencyRequestRepository;
-  private final OrderMapper orderMapper;
+  private final OrderViewAssembler orderViewAssembler;
   private final EventSalesSnapshotRepository eventSalesSnapshotRepository;
   private final PurchaseLimitRepository purchaseLimitRepository;
   private final TicketTypeInventoryRepository ticketTypeInventoryRepository;
@@ -527,7 +527,11 @@ public class OrderServiceImpl implements OrderService {
         orderRepository
             .findByIdAndBuyerSubject(orderId, buyerSubject)
             .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
-    return orderMapper.toView(order);
+    var eventTitleByEventId = new HashMap<UUID, String>();
+    for (var title :
+        eventSalesSnapshotRepository.findEventTitlesByEventIdIn(List.of(order.getEventId())))
+      eventTitleByEventId.put(title.getEventId(), title.getEventTitle());
+    return orderViewAssembler.toViews(List.of(order), eventTitleByEventId).getFirst();
   }
 
   @Override
@@ -538,27 +542,29 @@ public class OrderServiceImpl implements OrderService {
       throw new BusinessException(ErrorCode.UNAUTHENTICATED);
     // Giới hạn kích thước trang 1..100 theo B13 §9.
     if (page < 0 || size < 1 || size > 100) throw new BusinessException(ErrorCode.INVALID_REQUEST);
-    var pageRequest =
-        PageRequest.of(
-            page,
-            size,
-            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
-    var orderIdPage = orderRepository.findOrderIdsByBuyerSubject(buyerSubject, state, pageRequest);
+    var pageRequest = PageRequest.of(page, size);
+    var orderPageRows =
+        orderRepository.findBuyerOrderPageWithTitles(
+            buyerSubject, state == null ? null : state.name(), size, pageRequest.getOffset());
+    long totalElements = orderRepository.countBuyerOrdersBySubjectAndState(buyerSubject, state);
     var orderViews = new ArrayList<OrderView>();
-    if (orderIdPage.hasContent()) {
+    if (!orderPageRows.isEmpty()) {
+      var orderIds = orderPageRows.stream().map(row -> row.getOrderId()).toList();
       var orderById = new HashMap<UUID, Order>();
-      for (Order order : orderRepository.findWithItemsByIdIn(orderIdPage.getContent()))
+      for (Order order : orderRepository.findWithItemsByIdIn(orderIds))
         orderById.put(order.getId(), order);
-      // Query nạp theo id không giữ thứ tự => sắp lại theo trang id của bước 1.
-      for (UUID orderId : orderIdPage.getContent())
-        orderViews.add(orderMapper.toView(orderById.get(orderId)));
+      // Query IN không giữ thứ tự; tên và id đã cùng lấy từ trang trước khi fetch items.
+      var orderedOrders = new ArrayList<Order>();
+      var eventTitleByEventId = new HashMap<UUID, String>();
+      for (var row : orderPageRows) {
+        var order = orderById.get(row.getOrderId());
+        orderedOrders.add(order);
+        eventTitleByEventId.put(order.getEventId(), row.getEventTitle());
+      }
+      orderViews.addAll(orderViewAssembler.toViews(orderedOrders, eventTitleByEventId));
     }
-    return new OrderPage(
-        orderViews,
-        orderIdPage.getNumber(),
-        orderIdPage.getSize(),
-        orderIdPage.getTotalElements(),
-        orderIdPage.getTotalPages());
+    int totalPages = (int) Math.ceil((double) totalElements / size);
+    return new OrderPage(orderViews, page, size, totalElements, totalPages);
   }
 
   @Override
@@ -687,7 +693,7 @@ public class OrderServiceImpl implements OrderService {
             .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
     // Yêu cầu hủy trước có thể đã commit trong lúc chờ khóa; không trả tài nguyên lần hai.
     if (lockedOrder.getLifecycleState() == OrderState.CANCELLED)
-      return orderMapper.toView(lockedOrder);
+      return orderViewAssembler.toView(lockedOrder);
     if (lockedOrder.getLifecycleState() == OrderState.EXPIRED)
       throw new BusinessException(ErrorCode.ORDER_EXPIRED);
     if (lockedOrder.getLifecycleState() != OrderState.PENDING_PAYMENT)
@@ -769,7 +775,7 @@ public class OrderServiceImpl implements OrderService {
     applicationEventPublisher.publishEvent(
         new BuyerOrdersChangedEvent(lockedOrder.getBuyerSubject()));
     // Proxy commit xong mới trả về controller; lỗi flush/commit phải đi ra ngoài.
-    return orderMapper.toView(lockedOrder);
+    return orderViewAssembler.toView(lockedOrder);
   }
 
   @Override
@@ -2002,7 +2008,7 @@ public class OrderServiceImpl implements OrderService {
     receipt.setCreatedAt(decisionAt);
     // Version null => INSERT; trùng key không ghi đè receipt của request khác.
     idempotencyRequestRepository.save(receipt);
-    return orderMapper.toView(order);
+    return orderViewAssembler.toView(order);
   }
 
   private String calculateCreateOrderRequestHash(CreateOrderRequest request) {
@@ -2027,7 +2033,7 @@ public class OrderServiceImpl implements OrderService {
             .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
     if (!requestId.getActorSubject().equals(order.getBuyerSubject()))
       throw new BusinessException(ErrorCode.INTERNAL_ERROR);
-    return Optional.of(orderMapper.toView(order));
+    return Optional.of(orderViewAssembler.toView(order));
   }
 
   private void populateOrderItems(

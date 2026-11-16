@@ -482,11 +482,11 @@ curl -s -X POST "$BASE/api/v1/orders/<orderId>/cancel" -H "Authorization: Bearer
 Body phải đúng là `{}`. Response là `OrderView` với `state = CANCELLED`.
 
 ### 3.5 `GET /api/v1/orders/{orderId}` — chi tiết đơn (`BUYER`, chủ đơn)
-Trả `OrderView` như `POST /orders`. Đơn của buyer khác hoặc không tồn tại → `404 ORDER_NOT_FOUND`.
+Trả `OrderView` như `POST /orders`, có thêm `eventTitle` (string hoặc null) từ snapshot cấu hình Booking hiện hành. Đơn của buyer khác hoặc không tồn tại → `404 ORDER_NOT_FOUND`.
 
 ### 3.6 `GET /api/v1/orders?page=0&size=10&state=` — danh sách đơn của tôi (`BUYER`)
 - `page` ≥ 0 (mặc định 0), `size` 1..100 (mặc định 10), `state` tùy chọn (một `OrderState`); mới nhất trước.
-- Response `{ items: OrderView[], page, size, totalElements, totalPages }`. `items[].items[].seats` lấy từ snapshot lúc mua.
+- Response `{ items: OrderView[], page, size, totalElements, totalPages }`. Mỗi đơn có `eventTitle` (string nullable); `items[].items[].seats` lấy từ snapshot lúc mua, QUANTITY cũ thiếu seats trả `[]`.
 - Lỗi: `400 INVALID_REQUEST`, `401`, `403`.
 
 ### 3.7 `GET /api/v1/organizer/events/{eventId}/sales-summary?from=&to=` — thống kê bán vé (`ORGANIZER`, chủ sự kiện)
@@ -740,7 +740,7 @@ Ví dụ chart `GET /api/v1/organizers/owner/sales/chart?from=2026-11-01&to=2026
 
 `GET /api/v1/orders?state=&page=0&size=10` dùng Redis cache-aside theo subject JWT + state/page/size. Giữ nguyên OrderPage/OrderView và phân trang; chỉ cache trang được yêu cầu. BUYER authentication/authorization vẫn chạy trước lookup.
 
-- Data TTL mặc định **24 giờ** (`BOOKING_BUYER_ORDERS_CACHE_TTL=PT24H`); TTL <=0 bypass cache. Prefix `BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX` mặc định `flash-ticket:dev:booking:buyer-orders:v1:`.
+- Data TTL mặc định **24 giờ** (`BOOKING_BUYER_ORDERS_CACHE_TTL=PT24H`); TTL <=0 bypass cache. Prefix `BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX` mặc định `flash-ticket:dev:booking:buyer-orders:v2:`.
 - Subject được encode Base64 URL UTF8, không dùng token/email. Ví dụ buyer-123 → YnV5ZXItMTIz.
 - Metadata key: `{prefix}{encodedBuyer}:generation` → UUID hiện tại, không TTL.
 - Data key: `{prefix}{encodedBuyer}:data:{generation}:state:ALL:page:0:size:10` → JSON OrderPage, TTL86400s. Lọc state dùng đúng enum thay ALL.
@@ -749,4 +749,5 @@ Ví dụ chart `GET /api/v1/organizers/owner/sales/chart?from=2026-11-01&to=2026
 - GET miss gọi OrderService proxy, giữ transaction REPEATABLE_READ hiện tại, kết thúc DB transaction trước Redis SET. Reader giữ generation lấy trước khi đọc DB nên không ghi vào namespace mới sau invalidation.
 - Redis đọc/xóa lỗi fallback DB và bỏ ghi cache; JSON hỏng xóa best effort; Redis ghi/invalidate lỗi được log, không giả rollback DB đã commit. Không cache lỗi DB/nghiệp vụ; cache trang rỗng hợp lệ.
 - Giới hạn: chưa durable invalidation hoặc singleflight; nếu Redis lỗi hoặc process dừng sau DB commit trước listener, cache cũ có thể còn gần24giờ. Reader đang chạy có thể trả snapshot cũ cho chính request đó. TTL tính từ SET, không cam kết độ cũ dữ liệu luôn <=24giờ. Metadata generation giữ một key nhỏ/buyer; payload cũ được dọn bằng TTL.
-- Không thêm cột/index/query trong task cache này. Các field eventTitle/eventStartsAt/createdAt và batch snapshot đã thảo luận chưa được thêm vào OrderView trong thay đổi cache.
+- Hai GET `/api/v1/orders` và `/api/v1/orders/{orderId}` trả thêm `eventTitle` (string nullable) trong OrderView. Tên lấy từ snapshot cấu hình Booking hiện hành, không phải tên đóng băng lúc đặt; thiếu snapshot/tên trả null, không bỏ đơn. API ghi không lookup tên và có thể trả null. QUANTITY cũ thiếu/null/rỗng seats trả `[]`; không che lỗi thiếu ghế của SEATED.
+- Danh sách lấy ID/tên trong cùng query phân trang, rồi fetch items; không gọi Event Service hay tải toàn bộ JSON cấu hình. Cache v2 tránh đọc payload v1 thiếu tên: khi rollout cần đổi cả env override prefix nếu có; không flush Redis. Đổi tên event chưa invalidate cache buyer riêng nên tên có thể cũ tới lần invalidation đơn hoặc hết TTL. `eventStartsAt`/`createdAt` chưa được thêm.

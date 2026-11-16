@@ -77,11 +77,112 @@ class MapperTests {
   @Test
   void selectionConversionReturnsAnImmutableCopy() {
     var seats = new ArrayList<>(List.of(seat()));
-    var result = converter.seats(new SelectionSnapshot(1, seats));
+    var item = new OrderItem();
+    item.setSelectionSnapshot(new SelectionSnapshot(1, seats));
+    var result = converter.seats(item, Map.of());
     seats.clear();
     assertThat(result).containsExactly(seat());
     assertThatThrownBy(() -> result.clear()).isInstanceOf(UnsupportedOperationException.class);
-    assertThat(converter.seats(null)).isEmpty();
+    item.setSalesMode(SalesMode.QUANTITY);
+    item.setSelectionSnapshot(null);
+    assertThat(converter.seats(item, Map.of())).isEmpty();
+  }
+
+  static java.util.stream.Stream<SelectionSnapshot> missingOrEmptySeats() {
+    return java.util.stream.Stream.of(
+        null, new SelectionSnapshot(1, null), new SelectionSnapshot(1, List.of()));
+  }
+
+  private OrderItem itemWithSelection(SalesMode mode, SelectionSnapshot snapshot) {
+    var item = new OrderItem();
+    item.setId(MESSAGE);
+    item.setEventId(EVENT);
+    item.setSectorId(SECTOR);
+    item.setSalesMode(mode);
+    item.setUnitPrice(BigDecimal.ONE);
+    item.setLineSubtotal(BigDecimal.ONE);
+    item.setSelectionSnapshot(snapshot);
+    return item;
+  }
+
+  @ParameterizedTest
+  @MethodSource("missingOrEmptySeats")
+  void quantityOrdersTolerateLegacyMissingSeats(SelectionSnapshot snapshot) {
+    var view = orders.toItemView(itemWithSelection(SalesMode.QUANTITY, snapshot), Map.of());
+    assertThat(view.getSeats()).isEmpty();
+    assertThatThrownBy(() -> view.getSeats().add(seat()))
+        .isInstanceOf(UnsupportedOperationException.class);
+  }
+
+  @ParameterizedTest
+  @MethodSource("missingOrEmptySeats")
+  void standingOrdersTolerateMissingSeatsOnlyWithMatchingSector(SelectionSnapshot snapshot) {
+    assertThat(
+            orders
+                .toItemView(itemWithSelection(SalesMode.SEAT_MAP, snapshot), Map.of(SECTOR, EVENT))
+                .getSeats())
+        .isEmpty();
+  }
+
+  @ParameterizedTest
+  @MethodSource("missingOrEmptySeats")
+  void seatedOrdersNeverHideMissingSeats(SelectionSnapshot snapshot) {
+    assertThatThrownBy(
+            () -> orders.toItemView(itemWithSelection(SalesMode.SEAT_MAP, snapshot), Map.of()))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INTERNAL_ERROR);
+  }
+
+  @Test
+  void unknownOrOtherEventSectorCannotBeTreatedAsStanding() {
+    var item = itemWithSelection(SalesMode.SEAT_MAP, new SelectionSnapshot(1, null));
+    assertThatThrownBy(() -> orders.toItemView(item, Map.of()))
+        .isInstanceOf(BusinessException.class);
+    assertThatThrownBy(() -> orders.toItemView(item, Map.of(SECTOR, UUID.randomUUID())))
+        .isInstanceOf(BusinessException.class);
+    item.setEventId(null);
+    assertThatThrownBy(() -> orders.toItemView(item, Map.of(SECTOR, EVENT)))
+        .isInstanceOf(BusinessException.class);
+    item.setEventId(EVENT);
+    item.setSectorId(null);
+    assertThatThrownBy(() -> orders.toItemView(item, Map.of(SECTOR, EVENT)))
+        .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void nullSeatEntriesAreRejectedInsteadOfBeingHidden() {
+    var item =
+        itemWithSelection(
+            SalesMode.QUANTITY, new SelectionSnapshot(1, Arrays.asList(seat(), null)));
+    assertThatThrownBy(() -> orders.toItemView(item, Map.of()))
+        .isInstanceOf(BusinessException.class)
+        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INTERNAL_ERROR);
+  }
+
+  @Test
+  void completedPageWithTenQuantityOrdersAndThreeLegacyItemsMapsSuccessfully() {
+    var mapped = new ArrayList<com.flashticket.booking_service.dto.response.OrderView>();
+    for (int i = 0; i < 10; i++) {
+      var order = new Order();
+      order.setId(UUID.randomUUID());
+      order.setLifecycleState(OrderState.COMPLETED);
+      order.setSubtotal(BigDecimal.ONE);
+      order.setDiscount(BigDecimal.ZERO);
+      order.setTotal(BigDecimal.ONE);
+      order.setSourceConfigVersion(1L);
+      var snapshot = i < 3 ? new SelectionSnapshot(1, null) : new SelectionSnapshot(1, List.of());
+      order.addItem(itemWithSelection(SalesMode.QUANTITY, snapshot));
+      mapped.add(orders.toView(order, Map.of()));
+    }
+    var page = new com.flashticket.booking_service.dto.response.OrderPage(mapped, 0, 10, 10L, 1);
+    assertThat(page.getTotalElements()).isEqualTo(10);
+    assertThat(mapped)
+        .hasSize(10)
+        .allSatisfy(
+            view -> {
+              assertThat(view.getState()).isEqualTo(OrderState.COMPLETED);
+              assertThat(view.getItems().getFirst().getSeats()).isEmpty();
+            });
   }
 
   @Test
@@ -124,7 +225,7 @@ class MapperTests {
     item.setSectorId(SECTOR);
     item.setSelectionSnapshot(new SelectionSnapshot(1, List.of(seat())));
     order.addItem(item);
-    var view = orders.toView(order);
+    var view = orders.toView(order, Map.of());
     assertThat(view.getOrderId()).isEqualTo(ORDER);
     assertThat(view.getEventId()).isEqualTo(EVENT);
     assertThat(view.getState()).isEqualTo(OrderState.PENDING_PAYMENT);
@@ -139,8 +240,31 @@ class MapperTests {
     assertThat(line.getUnitPrice()).isEqualTo("100");
     assertThat(line.getLineSubtotal()).isEqualTo("200");
     assertThat(line.getSeats()).containsExactly(seat());
-    assertThat(orders.toView(null)).isNull();
-    assertThat(orders.toItemView(null)).isNull();
+    assertThat(orders.toView(null, Map.of())).isNull();
+    assertThat(orders.toItemView(null, Map.of())).isNull();
+  }
+
+  @Test
+  void mapsBuyerOrderEventTitleWithoutChangingWriteMapping() {
+    var order = new Order();
+    order.setId(ORDER);
+    order.setEventId(EVENT);
+    order.setLifecycleState(OrderState.COMPLETED);
+    order.setSubtotal(BigDecimal.ONE);
+    order.setDiscount(BigDecimal.ZERO);
+    order.setTotal(BigDecimal.ONE);
+    order.setSourceConfigVersion(1L);
+    order.addItem(itemWithSelection(SalesMode.SEAT_MAP, new SelectionSnapshot(1, null)));
+    var context = Map.of(SECTOR, EVENT);
+    var view = orders.toBuyerOrderView(order, "Đêm nhạc Việt – 東京", context);
+    assertThat(view.getEventTitle()).isEqualTo("Đêm nhạc Việt – 東京");
+    assertThat(view.getOrderId()).isEqualTo(ORDER);
+    assertThat(view.getItems().getFirst().getSeats()).isEmpty();
+    assertThat(orders.toBuyerOrderView(order, null, context).getEventTitle()).isNull();
+    assertThat(orders.toView(order, context).getEventTitle()).isNull();
+    assertThat(orders.toBuyerOrderView(order, null, context))
+        .usingRecursiveComparison()
+        .isEqualTo(orders.toView(order, context));
   }
 
   @Test
