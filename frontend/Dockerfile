@@ -16,5 +16,6 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine-slim@sha256:a8cb0f33d51fa107c96fd
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 EXPOSE 5173
+STOPSIGNAL SIGQUIT
 # Bypass the image entrypoint scripts: they try to rewrite config, which fails on a read-only root filesystem.
 ENTRYPOINT ["nginx", "-g", "daemon off;"]

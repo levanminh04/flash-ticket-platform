@@ -69,7 +69,49 @@ def check():
         assert endpoint['endpoints'][0].get('conditions', {}).get('ready', True)
         assert endpoint['ports'][0]['port'] == service['spec']['ports'][0]['port']
         assert endpoint['ports'][0]['name'] == service['spec']['ports'][0]['name']
-    assert {s['spec']['ports'][0]['port'] for s in services.values()} == {5173, 8080}
+    assert set(services) == {'keycloak-external'}
+    assert len(external) == 2
+    assert services['keycloak-external']['spec']['ports'][0]['port'] == 8080
+
+    deployment = documents('deploy/k8s/frontend/deployment.yaml')[0]
+    spec = deployment['spec']
+    assert spec['replicas'] == 1
+    assert spec['minReadySeconds'] == 10 and spec['progressDeadlineSeconds'] == 300
+    assert spec['strategy'] == {'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}
+    pod = spec['template']['spec']
+    assert pod['automountServiceAccountToken'] is False
+    assert pod['securityContext'] == {'runAsNonRoot': True, 'runAsUser': 10001, 'runAsGroup': 10001}
+    assert pod['terminationGracePeriodSeconds'] == 30
+    assert not pod.get('hostNetwork', False)
+    container = pod['containers'][0]
+    assert container['ports'] == [{'name': 'http', 'containerPort': 5173}]
+    assert not container.get('env') and not container.get('envFrom')
+    assert container['securityContext'] == {'readOnlyRootFilesystem': True, 'allowPrivilegeEscalation': False,
+                                            'capabilities': {'drop': ['ALL']}}
+    assert container['resources'] == {'requests': {'cpu': '25m', 'memory': '32Mi'}, 'limits': {'memory': '64Mi'}}
+    assert pod['volumes'] == [{'name': 'tmp', 'emptyDir': {'medium': 'Memory', 'sizeLimit': '64Mi'}}]
+    assert container['volumeMounts'] == [{'name': 'tmp', 'mountPath': '/tmp'}]
+    assert container['lifecycle']['preStop']['exec']['command'] == ['sh', '-c', 'sleep 5']
+    for probe, period, failures in [('startupProbe', 2, 30), ('readinessProbe', 2, 2), ('livenessProbe', 10, 3)]:
+        assert container[probe] == {'httpGet': {'path': '/index.html', 'port': 'http'}, 'periodSeconds': period,
+                                    'timeoutSeconds': 2, 'failureThreshold': failures}
+    frontend = documents('deploy/k8s/frontend/service.yaml')[0]
+    assert frontend['spec']['type'] == 'ClusterIP'
+    assert frontend['spec']['selector'] == spec['selector']['matchLabels']
+    assert all(spec['template']['metadata']['labels'][k] == v for k, v in frontend['spec']['selector'].items())
+    assert frontend['spec']['ports'] == [{'name': 'http', 'port': 5173, 'targetPort': 'http'}]
+    for ingress in [http, ingresses['frontend-https']]:
+        rule = next(r for r in ingress['spec']['rules'] if r['host'] == APP)
+        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'frontend', 'port': {'number': 5173}}
+    for ingress in [http, ingresses['keycloak-https']]:
+        rule = next(r for r in ingress['spec']['rules'] if r['host'] == AUTH)
+        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'keycloak-external', 'port': {'number': 8080}}
+    assert not (ROOT / 'deploy/k8s/frontend/ingress.yaml').exists()
+    assert not (ROOT / 'deploy/k8s/frontend/hpa.yaml').exists()
+    assert 'STOPSIGNAL SIGQUIT' in (ROOT / 'frontend/Dockerfile').read_text(encoding='utf-8')
+    compose_script = (ROOT / 'deploy/scripts/deploy-service.sh').read_text(encoding='utf-8')
+    assert '$svc == frontend && -f $APP_ROOT/state/k8s/frontend.current' in compose_script
+    assert compose_script.index('state/k8s/frontend.current') < compose_script.index('docker login')
 
     for name in ['api-gateway', 'booking-service', 'payment-service', 'ticket-service', 'event-service', 'user-service']:
         config = documents(f'deploy/k8s/{name}/configmap.yaml')[0]['data']

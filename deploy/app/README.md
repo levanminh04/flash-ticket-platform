@@ -16,6 +16,18 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 
 "Như trên" nghĩa là instance của service trong Eureka (`/eureka/apps/<APP>`) có `status=UP`, đúng port và đăng ký **sau** khi container mới start.
 
+## Phân chia runtime hiện tại trong source
+
+Tám ứng dụng (gồm frontend) dùng K3s; chỉ Keycloak dùng deploy Compose thường.
+FE **chưa cutover live** trong lượt sửa source17/11/2026; `frontend.yml` giữ làm
+fallback, không xóa image/config/state Compose. Xem [bootstrap/rollback FE](../k8s/README.md#frontend-bootstrap-cutover-và-rollback-riêng).
+K8s digest nằm `state/k8s/<svc>.current`; revision current/previous và snapshots ở
+`state/k8s/<svc>/`. Các lệnh/log/state Compose bên dưới chỉ áp dụng workload Compose,
+không dùng để restart Java/FE đã migrate. Guard FE chặn khi có frontend.current K8s.
+
+Không chạy CD main/all/k8s để phát hành FE lúc callback VNPay còn hoãn: sửa shared
+script sẽ recreate cả Payment. Source-only chưa cấp quyền publish/deploy/Git.
+
 ## Việc hằng ngày
 
 ```bash
@@ -139,4 +151,5 @@ Services có trường `kind`: `maven` cho service Spring/Keycloak, `node` cho f
 
 - Image `frontend` là nginx (`nginxinc/nginx-unprivileged`) phục vụ `dist/` đã build, cổng 5173, không có env runtime (không `env/frontend.env`, không secret `ENV_FRONTEND`).
 - `VITE_*` được build cứng vào bundle. Lấy từ **repo Variables** (`vars.VITE_API_GATEWAY_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`), không phải secret. Đổi giá trị thì phải chạy `action=deploy` (không phải `restart`) để build lại.
-- Workflow và script bỏ qua bước ghi/kiểm tra env khi service là frontend (trường `kind: node` trong `.github/services.json`).
+- Registry `kind: node`, `runtime: k8s`; workflow dùng deploy-k8s-service.sh, không ghi/kiểm tra env FE, không gọi Eureka. Readiness `/index.html` chỉ kiểm HTTP; smoke riêng HTML/assets/MIME/SPA.
+- Ổn định một Pod; rollout maxUnavailable0/maxSurge1, đợi Ready10s. Không node-failure HA, không bảo đảm tránh chunk404 giữa hai version. Compose chỉ rollback theo runbook dưới deploy.lock; không lách guard bằng override.

@@ -118,11 +118,18 @@ nslookup auth.flashticket.sondimid.cloud 1.1.1.1
 
 Lưu xong, báo lại để tiếp tục xác minh và cutover. Không cần mua SSL riêng.
 
-## 2. Kiến trúc được giữ nguyên
+## 2. Kiến trúc nguồn hiện tại (FE K3s chưa cutover live)
+
+Nguồn FE ngày17/11/2026 đã chuyển sang Deployment/Service selector-based;
+production FE vẫn Compose tới khi thực hiện [runbook FE](../k8s/README.md#frontend-bootstrap-cutover-và-rollback-riêng).
+Không apply `ingress.yaml` mới trước khi FE Pod Ready và smoke nội bộ đạt.
+Ingress FE vẫn thuộc `deploy/https`, không được script deploy FE apply tự động.
+Hai refs cần đổi riêng dưới deploy.lock; giữ Compose làm rollback, chỉ xóa hai
+object frontend-external sau nghiệm thu. Bỏ document khỏi file không prune live.
 
 | URL | Đích |
 | --- | --- |
-| `https://flashticket.sondimid.cloud/` | Frontend Compose, private `172.31.41.236:5173` |
+| `https://flashticket.sondimid.cloud/` | Nguồn: Service `frontend:5173` → Pod K3s; live trước cutover vẫn Compose |
 | `https://flashticket.sondimid.cloud/api` | Gateway Service K3s, port 8081; giữ nguyên path |
 | `https://auth.flashticket.sondimid.cloud/` | Keycloak Compose, private `172.31.41.236:8080` |
 
@@ -135,7 +142,7 @@ Ingress HTTPS chỉ ở entrypoint `websecure`; API priority200 thắng frontend
 priority100. Redirect HTTP priority1000 thắng route hostless; không thêm middleware
 rewrite cho API. Headlamp hiện chỉ ở `web`, không route dưới hai domain mới.
 
-Service không selector + EndpointSlice nối Traefik tới hai container ngoài cluster.
+Service không selector + EndpointSlice trong nguồn chỉ còn nối tới Keycloak ngoài cluster.
 IP private này gắn với máy84; khi đổi máy phải cập nhật EndpointSlice, nguồn tin cậy
 proxy và security group tương ứng. Không đưa management Keycloak9000 ra ngoài.
 

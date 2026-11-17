@@ -37,6 +37,10 @@ mkdir -p "$APP_ROOT/state/k8s"
 exec 8>"$APP_ROOT/state/k8s/deploy.lock"
 flock -w 600 8 || reject "cluster maintenance/deploy lock timeout"
 [[ ! -e $APP_ROOT/state/maintenance ]] || reject "maintenance active"
+# Marker chung có trước bootstrap FE; chỉ state FE thành công mới chặn Compose cũ.
+if [[ $svc == frontend && -f $APP_ROOT/state/k8s/frontend.current ]]; then
+  reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
+fi
 if [[ -f $APP_ROOT/state/k8s/enabled && $svc != keycloak && $svc != frontend ]]; then
   reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
 fi

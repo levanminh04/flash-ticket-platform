@@ -27,7 +27,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: frontend-external
+                name: frontend
                 port:
                   number: 5173
     - host: auth.flashticket.sondimid.cloud
@@ -63,7 +63,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: frontend-external
+                name: frontend
                 port:
                   number: 5173
 ---

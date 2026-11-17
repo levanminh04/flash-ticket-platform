@@ -8,6 +8,6 @@
     {"name": "booking-service", "path": "services/booking-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": true, "runtime": "k8s"},
     {"name": "payment-service", "path": "services/payment-service", "kind": "maven", "mvn": "./mvnw", "postgres": false, "rabbitmq": false, "runtime": "k8s"},
     {"name": "keycloak", "path": "services/keycloak-spi", "kind": "maven", "mvn": "mvn", "postgres": false, "rabbitmq": false, "runtime": "compose"},
-    {"name": "frontend", "path": "frontend", "kind": "node", "mvn": "", "postgres": false, "rabbitmq": false, "runtime": "compose"}
+    {"name": "frontend", "path": "frontend", "kind": "node", "mvn": "", "postgres": false, "rabbitmq": false, "runtime": "k8s"}
   ]
 }
