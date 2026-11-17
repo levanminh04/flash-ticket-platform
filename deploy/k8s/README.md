@@ -1,8 +1,10 @@
-# 7 ứng dụng Flash Ticket trên K3s
+# 8 ứng dụng Flash Ticket trên K3s — nguồn triển khai
 
 Gateway/Eureka và Booking/Payment/Ticket/Event/User chạy trong namespace
-`flash-ticket`. PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak, Frontend và Ngrok
-tiếp tục chạy Compose trên 84. Eureka trả địa chỉ Pod; HTTP nghiệp vụ đi trực
+`flash-ticket`. Nguồn FE nay dùng K3s; **chưa bootstrap/cutover FE live** trong lượt
+triển khai source ngày 17/11/2026. PostgreSQL, MongoDB, RabbitMQ, Redis và Keycloak
+vẫn ở ngoài K3s; FE Compose giữ làm fallback, Ngrok theo runbook Payment riêng.
+Eureka trả địa chỉ Pod; HTTP nghiệp vụ đi trực
 tiếp đến Pod đã chọn. Gateway có một Service; Eureka có Service client và thêm
 headless Service để hai peer có địa chỉ DNS ổn định.
 
@@ -85,8 +87,8 @@ pull lâu dài. Không cần tạo pull Secret nếu đã kiểm digest truy c�
 
 ## Deploy thường và rollback một service
 
-CD push main dùng `.github/services.json.runtime`: bảy app `k8s`, Keycloak và
-Frontend `compose`. Source đổi → verify/build/publish GHCR/deploy; chỉ manifest
+CD push main dùng `.github/services.json.runtime`: tám app `k8s` (gồm frontend),
+Keycloak `compose`. Source đổi → verify/build/publish GHCR/deploy; chỉ manifest
 đổi → dùng digest K8s current, tạo Pod mới. Node template/Secret example/docs
 không tự cài cluster hoặc xoay Secret. Khi chỉ sửa `ENV_*`, dùng action restart
 hiện có để nạp lại, thay Secret không tự cập nhật process đang chạy.
@@ -107,7 +109,8 @@ tùy ý mà không biết cấu hình tương ứng.
 Script khóa chung `/opt/flash-ticket-app/state/k8s/deploy.lock`, yêu cầu file
 `state/k8s/enabled`, namespace sẵn và không có `state/maintenance`. Không tự cài
 K3s hoặc fallback Compose. Compose deploy cũng dùng khóa này và từ chối Java đã
-chuyển K8s khi gate enabled.
+chuyển K8s khi gate enabled. Riêng frontend chỉ bị chặn Compose khi đã có
+`state/k8s/frontend.current`, không chặn bởi marker enabled chung trước bootstrap.
 
 State K8s riêng `state/k8s/<service>/`: current/previous trỏ revision, mỗi revision
 có image, Deployment hoặc StatefulSet, ConfigMap/Service/Ingress/HPA và snapshot Secret. Thư mục mode
@@ -122,6 +125,100 @@ thể đổi replica trong khi kiểm nên script lấy lại trạng thái mỗ
 index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗi rollout vẫn
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
+
+## Frontend: bootstrap, cutover và rollback riêng
+
+**Trạng thái:** chỉ source/config/tests; chưa publish image, SSH preflight hoặc đổi
+route live. Không chạy CD `all`/`k8s` hay merge main để thử FE: đổi shared deploy script
+chọn recreate toàn bộ K8s app, có thể áp callback Payment của `0ed5baf` đang hoãn.
+Lần chuyển đầu chỉ chọn `frontend`; phát hành CD main cần quyết định riêng.
+
+### Runtime và state
+
+- `Deployment/frontend`: ổn định 1 replica, không HPA; RollingUpdate
+  maxUnavailable0/maxSurge1, minReadySeconds10, progressDeadlineSeconds300.
+  Pod mới chưa Ready thì giữ Pod cũ trong rollout bình thường. Không phải HA khi
+  node/Traefik/network hỏng hoặc Pod duy nhất crash; terminating Pod vẫn tốn RAM.
+- Port5173, UID/GID10001, root filesystem read-only, không service-account token,
+  drop ALL/no privilege escalation; `/tmp` emptyDir memory64Mi.
+  Request25m/32Mi, limit64Mi không CPU limit. Cần đo OOM/capacity với cả surge và
+  terminating Pod; tmpfs cũng tính vào memory, không chỉ dựa requests.
+- Probe HTTP `/index.html` không phụ thuộc Keycloak/API; preStop đợi5s,
+  grace30s và image `STOPSIGNAL SIGQUIT`. HTTP200 chưa chứng minh app/JS hoạt động.
+- Không ConfigMap, Secret hay runtime env FE; VITE lấy repo Variables lúc build.
+  Restart giữ bundle cũ, đổi URL cần rebuild. Script bỏ toàn bộ discovery/Eureka
+  preparation/check cho FE, vẫn kiểm digest/1 Pod Ready/không restart và rollback.
+- Digest `state/k8s/frontend.current`; revision snapshots/current/previous dưới
+  `state/k8s/frontend/`. Compose state `state/frontend.current/.previous` giữ riêng.
+  Lỗi rollout trả nonzero dù restore thành công; deadline không tự rollback.
+
+### Trình tự khi được phép ghi production
+
+1. Read-only preflight ft84: node/capacity/requests/RAM thực, Compose FE digest và
+   state, hai Ingress FE/static EndpointSlice, gate/lock, GHCR pull credentials
+   (chỉ tồn tại/quyền). Lưu snapshot routing public và digest; không in env/token.
+2. Khi có quyền Git/publish, dùng SHA thật đã kiểm với CD `publish_only=true`,
+   `action=deploy`, **service=frontend** trên ref được duyệt; không build trên84.
+   Kiểm multiarch/digest, SIGQUIT và bundle có app/auth HTTPS đúng.
+3. Upload đúng release tree; khi được phép bootstrap, cài bản `deploy-service.sh`
+   có guard FE vào `/opt/flash-ticket-app/deploy-service.sh` để caller Compose cũ
+   dùng guard (workflow K8s không tự upload script Compose này).
+   Gọi deploy script frontend mode `deploy` để seed
+   state, không `recreate` trước current. Chưa sửa Ingress, giữ Compose phục vụ.
+   Script tự giữ deploy.lock; không giữ cùng khóa ngoài khi gọi gây deadlock.
+4. Chờ Ready1/1 đúng digest, không restart; kiểm Service selector/PodIP và GET qua
+   ClusterIP: index có root, asset thật đúng MIME, SPA deep route, missing asset404.
+5. Sau khi script trả, lấy deploy.lock cho đổi route, kiểm không CD cạnh tranh.
+   Patch **chỉ hai refs FE** trong `frontend-https` và rule app-host của
+   `domain-http-redirect`: `frontend-external:5173` → `frontend:5173`.
+   Không apply toàn bộ HTTPS/Traefik/Keycloak trong lần chuyển này.
+6. Kiểm TLS trusted, redirect, HTML/asset/deep route; `/api` vẫn Gateway, protected
+   API vẫn từ chối không token, auth discovery không đổi. Đối chiếu backend refs,
+   EndpointSlice PodIP và Pod access log để chứng minh request qua Pod, không Compose.
+7. Đo đọc hữu hạn tối đa2 request/s bao trùm recreate cùng digest: timestamp,
+   status/error/latency/content-type; quan sát cũ+mới/minReadySeconds/endpoints/RAM.
+   Cuối cùng Ready1/1, không restart/OOM; báo số mẫu/lỗi, không gọi đó là SLA tuyệt đối.
+8. Sau checks đạt, dưới deploy.lock stop **riêng** container FE Compose đã xác minh,
+   giữ image/config (không compose down/volume). Chứng minh không còn Ingress refs
+   tới FE external rồi delete riêng Service và EndpointSlice `frontend-external`.
+   Xóa document nguồn không prune object live. Keycloak/Ngrok không đụng.
+9. Kiểm public sau stop và cleanup; ghi SHA/digest/state/routes/kết quả vào plan.
+   Không yêu cầu host port5173 còn listen khi FE đã dùng Pod network.
+
+### Đường lui và giới hạn assets
+
+- Trước cleanup: restore đúng hai refs từ snapshot về frontend-external, kiểm
+  public; Compose vẫn chạy. Bootstrap chưa có previous K8s thì không có automatic
+  K8s rollback; nếu bất định giữ cả hai workloads, không xóa namespace/Pod hàng loạt.
+- Sau cleanup: dưới deploy.lock phục hồi Compose **trực tiếp**, dùng digest snapshot
+  và `compose/frontend.yml` + `_common.yml` hiện có (không runtime env), kiểm host
+  listener; restore đúng Service/EndpointSlice FE static từ snapshot, rồi đổi refs
+  Ingress về cũ và kiểm public. Không gọi deploy-service.sh hoặc lách guard bằng
+  override/xóa state. Không khởi động Java Compose, đổi Keycloak/Payment hay xóa dữ liệu.
+- Rollback K8s bình thường dùng digest **previous** có snapshot qua script; diễn tập
+  live chỉ với revision đã kiểm VITE HTTPS và quyền riêng, không cố deploy bản lỗi.
+- Mỗi image chỉ giữ dist riêng. HTML A/chunk B trong rollout khác version hoặc tab
+  cũ có thể chunk404; no-cache index/immutable assets không giải quyết version skew.
+  Chưa có CDN/asset retention/session affinity. Kiểm assets theo từng index, không
+  dùng root200 để khẳng định mọi SPA session zero-error.
+
+### Kiểm chứng source ngày17/11/2026
+
+Flow: registry runtime k8s → deploy script/render digest → Service/Deployment FE
+→ rollout/Pod check → atomic current/previous; Ingress đổi riêng sau bootstrap.
+Không có Java class/method hoặc annotation mới; Shop App Java không áp vào YAML/Bash.
+Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framework/helper.
+
+- PASS: HTTPS static contract, deploy fixtures backend+FE (deploy/recreate/rollback,
+  failed rollout không advance state, validation và Compose guard), 15 discovery tests.
+- PASS: routing fixtures/ShellCheck trong container Alpine, shell syntax và diff check.
+- PASS: container hooks sáu backend/Eureka; nginx FE runtime stage thật với dist mẫu,
+  UID10001/read-only/tmpfs/64Mi, HTML/SPA/assets/MIME/cache/404, SIGQUIT stop exit0.
+  Đây không phải bundle VITE thật, test tải hoặc chứng minh continuity trên Traefik/K3s.
+- Chưa chạy actionlint1.7.12/kubeconform0.8.0: host thiếu Go, lệnh Go trong container
+  bị chặn quyền chạy code GitHub bên ngoài. Không bỏ qua hoặc ghi nhận là PASS.
+- Chưa commit/push/publish/preflight/cutover production. CI trên GitHub chưa chạy
+  cho tree này. Hai spec/plan local vẫn bị `/docs/java-workflow/` exclude, không force-add.
 
 ## Rollout giữ ứng dụng phục vụ trên node 84
 
@@ -242,7 +339,7 @@ Nguồn: [Kubernetes HPA](https://kubernetes.io/docs/concepts/workloads/autoscal
 ## Bootstrap/cutover: chưa tự động thực hiện
 
 Để có image mới trước khi dừng Compose, CD có input `publish_only=true` cùng
-`action=deploy`, `service=k8s`: chỉ verify/build/publish đúng bảy ứng dụng, bỏ
+`action=deploy`, `service=k8s`: source hiện chọn tám ứng dụng, bỏ
 toàn bộ job SSH deploy. Dùng revision code đã được phép push; lấy digest từ
 GHCR tag `sha-<commit>` để bootstrap. Không bật runtime gate hoặc tạo consumer
 chỉ để pipeline build được image. Push main bình thường vẫn deploy như cũ.
@@ -277,17 +374,13 @@ Chỉ thực hiện sau khi đã có kết quả verify, image đã publish đư
 7. Kiểm từng instance Eureka, loại registry/cache cũ ra khỏi đường gọi; health
    không chứng minh HTTP nghiệp vụ đúng. Kiểm public `http://52.64.237.84/api/...`,
    JWT/role và public `/actuator/health` `/internal/...` không route được.
-8. Ngrok giữ nguyên domain; thêm `NGROK_UPSTREAM=http://127.0.0.1:80` vào env
-   Payment trên server qua cơ chế env-file, cập nhật Compose file mới rồi chỉ
-   recreate `ngrok` với `--no-deps`. Không gọi deploy Compose Payment. Ví dụ:
-
-   ```bash
-   IMAGE="$(cat /opt/flash-ticket-app/state/payment-service.current)" \
-     docker compose --env-file /opt/flash-ticket-app/env/payment-service.env \
-     -p flash-ticket-payment-service \
-     -f /opt/flash-ticket-app/compose/payment-service.yml \
-     up -d --no-deps --force-recreate ngrok
-   ```
+8. Callback VNPay dùng HTTPS domain:
+   `https://flashticket.sondimid.cloud/api/v1/payments/vnpay/ipn` và `/return`.
+   Đồng bộ ConfigMap Payment, env server và `ENV_PAYMENT_SERVICE`, rollout riêng
+   Payment rồi cập nhật đăng ký IPN bên VNPay. Compose/script mới không tạo Ngrok;
+   chỉ tháo container cũ sau khi provider đã đổi và callback/link cũ đã drain.
+   Không gọi deploy Compose Payment đã migrate K3s. Xem
+   [trình tự cutover và kiểm tra](../README.payment.md).
 
 9. Đổi repo Variable `VITE_API_GATEWAY_URL` sang public port 80 và rebuild
    Frontend bằng luồng hiện có; restart Nginx không đổi bundle. Kiểm CORS và

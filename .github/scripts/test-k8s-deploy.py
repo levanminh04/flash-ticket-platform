@@ -24,6 +24,8 @@ def fake_kubectl():
     api = root / 'api'
     if arguments[:2] == ['-n', 'flash-ticket']:
         arguments = arguments[2:]
+    if (root / 'frontend-only').exists() and any('discovery-server' in arg for arg in arguments):
+        sys.exit('Frontend must not query discovery')
     if arguments[:2] == ['get', 'namespace']:
         return
     if arguments[0] == 'create':
@@ -44,6 +46,8 @@ def fake_kubectl():
                 desired.write_text(str(resource['spec']['replicas']))
             resource['spec']['replicas'] = int(desired.read_text()) if desired.exists() else 1
             resource['metadata'].setdefault('annotations', {})['kubectl.kubernetes.io/last-applied-configuration'] = last_applied
+        if (root / 'frontend-only').exists():
+            assert resource['kind'] in ('Deployment', 'Service'), 'FE must not apply backend config or Secret'
         (api / (resource['kind'] + '.json')).write_text(json.dumps(resource))
     elif arguments[0] == 'rollout':
         fail = root / 'fail-once'
@@ -68,7 +72,7 @@ def fake_kubectl():
         image = deployment['spec']['template']['spec']['containers'][0]['image']
         print(json.dumps({'items': [{
             'metadata': {'uid': 'fixture-pod' if i == 0 else f'fixture-pod-{i+1}'},
-            'spec': {'containers': [{'image': image, 'ports': [{'containerPort': 8083}]}]},
+            'spec': {'containers': [{'image': image, 'ports': deployment['spec']['template']['spec']['containers'][0].get('ports', [{'containerPort': 8083}])}]},
             'status': {'podIP': f'10.42.0.{9+i}', 'containerStatuses': [{'ready': True, 'restartCount': 0}]}
         } for i in range(count)]}))
     elif arguments[:2] == ['get', 'service']:
@@ -154,6 +158,10 @@ def run_fixtures():
             (root / 'state/maintenance').touch()
             deploy('a', success=False)
             (root / 'state/maintenance').unlink()
+            (app / 'configmap.yaml').rename(app / 'configmap.saved')
+            result = deploy('a', success=False)
+            assert 'MISSING_MANIFEST' in result.stderr
+            (app / 'configmap.saved').rename(app / 'configmap.yaml')
             deploy('a')
             state = root / 'state/k8s/payment-service'
             first = (state / 'current').read_text()
@@ -200,6 +208,86 @@ def run_fixtures():
         finally:
             server.shutdown()
             server.server_close()
+
+        # FE độc lập: không env/config/Secret, không server Eureka hoặc migration helper.
+        frontend_root = root / 'frontend-fixture'
+        for path in ('state/k8s', 'api'):
+            (frontend_root / path).mkdir(parents=True)
+        env['APP_ROOT'] = frontend_root.as_posix()
+        (frontend_root / 'frontend-only').touch()
+        (frontend_root / 'state/k8s/enabled').touch()
+        frontend_source = frontend_root / 'releases' / SHA / 'deploy'
+        frontend_app = frontend_source / 'k8s/frontend'
+        frontend_app.mkdir(parents=True)
+        (frontend_source / 'scripts').mkdir()
+        (frontend_source / 'scripts/migrate-k8s-discovery.py').write_text('raise AssertionError("FE called discovery migration")\n')
+        frontend_deployment = json.loads(json.dumps(deployment))
+        frontend_deployment['metadata']['name'] = 'frontend'
+        frontend_deployment['spec']['template']['spec']['containers'][0]['ports'] = [{'containerPort': 5173}]
+        (frontend_app / 'deployment.yaml').write_text(json.dumps(frontend_deployment))
+        (frontend_app / 'service.yaml').write_text(json.dumps({
+            'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 'frontend'},
+            'spec': {'selector': {'app.kubernetes.io/name': 'frontend'}, 'ports': [{'port': 5173, 'targetPort': 5173}]}}))
+        frontend_repository = REPOSITORY.replace('payment-service', 'frontend')
+        frontend_state = frontend_root / 'state/k8s/frontend'
+        current_image = frontend_root / 'state/k8s/frontend.current'
+        (frontend_root / 'fail-once').touch()
+        result = subprocess.run([bash, SCRIPT.as_posix(), 'frontend', frontend_repository + 'a' * 64, SHA, 'deploy'],
+                                env=env, text=True, capture_output=True)
+        assert result.returncode != 0 and 'NO_PREVIOUS_K8S_REVISION' in result.stderr, result.stdout + result.stderr
+        assert not current_image.exists() and not (frontend_state / 'current').exists()
+        for digest, mode in [('a', 'deploy'), ('a', 'recreate'), ('b', 'deploy')]:
+            before = (frontend_state / 'current').read_text() if (frontend_state / 'current').exists() else None
+            result = subprocess.run([bash, SCRIPT.as_posix(), 'frontend', frontend_repository + digest * 64, SHA, mode],
+                                    env=env, text=True, capture_output=True)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert current_image.read_text().strip() == frontend_repository + digest * 64
+            assert (frontend_state / 'current').read_text() != before
+        before = (frontend_state / 'current').read_text()
+        (frontend_root / 'fail-once').touch()
+        result = subprocess.run([bash, SCRIPT.as_posix(), 'frontend', frontend_repository + 'c' * 64, SHA, 'deploy'],
+                                env=env, text=True, capture_output=True)
+        assert result.returncode != 0 and 'RESTORED_PREVIOUS' in result.stderr, result.stdout + result.stderr
+        assert (frontend_state / 'current').read_text() == before
+        assert current_image.read_text().strip() == frontend_repository + 'b' * 64
+        assert json.loads((frontend_root / 'api/Deployment.json').read_text())['spec']['template']['spec']['containers'][0]['image'] == frontend_repository + 'b' * 64
+        result = subprocess.run([bash, SCRIPT.as_posix(), 'frontend', frontend_repository + 'a' * 64, SHA, 'rollback'],
+                                env=env, text=True, capture_output=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert current_image.read_text().strip() == frontend_repository + 'a' * 64
+        before = (frontend_state / 'current').read_text()
+        for service, image, commit, mode, reason in [
+            ('frontend', REPOSITORY + 'a' * 64, SHA, 'deploy', 'INVALID_IMAGE'),
+            ('frontend', frontend_repository + 'a' * 63, SHA, 'deploy', 'INVALID_IMAGE'),
+            ('frontend', frontend_repository + 'a' * 64, 'bad', 'deploy', 'INVALID_SHA'),
+            ('frontend', frontend_repository + 'a' * 64, SHA, 'bad', 'INVALID_MODE'),
+            ('unknown', frontend_repository + 'a' * 64, SHA, 'deploy', 'UNKNOWN_SERVICE'),
+            ('frontend', frontend_repository + 'c' * 64, SHA, 'rollback', 'ROLLBACK_CONFIG_NOT_FOUND'),
+        ]:
+            result = subprocess.run([bash, SCRIPT.as_posix(), service, image, commit, mode], env=env, text=True, capture_output=True)
+            assert result.returncode != 0 and reason in result.stderr, result.stdout + result.stderr
+            assert (frontend_state / 'current').read_text() == before
+        assert not list(frontend_state.rglob('secret*.json'))
+        assert not list(frontend_state.rglob('discovery*.json'))
+        assert not (frontend_root / 'api/ConfigMap.json').exists()
+        assert not (frontend_root / 'api/Secret.json').exists()
+
+        # Guard chạy trước docker login; marker enabled chung vẫn cho phép Compose trước bootstrap FE.
+        docker = binary / 'docker'
+        docker.write_text('#!/usr/bin/env bash\nprintf called > "$APP_ROOT/docker-called"\nexit 79\n')
+        docker.chmod(0o755)
+        env['REGISTRY_USER'] = 'fixture'
+        compose = SCRIPT.parent / 'deploy-service.sh'
+        for migrated in (True, False):
+            if not migrated:
+                current_image.unlink()
+            result = subprocess.run([bash, compose.as_posix(), 'frontend', frontend_repository + 'a' * 64, SHA],
+                                    input='fixture-token\n', env=env, text=True, capture_output=True)
+            assert result.returncode == (64 if migrated else 79), result.stdout + result.stderr
+            assert (frontend_root / 'docker-called').exists() == (not migrated)
+            if migrated:
+                assert 'has migrated to K8s' in result.stdout
+        print('Frontend fixtures passed: no backend dependencies, deploy/recreate/rollback, failure state, validation and Compose migration guard.')
 
 
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ def check():
     init = values['deployment']['initContainers'][0]
     assert 'chmod 600 /data/acme.json' in init['command'][-1]
     assert '> /data/acme.json' not in init['command'][-1]
-    assert 'ports' not in values, 'Do not redirect the entire HTTP entrypoint/Ngrok'
+    assert 'ports' not in values, 'Do not redirect unrelated legacy HTTP clients'
 
     routes = documents('deploy/https/ingress.yaml')
     redirect = next(d for d in routes if d['kind'] == 'Middleware')
@@ -69,13 +69,75 @@ def check():
         assert endpoint['endpoints'][0].get('conditions', {}).get('ready', True)
         assert endpoint['ports'][0]['port'] == service['spec']['ports'][0]['port']
         assert endpoint['ports'][0]['name'] == service['spec']['ports'][0]['name']
-    assert {s['spec']['ports'][0]['port'] for s in services.values()} == {5173, 8080}
+    assert set(services) == {'keycloak-external'}
+    assert len(external) == 2
+    assert services['keycloak-external']['spec']['ports'][0]['port'] == 8080
+
+    deployment = documents('deploy/k8s/frontend/deployment.yaml')[0]
+    spec = deployment['spec']
+    assert spec['replicas'] == 1
+    assert spec['minReadySeconds'] == 10 and spec['progressDeadlineSeconds'] == 300
+    assert spec['strategy'] == {'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}
+    pod = spec['template']['spec']
+    assert pod['automountServiceAccountToken'] is False
+    assert pod['securityContext'] == {'runAsNonRoot': True, 'runAsUser': 10001, 'runAsGroup': 10001}
+    assert pod['terminationGracePeriodSeconds'] == 30
+    assert not pod.get('hostNetwork', False)
+    container = pod['containers'][0]
+    assert container['ports'] == [{'name': 'http', 'containerPort': 5173}]
+    assert not container.get('env') and not container.get('envFrom')
+    assert container['securityContext'] == {'readOnlyRootFilesystem': True, 'allowPrivilegeEscalation': False,
+                                            'capabilities': {'drop': ['ALL']}}
+    assert container['resources'] == {'requests': {'cpu': '25m', 'memory': '32Mi'}, 'limits': {'memory': '64Mi'}}
+    assert pod['volumes'] == [{'name': 'tmp', 'emptyDir': {'medium': 'Memory', 'sizeLimit': '64Mi'}}]
+    assert container['volumeMounts'] == [{'name': 'tmp', 'mountPath': '/tmp'}]
+    assert container['lifecycle']['preStop']['exec']['command'] == ['sh', '-c', 'sleep 5']
+    for probe, period, failures in [('startupProbe', 2, 30), ('readinessProbe', 2, 2), ('livenessProbe', 10, 3)]:
+        assert container[probe] == {'httpGet': {'path': '/index.html', 'port': 'http'}, 'periodSeconds': period,
+                                    'timeoutSeconds': 2, 'failureThreshold': failures}
+    frontend = documents('deploy/k8s/frontend/service.yaml')[0]
+    assert frontend['spec']['type'] == 'ClusterIP'
+    assert frontend['spec']['selector'] == spec['selector']['matchLabels']
+    assert all(spec['template']['metadata']['labels'][k] == v for k, v in frontend['spec']['selector'].items())
+    assert frontend['spec']['ports'] == [{'name': 'http', 'port': 5173, 'targetPort': 'http'}]
+    for ingress in [http, ingresses['frontend-https']]:
+        rule = next(r for r in ingress['spec']['rules'] if r['host'] == APP)
+        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'frontend', 'port': {'number': 5173}}
+    for ingress in [http, ingresses['keycloak-https']]:
+        rule = next(r for r in ingress['spec']['rules'] if r['host'] == AUTH)
+        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'keycloak-external', 'port': {'number': 8080}}
+    assert not (ROOT / 'deploy/k8s/frontend/ingress.yaml').exists()
+    assert not (ROOT / 'deploy/k8s/frontend/hpa.yaml').exists()
+    assert 'STOPSIGNAL SIGQUIT' in (ROOT / 'frontend/Dockerfile').read_text(encoding='utf-8')
+    compose_script = (ROOT / 'deploy/scripts/deploy-service.sh').read_text(encoding='utf-8')
+    assert '$svc == frontend && -f $APP_ROOT/state/k8s/frontend.current' in compose_script
+    assert compose_script.index('state/k8s/frontend.current') < compose_script.index('docker login')
 
     for name in ['api-gateway', 'booking-service', 'payment-service', 'ticket-service', 'event-service', 'user-service']:
         config = documents(f'deploy/k8s/{name}/configmap.yaml')[0]['data']
         assert config['KEYCLOAK_ISSUER_URI'] == f'https://{AUTH}/realms/flash-ticket'
         if name == 'api-gateway':
             assert f'https://{APP}' in config['CORS_ALLOWED_ORIGINS'].split(',')
+    payment = documents('deploy/k8s/payment-service/configmap.yaml')[0]['data']
+    public_env = (ROOT / 'deploy/https/public.env.example').read_text(encoding='utf-8')
+    local_env = (ROOT / 'services/payment-service/.env.example').read_text(encoding='utf-8')
+    for key, path in [('VNPAY_RETURN_URL', 'return'), ('VNPAY_IPN_URL', 'ipn')]:
+        url = f'https://{APP}/api/v1/payments/vnpay/{path}'
+        assert payment[key] == url
+        assert f'{key}={url}' in public_env
+        assert f'{key}=http://localhost:8083/api/v1/payments/vnpay/{path}' in local_env
+    assert payment['VNPAY_APP_RETURN_URL'] == 'flash-ticket://payment-return'
+    for path in ['deploy/app/payment-service.yml', 'deploy/docker-compose.payment.yml']:
+        source = (ROOT / path).read_text(encoding='utf-8')
+        assert set(documents(path)[0]['services']) == {'payment-service'}
+        assert 'ngrok' not in source.lower()
+    local_payment = documents('deploy/docker-compose.payment.yml')[0]['services']['payment-service']
+    for key in ['VNPAY_RETURN_URL', 'VNPAY_IPN_URL']:
+        assert local_payment['environment'][key].startswith('${' + key + ':?')
+    assert 'NGROK_' not in local_env
+    assert 'ngrok' not in (ROOT / 'deploy/scripts/deploy-service.sh').read_text(encoding='utf-8').lower()
+    for path in ['deploy/app/ngrok.yml', 'deploy/ngrok/payment.yml']:
+        assert not (ROOT / path).exists()
     print('HTTPS configuration contract: PASS')
 
 

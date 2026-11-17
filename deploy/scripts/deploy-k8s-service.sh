@@ -6,7 +6,7 @@ service=${1:?service}; image=${2:?image digest}; sha=${3:?commit sha}; mode=${4:
 app_root=${APP_ROOT:-/opt/flash-ticket-app}
 namespace=flash-ticket
 die() { echo "DEPLOY_REJECTED $*" >&2; exit 1; }
-case $service in discovery-server|api-gateway|booking-service|payment-service|ticket-service|event-service|user-service) ;; *) die UNKNOWN_SERVICE ;; esac
+case $service in discovery-server|api-gateway|booking-service|payment-service|ticket-service|event-service|user-service|frontend) ;; *) die UNKNOWN_SERVICE ;; esac
 [[ $image =~ ^ghcr.io/levanminh04/flash-ticket-platform/$service@sha256:[a-f0-9]{64}$ ]] || die INVALID_IMAGE
 [[ $sha =~ ^[a-f0-9]{40}$ ]] || die INVALID_SHA
 [[ $mode == deploy || $mode == recreate || $mode == rollback ]] || die INVALID_MODE
@@ -75,7 +75,7 @@ PY
     # Restoring a revision without HPA explicitly restores fixed-replica operation.
     kubectl -n "$namespace" delete hpa "$service" --ignore-not-found >/dev/null || return 1
   fi
-  if [[ $service != discovery-server ]]; then
+  if [[ $service != discovery-server && $service != frontend ]]; then
     if [[ $mode == rollback || $revision != "$target" ]]; then preparation=prepare-rollback; fi
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" "$preparation" "$revision" || return 1
   fi
@@ -96,12 +96,16 @@ check_revision() {
   local revision=$1 attempt kind=deployment
   if [[ -f $revision/statefulset.json ]]; then kind=statefulset; fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
-  kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
+  if [[ $service != frontend ]]; then
+    kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
+  fi
   for attempt in {1..40}; do
     # Read desired scale again: HPA may change it while Pods register in Eureka.
     kubectl -n "$namespace" get "$kind" "$service" -o json > "$revision/live-deployment.json" || return 1
     kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$service" -o json > "$revision/live-pods.json" || return 1
-    kubectl -n "$namespace" get pods -l 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' -o json > "$revision/discovery-pods.json" || return 1
+    if [[ $service != frontend ]]; then
+      kubectl -n "$namespace" get pods -l 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' -o json > "$revision/discovery-pods.json" || return 1
+    fi
     if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<'PY'
 import json, pathlib, sys, urllib.request
 root, service = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -114,12 +118,14 @@ pods = [p for p in pod_list['items'] if not p['metadata'].get('deletionTimestamp
 if deployment['kind'] == 'StatefulSet':
     pods = [p for p in pods if p['metadata'].get('labels', {}).get('flash-ticket/discovery-generation') == 'peers']
 assert desired >= 1 and len(pods) == desired, 'REPLICA_COUNT_MISMATCH'
+if service == 'frontend':
+    assert desired == 1, 'FRONTEND_REPLICA_COUNT_MISMATCH'
 for pod in pods:
     statuses = pod['status'].get('containerStatuses', [])
     assert pod['spec']['containers'][0]['image'] == expected, 'POD_IMAGE_MISMATCH'
     assert len(statuses) == 1 and statuses[0]['ready'] and statuses[0]['restartCount'] == 0, 'POD_NOT_STABLE'
-if service == 'discovery-server':
-    # Full peer comparison runs below after this Pod/image check.
+if service in ('discovery-server', 'frontend'):
+    # FE không dùng registry; peer comparison của discovery chạy sau kiểm Pod/image.
     sys.exit(0)
 discovery = json.loads((root / 'discovery.json').read_text())['spec']
 peers = json.loads((root / 'discovery-pods.json').read_text())['items']
@@ -161,7 +167,7 @@ else
   printf '%s\n' "$image" > "$target/image"
   for resource in configmap peer-service service ingress deployment statefulset hpa; do
     file="$source_root/deploy/k8s/$service/$resource.yaml"
-    [[ -f $file ]] || { [[ $resource != configmap ]] || die MISSING_MANIFEST; continue; }
+    [[ -f $file ]] || { [[ $resource != configmap || $service == frontend ]] || die MISSING_MANIFEST; continue; }
     kubectl create --dry-run=client --validate=false -f "$file" -o json > "$target/$resource.json"
   done
   python3 - "$target" "$image" "$revision" <<'PY'
@@ -174,7 +180,7 @@ template['spec']['containers'][0]['image'] = sys.argv[2]
 template['metadata'].setdefault('annotations', {})['flash-ticket/release'] = sys.argv[3]
 path.write_text(json.dumps(deployment))
 PY
-  if [[ $service != discovery-server ]]; then
+  if [[ $service != discovery-server && $service != frontend ]]; then
     python3 - "$source_root/deploy/k8s/examples/$service.secret.env.example" "$app_root/env/$service.env" "$target/secret-env.json" "$service" <<'PY'
 import base64, json, pathlib, re, sys, urllib.parse
 template, env_file, output, service = sys.argv[1:]

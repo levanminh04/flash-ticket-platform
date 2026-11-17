@@ -37,6 +37,10 @@ mkdir -p "$APP_ROOT/state/k8s"
 exec 8>"$APP_ROOT/state/k8s/deploy.lock"
 flock -w 600 8 || reject "cluster maintenance/deploy lock timeout"
 [[ ! -e $APP_ROOT/state/maintenance ]] || reject "maintenance active"
+# Marker chung có trước bootstrap FE; chỉ state FE thành công mới chặn Compose cũ.
+if [[ $svc == frontend && -f $APP_ROOT/state/k8s/frontend.current ]]; then
+  reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
+fi
 if [[ -f $APP_ROOT/state/k8s/enabled && $svc != keycloak && $svc != frontend ]]; then
   reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
 fi
@@ -54,7 +58,6 @@ printf '%s' "$token" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 
 dc() { local img=$1; shift; IMAGE=$img docker compose ${env_args[@]+"${env_args[@]}"} -p "flash-ticket-$svc" -f "$APP_ROOT/compose/$svc.yml" "$@"; }
 targets=("$svc")
-if [[ $svc == payment-service ]]; then targets+=(ngrok); fi
 
 need=$(dc "$image" config --format json | jq -er --arg s "$svc" '.services[$s].mem_limit | tonumber') \
   || { echo "DEPLOY_FAILED INVALID_COMPOSE"; exit 1; }

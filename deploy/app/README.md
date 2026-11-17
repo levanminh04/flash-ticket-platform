@@ -10,11 +10,23 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 | event-service | `services/event-service` | 8086 | như trên |
 | ticket-service | `services/ticket-service` | 8084 | như trên |
 | booking-service | `services/booking-service` | 8082 | như trên |
-| payment-service (+ ngrok) | `services/payment-service` | 8083 | như trên |
+| payment-service | `services/payment-service` | 8083 | như trên |
 | keycloak | `services/keycloak-spi` | 8080 | `/realms/flash-ticket/.well-known/openid-configuration` = 200 |
 | frontend | `frontend` | 5173 | `GET /` trả HTML có `id="root"` |
 
 "Như trên" nghĩa là instance của service trong Eureka (`/eureka/apps/<APP>`) có `status=UP`, đúng port và đăng ký **sau** khi container mới start.
+
+## Phân chia runtime hiện tại trong source
+
+Tám ứng dụng (gồm frontend) dùng K3s; chỉ Keycloak dùng deploy Compose thường.
+FE **chưa cutover live** trong lượt sửa source17/11/2026; `frontend.yml` giữ làm
+fallback, không xóa image/config/state Compose. Xem [bootstrap/rollback FE](../k8s/README.md#frontend-bootstrap-cutover-và-rollback-riêng).
+K8s digest nằm `state/k8s/<svc>.current`; revision current/previous và snapshots ở
+`state/k8s/<svc>/`. Các lệnh/log/state Compose bên dưới chỉ áp dụng workload Compose,
+không dùng để restart Java/FE đã migrate. Guard FE chặn khi có frontend.current K8s.
+
+Không chạy CD main/all/k8s để phát hành FE lúc callback VNPay còn hoãn: sửa shared
+script sẽ recreate cả Payment. Source-only chưa cấp quyền publish/deploy/Git.
 
 ## Việc hằng ngày
 
@@ -84,14 +96,18 @@ Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đ�
 | `EUREKA_SERVER_URL` | `http://127.0.0.1:8761/eureka/` |
 | `SERVER_ADDRESS` | `127.0.0.1`; riêng api-gateway `0.0.0.0` |
 | Host Postgres/RabbitMQ/Redis/Mongo/Keycloak | `127.0.0.1` |
-| payment: `NGROK_DOMAIN`, `NGROK_AUTHTOKEN` | domain và token ngrok |
-| payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://<NGROK_DOMAIN>/api/v1/payments/vnpay/return` và `/ipn` |
+| payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://flashticket.sondimid.cloud/api/v1/payments/vnpay/return` và `/ipn` |
 | ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/key-ring.json` |
 | keycloak | `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, `KC_HOSTNAME`, `KC_HTTP_ENABLED`, `KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD`, `KC_DB_POOL_MIN_SIZE`, `KC_DB_POOL_INITIAL_SIZE`, `KC_DB_POOL_MAX_SIZE`, `KC_HTTP_MAX_QUEUED_REQUESTS`, `FT_IDENTITY_OUTBOX_ENABLED`, `FT_IDENTITY_OUTBOX_INTERVAL_MS`, `FT_IDENTITY_RABBITMQ_HOST`, `FT_IDENTITY_RABBITMQ_PORT`, `FT_IDENTITY_RABBITMQ_VHOST`, `FT_IDENTITY_RABBITMQ_USERNAME`, `FT_IDENTITY_RABBITMQ_PASSWORD` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
 
-## Lưu ý về Ngrok (payment-service)
+## Callback VNPay qua domain (payment-service)
 
-Ngrok local và ngrok CD trên FT84 dùng **chung một `NGROK_DOMAIN`** và 1 URL IPN VNPay. Do đó, **trước khi CD deploy `payment-service`/`ngrok` lên máy 84, phải tắt ngrok/payment local** (`docker compose --env-file .env -f deploy/docker-compose.payment.yml down`) để tránh xung đột domain và tranh chấp webhook IPN.
+Compose/script mới không tạo Ngrok. Backend trên ft84 hiện chạy K3s: URL callback
+runtime lấy từ ConfigMap Payment; vẫn đồng bộ env server và `ENV_PAYMENT_SERVICE`
+để nguồn CD không lệch. Phải cập nhật đăng ký IPN bên VNPay riêng, không chỉ sửa env.
+Giữ container Ngrok cũ tới khi provider đã đổi và callback/link cũ đã drain; không
+`compose down` hoặc tự xóa legacy HTTP ingress. Xem [trình tự cutover và kiểm tra](../README.payment.md).
+Không dùng callback ft84 để nhận giao dịch của Payment local.
 
 ## Cutover Keycloak thủ công trên máy 84
 
@@ -135,4 +151,5 @@ Services có trường `kind`: `maven` cho service Spring/Keycloak, `node` cho f
 
 - Image `frontend` là nginx (`nginxinc/nginx-unprivileged`) phục vụ `dist/` đã build, cổng 5173, không có env runtime (không `env/frontend.env`, không secret `ENV_FRONTEND`).
 - `VITE_*` được build cứng vào bundle. Lấy từ **repo Variables** (`vars.VITE_API_GATEWAY_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`), không phải secret. Đổi giá trị thì phải chạy `action=deploy` (không phải `restart`) để build lại.
-- Workflow và script bỏ qua bước ghi/kiểm tra env khi service là frontend (trường `kind: node` trong `.github/services.json`).
+- Registry `kind: node`, `runtime: k8s`; workflow dùng deploy-k8s-service.sh, không ghi/kiểm tra env FE, không gọi Eureka. Readiness `/index.html` chỉ kiểm HTTP; smoke riêng HTML/assets/MIME/SPA.
+- Ổn định một Pod; rollout maxUnavailable0/maxSurge1, đợi Ready10s. Không node-failure HA, không bảo đảm tránh chunk404 giữa hai version. Compose chỉ rollback theo runbook dưới deploy.lock; không lách guard bằng override.
