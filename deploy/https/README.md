@@ -1,6 +1,20 @@
 # Domain + HTTPS trên máy 84
 
-## Trạng thái ngày 17/11/2026
+## Cập nhật sau cutover HTTPS — 17/11/2026
+
+Nguồn HTTPS đã hợp nhất vào main qua
+[PR36](https://github.com/levanminh04/flash-ticket-platform/pull/36).
+Bảy GitHub Secrets ENV_* đã đồng bộ, alias issuer Event đã sửa và maintenance gate
+đã gỡ trong đợt HTTPS. Login/logout E2E và mixed-content trình duyệt chưa kiểm.
+
+Source callback VNPay nay dùng domain app, Compose/script không còn tạo Ngrok.
+Đây chưa phải xác nhận runtime/provider đã chuyển hoặc container cũ đã tháo; xem
+[runbook callback và điều kiện tháo Ngrok](../README.payment.md).
+
+### Nhật ký giai đoạn TLS ban đầu (lịch sử, đã được cập nhật phía trên)
+
+Các trạng thái gate/Secrets/alias/main bên dưới mô tả thời điểm TLS ban đầu,
+không dùng làm trạng thái vận hành hiện tại.
 
 **Đã triển khai TLS edge, Keycloak HTTPS, rollout sáu backend và deploy frontend
 build HTTPS trên máy84; chưa hoàn tất đồng bộ nguồn CD và nghiệm thu E2E.** DNS hai
@@ -114,8 +128,8 @@ Lưu xong, báo lại để tiếp tục xác minh và cutover. Không cần mua
 
 Traefik hiện có terminate TLS cổng443. Let's Encrypt HTTP-01 dùng cổng80; không
 đổi port nội bộ. Hai host HTTP redirect sang HTTPS bằng middleware riêng.
-**Không redirect toàn entrypoint web:** Ngrok vẫn gọi HTTP `/api` và Headlamp hiện
-có vẫn ngoài phạm vi task. `legacy-api.yaml` giữ route HTTP cũ cho Ngrok.
+**Không redirect toàn entrypoint web:** Headlamp và client HTTP cũ vẫn ngoài phạm vi.
+`legacy-api.yaml` giữ route HTTP cũ; không tự xóa khi tháo Ngrok.
 
 Ingress HTTPS chỉ ở entrypoint `websecure`; API priority200 thắng frontend
 priority100. Redirect HTTP priority1000 thắng route hostless; không thêm middleware
@@ -250,7 +264,8 @@ sau khi đã được phép publish image. Không commit/push source tự độn
 này; cần đưa manifest HTTPS vào nhánh CD dùng trước khi mở deploy thường trở lại.
 Chưa đồng bộ nguồn CD thì deployment mới chỉ là tạm thời, chưa bàn giao hoàn tất.
 
-Không đổi Ngrok domain/upstream, VNPay return/IPN hoặc thực hiện giao dịch để smoke.
+Với cài đặt TLS đơn thuần không đổi callback hoặc thực hiện giao dịch để smoke.
+Việc chuyển VNPay sang domain thực hiện riêng theo [runbook Payment](../README.payment.md).
 
 ## 5. Nghiệm thu
 
@@ -276,7 +291,7 @@ curl --head http://flashticket.sondimid.cloud/
   Frontend SPA fallback có thể trả HTML200: không coi status200 đơn lẻ là API lộ
   hoặc là bằng chứng endpoint nghiệp vụ hoạt động.
 - Keycloak `/metrics`, `/health` không lộ management9000 qua proxy8080.
-- HTTP host Ngrok vẫn tới Gateway; không redirect nó về domain web.
+- Trong giai đoạn chuyển tiếp, Ngrok cũ vẫn tới Gateway; chỉ tháo theo runbook Payment.
 - PVC Bound, file ACME0600. Kiểm storage giữ nguyên sau restart trong cửa sổ được
   phép; không xóa acme.json để thử, không ép cấp production nhiều lần.
 

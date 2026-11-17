@@ -26,7 +26,7 @@ def check():
     init = values['deployment']['initContainers'][0]
     assert 'chmod 600 /data/acme.json' in init['command'][-1]
     assert '> /data/acme.json' not in init['command'][-1]
-    assert 'ports' not in values, 'Do not redirect the entire HTTP entrypoint/Ngrok'
+    assert 'ports' not in values, 'Do not redirect unrelated legacy HTTP clients'
 
     routes = documents('deploy/https/ingress.yaml')
     redirect = next(d for d in routes if d['kind'] == 'Middleware')
@@ -76,6 +76,26 @@ def check():
         assert config['KEYCLOAK_ISSUER_URI'] == f'https://{AUTH}/realms/flash-ticket'
         if name == 'api-gateway':
             assert f'https://{APP}' in config['CORS_ALLOWED_ORIGINS'].split(',')
+    payment = documents('deploy/k8s/payment-service/configmap.yaml')[0]['data']
+    public_env = (ROOT / 'deploy/https/public.env.example').read_text(encoding='utf-8')
+    local_env = (ROOT / 'services/payment-service/.env.example').read_text(encoding='utf-8')
+    for key, path in [('VNPAY_RETURN_URL', 'return'), ('VNPAY_IPN_URL', 'ipn')]:
+        url = f'https://{APP}/api/v1/payments/vnpay/{path}'
+        assert payment[key] == url
+        assert f'{key}={url}' in public_env
+        assert f'{key}=http://localhost:8083/api/v1/payments/vnpay/{path}' in local_env
+    assert payment['VNPAY_APP_RETURN_URL'] == 'flash-ticket://payment-return'
+    for path in ['deploy/app/payment-service.yml', 'deploy/docker-compose.payment.yml']:
+        source = (ROOT / path).read_text(encoding='utf-8')
+        assert set(documents(path)[0]['services']) == {'payment-service'}
+        assert 'ngrok' not in source.lower()
+    local_payment = documents('deploy/docker-compose.payment.yml')[0]['services']['payment-service']
+    for key in ['VNPAY_RETURN_URL', 'VNPAY_IPN_URL']:
+        assert local_payment['environment'][key].startswith('${' + key + ':?')
+    assert 'NGROK_' not in local_env
+    assert 'ngrok' not in (ROOT / 'deploy/scripts/deploy-service.sh').read_text(encoding='utf-8').lower()
+    for path in ['deploy/app/ngrok.yml', 'deploy/ngrok/payment.yml']:
+        assert not (ROOT / path).exists()
     print('HTTPS configuration contract: PASS')
 
 

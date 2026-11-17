@@ -277,17 +277,13 @@ Chỉ thực hiện sau khi đã có kết quả verify, image đã publish đư
 7. Kiểm từng instance Eureka, loại registry/cache cũ ra khỏi đường gọi; health
    không chứng minh HTTP nghiệp vụ đúng. Kiểm public `http://52.64.237.84/api/...`,
    JWT/role và public `/actuator/health` `/internal/...` không route được.
-8. Ngrok giữ nguyên domain; thêm `NGROK_UPSTREAM=http://127.0.0.1:80` vào env
-   Payment trên server qua cơ chế env-file, cập nhật Compose file mới rồi chỉ
-   recreate `ngrok` với `--no-deps`. Không gọi deploy Compose Payment. Ví dụ:
-
-   ```bash
-   IMAGE="$(cat /opt/flash-ticket-app/state/payment-service.current)" \
-     docker compose --env-file /opt/flash-ticket-app/env/payment-service.env \
-     -p flash-ticket-payment-service \
-     -f /opt/flash-ticket-app/compose/payment-service.yml \
-     up -d --no-deps --force-recreate ngrok
-   ```
+8. Callback VNPay dùng HTTPS domain:
+   `https://flashticket.sondimid.cloud/api/v1/payments/vnpay/ipn` và `/return`.
+   Đồng bộ ConfigMap Payment, env server và `ENV_PAYMENT_SERVICE`, rollout riêng
+   Payment rồi cập nhật đăng ký IPN bên VNPay. Compose/script mới không tạo Ngrok;
+   chỉ tháo container cũ sau khi provider đã đổi và callback/link cũ đã drain.
+   Không gọi deploy Compose Payment đã migrate K3s. Xem
+   [trình tự cutover và kiểm tra](../README.payment.md).
 
 9. Đổi repo Variable `VITE_API_GATEWAY_URL` sang public port 80 và rebuild
    Frontend bằng luồng hiện có; restart Nginx không đổi bundle. Kiểm CORS và

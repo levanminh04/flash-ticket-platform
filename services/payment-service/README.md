@@ -1,7 +1,7 @@
 # Payment Service — API trạng thái và VNPay theo Cinema
 
-Chạy Payment cùng ngrok bằng một lệnh Docker Compose: xem
-[hướng dẫn Payment Docker + ngrok](../../deploy/README.payment.md).
+Chạy Payment bằng Docker Compose và nhận callback production qua domain HTTPS: xem
+[hướng dẫn Payment Docker + VNPay](../../deploy/README.payment.md). Không còn phụ thuộc Ngrok.
 
 ## Swagger UI
 

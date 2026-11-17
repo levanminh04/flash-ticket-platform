@@ -10,7 +10,7 @@ Push lên `main` → `cd.yml` chỉ verify, build và deploy lại service có f
 | event-service | `services/event-service` | 8086 | như trên |
 | ticket-service | `services/ticket-service` | 8084 | như trên |
 | booking-service | `services/booking-service` | 8082 | như trên |
-| payment-service (+ ngrok) | `services/payment-service` | 8083 | như trên |
+| payment-service | `services/payment-service` | 8083 | như trên |
 | keycloak | `services/keycloak-spi` | 8080 | `/realms/flash-ticket/.well-known/openid-configuration` = 200 |
 | frontend | `frontend` | 5173 | `GET /` trả HTML có `id="root"` |
 
@@ -84,14 +84,18 @@ Mỗi service có một GitHub Secret chứa toàn bộ nội dung file env, đ�
 | `EUREKA_SERVER_URL` | `http://127.0.0.1:8761/eureka/` |
 | `SERVER_ADDRESS` | `127.0.0.1`; riêng api-gateway `0.0.0.0` |
 | Host Postgres/RabbitMQ/Redis/Mongo/Keycloak | `127.0.0.1` |
-| payment: `NGROK_DOMAIN`, `NGROK_AUTHTOKEN` | domain và token ngrok |
-| payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://<NGROK_DOMAIN>/api/v1/payments/vnpay/return` và `/ipn` |
+| payment: `VNPAY_RETURN_URL`, `VNPAY_IPN_URL` | `https://flashticket.sondimid.cloud/api/v1/payments/vnpay/return` và `/ipn` |
 | ticket: `TICKET_QR_KEY_RING_LOCATION` | `file:/run/ticket-qr/key-ring.json` |
 | keycloak | `KC_DB`, `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, `KC_HOSTNAME`, `KC_HTTP_ENABLED`, `KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD`, `KC_DB_POOL_MIN_SIZE`, `KC_DB_POOL_INITIAL_SIZE`, `KC_DB_POOL_MAX_SIZE`, `KC_HTTP_MAX_QUEUED_REQUESTS`, `FT_IDENTITY_OUTBOX_ENABLED`, `FT_IDENTITY_OUTBOX_INTERVAL_MS`, `FT_IDENTITY_RABBITMQ_HOST`, `FT_IDENTITY_RABBITMQ_PORT`, `FT_IDENTITY_RABBITMQ_VHOST`, `FT_IDENTITY_RABBITMQ_USERNAME`, `FT_IDENTITY_RABBITMQ_PASSWORD` (host DB/broker là `postgres`/`rabbitmq` vì Keycloak chạy trong network `flash-ticket-infra`) |
 
-## Lưu ý về Ngrok (payment-service)
+## Callback VNPay qua domain (payment-service)
 
-Ngrok local và ngrok CD trên FT84 dùng **chung một `NGROK_DOMAIN`** và 1 URL IPN VNPay. Do đó, **trước khi CD deploy `payment-service`/`ngrok` lên máy 84, phải tắt ngrok/payment local** (`docker compose --env-file .env -f deploy/docker-compose.payment.yml down`) để tránh xung đột domain và tranh chấp webhook IPN.
+Compose/script mới không tạo Ngrok. Backend trên ft84 hiện chạy K3s: URL callback
+runtime lấy từ ConfigMap Payment; vẫn đồng bộ env server và `ENV_PAYMENT_SERVICE`
+để nguồn CD không lệch. Phải cập nhật đăng ký IPN bên VNPay riêng, không chỉ sửa env.
+Giữ container Ngrok cũ tới khi provider đã đổi và callback/link cũ đã drain; không
+`compose down` hoặc tự xóa legacy HTTP ingress. Xem [trình tự cutover và kiểm tra](../README.payment.md).
+Không dùng callback ft84 để nhận giao dịch của Payment local.
 
 ## Cutover Keycloak thủ công trên máy 84
 

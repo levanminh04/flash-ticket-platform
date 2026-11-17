@@ -54,7 +54,6 @@ printf '%s' "$token" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
 
 dc() { local img=$1; shift; IMAGE=$img docker compose ${env_args[@]+"${env_args[@]}"} -p "flash-ticket-$svc" -f "$APP_ROOT/compose/$svc.yml" "$@"; }
 targets=("$svc")
-if [[ $svc == payment-service ]]; then targets+=(ngrok); fi
 
 need=$(dc "$image" config --format json | jq -er --arg s "$svc" '.services[$s].mem_limit | tonumber') \
   || { echo "DEPLOY_FAILED INVALID_COMPOSE"; exit 1; }
