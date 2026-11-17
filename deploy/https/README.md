@@ -2,8 +2,9 @@
 
 ## Trạng thái ngày 17/11/2026
 
-**Đã triển khai TLS edge trên máy84; chưa cutover cấu hình ứng dụng.** DNS hai host
-đã trỏ về `52.64.237.84`. Traefik đã nhận chứng chỉ Let's Encrypt, HTTP redirect
+**Đã triển khai TLS edge, Keycloak HTTPS, rollout sáu backend và deploy frontend
+build HTTPS trên máy84; chưa hoàn tất đồng bộ nguồn CD và nghiệm thu E2E.** DNS hai
+host đã trỏ về `52.64.237.84`. Traefik đã nhận chứng chỉ Let's Encrypt, HTTP redirect
 HTTPS và route `/api` qua Gateway; legacy HTTP `/api` vẫn được giữ.
 
 Kiểm chứng ngày17/11/2026:
@@ -11,24 +12,53 @@ Kiểm chứng ngày17/11/2026:
   server và máy ngoài server, không bỏ qua kiểm tra TLS. SAN đúng từng host;
   chứng chỉ hết hạn ngày15/02/2027 UTC. Traefik cấu hình tự gia hạn qua HTTP-01.
 - API `https://flashticket.sondimid.cloud/api/v1/events` trả JSON200; API qua
-  `http://52.64.237.84/api/v1/events` vẫn trả JSON200. Chưa kiểm trực tiếp URL Ngrok.
+  `http://52.64.237.84/api/v1/events` vẫn trả JSON200. URL Ngrok thực tế cũng đã
+  trả JSON200 cho `/api/v1/events`, không đổi cấu hình upstream.
 - Traefik Ready1/1, Pod không restart; PVC Bound, `/data/acme.json` mode0600,
   owner/group65532. Chưa thử restart riêng để kiểm persistence hoặc gia hạn thực tế.
 - Các path `/headlamp`, `/internal`, `/actuator`, `/metrics`, `/health` trên web
   trả HTML SPA, không phải dữ liệu quản trị; trên auth trả404. Đây là kiểm tra
   các path cụ thể, không thay thế kiểm toán bảo mật toàn bộ endpoint.
 - Maintenance gate `/opt/flash-ticket-app/state/maintenance` do đợt TLS tạo vẫn
-  đang giữ, nội dung `https-20261117-1322`. Chưa gỡ được vì thao tác bị chặn quyền;
-  CD có kiểm gate sẽ chưa deploy cho tới khi người vận hành cho phép gỡ gate này.
-- Keycloak vẫn quảng bá issuer HTTP cũ; root auth vẫn redirect về địa chỉ admin
-  HTTP cũ. Chưa restart Keycloak, rollout issuer mới hoặc rebuild frontend.
-  Login/logout và mixed-content trong trình duyệt **chưa nghiệm thu**.
+  đang giữ, nội dung `https-20261117-1322`. Gate chặn deploy CD, không phải trang
+  bảo trì chặn người dùng. Chưa gỡ vì GitHub Secrets và source `main` còn có thể
+  ghi đè cấu hình HTTPS; lần đọc kiểm tra trực tiếp cuối trên ft84 bị chặn quyền.
+- Keycloak đã cập nhật hostname HTTPS, proxy headers `xforwarded` và trusted
+  proxy `10.42.0.0/16` (quan sát nguồn Traefik là `10.42.0.102`). Container đã
+  recreate bằng digest cũ, không restart bất thường. Client `frontend` đã thêm
+  redirect URI `https://flashticket.sondimid.cloud/*` và web origin HTTPS, giữ
+  các entry cũ. Không tạo backup Keycloak mới theo yêu cầu người vận hành.
+- Discovery issuer, authorization/token/logout/JWKS endpoints đã dùng HTTPS.
+- Script deploy sáu backend (`api-gateway`, `user-service`, `event-service`,
+  `ticket-service`, `booking-service`, `payment-service`) đã hoàn tất với exit0;
+  log xác nhận từng Deployment successfully rolled out. Dùng image digest cũ,
+  ConfigMap issuer HTTPS và release `d4c57f8afa8619bbe3d7313601685153afa7f74d`.
+  Log có cảnh báo không đọc được `/etc/rancher/k3s/config.yaml.d`; không coi
+  exit0 là bằng chứng thay thế lần kiểm tra live độc lập sau deploy.
+- Frontend đã build/publish và deploy digest
+  `sha256:ebaf3e8b16ec166aff8b117db8a106f39946f1ca443e9344c5fe9777fc5abcce`.
+  Script deploy xác nhận health và bundle chứa hai URL HTTPS, không chứa public
+  HTTP IP cũ. Đây chưa phải kiểm chứng mixed-content trong trình duyệt.
+- Sáu file env backend trên server đã đổi `KEYCLOAK_ISSUER_URI` sang HTTPS.
+  Alias `EVENT_KEYCLOAK_ISSUER_URI` trong `event-service.env` còn HTTP cũ, chưa sửa.
+  `services/event-service/src/main/resources/application.yaml` ưu tiên alias này
+  hơn biến chung khi có mặt; phải đồng bộ cả alias trong env server và
+  `ENV_EVENT_SERVICE` trước khi deploy từ nguồn env đó. Template public đã có alias.
+- Hai GitHub Variables URL frontend đã đồng bộ. Bảy GitHub Secrets
+  `ENV_KEYCLOAK`, `ENV_API_GATEWAY`, `ENV_BOOKING_SERVICE`, `ENV_PAYMENT_SERVICE`,
+  `ENV_TICKET_SERVICE`, `ENV_EVENT_SERVICE`, `ENV_USER_SERVICE` **chưa đồng bộ**:
+  thao tác ghi bị chặn quyền, cần phê duyệt nêu rõ các tên trên. Không log giá trị
+  hoặc thay toàn bộ file env bằng template public.
+- Kiểm tra live độc lập sau rollout, login/logout E2E, JWT qua API và mixed-content
+  trong trình duyệt **chưa nghiệm thu**. Maintenance vẫn giữ, không kết luận toàn
+  bộ cutover/CD đã hoàn tất.
 
 HelmChartConfig được lưu qua auto-deploy K3s. Bộ manifest HTTPS được quản lý trên
 nhánh `dev/son`, chưa hợp nhất vào `main` là nguồn auto-CD; deploy Gateway bằng
 revision cũ có thể khôi phục Ingress HTTP.
-Không rollout các ConfigMap issuer mới trước khi Keycloak sẵn sàng; không push main
-để thử DNS. Source CD, Keycloak và frontend phải được đồng bộ ở bước cutover tiếp.
+Không push main để thử DNS. Trước khi gỡ gate, phải đồng bộ GitHub Secrets,
+đối chiếu alias issuer cũ và đưa nguồn HTTPS vào main theo quy trình duyệt/merge
+hiện có; không tự merge hoặc bypass bảo vệ nhánh.
 
 ## 1. Cài DNS tại Nhân Hòa — phần bạn cần thao tác
 
