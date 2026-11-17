@@ -6,6 +6,12 @@ tiếp tục chạy Compose trên 84. Eureka trả địa chỉ Pod; HTTP nghi�
 tiếp đến Pod đã chọn. Gateway có một Service; Eureka có Service client và thêm
 headless Service để hai peer có địa chỉ DNS ổn định.
 
+## Domain và HTTPS
+
+Cấu hình cutover và hướng dẫn DNS Nhân Hòa nằm tại
+[Domain + HTTPS](../https/README.md). **Không deploy riêng issuer/Ingress mới trước
+khi hoàn tất DNS, TLS và Keycloak theo đúng thứ tự trong runbook.**
+
 ## File và cấu hình
 
 ```text

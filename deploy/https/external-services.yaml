@@ -1,0 +1,58 @@
+# Frontend/Keycloak vẫn chạy Compose trên 84, không chuyển workload vào K3s.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-external
+  namespace: flash-ticket
+spec:
+  ports:
+    - name: http
+      port: 5173
+      targetPort: 5173
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: frontend-external
+  namespace: flash-ticket
+  labels:
+    kubernetes.io/service-name: frontend-external
+    endpointslice.kubernetes.io/managed-by: flash-ticket-static
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 5173
+endpoints:
+  - addresses: [172.31.41.236]
+    conditions:
+      ready: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-external
+  namespace: flash-ticket
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: keycloak-external
+  namespace: flash-ticket
+  labels:
+    kubernetes.io/service-name: keycloak-external
+    endpointslice.kubernetes.io/managed-by: flash-ticket-static
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+endpoints:
+  - addresses: [172.31.41.236]
+    conditions:
+      ready: true
