@@ -3,10 +3,18 @@ kind: Ingress
 metadata:
   name: api-gateway
   namespace: flash-ticket
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.priority: '200'
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   ingressClassName: traefik
+  tls:
+  - hosts: [flashticket.sondimid.cloud]
   rules:
-  - http:
+  - host: flashticket.sondimid.cloud
+    http:
       paths:
       - path: /api
         pathType: Prefix

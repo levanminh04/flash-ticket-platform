@@ -1,0 +1,40 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      replicas: 1
+      initContainers:
+        - name: acme-permissions
+          image: rancher/mirrored-library-traefik:3.7.15
+          command:
+            - sh
+            - -ec
+            - touch /data/acme.json; chmod 600 /data/acme.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+    # Hai process không được cùng ghi acme.json trên PVC.
+    updateStrategy:
+      type: Recreate
+    podSecurityContext:
+      fsGroup: 65532
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 128Mi
+    certificatesResolvers:
+      letsencrypt:
+        acme:
+          email: daongocson12022004@gmail.com
+          storage: /data/acme.json
+          httpChallenge:
+            entryPoint: web
