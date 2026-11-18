@@ -29,7 +29,8 @@ def container_fixtures():
             elif state['malformed']:
                 self.wfile.write(b'not-json')
             else:
-                self.wfile.write(json.dumps({'instance': {'status': state['status'], 'instanceId': state['id'], 'ipAddr': state['ip']}}).encode())
+                self.wfile.write(json.dumps({'instance': {'status': state['status'], 'instanceId': state['id'],
+                                                        'ipAddr': state['ip'], 'port': {'$': state['port']}}}).encode())
 
         def do_PUT(self):
             state['puts'].append(self.path)
@@ -55,7 +56,9 @@ def container_fixtures():
         sleep.chmod(0o755)
         env['PATH'] = str(binary) + os.pathsep + env['PATH']
         for app in apps:
-            state.update({'status': 'UP', 'health': 200, 'id': app['name'] + ':fixture-uid', 'ip': env['POD_IP'], 'malformed': False})
+            env['ASSISTANT_SERVICE_PORT'] = str(app['port'])
+            state.update({'status': 'UP', 'health': 200, 'id': app['name'] + ':fixture-uid', 'ip': env['POD_IP'],
+                          'port': app['port'], 'malformed': False})
 
             def startup(passed):
                 result = subprocess.run(app['startup'], env=env, capture_output=True, timeout=10)
@@ -71,6 +74,10 @@ def container_fixtures():
             state['ip'] = '10.42.0.99'
             startup(False)
             state['ip'] = env['POD_IP']
+            if app['name'] == 'assistant-service':
+                state['port'] = app['port'] + 1
+                startup(False)
+                state['port'] = app['port']
             state['malformed'] = True
             startup(False)
             state['malformed'] = False
@@ -82,7 +89,7 @@ def container_fixtures():
             assert state['puts'][-1] == '/eureka/apps/' + app['name'].upper() + '/' + app['name'] + ':fixture-uid/status?value=OUT_OF_SERVICE'
             assert Path('/tmp/drain-seconds').read_text() == '75'
             startup(False)  # Draining instances must never pass the initial traffic gate.
-            if app['name'] == 'api-gateway':
+            if app['name'] in ('api-gateway', 'assistant-service'):
                 state['putStatus'] = 503
                 result = subprocess.run(app['drain'], env=env, capture_output=True, timeout=15)
                 assert result.returncode != 0, 'Failed drain must be visible as a failed preStop hook'
@@ -113,7 +120,7 @@ def run_docker():
     root = Path(__file__).resolve().parents[2]
     apps = []
     base = None
-    for name in ['api-gateway', 'booking-service', 'payment-service', 'ticket-service', 'event-service', 'user-service']:
+    for name in ['api-gateway', 'booking-service', 'payment-service', 'ticket-service', 'event-service', 'user-service', 'assistant-service']:
         doc = yaml.safe_load((root / 'deploy/k8s' / name / 'deployment.yaml').read_text(encoding='utf-8'))
         container = doc['spec']['template']['spec']['containers'][0]
         directory = 'infrastructure' if name == 'api-gateway' else 'services'

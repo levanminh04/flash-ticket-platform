@@ -63,9 +63,20 @@ def fake_kubectl():
             print(json.dumps(live))
         elif '--ignore-not-found' not in arguments:
             sys.exit('Deployment not found')
+    elif arguments[:3] == ['get', 'statefulset', 'discovery-server'] and root.name == 'assistant-fixture':
+        print(json.dumps({'spec': {'replicas': 1}}))
     elif arguments[:2] == ['get', 'pods']:
         if 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' in arguments:
-            print(json.dumps({'items': []}))
+            peers = []
+            missing = root / 'peer-missing-once'
+            if root.name == 'assistant-fixture':
+                if missing.exists():
+                    missing.unlink()
+                else:
+                    (root / 'peer-observed').touch()
+                    peers = [{'metadata': {'name': 'discovery-server-0'},
+                              'status': {'podIP': '127.0.0.1', 'conditions': [{'type': 'Ready', 'status': 'True'}]}}]
+            print(json.dumps({'items': peers}))
             return
         deployment = json.loads((api / 'Deployment.json').read_text())
         count = int((root / 'desired').read_text()) if (root / 'desired').exists() else 1
@@ -90,9 +101,11 @@ class Registry(http.server.BaseHTTPRequestHandler):
         if missing.exists():
             missing.unlink()
             count = 1
+        service, port = ('assistant-service', 8089) if root.name == 'assistant-fixture' else ('payment-service', 8083)
+        assert self.path == '/eureka/apps/' + service.upper()
         body = json.dumps({'application': {'instance': [{
-            'instanceId': 'payment-service:' + ('fixture-pod' if i == 0 else f'fixture-pod-{i+1}'), 'ipAddr': f'10.42.0.{9+i}',
-            'port': {'$': 8083}, 'status': 'UP'
+            'instanceId': service + ':' + ('fixture-pod' if i == 0 else f'fixture-pod-{i+1}'), 'ipAddr': f'10.42.0.{9+i}',
+            'port': {'$': port}, 'status': 'UP'
         } for i in range(count)]}}).encode()
         self.send_response(200)
         self.end_headers()
@@ -289,7 +302,7 @@ def run_fixtures():
                 assert 'has migrated to K8s' in result.stdout
         print('Frontend fixtures passed: no backend dependencies, deploy/recreate/rollback, failure state, validation and Compose migration guard.')
 
-        # Synthetic Assistant manifests exercise bootstrap guards without a runtime port or Eureka.
+        # Synthetic Assistant manifests exercise bootstrap and a single Ready Eureka peer.
         assistant_root = root / 'assistant-fixture'
         for path in ('state/k8s', 'api', 'env'):
             (assistant_root / path).mkdir(parents=True)
@@ -305,6 +318,8 @@ def run_fixtures():
         shutil.copyfile(SCRIPT.parents[1] / 'k8s/examples' / template, assistant_examples / template)
         for name, document in [('deployment', deployment), ('configmap', config)]:
             fixture = json.loads(json.dumps(document).replace('payment-service', 'assistant-service'))
+            if name == 'deployment':
+                fixture['spec']['template']['spec']['containers'][0]['ports'] = [{'containerPort': 8089}]
             (assistant_app / (name + '.yaml')).write_text(json.dumps(fixture))
         assistant_env = assistant_root / 'env/assistant-service.env'
         assistant_env.write_text('REDIS_PASSWORD=fixture-redis\nUNRELATED_SECRET=fixture-ignored\n')
@@ -324,7 +339,25 @@ def run_fixtures():
         assert not any(value in result.stdout + result.stderr for value in ('fixture-redis', 'fixture-ignored', 'fixture-model'))
         secret = json.loads((assistant_root / 'api/Secret.json').read_text())['data']
         assert set(secret) == {'REDIS_PASSWORD', 'ASSISTANT_MODEL_API_KEY'}
-        print('Assistant bootstrap fixtures passed: required secrets, allowlist and no Compose fallback.')
+        # Initially no peer pod. The Service still responds, but must not be used as a fallback.
+        (assistant_root / 'peer-missing-once').touch()
+        with http.server.ThreadingHTTPServer(('127.0.0.1', 8761), Registry) as server:
+            server.fixture_root = assistant_root
+            server.registry_requests = 0
+            (assistant_root / 'port').write_text(str(server.server_port))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=90)
+                assert result.returncode == 0, result.stdout + result.stderr
+                assert (assistant_root / 'peer-observed').exists(), 'Must wait for the required Ready peer'
+                assert server.registry_requests == 1, 'Must not query the Service when the required peer is missing'
+                assert (assistant_root / 'state/k8s/assistant-service.current').read_text().strip() == assistant_repository + 'a' * 64
+                live = json.loads((assistant_root / 'api/Deployment.json').read_text())
+                assert live['spec']['replicas'] == 1
+                assert live['spec']['template']['spec']['containers'][0]['image'] == assistant_repository + 'a' * 64
+            finally:
+                server.shutdown()
+        print('Assistant bootstrap fixtures passed: required secrets, allowlist, no Compose fallback and Ready Eureka peer.')
 
 
 if __name__ == '__main__':

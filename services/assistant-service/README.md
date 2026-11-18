@@ -26,7 +26,7 @@ Sau khi có JDK 21 và env-file đã nạp đúng:
 mvn -f services/assistant-service/pom.xml spring-boot:run
 ```
 
-Service đăng ký Eureka với tên `assistant-service`. Gateway dùng route `lb://assistant-service`, timeout riêng 55 giây và time limiter 60 giây; biến nằm trong [Gateway env template](../../infrastructure/api-gateway/.env.example). Việc đổi adapter không bật deploy hoặc thêm workload K3s.
+Service đăng ký Eureka với tên `assistant-service`. Gateway dùng route `lb://assistant-service`, timeout riêng 55 giây và time limiter 60 giây; biến nằm trong [Gateway env template](../../infrastructure/api-gateway/.env.example). Workload K3s chạy một replica và đăng ký Eureka; xem [runbook bootstrap riêng](../../deploy/k8s/README.md#assistant-bootstrap-riêng) trước khi deploy lần đầu.
 
 ## HTTP contract
 

@@ -229,34 +229,37 @@ Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framewo
 - Chưa commit/push/publish/preflight/cutover production. CI trên GitHub chưa chạy
   cho tree này. Hai spec/plan local vẫn bị `/docs/java-workflow/` exclude, không force-add.
 
-## Assistant: chuẩn bị bootstrap riêng
+## Assistant: bootstrap riêng
 
-- Downstream cố định trong namespace `flash-ticket`: `http://event-service:8086`
-  và `http://booking-service:8082`. Hai ClusterIP mới chọn các Pod đang Ready;
-  không đổi port, không mở Ingress và không sửa luồng Eureka của caller cũ.
-- Assistant chưa có Deployment/ConfigMap và chưa được đưa vào matrix CD. Mục tiêu
-  là 1 replica ổn định và 1 pod surge khi rollout, không phải HA khi pod/node hỏng.
-  Plan dùng hai peer Eureka cho startup/drain; manifest Discovery hiện khai báo
-  1 replica. Cần chốt topology trước khi hoàn thiện các hook, không giả định peer
-  thứ hai tồn tại hoặc tự đổi replica của Discovery.
-- Trước khi chạy cần chốt `ASSISTANT_SERVICE_PORT` và `ASSISTANT_REDIS_KEY_PREFIX`
-  cho K3s. Cấu hình `ASSISTANT_MODEL_BASE_URL` (hiện chọn `https://model.sondimid.cloud/v1`)
-  và `ASSISTANT_MODEL_NAME` (`gemini-3.8-flash-high`) qua ConfigMap khi có workload.
-  `ENV_ASSISTANT_SERVICE` trong GitHub production environment chỉ gồm `REDIS_PASSWORD`
-  và `ASSISTANT_MODEL_API_KEY`. Không dùng fixture MVC, `.env` IntelliJ hay secret thật
-  trong manifest/log.
-- Chỉ khi được phép bootstrap: publish digest cho riêng `assistant-service`; apply
-  hai manifest `service.yaml` của Event/Booking và kiểm EndpointSlice, không
-  restart hai Deployment này. Dùng đúng release tree cùng SHA và digest đã verify
-  để deploy riêng Assistant. Kiểm node đủ chỗ cho cả pod mới và pod đang drain,
-  hai peer Eureka, đường nội bộ, route Gateway và cấu hình provider. Nếu Gateway
-  thiếu route thì rollout Gateway riêng, không dùng `all` hoặc `k8s`.
-- Lần đầu thất bại sẽ không có revision `previous`: không fallback Compose và
-  không xóa state Redis. Dừng, kiểm nguyên nhân; chỉ dọn tài nguyên Assistant
-  sau phê duyệt. Khi đã có baseline, kiểm một rollout riêng qua Gateway bằng
-  GET của BUYER test, đối chiếu registry trước/sau và pod cũ ngừng nhận request.
-- Đổi shared script có thể đưa toàn bộ K3s vào matrix CD khi merge `main`; kiểm
-  matrix từ đúng `before`/`head` trước khi merge, không dùng merge để bootstrap.
+- [Deployment](assistant-service/deployment.yaml): 1 replica, surge 1,
+  `maxUnavailable: 0`, pod mới phải Ready 75 giây mới Available. Startup cần
+  health local và Eureka `UP` đúng UID/IP/port. `preStop` đánh dấu `OUT_OF_SERVICE`
+  rồi chờ 75 giây trước graceful shutdown. Không phải HA khi pod/node hỏng.
+- [ConfigMap](assistant-service/configmap.yaml): port `8089`, Redis prefix
+  `flash-ticket:assistant:k8s:v1`, proxy OpenAI-compatible. Gateway tiếp tục gọi
+  `lb://assistant-service`, không thêm Service/Ingress cho Assistant.
+  `ENV_ASSISTANT_SERVICE` chỉ gồm `REDIS_PASSWORD` và `ASSISTANT_MODEL_API_KEY`;
+  không đưa giá trị thật vào manifest hay log.
+- **Preflight FT84:** Xác nhận Discovery StatefulSet có đúng một pod Ready và
+  Service trỏ đúng pod đó; dừng nếu topology khác, không tự scale Discovery.
+  Kiểm RAM/capacity cho pod surge và pod đang drain, GHCR pull, issuer, Redis
+  private/auth và route Gateway đúng revision. Xác nhận hai ClusterIP Event:8086
+  và Booking:8082 có EndpointSlice Ready; nếu thiếu, chỉ apply hai manifest Service
+  hiện có sau khi được phép, không restart backend. Kiểm chính sách log/retention
+  của proxy và upstream trước bootstrap: buyer có thể gửi dữ liệu thật ngay khi
+  Assistant đăng ký Eureka. Không bootstrap bằng credential đã lộ/chưa được xoay vòng.
+- **CD lần đầu:** Sau khi được phép deploy, chạy manual CD trên ref chứa manifest
+  và registry với `action=deploy`, `service=assistant-service`, `publish_only=false`.
+  Workflow dùng đúng digest đã verify/build và release cùng SHA; không dùng
+  `restart`, `rollback`, `all`, `k8s` hay merge `main` để bootstrap. Chỉ đổi
+  manifest sẽ ra `recreate`, cần digest đã chạy; tính matrix từ đúng `before`/`head`
+  trước một lần merge sau này.
+- **Nghiệm thu:** Kiểm 1 pod khỏe, đúng digest và Eureka `UP`; kiểm Gateway với
+  BUYER test bằng GET read-only, không xác nhận đặt vé. Với rollout sau bootstrap,
+  kiểm pod cũ phục vụ tới khi pod mới Available, rồi drain/terminate và không
+  còn record cũ `UP`. Fixture không chứng minh continuity trên cluster thật.
+- **Lần đầu thất bại:** Không có revision `previous`, không fallback Compose,
+  không xóa Redis. Dừng để tìm nguyên nhân; chỉ dọn tài nguyên Assistant sau phê duyệt.
 
 ## Rollout giữ ứng dụng phục vụ trên node 84
 
