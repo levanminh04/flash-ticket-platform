@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assistant-service
+  namespace: flash-ticket
+  labels: &labels
+    app.kubernetes.io/name: assistant-service
+    app.kubernetes.io/part-of: flash-ticket
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 75
+  progressDeadlineSeconds: 600
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: assistant-service
+  template:
+    metadata:
+      labels: *labels
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 180
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+      - name: assistant-service
+        image: ghcr.io/levanminh04/flash-ticket-platform/assistant-service:render-required
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8089
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            memory: 768Mi
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        envFrom:
+        - configMapRef:
+            name: assistant-service-config
+        - secretRef:
+            name: assistant-service-secret
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - |
+              set -o pipefail
+              curl -fsS --max-time 2 "http://127.0.0.1:${ASSISTANT_SERVICE_PORT}/actuator/health/readiness" >/dev/null
+              curl -fsS --max-time 2 -H 'Accept: application/json' "${EUREKA_SERVER_URL%/}/apps/ASSISTANT-SERVICE/assistant-service:${POD_UID}" |
+                jq -e --arg id "assistant-service:${POD_UID}" --arg ip "$POD_IP" --arg port "$ASSISTANT_SERVICE_PORT" \
+                  '.instance | .status == "UP" and .instanceId == $id and .ipAddr == $ip and (.port["$"] | tostring) == $port' >/dev/null
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 36
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -ec
+              - |
+                # Chờ Gateway bỏ địa chỉ cũ kể cả khi Eureka không nhận cập nhật.
+                result=0
+                curl -fsS --max-time 4 --retry 3 --retry-delay 1 --retry-max-time 15 --retry-all-errors -X PUT "${EUREKA_SERVER_URL%/}/apps/ASSISTANT-SERVICE/assistant-service:${POD_UID}/status?value=OUT_OF_SERVICE" >/dev/null || result=$?
+                sleep 75
+                exit "$result"
