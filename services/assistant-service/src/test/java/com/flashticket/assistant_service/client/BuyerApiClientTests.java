@@ -35,6 +35,7 @@ class BuyerApiClientTests {
   private volatile String body;
   private volatile String method;
   private volatile String path;
+  private volatile String query;
   private volatile String authorization;
   private volatile int requests;
   private boolean gzip;
@@ -63,7 +64,17 @@ class BuyerApiClientTests {
     var other = Jwt.withTokenValue("other-current-token").header("alg", "RS256").subject("other").expiresAt(Instant.now().plusSeconds(300)).build();
     assertEquals(orderId, client.getMyOrder(other, orderId).getOrderId()); assertEquals("Bearer other-current-token", authorization);
     body = "{\"items\":[],\"page\":0,\"size\":5}"; client.getMyOrders(jwt, 0, ""); assertEquals("/api/v1/orders", path);
-    body = "{\"items\":[],\"nextCursor\":null}"; client.searchEvents(jwt, new EventSearchRequest());
+    body = "{\"items\":[],\"nextCursor\":null}";
+    var search = new EventSearchRequest();
+    for (String cursor : new String[] {null, "", " \t"}) {
+      search.setCursor(cursor);
+      client.searchEvents(jwt, search);
+      assertEquals("size=5&includePast=false", query);
+    }
+    String cursor = "MjAyNi0xMS0xOFQwMDowMDowMFp8MTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTEx";
+    search.setCursor(cursor);
+    client.searchEvents(jwt, search);
+    assertEquals("size=5&includePast=false&cursor=" + cursor, query);
     int before = requests;
     status = 302; assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId)).getCode()); assertEquals(before + 1, requests);
     ReflectionTestUtils.setField(client, "eventBaseUrl", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/forbidden"));
@@ -105,6 +116,32 @@ class BuyerApiClientTests {
           "Buyer API call failed: operation=getEvent reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus=500 durationMs=[0-9]+"));
       assertTrue(logs.list.getLast().getFormattedMessage().matches(
           "Buyer API call failed: operation=getEvent reasonCode=DOWNSTREAM_UNAVAILABLE errorType=ResourceAccessException causeType=SocketTimeoutException durationMs=[0-9]+"));
+      status = 400;
+      String cursorError = "{\"code\":\"INVALID_CURSOR\",\"message\":\"private@example.test Bearer hidden-secret\"}";
+      String[] errorBodies = {
+          cursorError,
+          "{\"code\":\"INVALID_REQUEST\"}",
+          "{\"code\":\"private@example.test\"}",
+          cursorError + " trailing",
+          cursorError + " ".repeat(2048)
+      };
+      String[] expectedCodes = {" downstreamCode=INVALID_CURSOR", " downstreamCode=INVALID_REQUEST", "", "", ""};
+      for (int i = 0; i < errorBodies.length; i++) {
+        body = errorBodies[i];
+        var rejection = assertThrows(AssistantProblem.class, () -> client.searchEvents(jwt, new EventSearchRequest()));
+        assertEquals(503, rejection.getStatus().value());
+        assertEquals("DOWNSTREAM_UNAVAILABLE", rejection.getCode());
+        assertFalse(rejection.getSafeDetail().contains("hidden-secret"));
+        assertEquals(3 + i, logs.list.size());
+        assertTrue(logs.list.getLast().getFormattedMessage().matches(
+            "Buyer API call failed: operation=searchEvents reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus=400"
+                + expectedCodes[i] + " durationMs=[0-9]+"));
+      }
+      body = cursorError;
+      assertEquals(503, assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId)).getStatus().value());
+      assertEquals(3 + errorBodies.length, logs.list.size());
+      assertTrue(logs.list.getLast().getFormattedMessage().matches(
+          "Buyer API call failed: operation=getEvent reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus=400 durationMs=[0-9]+"));
       for (ILoggingEvent log : logs.list) {
         assertEquals(Level.WARN, log.getLevel());
         assertNull(log.getThrowableProxy());
@@ -125,7 +162,8 @@ class BuyerApiClientTests {
   }
 
   private void handleFixture(HttpExchange exchange) throws IOException {
-    requests++; method = exchange.getRequestMethod(); path = exchange.getRequestURI().getPath(); authorization = exchange.getRequestHeaders().getFirst("Authorization");
+    requests++; method = exchange.getRequestMethod(); path = exchange.getRequestURI().getPath();
+    query = exchange.getRequestURI().getRawQuery(); authorization = exchange.getRequestHeaders().getFirst("Authorization");
     byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
     if (gzip) {
       var output = new java.io.ByteArrayOutputStream();
