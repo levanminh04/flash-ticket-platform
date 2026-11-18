@@ -1,7 +1,13 @@
 package com.flashticket.assistant_service.client;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.flashticket.assistant_service.config.AssistantConfiguration;
 import com.flashticket.assistant_service.dto.EventSearchRequest;
 import com.flashticket.assistant_service.exception.AssistantProblem;
@@ -13,8 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
 class BuyerApiClientTests {
@@ -64,12 +73,45 @@ class BuyerApiClientTests {
   @Test
   void boundsResponseAndMapsFailuresWithoutLeakingBody() {
     var jwt = Jwt.withTokenValue("fixture").header("alg", "RS256").subject("buyer").expiresAt(Instant.now().plusSeconds(300)).build();
-    body = "private@example.test Bearer hidden-secret";
-    for (int code : new int[] {401, 403, 404, 429, 500}) {
-      status = code;
-      var problem = assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId));
-      assertEquals(code == 500 ? 503 : code, problem.getStatus().value());
-      assertFalse(problem.getSafeDetail().contains("hidden-secret")); assertFalse(problem.getMessage().contains("private@"));
+    var logger = (Logger) LoggerFactory.getLogger(BuyerApiClient.class);
+    var logs = new ListAppender<ILoggingEvent>();
+    logs.start();
+    logger.addAppender(logs);
+    try {
+      body = "private@example.test Bearer hidden-secret";
+      for (int code : new int[] {401, 403, 404, 429, 500}) {
+        status = code;
+        var problem = assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId));
+        assertEquals(code == 500 ? 503 : code, problem.getStatus().value());
+        if (code == 500) assertEquals("DOWNSTREAM_UNAVAILABLE", problem.getCode());
+        assertFalse(problem.getSafeDetail().contains("hidden-secret")); assertFalse(problem.getMessage().contains("private@"));
+      }
+
+      var builder = RestClient.builder();
+      var transport = MockRestServiceServer.bindTo(builder).build();
+      URI origin = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+      transport.expect(requestTo(origin + "/api/v1/events/" + eventId))
+          .andRespond(withException(new SocketTimeoutException("fixture-sensitive-timeout-message")));
+      var timeoutClient = new BuyerApiClient(builder.build(), JsonMapper.builder().build());
+      ReflectionTestUtils.setField(timeoutClient, "eventBaseUrl", origin);
+      ReflectionTestUtils.setField(timeoutClient, "bookingBaseUrl", origin);
+      var timeout = assertThrows(AssistantProblem.class, () -> timeoutClient.getEvent(jwt, eventId));
+      assertEquals(503, timeout.getStatus().value());
+      assertEquals("DOWNSTREAM_UNAVAILABLE", timeout.getCode());
+      transport.verify();
+
+      assertEquals(2, logs.list.size());
+      assertTrue(logs.list.getFirst().getFormattedMessage().matches(
+          "Buyer API call failed: operation=getEvent reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus=500 durationMs=[0-9]+"));
+      assertTrue(logs.list.getLast().getFormattedMessage().matches(
+          "Buyer API call failed: operation=getEvent reasonCode=DOWNSTREAM_UNAVAILABLE errorType=ResourceAccessException causeType=SocketTimeoutException durationMs=[0-9]+"));
+      for (ILoggingEvent log : logs.list) {
+        assertEquals(Level.WARN, log.getLevel());
+        assertNull(log.getThrowableProxy());
+      }
+    } finally {
+      logger.detachAppender(logs);
+      logs.stop();
     }
     status = 200; body = "not-json";
     assertEquals("INVALID_DOWNSTREAM_RESPONSE", assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId)).getCode());

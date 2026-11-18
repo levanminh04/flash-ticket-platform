@@ -9,8 +9,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -24,6 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 @RequiredArgsConstructor
 public class BuyerApiClient {
+  private static final Logger log = LoggerFactory.getLogger(BuyerApiClient.class);
+
   private final RestClient buyerRestClient;
   private final JsonMapper jsonMapper;
   @Value("${assistant.event-base-url}") private URI eventBaseUrl;
@@ -39,7 +44,7 @@ public class BuyerApiClient {
         .queryParamIfPresent("to", Optional.ofNullable(request.getTo()))
         .queryParamIfPresent("maxPrice", Optional.ofNullable(request.getMaxPrice()))
         .queryParamIfPresent("cursor", Optional.ofNullable(request.getCursor())).build().encode().toUri();
-    EventPage page = get(uri, jwt, EventPage.class);
+    EventPage page = get("searchEvents", uri, jwt, EventPage.class);
     if (page.getItems() == null || page.getItems().size() > 5) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Danh sách sự kiện không hợp lệ.");
     }
@@ -51,7 +56,7 @@ public class BuyerApiClient {
   }
 
   public EventView getEvent(Jwt jwt, UUID eventId) {
-    EventView event = minimizeEvent(get(UriComponentsBuilder.fromUri(eventBaseUrl)
+    EventView event = minimizeEvent(get("getEvent", UriComponentsBuilder.fromUri(eventBaseUrl)
         .path("/api/v1/events/" + eventId).build().toUri(), jwt, EventView.class));
     if (!eventId.equals(event.getEventId()) || jsonMapper.writeValueAsBytes(event).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được thông tin sự kiện phù hợp.");
@@ -60,7 +65,7 @@ public class BuyerApiClient {
   }
 
   public AvailabilityReadView getAvailability(Jwt jwt, UUID eventId) {
-    AvailabilityReadView availability = get(UriComponentsBuilder.fromUri(bookingBaseUrl)
+    AvailabilityReadView availability = get("getAvailability", UriComponentsBuilder.fromUri(bookingBaseUrl)
         .path("/api/v1/events/" + eventId + "/availability").build().toUri(), jwt, AvailabilityReadView.class);
     if (!eventId.equals(availability.getEventId()) || availability.getAsOf() == null || availability.getTicketTypes() == null
         || jsonMapper.writeValueAsBytes(availability).length > 16384) {
@@ -70,7 +75,7 @@ public class BuyerApiClient {
   }
 
   public OrderReadPage getMyOrders(Jwt jwt, int page, String state) {
-    OrderReadPage result = get(UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/orders")
+    OrderReadPage result = get("getMyOrders", UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/orders")
         .queryParam("page", page).queryParam("size", 5)
         .queryParamIfPresent("state", Optional.ofNullable(state).filter(value -> !value.isBlank()))
         .build().encode().toUri(), jwt, OrderReadPage.class);
@@ -81,7 +86,7 @@ public class BuyerApiClient {
   }
 
   public OrderReadView getMyOrder(Jwt jwt, UUID orderId) {
-    OrderReadView order = get(UriComponentsBuilder.fromUri(bookingBaseUrl)
+    OrderReadView order = get("getMyOrder", UriComponentsBuilder.fromUri(bookingBaseUrl)
         .path("/api/v1/orders/" + orderId).build().toUri(), jwt, OrderReadView.class);
     if (!orderId.equals(order.getOrderId()) || jsonMapper.writeValueAsBytes(order).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được đơn phù hợp.");
@@ -89,7 +94,7 @@ public class BuyerApiClient {
     return order;
   }
 
-  private <T> T get(URI uri, Jwt jwt, Class<T> responseType) {
+  private <T> T get(String operation, URI uri, Jwt jwt, Class<T> responseType) {
     // Base URL chỉ là origin cố định; model không thể chọn host/path/header.
     String uuid = "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}";
     boolean allowed = false;
@@ -111,17 +116,22 @@ public class BuyerApiClient {
     if (jwt == null || jwt.getExpiresAt() == null || !Instant.now().isBefore(jwt.getExpiresAt())) {
       throw new AssistantProblem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Vui lòng đăng nhập lại.");
     }
+    long startedNanos = System.nanoTime();
     try {
       T result = buyerRestClient.get().uri(uri).headers(headers -> {
         headers.setBearerAuth(jwt.getTokenValue()); headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.set("Accept-Encoding", "identity");
-      }).exchange((request, response) -> decodeResponse(response, responseType));
+      }).exchange((request, response) -> decodeResponse(response, responseType, operation, startedNanos));
       if (!Instant.now().isBefore(jwt.getExpiresAt())) {
         throw new AssistantProblem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Vui lòng đăng nhập lại.");
       }
       return result;
     } catch (AssistantProblem error) { throw error;
     } catch (Exception error) {
+      Throwable cause = error.getCause();
+      log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE errorType={} causeType={} durationMs={}",
+          operation, error.getClass().getSimpleName(), cause == null ? "none" : cause.getClass().getSimpleName(),
+          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos));
       throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");
     }
   }
@@ -143,7 +153,8 @@ public class BuyerApiClient {
     return event;
   }
 
-  private <T> T decodeResponse(ClientHttpResponse response, Class<T> responseType) throws IOException {
+  private <T> T decodeResponse(ClientHttpResponse response, Class<T> responseType, String operation,
+      long startedNanos) throws IOException {
     int status = response.getStatusCode().value();
     if (status != 200) {
       // Không đọc/echo body lỗi vì có thể chứa dữ liệu cá nhân hoặc credential.
@@ -152,7 +163,11 @@ public class BuyerApiClient {
         case 403 -> new AssistantProblem(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền đọc dữ liệu này.");
         case 404 -> new AssistantProblem(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Không tìm thấy dữ liệu được phép truy cập.");
         case 429 -> new AssistantProblem(HttpStatus.TOO_MANY_REQUESTS, "DOWNSTREAM_RATE_LIMITED", "Dịch vụ đang giới hạn yêu cầu.");
-        default -> new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");
+        default -> {
+          log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} durationMs={}",
+              operation, status, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos));
+          yield new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");
+        }
       };
     }
     String encoding = response.getHeaders().getFirst("Content-Encoding");
