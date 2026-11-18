@@ -1,3 +1,18 @@
+.assistant-message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-event-link { display: block; margin: 6px 0; }
+.assistant-status { padding: 6px 12px; font-size: 13px; }
+.assistant-status p { margin: 4px 0; }
+.assistant-purchase-form { padding: 12px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a; }
+.assistant-purchase-form p { font-size: 13px; margin: 6px 0; }
+.assistant-purchase-form label, .assistant-purchase-form input { display: block; width: 100%; }
+.assistant-purchase-form input { margin: 6px 0; padding: 8px; border: 1px solid #94a3b8; border-radius: 6px; }
+.assistant-purchase-form button { white-space: normal; }
+.assistant-full-page .chatbot-shell { display: flex; flex-direction: column; min-height: 500px; }
+.assistant-full-page .chatbot-messages { flex: 1; max-height: 65vh; overflow: auto; padding: 12px; }
+.floating-chatbot-header > div { display: flex; align-items: center; gap: 8px; }
+.floating-chatbot-header button:first-child { width: auto; font-size: 12px; }
+.assistant-purchase-form :disabled { opacity: .65; }
+
 .floating-chatbot {
   position: fixed;
   right: 20px;
@@ -41,7 +56,7 @@
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.2);
   margin-bottom: 10px;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   overflow: hidden;
 }
 

@@ -68,7 +68,7 @@ class MigrationTests(unittest.TestCase):
             if not self.deleted_legacy:
                 rows.append(self.pod('discovery-server', 'legacy-pod', '10.42.0.1', 'legacy'))
             if self.workload:
-                for i in range(2):
+                for i in range(self.workload['spec']['replicas']):
                     pod = self.pod('discovery-server', 'peer-' + str(i), '10.42.0.' + str(i + 2), 'peers')
                     if self.restart:
                         pod['status']['containerStatuses'][0]['restartCount'] = 1
@@ -111,6 +111,17 @@ class MigrationTests(unittest.TestCase):
         if (self.partial and address.endswith('.3:8761')) or (self.old_incomplete and address.endswith('.1:8761')):
             records.pop(next(iter(records)))
         return records
+
+    def test_standalone_registry_does_not_require_peer_one(self):
+        self.workload = migration.read(self.root / 'statefulset.json')
+        self.workload['spec']['replicas'] = 1
+        migration.write(self.root / 'statefulset.json', self.workload)
+        self.deleted_legacy = True
+        migration.check(self.root)
+        self.assertEqual(len(migration.read(self.root / 'peer-sync-diagnostics.json')['peers']), 1)
+        self.workload['spec']['replicas'] = 2
+        with self.assertRaisesRegex(AssertionError, 'DISCOVERY_REPLICA_COUNT_MISMATCH'):
+            migration.check(self.root)
 
     def test_success_retains_legacy_until_final_check_and_creates_a_valid_peer_baseline(self):
         original_check = migration.check
@@ -171,6 +182,16 @@ class MigrationTests(unittest.TestCase):
                 migration.restore(self.root)
         self.assertIsNotNone(self.workload)
         self.assertEqual(self.service['spec']['selector'][migration.GENERATION], 'peers')
+
+    def test_assistant_is_checked_only_when_it_has_a_ready_pod(self):
+        baseline = migration.expected_instances(self.pod_items, require_all=True)
+        assistant = self.pod('assistant-service', 'assistant-uid', '10.42.0.90')
+        self.pod_items.append(assistant)
+        key = 'assistant-service:assistant-uid'
+        self.assertEqual(migration.expected_instances(self.pod_items, require_all=True),
+                         {**baseline, key: ('10.42.0.90', 8082)})
+        assistant['status']['containerStatuses'][0]['ready'] = False
+        self.assertEqual(migration.expected_instances(self.pod_items, require_all=True), baseline)
 
     def test_memory_guard_precedes_cluster_mutation(self):
         self.memory = 700

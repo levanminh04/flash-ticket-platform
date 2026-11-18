@@ -27,11 +27,14 @@ check() {
 }
 check services/payment-service/src/main/Example.java '["payment-service"]' '[]'
 check deploy/k8s/payment-service/configmap.yaml '[]' '["payment-service"]'
-check deploy/scripts/deploy-k8s-service.sh '[]' '["api-gateway","booking-service","discovery-server","event-service","frontend","payment-service","ticket-service","user-service"]'
-check deploy/scripts/migrate-k8s-discovery.py '[]' '["api-gateway","booking-service","discovery-server","event-service","frontend","payment-service","ticket-service","user-service"]'
+check deploy/k8s/event-service/service.yaml '[]' '["event-service"]'
+check deploy/k8s/booking-service/service.yaml '[]' '["booking-service"]'
+check deploy/scripts/deploy-k8s-service.sh '[]' '["api-gateway","booking-service","discovery-server","event-service","frontend","keycloak","payment-service","ticket-service","user-service"]'
+check deploy/scripts/migrate-k8s-discovery.py '[]' '["api-gateway","booking-service","discovery-server","event-service","frontend","keycloak","payment-service","ticket-service","user-service"]'
 check deploy/k8s/discovery-server/statefulset.yaml '[]' '["discovery-server"]'
 check deploy/k8s/discovery-server/peer-service.yaml '[]' '["discovery-server"]'
-check deploy/app/keycloak.yml '[]' '["keycloak"]'
+check deploy/app/keycloak.yml '[]' '[]'
+check deploy/k8s/keycloak/deployment.yaml '[]' '["keycloak"]'
 check frontend/src/App.tsx '["frontend"]' '[]'
 check deploy/k8s/frontend/deployment.yaml '[]' '["frontend"]'
 check deploy/k8s/frontend/service.yaml '[]' '["frontend"]'
@@ -46,12 +49,11 @@ git -C "$fixture" -c user.name=fixture -c user.email=fixture@example.invalid com
 output=$(EVENT_NAME=push BEFORE="$base" SHA=HEAD bash "$fixture/.github/scripts/plan-deploy.sh")
 sed -n 's/^rest=//p' <<< "$output" | jq -e 'length == 1 and .[0].name == "payment-service" and .[0].runtime == "k8s" and .[0].mode == "build-and-deploy"' >/dev/null
 for service in keycloak frontend; do
-  runtime=compose
-  if [[ $service == frontend ]]; then runtime=k8s; fi
+  runtime=k8s
   output=$(EVENT_NAME=workflow_dispatch ACTION=restart SERVICE="$service" bash "$fixture/.github/scripts/plan-deploy.sh")
   sed -n 's/^rest=//p' <<< "$output" | jq -e --arg runtime "$runtime" 'length == 1 and .[0].runtime == $runtime and .[0].mode == "recreate"' >/dev/null
 done
 output=$(EVENT_NAME=workflow_dispatch ACTION=deploy SERVICE=k8s bash "$fixture/.github/scripts/plan-deploy.sh")
 sed -n 's/^first=//p' <<< "$output" | jq -e 'length == 1 and .[0].name == "discovery-server" and .[0].runtime == "k8s"' >/dev/null
-sed -n 's/^rest=//p' <<< "$output" | jq -e 'length == 7 and all(.[]; .runtime == "k8s" and .mode == "build-and-deploy")' >/dev/null
+sed -n 's/^rest=//p' <<< "$output" | jq -e 'length == 8 and all(.[]; .runtime == "k8s" and .mode == "build-and-deploy")' >/dev/null
 echo 'Deployment routing fixtures passed (source, manifest, shared, Compose, examples, docs, precedence).'

@@ -289,6 +289,43 @@ def run_fixtures():
                 assert 'has migrated to K8s' in result.stdout
         print('Frontend fixtures passed: no backend dependencies, deploy/recreate/rollback, failure state, validation and Compose migration guard.')
 
+        # Synthetic Assistant manifests exercise bootstrap guards without a runtime port or Eureka.
+        assistant_root = root / 'assistant-fixture'
+        for path in ('state/k8s', 'api', 'env'):
+            (assistant_root / path).mkdir(parents=True)
+        env['APP_ROOT'] = assistant_root.as_posix()
+        (assistant_root / 'state/k8s/enabled').touch()
+        assistant_source = assistant_root / 'releases' / SHA / 'deploy'
+        assistant_app = assistant_source / 'k8s/assistant-service'
+        assistant_app.mkdir(parents=True)
+        shutil.copytree(scripts, assistant_source / 'scripts')
+        assistant_examples = assistant_source / 'k8s/examples'
+        assistant_examples.mkdir()
+        template = 'assistant-service.secret.env.example'
+        shutil.copyfile(SCRIPT.parents[1] / 'k8s/examples' / template, assistant_examples / template)
+        for name, document in [('deployment', deployment), ('configmap', config)]:
+            fixture = json.loads(json.dumps(document).replace('payment-service', 'assistant-service'))
+            (assistant_app / (name + '.yaml')).write_text(json.dumps(fixture))
+        assistant_env = assistant_root / 'env/assistant-service.env'
+        assistant_env.write_text('REDIS_PASSWORD=fixture-redis\nUNRELATED_SECRET=fixture-ignored\n')
+        assistant_repository = REPOSITORY.replace('payment-service', 'assistant-service')
+        command = [bash, SCRIPT.as_posix(), 'assistant-service', assistant_repository + 'a' * 64, SHA, 'deploy']
+        result = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert result.returncode != 0 and 'MISSING_SECRET_KEYS ASSISTANT_MODEL_API_KEY' in result.stderr
+        assert not (assistant_root / 'api/Secret.json').exists()
+        with assistant_env.open('a') as stream:
+            stream.write('ASSISTANT_MODEL_API_KEY=fixture-model\n')
+        (assistant_root / 'fail-once').touch()
+        result = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert result.returncode != 0 and 'NO_PREVIOUS_K8S_REVISION' in result.stderr
+        assert 'no Compose fallback' in result.stderr and 'RESTORED_PREVIOUS' not in result.stderr
+        assert not (assistant_root / 'state/k8s/assistant-service/current').exists()
+        assert not (assistant_root / 'state/k8s/assistant-service.current').exists()
+        assert not any(value in result.stdout + result.stderr for value in ('fixture-redis', 'fixture-ignored', 'fixture-model'))
+        secret = json.loads((assistant_root / 'api/Secret.json').read_text())['data']
+        assert set(secret) == {'REDIS_PASSWORD', 'ASSISTANT_MODEL_API_KEY'}
+        print('Assistant bootstrap fixtures passed: required secrets, allowlist and no Compose fallback.')
+
 
 if __name__ == '__main__':
     if sys.argv[1:2] == ['--kubectl']:

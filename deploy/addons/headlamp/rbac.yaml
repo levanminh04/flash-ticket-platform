@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: headlamp
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/part-of: flash-ticket
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp
+  namespace: headlamp
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/part-of: flash-ticket
+# Pod chỉ dùng token để thiết lập kết nối in-cluster, không được cấp quyền admin.
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp-admin
+  namespace: headlamp
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/part-of: flash-ticket
+# Tài khoản đăng nhập riêng, không dùng để chạy Pod hoặc lưu token lâu dài.
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-admin
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/part-of: flash-ticket
+# Quyền toàn cluster đã được chọn cho tài khoản quản trị đăng nhập Headlamp.
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: headlamp-admin
+    namespace: headlamp

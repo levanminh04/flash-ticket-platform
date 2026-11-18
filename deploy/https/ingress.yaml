@@ -37,7 +37,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: keycloak-external
+                name: keycloak
                 port:
                   number: 8080
 ---
@@ -89,6 +89,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: keycloak-external
+                name: keycloak
                 port:
                   number: 8080

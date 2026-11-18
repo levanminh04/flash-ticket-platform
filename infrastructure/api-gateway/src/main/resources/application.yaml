@@ -91,6 +91,19 @@ spring:
                     rate-limiter: "#{@redisRateLimiter}"
                     key-resolver: "#{@remoteAddressKeyResolver}"
                 - CircuitBreaker=userServiceBreaker
+            - id: assistant
+              uri: lb://assistant-service
+              order: 45
+              predicates:
+                - Path=/api/v1/assistant/**
+              metadata:
+                response-timeout: ${ASSISTANT_GATEWAY_RESPONSE_TIMEOUT_MS:55000}
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@remoteAddressKeyResolver}"
+                - CircuitBreaker=assistantServiceBreaker
             - id: event
               uri: lb://event-service
               order: 50
@@ -154,8 +167,11 @@ resilience4j:
       paymentServiceBreaker: *breaker
       ticketServiceBreaker: *breaker
       userServiceBreaker: *breaker
+      assistantServiceBreaker: *breaker
   timelimiter:
     instances:
+      assistantServiceBreaker:
+        timeoutDuration: ${ASSISTANT_GATEWAY_TIME_LIMIT:60s}
       eventImageServiceBreaker:
         timeoutDuration: ${EVENT_IMAGES_GATEWAY_TIME_LIMIT:50s}
       eventServiceBreaker:

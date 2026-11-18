@@ -16,8 +16,7 @@ import threading
 def container_fixtures():
     apps = json.loads(Path('/fixture/apps.json').read_text())
     state = {'status': 'UP', 'health': 200, 'id': '', 'ip': '10.42.0.9', 'malformed': False, 'puts': [], 'putStatus': 200}
-    sample = {'app': 'BOOKING-SERVICE', 'instanceId': 'booking-service:sample', 'status': 'UP', 'ipAddr': '10.42.0.8', 'port': {'$': 8082}}
-    state.update({'localApps': [sample], 'peerApps': [sample], 'peerStatus': 200})
+    state['localRegistry'] = {'applications': {}}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -26,7 +25,7 @@ def container_fixtures():
             if self.path.startswith('/actuator/'):
                 self.wfile.write(b'{"status":"UP"}')
             elif self.path == '/eureka/apps':
-                self.wfile.write(json.dumps({'applications': {'application': [{'name': 'BOOKING-SERVICE', 'instance': state['localApps']}]}}).encode())
+                self.wfile.write(json.dumps(state['localRegistry']).encode())
             elif state['malformed']:
                 self.wfile.write(b'not-json')
             else:
@@ -42,15 +41,8 @@ def container_fixtures():
         def log_message(self, *args):
             pass
 
-    class PeerHandler(Handler):
-        def do_GET(self):
-            self.send_response(state['peerStatus'])
-            self.end_headers()
-            self.wfile.write(json.dumps({'applications': {'application': [{'name': 'BOOKING-SERVICE', 'instance': state['peerApps']}]}}).encode())
-
     ports = {a['port'] for a in apps} | {8761}
     servers = [http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler) for port in ports]
-    servers.append(http.server.ThreadingHTTPServer(('127.0.0.2', 8761), PeerHandler))
     for server in servers:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -97,25 +89,19 @@ def container_fixtures():
                 assert Path('/tmp/drain-seconds').read_text() == '75', 'Failed drain must still allow propagation time'
                 state['putStatus'] = 200
             print('HOOK_PASSED ' + app['name'], flush=True)
-        env['POD_NAME'] = 'discovery-server-0'
         command = json.loads(Path('/fixture/discovery.json').read_text())
 
-        def peer_startup(passed):
+        def standalone_startup(passed):
             result = subprocess.run(command, env=env, capture_output=True, timeout=10)
-            assert (result.returncode == 0) == passed, 'Eureka startup registry comparison'
+            assert (result.returncode == 0) == passed, 'Eureka standalone startup probe'
 
-        peer_startup(True)
-        state['localApps'] = []
-        peer_startup(False)  # Healthy peer has a record the new Pod has not copied.
-        state['localApps'] = [sample]
-        peer_startup(True)
-        state['localApps'] = []
-        state['peerStatus'] = 503
-        peer_startup(False)  # A transient peer failure must not bypass the sync gate.
-        state['peerStatus'] = 200
-        state['peerApps'] = []
-        peer_startup(True)  # Both HTTP servers can bootstrap empty before either Pod is Ready.
-        print('HOOK_PASSED discovery-server: sync gate, peer failure and empty cold bootstrap', flush=True)
+        standalone_startup(True)  # Cold start without a peer or registrations.
+        state['localRegistry'] = {'applications': None}
+        standalone_startup(False)
+        state['localRegistry'] = {'applications': {}}
+        state['health'] = 503
+        standalone_startup(False)
+        print('HOOK_PASSED discovery-server: standalone cold start and readiness', flush=True)
     finally:
         for server in servers:
             server.shutdown()
@@ -147,7 +133,7 @@ def run_docker():
         (context / 'Dockerfile').write_text('FROM ' + base + '\nRUN apk add --no-cache curl jq python3 && addgroup -S -g 10001 app && adduser -S -D -u 10001 -G app app\nCOPY . /fixture/\nUSER 10001:10001\nCMD ["python3", "/fixture/fixture.py", "--container"]\n')
         tag = 'flash-ticket-rollout-hooks:fixture'
         subprocess.run(['docker', 'build', '--quiet', '-t', tag, str(context)], check=True, timeout=300)
-        subprocess.run(['docker', 'run', '--rm', '--add-host', 'discovery-server-1.discovery-server-peers.flash-ticket.svc.cluster.local:127.0.0.2', tag], check=True, timeout=120)
+        subprocess.run(['docker', 'run', '--rm', tag], check=True, timeout=120)
 
     # Dùng nguyên runtime stage/nginx.conf, chỉ thay dist bằng nội dung fixture không chứa VITE/secret thật.
     with tempfile.TemporaryDirectory(prefix='ft-frontend-runtime-') as directory:

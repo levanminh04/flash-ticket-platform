@@ -41,6 +41,10 @@ flock -w 600 8 || reject "cluster maintenance/deploy lock timeout"
 if [[ $svc == frontend && -f $APP_ROOT/state/k8s/frontend.current ]]; then
   reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
 fi
+if [[ $svc == keycloak && -f $APP_ROOT/state/k8s/keycloak-enabled ]]; then
+  echo "DEPLOY_REJECTED KEYCLOAK_K8S_MANAGED" >&2
+  exit 1
+fi
 if [[ -f $APP_ROOT/state/k8s/enabled && $svc != keycloak && $svc != frontend ]]; then
   reject "$svc has migrated to K8s; use deploy-k8s-service.sh"
 fi

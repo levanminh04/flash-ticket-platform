@@ -158,7 +158,7 @@ jobs:
           ROLLBACK_DIGEST: ${{ inputs.image_digest }}
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ENV_SECRET: ${{ secrets[format('ENV_{0}', fromJSON('{"discovery-server":"DISCOVERY_SERVER","api-gateway":"API_GATEWAY","user-service":"USER_SERVICE","event-service":"EVENT_SERVICE","ticket-service":"TICKET_SERVICE","booking-service":"BOOKING_SERVICE","payment-service":"PAYMENT_SERVICE","keycloak":"KEYCLOAK"}')[inputs.service])] }}
+          ENV_SECRET: ${{ secrets[format('ENV_{0}', fromJSON('{"discovery-server":"DISCOVERY_SERVER","api-gateway":"API_GATEWAY","user-service":"USER_SERVICE","event-service":"EVENT_SERVICE","ticket-service":"TICKET_SERVICE","booking-service":"BOOKING_SERVICE","payment-service":"PAYMENT_SERVICE","assistant-service":"ASSISTANT_SERVICE","keycloak":"KEYCLOAK"}')[inputs.service])] }}
         run: |
           set -euo pipefail
           [[ $SERVICE =~ ^[a-z-]+$ ]]
@@ -178,6 +178,15 @@ jobs:
           # Respect cutover before writing env/config for either runtime.
           # shellcheck disable=SC2029
           ssh "${opts[@]}" "$dest" "test ! -e '$APP_ROOT/state/maintenance'"
+
+          if [[ $SERVICE == keycloak ]]; then
+            # shellcheck disable=SC2029
+            if [[ $RUNTIME == k8s ]]; then
+              ssh "${opts[@]}" "$dest" "test -f '$APP_ROOT/state/k8s/keycloak-enabled'"
+            else
+              ssh "${opts[@]}" "$dest" "test ! -e '$APP_ROOT/state/k8s/keycloak-enabled'"
+            fi
+          fi
 
           case "$MODE" in
             build-and-deploy) image="$REGISTRY_IMAGE@$PUBLISHED_DIGEST" ;;

@@ -105,7 +105,7 @@ def check():
         assert rule['http']['paths'][0]['backend']['service'] == {'name': 'frontend', 'port': {'number': 5173}}
     for ingress in [http, ingresses['keycloak-https']]:
         rule = next(r for r in ingress['spec']['rules'] if r['host'] == AUTH)
-        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'keycloak-external', 'port': {'number': 8080}}
+        assert rule['http']['paths'][0]['backend']['service'] == {'name': 'keycloak', 'port': {'number': 8080}}
     assert not (ROOT / 'deploy/k8s/frontend/ingress.yaml').exists()
     assert not (ROOT / 'deploy/k8s/frontend/hpa.yaml').exists()
     assert 'STOPSIGNAL SIGQUIT' in (ROOT / 'frontend/Dockerfile').read_text(encoding='utf-8')

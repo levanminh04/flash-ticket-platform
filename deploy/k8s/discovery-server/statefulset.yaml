@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: discovery-server
     app.kubernetes.io/part-of: flash-ticket
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: discovery-server
@@ -65,30 +65,9 @@ spec:
             - sh
             - -ec
             - |
-              # Pod mới phải có các instance UP đang tồn tại trên peer trước khi nhận traffic.
               curl -fsS --max-time 2 http://127.0.0.1:8761/actuator/health/readiness >/dev/null
-              local_registry=$(mktemp)
-              peer_registry=$(mktemp)
-              trap 'rm -f "$local_registry" "$peer_registry"' EXIT
-              curl -fsS --max-time 2 -H 'Accept: application/json' http://127.0.0.1:8761/eureka/apps > "$local_registry"
-              jq -e '.applications | type == "object"' "$local_registry" >/dev/null
-              case "$POD_NAME" in
-                discovery-server-0) peer=discovery-server-1 ;;
-                discovery-server-1) peer=discovery-server-0 ;;
-                *) exit 1 ;;
-              esac
-              # Headless Service công bố cả Pod chưa Ready; cold boot vẫn tìm được peer.
-              # Lỗi DNS/HTTP phải chờ lần probe sau, không bỏ qua đồng bộ khi rolling.
-              curl -fsS --max-time 2 -H 'Accept: application/json' "http://${peer}.discovery-server-peers.flash-ticket.svc.cluster.local:8761/eureka/apps" > "$peer_registry"
-              jq -e '.applications | type == "object"' "$peer_registry" >/dev/null
-              jq -e --slurpfile peer "$peer_registry" '
-                  def list: if type == "array" then . elif . == null then [] else [.] end;
-                  def live:
-                    [.applications.application | list | .[] | .instance | list | .[]
-                     | select(.status == "UP" and .app != "DISCOVERY-SERVER")
-                     | [.instanceId, .ipAddr, (.port."$" | tostring)]];
-                  live as $local | ($peer[0] | live) as $remote | ($remote - $local | length) == 0
-              ' "$local_registry" >/dev/null
+              curl -fsS --max-time 2 -H 'Accept: application/json' http://127.0.0.1:8761/eureka/apps |
+                jq -e '.applications | type == "object"' >/dev/null
           periodSeconds: 5
           timeoutSeconds: 8
           failureThreshold: 36

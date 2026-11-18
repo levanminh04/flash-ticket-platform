@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: flash-ticket
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -8,6 +8,15 @@ Eureka trả địa chỉ Pod; HTTP nghiệp vụ đi trực
 tiếp đến Pod đã chọn. Gateway có một Service; Eureka có Service client và thêm
 headless Service để hai peer có địa chỉ DNS ổn định.
 
+## Cutover Keycloak và Eureka trên ft84
+
+Nguồn mới chuyển Eureka sang 1 Pod standalone và Keycloak sang 1 Pod K3s; không tự áp dụng vào runtime. Hai bước thực hiện riêng để cô lập lỗi.
+
+- **Eureka:** chụp revision hiện tại và danh sách instance UP, sau đó deploy revision mới bằng `deploy-k8s-service.sh` với digest hiện tại. Không chỉ scale: probe cũ cần Pod thứ hai. Giữ Service 8761 và headless DNS. Chờ registry phục hồi đủ instance và kiểm API qua Gateway. Nếu lỗi, phục hồi cả ConfigMap và StatefulSet hai replica từ revision trước; nếu controller kẹt do một Pod chưa Ready của revision lỗi, xác minh owner và template đã phục hồi trước khi thay Pod đó theo runbook. Cụm còn Deployment legacy phải chuyển qua revision hai peer tương thích trước. Một Pod không có dự phòng khi restart.
+- **Keycloak:** kiểm trước đường Pod tới PostgreSQL/RabbitMQ, issuer nội bộ, digest, theme/mount, dải Traefik được trust và khả năng giữ cổng host 8080. Dùng file `/opt/flash-ticket-app/env/keycloak.env` và danh sách biến trong `examples/keycloak.secret.env.example`; chỉnh địa chỉ Docker-only sang endpoint nội bộ đã xác minh trước khi dùng, giữ nguyên credentials và cấu hình realm. Không import realm, không nâng phiên bản trong lần chuyển.
+- Trong cửa sổ bảo trì, giữ deploy/CD không chạy đồng thời. Dừng đúng Keycloak Compose trước, tạo marker `state/k8s/keycloak-enabled` để cho phép script K3s và khóa đường Compose, deploy đúng digest, kiểm Pod Ready, OIDC/JWKS và đường host 8080 trước khi apply Traefik Ingress mới. Đối chiếu `ENV_KEYCLOAK` với quy trình phát hành trước khi mở CD để một lần recreate không ghi đè endpoint đã chuyển. Giữ container Compose và `keycloak-external` làm rollback; không chạy đồng thời hai runtime trên cùng DB.
+- **Rollback Keycloak:** khóa CD, scale Deployment về 0 và chờ Pod dừng/hết giữ port, khởi động đúng container Compose, xác minh endpoint 8080 rồi phục hồi hai backend Ingress về `keycloak-external`; gỡ marker sau khi đã xác minh và lưu lại trạng thái. Không apply lại Ingress mới khi còn dùng Compose. Không xóa dữ liệu hay volume.
+
 ## Domain và HTTPS
 
 Cấu hình cutover và hướng dẫn DNS Nhân Hòa nằm tại
@@ -23,7 +32,7 @@ deploy/k8s/<app>/deployment.yaml  RollingUpdate cho Gateway và năm service
 deploy/k8s/<app>/configmap.yaml   endpoint private và cấu hình không nhạy cảm
 deploy/k8s/<core>/hpa.yaml        autoscaling/v2 cho năm service nghiệp vụ
 deploy/k8s/discovery-server/service.yaml
-deploy/k8s/discovery-server/statefulset.yaml   hai peer, cập nhật lần lượt
+deploy/k8s/discovery-server/statefulset.yaml   một Pod standalone
 deploy/k8s/discovery-server/peer-service.yaml  headless DNS cho peer
 deploy/k8s/api-gateway/service.yaml
 deploy/k8s/api-gateway/ingress.yaml
@@ -220,6 +229,35 @@ Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framewo
 - Chưa commit/push/publish/preflight/cutover production. CI trên GitHub chưa chạy
   cho tree này. Hai spec/plan local vẫn bị `/docs/java-workflow/` exclude, không force-add.
 
+## Assistant: chuẩn bị bootstrap riêng
+
+- Downstream cố định trong namespace `flash-ticket`: `http://event-service:8086`
+  và `http://booking-service:8082`. Hai ClusterIP mới chọn các Pod đang Ready;
+  không đổi port, không mở Ingress và không sửa luồng Eureka của caller cũ.
+- Assistant chưa có Deployment/ConfigMap và chưa được đưa vào matrix CD. Mục tiêu
+  là 1 replica ổn định và 1 pod surge khi rollout, không phải HA khi pod/node hỏng.
+  Plan dùng hai peer Eureka cho startup/drain; manifest Discovery hiện khai báo
+  1 replica. Cần chốt topology trước khi hoàn thiện các hook, không giả định peer
+  thứ hai tồn tại hoặc tự đổi replica của Discovery.
+- Trước khi chạy cần chốt `ASSISTANT_SERVICE_PORT` và `ASSISTANT_REDIS_KEY_PREFIX`
+  cho K3s. Cấu hình `ASSISTANT_MODEL_BASE_URL` (hiện chọn `https://model.sondimid.cloud/v1`)
+  và `ASSISTANT_MODEL_NAME` (`gemini-3.8-flash-high`) qua ConfigMap khi có workload.
+  `ENV_ASSISTANT_SERVICE` trong GitHub production environment chỉ gồm `REDIS_PASSWORD`
+  và `ASSISTANT_MODEL_API_KEY`. Không dùng fixture MVC, `.env` IntelliJ hay secret thật
+  trong manifest/log.
+- Chỉ khi được phép bootstrap: publish digest cho riêng `assistant-service`; apply
+  hai manifest `service.yaml` của Event/Booking và kiểm EndpointSlice, không
+  restart hai Deployment này. Dùng đúng release tree cùng SHA và digest đã verify
+  để deploy riêng Assistant. Kiểm node đủ chỗ cho cả pod mới và pod đang drain,
+  hai peer Eureka, đường nội bộ, route Gateway và cấu hình provider. Nếu Gateway
+  thiếu route thì rollout Gateway riêng, không dùng `all` hoặc `k8s`.
+- Lần đầu thất bại sẽ không có revision `previous`: không fallback Compose và
+  không xóa state Redis. Dừng, kiểm nguyên nhân; chỉ dọn tài nguyên Assistant
+  sau phê duyệt. Khi đã có baseline, kiểm một rollout riêng qua Gateway bằng
+  GET của BUYER test, đối chiếu registry trước/sau và pod cũ ngừng nhận request.
+- Đổi shared script có thể đưa toàn bộ K3s vào matrix CD khi merge `main`; kiểm
+  matrix từ đúng `before`/`head` trước khi merge, không dùng merge để bootstrap.
+
 ## Rollout giữ ứng dụng phục vụ trên node 84
 
 Gateway và năm core dùng `RollingUpdate`, `maxUnavailable: 0`, `maxSurge: 1`,
@@ -409,6 +447,13 @@ bằng đổi image. Không `docker compose down -v`, delete namespace hoặc pr
 để xử lý lỗi deploy. Rollback thật còn cần được diễn tập trong cửa sổ được phép.
 
 ## Quan sát
+
+Addon tùy chọn [Headlamp](../addons/headlamp/README.md) cung cấp giao diện quản lý
+Kubernetes tại `http://52.64.237.84/headlamp/` qua Traefik cổng80; SSH/loopback là
+cách dự phòng. HTTP tạm thời **không mã hóa token quản trị**, có nguy cơ bị chặn
+lấy quyền `cluster-admin`; chưa cấu hình domain/HTTPS. Pod Headlamp dùng tài khoản
+riêng không được cấp quyền admin. Thêm manifest không đồng nghĩa đã cài addon;
+xem preflight, token ngắn hạn và cách thu hồi quyền trong runbook trước triển khai.
 
 ```bash
 kubectl -n flash-ticket get pods -o wide

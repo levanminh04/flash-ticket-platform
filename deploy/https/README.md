@@ -131,7 +131,7 @@ object frontend-external sau nghiệm thu. Bỏ document khỏi file không prun
 | --- | --- |
 | `https://flashticket.sondimid.cloud/` | Nguồn: Service `frontend:5173` → Pod K3s; live trước cutover vẫn Compose |
 | `https://flashticket.sondimid.cloud/api` | Gateway Service K3s, port 8081; giữ nguyên path |
-| `https://auth.flashticket.sondimid.cloud/` | Keycloak Compose, private `172.31.41.236:8080` |
+| `https://auth.flashticket.sondimid.cloud/` | Sau cutover: Service `keycloak:8080`. Trước cutover / rollback: `keycloak-external` tới Compose `172.31.41.236:8080`. |
 
 Traefik hiện có terminate TLS cổng443. Let's Encrypt HTTP-01 dùng cổng80; không
 đổi port nội bộ. Hai host HTTP redirect sang HTTPS bằng middleware riêng.
@@ -196,6 +196,8 @@ Dry-run chỉ xác nhận API/schema; không render Helm hoặc chứng minh k�
 Render chart đang cài với valuesContent, kiểm strategy/Recreate, volume PVC,
 securityContext và ACME args trước apply thật. Không sửa manifest Traefik gốc của
 K3s trong `/var/lib/rancher/k3s/server/manifests/traefik.yaml`.
+
+> `ingress.yaml` dùng Service `keycloak:8080`. Không apply lên ft84 trước khi Keycloak K3s Ready và issuer/JWKS đã xác minh theo [runbook K3s](../k8s/README.md#cutover-keycloak-và-eureka-trên-ft84). Giữ `keycloak-external` cho rollback; hoàn nguyên cả hai backend auth khi quay về Compose.
 
 ### 4.2. Bật TLS, giữ issuer cũ tới khi chứng chỉ hợp lệ
 
