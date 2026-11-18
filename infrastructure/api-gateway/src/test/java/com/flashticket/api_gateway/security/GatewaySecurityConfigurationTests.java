@@ -181,9 +181,14 @@ class GatewaySecurityConfigurationTests {
 
   @Test
   void requiresBuyerForAssistantEndpoints() {
-    for (String path : List.of("/api/v1/assistant/messages", "/api/v1/assistant/conversations/current", "/api/v1/assistant/conversations/reset")) {
+    for (String path :
+        List.of(
+            "/api/v1/assistant/messages",
+            "/api/v1/assistant/conversations/current",
+            "/api/v1/assistant/conversations/reset")) {
       assertFalse(reachesDownstream(HttpMethod.POST, path, null), path);
-      assertFalse(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_ORGANIZER")), path);
+      assertFalse(
+          reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_ORGANIZER")), path);
       assertFalse(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_ADMIN")), path);
       assertTrue(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_BUYER")), path);
     }
@@ -193,7 +198,11 @@ class GatewaySecurityConfigurationTests {
   void permitsAssistantPreflightWithoutPublicizingChat() {
     assertTrue(reachesDownstream(HttpMethod.OPTIONS, "/api/v1/assistant/messages", null));
     assertFalse(reachesDownstream(HttpMethod.GET, "/api/v1/assistant/conversations/current", null));
-    assertTrue(reachesDownstream(HttpMethod.GET, "/api/v1/assistant/conversations/current", authenticatedAs("ROLE_BUYER")));
+    assertTrue(
+        reachesDownstream(
+            HttpMethod.GET,
+            "/api/v1/assistant/conversations/current",
+            authenticatedAs("ROLE_BUYER")));
   }
 
   private boolean reachesDownstream(HttpMethod method, String path, Authentication authentication) {
