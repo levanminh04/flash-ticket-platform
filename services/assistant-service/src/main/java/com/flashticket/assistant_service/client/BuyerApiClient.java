@@ -22,6 +22,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
@@ -43,7 +44,8 @@ public class BuyerApiClient {
         .queryParamIfPresent("from", Optional.ofNullable(request.getFrom()))
         .queryParamIfPresent("to", Optional.ofNullable(request.getTo()))
         .queryParamIfPresent("maxPrice", Optional.ofNullable(request.getMaxPrice()))
-        .queryParamIfPresent("cursor", Optional.ofNullable(request.getCursor())).build().encode().toUri();
+        .queryParamIfPresent("cursor", Optional.ofNullable(request.getCursor()).filter(value -> !value.isBlank()))
+        .build().encode().toUri();
     EventPage page = get("searchEvents", uri, jwt, EventPage.class);
     if (page.getItems() == null || page.getItems().size() > 5) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Danh sách sự kiện không hợp lệ.");
@@ -157,15 +159,44 @@ public class BuyerApiClient {
       long startedNanos) throws IOException {
     int status = response.getStatusCode().value();
     if (status != 200) {
-      // Không đọc/echo body lỗi vì có thể chứa dữ liệu cá nhân hoặc credential.
       throw switch (status) {
         case 401 -> new AssistantProblem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Vui lòng đăng nhập lại.");
         case 403 -> new AssistantProblem(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền đọc dữ liệu này.");
         case 404 -> new AssistantProblem(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Không tìm thấy dữ liệu được phép truy cập.");
         case 429 -> new AssistantProblem(HttpStatus.TOO_MANY_REQUESTS, "DOWNSTREAM_RATE_LIMITED", "Dịch vụ đang giới hạn yêu cầu.");
         default -> {
-          log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} durationMs={}",
-              operation, status, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos));
+          String downstreamCode = null;
+          if (status == 400 && "searchEvents".equals(operation)) {
+            // Chỉ trích mã đã biết từ JSON lỗi nhỏ, không ghi body hoặc tham số tìm kiếm.
+            try {
+              int maxErrorBytes = 2048;
+              var headers = response.getHeaders();
+              var contentType = headers.getContentType();
+              String encoding = headers.getFirst("Content-Encoding");
+              long contentLength = headers.getContentLength();
+              if (contentType != null && MediaType.APPLICATION_JSON.includes(contentType)
+                  && (encoding == null || "identity".equalsIgnoreCase(encoding))
+                  && contentLength <= maxErrorBytes) {
+                byte[] bytes = response.getBody().readNBytes(maxErrorBytes);
+                if (bytes.length > 0 && (bytes.length < maxErrorBytes || contentLength == bytes.length)) {
+                  String code = jsonMapper.reader()
+                      .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                      .readTree(bytes).path("code").asString("");
+                  if ("INVALID_CURSOR".equals(code) || "INVALID_REQUEST".equals(code)) downstreamCode = code;
+                }
+              }
+            } catch (IOException | RuntimeException ignored) {
+              // Lỗi đọc chẩn đoán không được thay đổi mã lỗi trả về.
+            }
+          }
+          long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+          if (downstreamCode == null) {
+            log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} durationMs={}",
+                operation, status, durationMs);
+          } else {
+            log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} downstreamCode={} durationMs={}",
+                operation, status, downstreamCode, durationMs);
+          }
           yield new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");
         }
       };
