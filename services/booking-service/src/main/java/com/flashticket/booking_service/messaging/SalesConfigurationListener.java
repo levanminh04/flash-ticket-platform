@@ -5,8 +5,10 @@ import com.flashticket.booking_service.dto.message.Envelope;
 import com.flashticket.booking_service.dto.snapshot.SalesConfiguration;
 import com.flashticket.booking_service.exception.BusinessException;
 import com.flashticket.booking_service.exception.ErrorCode;
+import com.flashticket.booking_service.observability.RabbitTelemetry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +19,15 @@ public class SalesConfigurationListener {
   private final AvailabilityService availabilityService;
 
   @RabbitListener(queues = "booking.sales-configured.q", ackMode = "AUTO", concurrency = "1")
+  public void handleSalesConfiguredEventDelivery(
+      Envelope<SalesConfiguration> message, Message raw) {
+    try (var telemetry = new RabbitTelemetry(raw)) {
+      if (message != null) telemetry.context(message.messageId(), message.correlationId());
+      handleSalesConfiguredEvent(message);
+      telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
+    }
+  }
+
   public void handleSalesConfiguredEvent(Envelope<SalesConfiguration> message) {
     try {
       // Gọi service lưu DB; transaction phải commit xong thì lệnh gọi này mới trả về.

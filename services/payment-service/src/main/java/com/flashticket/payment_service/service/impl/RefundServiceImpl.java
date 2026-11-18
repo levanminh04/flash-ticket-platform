@@ -10,11 +10,13 @@ import com.flashticket.payment_service.entity.enums.*;
 import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.RefundMapper;
+import com.flashticket.payment_service.observability.BusinessTelemetry;
 import com.flashticket.payment_service.repository.*;
 import com.flashticket.payment_service.service.MessagingService;
 import com.flashticket.payment_service.service.RefundService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -174,7 +176,22 @@ public class RefundServiceImpl implements RefundService {
           attempt.setFinishedAt(now);
           attempt.setOutcome("DB_ONLY");
           refundAttemptRepository.save(attempt);
+          var before = refund.getState();
           refund.setState(RefundState.SUCCEEDED);
+          BusinessTelemetry.committed(
+              "refund-result",
+              Map.of(
+                  "orderId",
+                  refund.getOrderId().toString(),
+                  "correlationId",
+                  refund.getOrderId().toString(),
+                  "refundId",
+                  refundId.toString(),
+                  "outcome",
+                  "SUCCESS"),
+              before,
+              refund.getState(),
+              attempt.getOutcome());
           refund.setCompletedAt(now);
           completeRefund(refund, now);
         });

@@ -5,6 +5,7 @@ import com.flashticket.payment_service.dto.message.*;
 import com.flashticket.payment_service.dto.snapshot.PurchaseSnapshot;
 import com.flashticket.payment_service.entity.*;
 import com.flashticket.payment_service.entity.enums.*;
+import com.flashticket.payment_service.observability.BusinessTelemetry;
 import com.flashticket.payment_service.repository.*;
 import com.flashticket.payment_service.repository.PaymentSagaRepository;
 import com.flashticket.payment_service.service.MessagingService;
@@ -101,6 +102,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       purchases.validate(purchase);
       confirmations.save(PaymentConfirmation.accepted(charge, decision.decisionAt()));
       UUID commandId = UUID.randomUUID();
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.WAITING_TICKETS,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.WAITING_TICKETS);
       saga.setCommandId(commandId);
       messaging.enqueue(
@@ -123,6 +130,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
                   ? RefundReason.DUPLICATE_PAYMENT
                   : RefundReason.LATE_PAYMENT;
       refunds.ensureRefund(charge, reason, Instant.now());
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.COMPENSATING,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.COMPENSATING);
     }
     saga.setUpdatedAt(Instant.now());
@@ -174,6 +187,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
           charges.findById(saga.getChargeId()).orElseThrow(),
           RefundReason.EVENT_CANCELLED,
           Instant.now());
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.COMPENSATING,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
       if (result.state() == IssuanceState.FAILED) {
@@ -181,6 +200,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
             charges.findById(saga.getChargeId()).orElseThrow(),
             RefundReason.TICKET_ISSUANCE_FAILED,
             Instant.now());
+        BusinessTelemetry.committed(
+            "saga-step",
+            saga.getOrderId(),
+            saga.getState(),
+            PaymentSagaState.COMPENSATING,
+            "SAGA_STATE_CHANGED");
         saga.setState(PaymentSagaState.COMPENSATING);
       }
       UUID commandId = UUID.randomUUID();
@@ -252,6 +277,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
           charges.findById(saga.getChargeId()).orElseThrow(),
           RefundReason.EVENT_CANCELLED,
           Instant.now());
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.COMPENSATING,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
       var notification =
@@ -303,6 +334,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
       if (!messaging.recordInbox(
           "payment.order-completed.v1", incomingEnvelope, codec.toTree(result))) return;
       if (saga.getState() == PaymentSagaState.COMPLETED) return;
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.COMPLETED,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.COMPLETED);
     }
     saga.setUpdatedAt(Instant.now());
@@ -331,6 +368,12 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
           charges.findById(saga.getChargeId()).orElseThrow(),
           RefundReason.EVENT_CANCELLED,
           Instant.now());
+      BusinessTelemetry.committed(
+          "saga-step",
+          saga.getOrderId(),
+          saga.getState(),
+          PaymentSagaState.COMPENSATING,
+          "SAGA_STATE_CHANGED");
       saga.setState(PaymentSagaState.COMPENSATING);
     } else {
       var previousNotification =

@@ -70,8 +70,8 @@ class TicketLocalConfigurationTests {
               .isEqualTo("https://issuer.invalid/realm");
           assertThat(env.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri"))
               .isEqualTo("https://issuer.invalid/certs");
-          assertThat(env.getProperty("logging.structured.json.add.serviceName"))
-              .isEqualTo("ticket-service");
+          assertThat(env.getProperty("logging.structured.json.customizer"))
+              .isEqualTo("com.flashticket.ticket_service.config.TicketLogFields");
           assertThat(env.getProperty("spring.mail.properties[mail.smtp.starttls.required]"))
               .isEqualTo("true");
           assertThat(env.getProperty("management.endpoints.web.exposure.include"))
