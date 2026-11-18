@@ -114,7 +114,8 @@ class GatewayRouteConfigurationTests {
     "POST, /api/v1/events/id-1/check-ins, lb://ticket-service",
     "POST, /api/v1/orders/id-1/ticket-deliveries, lb://ticket-service",
     "GET, /api/v1/orders/id-1/tickets, lb://ticket-service",
-    "GET, /api/v1/tickets/id-1/qr, lb://ticket-service"
+    "GET, /api/v1/tickets/id-1/qr, lb://ticket-service",
+    "POST, /api/v1/assistant/messages, lb://assistant-service"
   })
   void routesEveryServiceEndpointToItsOwner(String method, String path, String expectedUri) {
     Route route = resolve(method, path);
@@ -123,9 +124,10 @@ class GatewayRouteConfigurationTests {
   }
 
   @Test
-  void hasExactlySevenRoutes() {
+  void declaresExactlyTheExpectedRoutes() {
     assertEquals(
         List.of(
+            "assistant",
             "booking",
             "event",
             "event-images",

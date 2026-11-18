@@ -38,6 +38,7 @@ import keycloak from "./lib/keycloak";
 import { hasRealmRole } from "./lib/auth";
 import Navbar from "./components/layout/Navbar";
 import FloatingChatbot from "./components/chatbot/FloatingChatbot";
+import { AssistantConversationProvider } from "./components/chatbot/AssistantConversationProvider";
 
 const KEYCLOAK_SESSION_HINT = "flashTicket:keycloakSession";
 
@@ -158,7 +159,7 @@ function AppRoutes() {
           />
         </Routes>
       </div>
-      {!usesStandaloneShell && !["/checkout", "/payment-result", "/payment/result"].includes(location.pathname) ? <FloatingChatbot /> : null}
+      {!usesStandaloneShell && !["/chatbot", "/checkout", "/payment-result", "/payment/result"].includes(location.pathname) ? <FloatingChatbot /> : null}
     </>
   );
 }
@@ -184,11 +185,13 @@ function App() {
       }}
     >
       <QueryClientProvider client={queryClient}>
+        <AssistantConversationProvider>
         <Router
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <AppRoutes />
         </Router>
+        </AssistantConversationProvider>
       </QueryClientProvider>
     </ReactKeycloakProvider>
   );

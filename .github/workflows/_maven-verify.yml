@@ -84,6 +84,11 @@ jobs:
         run: $MVN -B -ntp -Dtest=TicketPostgresIT test
         working-directory: ${{ inputs.path }}
 
+      - name: Load offline Assistant MVC environment
+        if: ${{ inputs.name == 'assistant-service' }}
+        run: cat src/test/fixtures/mvc.env >> "$GITHUB_ENV"
+        working-directory: ${{ inputs.path }}
+
       - name: Verify
         env:
           MVN: ${{ inputs.mvn }}

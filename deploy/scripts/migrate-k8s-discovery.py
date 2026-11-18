@@ -73,7 +73,7 @@ def expected_instances(items, require_all=False):
     expected = {}
     for pod in items:
         name = pod['metadata'].get('labels', {}).get('app.kubernetes.io/name')
-        if name not in APPS or pod['metadata'].get('deletionTimestamp'):
+        if (name not in APPS and name != 'assistant-service') or pod['metadata'].get('deletionTimestamp'):
             continue
         statuses = pod['status'].get('containerStatuses', [])
         if not statuses or not all(s['ready'] for s in statuses):
@@ -81,7 +81,7 @@ def expected_instances(items, require_all=False):
         expected[name + ':' + pod['metadata']['uid']] = (
             pod['status']['podIP'], pod['spec']['containers'][0]['ports'][0]['containerPort'])
     if require_all:
-        assert {key.split(':', 1)[0] for key in expected} == APPS, 'APPLICATION_BASELINE_NOT_READY'
+        assert APPS <= {key.split(':', 1)[0] for key in expected}, 'APPLICATION_BASELINE_NOT_READY'
     return expected
 
 
@@ -99,8 +99,9 @@ def check(root):
     expected = expected_instances(items)
     diagnostics = {'expectedCount': len(expected), 'peers': []}
     errors = []
-    if len(peers) != 2:
-        errors.append('TWO_PEERS_REQUIRED')
+    desired = read(root / 'statefulset.json')['spec'].get('replicas', 1)
+    if desired not in (1, 2) or len(peers) != desired:
+        errors.append('DISCOVERY_REPLICA_COUNT_MISMATCH')
     for peer in peers:
         statuses = peer['status'].get('containerStatuses', [])
         row = {'name': peer['metadata']['name'], 'ready': bool(statuses) and all(s['ready'] for s in statuses),
@@ -142,6 +143,7 @@ def wait_registry(root):
 def migrate(root):
     # If a failed attempt remains, restore it before starting another migration.
     assert not (root / 'legacy-deployment.json').exists(), 'MIGRATION_ALREADY_STARTED'
+    assert read(root / 'statefulset.json')['spec'].get('replicas', 1) == 2, 'MIGRATE_LEGACY_WITH_TWO_PEER_REVISION_FIRST'
     legacy = read(root / 'legacy-live.json')
     assert legacy.get('kind') == 'Deployment', 'LEGACY_DEPLOYMENT_REQUIRED'
     assert legacy['spec'].get('replicas', 1) == 1, 'LEGACY_SCALE_UNEXPECTED'

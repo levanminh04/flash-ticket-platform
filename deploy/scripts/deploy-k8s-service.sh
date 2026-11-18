@@ -6,7 +6,7 @@ service=${1:?service}; image=${2:?image digest}; sha=${3:?commit sha}; mode=${4:
 app_root=${APP_ROOT:-/opt/flash-ticket-app}
 namespace=flash-ticket
 die() { echo "DEPLOY_REJECTED $*" >&2; exit 1; }
-case $service in discovery-server|api-gateway|booking-service|payment-service|ticket-service|event-service|user-service|frontend) ;; *) die UNKNOWN_SERVICE ;; esac
+case $service in discovery-server|api-gateway|booking-service|payment-service|ticket-service|event-service|user-service|frontend|assistant-service|keycloak) ;; *) die UNKNOWN_SERVICE ;; esac
 [[ $image =~ ^ghcr.io/levanminh04/flash-ticket-platform/$service@sha256:[a-f0-9]{64}$ ]] || die INVALID_IMAGE
 [[ $sha =~ ^[a-f0-9]{40}$ ]] || die INVALID_SHA
 [[ $mode == deploy || $mode == recreate || $mode == rollback ]] || die INVALID_MODE
@@ -18,6 +18,7 @@ exec 9> "$state/deploy.lock"
 flock -w 600 9 || die DEPLOY_LOCK_TIMEOUT
 [[ ! -e $app_root/state/maintenance || ${K8S_BOOTSTRAP_SHA:-} == "$sha" ]] || die MAINTENANCE_ACTIVE
 [[ -f $state/enabled ]] || die K8S_NOT_ENABLED
+[[ $service != keycloak || -f $state/keycloak-enabled ]] || die KEYCLOAK_CUTOVER_REQUIRED
 # Plain kubectl deliberately uses the operator's protected kubeconfig.
 kubectl get namespace "$namespace" >/dev/null || die CLUSTER_NOT_READY
 revision_root="$state/$service"
@@ -75,7 +76,7 @@ PY
     # Restoring a revision without HPA explicitly restores fixed-replica operation.
     kubectl -n "$namespace" delete hpa "$service" --ignore-not-found >/dev/null || return 1
   fi
-  if [[ $service != discovery-server && $service != frontend ]]; then
+  if [[ $service != discovery-server && $service != frontend && $service != keycloak ]]; then
     if [[ $mode == rollback || $revision != "$target" ]]; then preparation=prepare-rollback; fi
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" "$preparation" "$revision" || return 1
   fi
@@ -96,14 +97,17 @@ check_revision() {
   local revision=$1 attempt kind=deployment
   if [[ -f $revision/statefulset.json ]]; then kind=statefulset; fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
-  if [[ $service != frontend ]]; then
+  if [[ $service != frontend && $service != keycloak ]]; then
     kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
   fi
   for attempt in {1..40}; do
     # Read desired scale again: HPA may change it while Pods register in Eureka.
     kubectl -n "$namespace" get "$kind" "$service" -o json > "$revision/live-deployment.json" || return 1
     kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$service" -o json > "$revision/live-pods.json" || return 1
-    if [[ $service != frontend ]]; then
+    if [[ $service != frontend && $service != keycloak ]]; then
+      if [[ $service == assistant-service ]]; then
+        kubectl -n "$namespace" get statefulset discovery-server -o json > "$revision/discovery-workload.json" || return 1
+      fi
       kubectl -n "$namespace" get pods -l 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' -o json > "$revision/discovery-pods.json" || return 1
     fi
     if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<'PY'
@@ -118,18 +122,26 @@ pods = [p for p in pod_list['items'] if not p['metadata'].get('deletionTimestamp
 if deployment['kind'] == 'StatefulSet':
     pods = [p for p in pods if p['metadata'].get('labels', {}).get('flash-ticket/discovery-generation') == 'peers']
 assert desired >= 1 and len(pods) == desired, 'REPLICA_COUNT_MISMATCH'
-if service == 'frontend':
-    assert desired == 1, 'FRONTEND_REPLICA_COUNT_MISMATCH'
+if service in ('frontend', 'keycloak'):
+    assert desired == 1, 'FIXED_REPLICA_COUNT_MISMATCH'
+if service == 'assistant-service':
+    assert desired == 1, 'ASSISTANT_REPLICA_COUNT_MISMATCH'
 for pod in pods:
     statuses = pod['status'].get('containerStatuses', [])
     assert pod['spec']['containers'][0]['image'] == expected, 'POD_IMAGE_MISMATCH'
     assert len(statuses) == 1 and statuses[0]['ready'] and statuses[0]['restartCount'] == 0, 'POD_NOT_STABLE'
-if service in ('discovery-server', 'frontend'):
-    # FE không dùng registry; peer comparison của discovery chạy sau kiểm Pod/image.
+if service in ('discovery-server', 'frontend', 'keycloak'):
+    # Frontend và Keycloak không đăng ký Eureka; Discovery kiểm registry riêng.
     sys.exit(0)
 discovery = json.loads((root / 'discovery.json').read_text())['spec']
 peers = json.loads((root / 'discovery-pods.json').read_text())['items']
-addresses = ['http://' + p['status']['podIP'] + ':8761' for p in peers if not p['metadata'].get('deletionTimestamp')]
+active_peers = [p for p in peers if not p['metadata'].get('deletionTimestamp')]
+if service == 'assistant-service':
+    replicas = json.loads((root / 'discovery-workload.json').read_text())['spec']['replicas']
+    assert replicas >= 1 and {p['metadata']['name'] for p in active_peers} == {f'discovery-server-{n}' for n in range(replicas)}, 'ASSISTANT_EUREKA_PEERS_REQUIRED'
+    assert all(any(c['type'] == 'Ready' and c['status'] == 'True' for c in p['status'].get('conditions', []))
+               for p in active_peers), 'ASSISTANT_EUREKA_PEER_NOT_READY'
+addresses = ['http://' + p['status']['podIP'] + ':8761' for p in active_peers]
 if not addresses:
     addresses = ['http://' + discovery['clusterIP'] + ':' + str(discovery['ports'][0]['port'])]
 for address in addresses:
@@ -167,7 +179,7 @@ else
   printf '%s\n' "$image" > "$target/image"
   for resource in configmap peer-service service ingress deployment statefulset hpa; do
     file="$source_root/deploy/k8s/$service/$resource.yaml"
-    [[ -f $file ]] || { [[ $resource != configmap || $service == frontend ]] || die MISSING_MANIFEST; continue; }
+    [[ -f $file ]] || { [[ $resource != configmap || $service == frontend || $service == keycloak ]] || die MISSING_MANIFEST; continue; }
     kubectl create --dry-run=client --validate=false -f "$file" -o json > "$target/$resource.json"
   done
   python3 - "$target" "$image" "$revision" <<'PY'
@@ -276,6 +288,8 @@ else
     else
       echo "RESTORE_FAILED $service: operator intervention required" >&2
     fi
+  elif [[ $service == assistant-service ]]; then
+    echo 'NO_PREVIOUS_K8S_REVISION: inspect the Assistant bootstrap; no Compose fallback' >&2
   else
     echo 'NO_PREVIOUS_K8S_REVISION: follow the Compose cutover rollback runbook' >&2
   fi

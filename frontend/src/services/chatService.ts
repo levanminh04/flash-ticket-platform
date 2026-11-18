@@ -1,26 +1,29 @@
 import axiosClient from "../lib/axiosClient";
+import keycloak from "../lib/keycloak";
+import type { ChatRequest, ChatResponse, ConversationView, ResetConversationRequest } from "../types/assistantContract";
 
-export interface ChatRequestPayload {
-  sessionId: string;
-  message: string;
+export function assistantOwnerScope(): string | null {
+  if (!keycloak.authenticated || !keycloak.tokenParsed?.iss || !keycloak.tokenParsed?.sub) return null;
+  return JSON.stringify([import.meta.env.VITE_API_GATEWAY_URL || "", keycloak.tokenParsed.iss, keycloak.tokenParsed.sub]);
 }
 
-export interface ChatResponsePayload {
-  sessionId: string;
-  message: string;
-  mood?: string | null;
-  ragStrategy?: string | null;
+function requestConfig(signal?: AbortSignal) {
+  if (!assistantOwnerScope()) throw new Error("UNAUTHENTICATED");
+  return {
+    signal,
+    timeout: 60000,
+    expectedAuthOwner: { issuer: keycloak.tokenParsed!.iss!, subject: keycloak.tokenParsed!.sub! },
+  };
 }
 
+const root = "/api/v1/assistant";
 export const chatService = {
-  sendMessage: async (
-    payload: ChatRequestPayload,
-  ): Promise<ChatResponsePayload> => {
-    const response = await axiosClient.post<ChatResponsePayload>(
-      "/api/chat",
-      payload,
-    );
-    return response.data;
-  },
+  openConversation: async (signal?: AbortSignal): Promise<ConversationView> =>
+    (await axiosClient.post<ConversationView>(`${root}/conversations/current`, undefined, requestConfig(signal))).data,
+  getConversation: async (signal?: AbortSignal): Promise<ConversationView> =>
+    (await axiosClient.get<ConversationView>(`${root}/conversations/current`, requestConfig(signal))).data,
+  sendMessage: async (payload: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> =>
+    (await axiosClient.post<ChatResponse>(`${root}/messages`, payload, requestConfig(signal))).data,
+  resetConversation: async (payload: ResetConversationRequest, signal?: AbortSignal): Promise<ConversationView> =>
+    (await axiosClient.post<ConversationView>(`${root}/conversations/reset`, payload, requestConfig(signal))).data,
 };
-

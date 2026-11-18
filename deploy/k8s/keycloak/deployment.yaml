@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: flash-ticket
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: ft84
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: keycloak
+          image: keycloak:release-placeholder
+          args: [start, --optimized]
+          ports:
+            - name: http
+              containerPort: 8080
+              # Retain the ft84 endpoint used by internal clients during cutover.
+              hostPort: 8080
+          envFrom:
+            - secretRef:
+                name: keycloak-secret
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 100m
+            limits:
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /realms/flash-ticket/.well-known/openid-configuration
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /realms/flash-ticket/.well-known/openid-configuration
+              port: http
+            periodSeconds: 5
+          volumeMounts:
+            - name: theme
+              mountPath: /opt/keycloak/themes/flash-ticket
+              readOnly: true
+      volumes:
+        - name: theme
+          hostPath:
+            path: /opt/flash-ticket-infra/keycloak/keycloak/themes/flash-ticket
+            type: Directory

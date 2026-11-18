@@ -27,8 +27,10 @@ export const bookingService = {
     return response.data;
   },
 
-  createOrder: async (input: CreateOrderRequest): Promise<OrderView> => {
+  createOrder: async (input: CreateOrderRequest, draftKey?: string, isRequestContextCurrent?: () => boolean): Promise<OrderView> => {
     const scope = buyerSessionScope();
+    const expectedAuthOwner = { issuer: keycloak.tokenParsed!.iss!, subject: keycloak.tokenParsed!.sub! };
+    if (draftKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(draftKey)) throw new Error("INVALID_DRAFT_KEY");
     const selected = input.selection;
     const selection: OrderSelection = selected.mode === "SEAT_MAP" && selected.kind === "SEATED"
       ? { mode: "SEAT_MAP", kind: "SEATED", sectorId: selected.sectorId, seatIds: [...selected.seatIds].sort() }
@@ -40,13 +42,16 @@ export const bookingService = {
     const body = JSON.stringify(request);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
     const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    if (buyerSessionScope() !== scope) throw new Error("AUTH_OWNER_CHANGED");
     const pendingKey = `${scope}:pending:${fingerprint}`;
     const stored = sessionStorage.getItem(pendingKey);
     const pending: { body: string; key: string } | null = stored ? JSON.parse(stored) : null;
-    const key = pending?.body === body ? pending.key : crypto.randomUUID();
+    const key = draftKey || (pending?.body === body ? pending.key : crypto.randomUUID());
     // Ghi trước khi gửi; timeout/5xx/reload phải thử lại cùng key và cùng request.
     sessionStorage.setItem(pendingKey, JSON.stringify({ body, key }));
-    const response = await axiosClient.post<OrderView>("/api/v1/orders", request, { headers: { "Idempotency-Key": key } });
+    const response = await axiosClient.post<OrderView>("/api/v1/orders", request, { headers: { "Idempotency-Key": key }, expectedAuthOwner, isRequestContextCurrent });
+    if (buyerSessionScope() !== scope) throw new Error("AUTH_OWNER_CHANGED");
+    if (!response.data?.orderId || response.data.eventId !== input.eventId || !response.data.state || !Array.isArray(response.data.items)) throw new Error("INVALID_ORDER_RESPONSE");
     rememberOrder(response.data, scope);
     if (sessionStorage.getItem(pendingKey) === JSON.stringify({ body, key })) sessionStorage.removeItem(pendingKey);
     return response.data;
