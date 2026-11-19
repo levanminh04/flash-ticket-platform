@@ -215,7 +215,12 @@
     "quickTicketTypesPrompt": "Cho tôi xem các sự kiện còn loại vé đang mở bán.",
     "quickUpcoming": "Sắp diễn ra",
     "quickUpcomingPrompt": "Liệt kê các sự kiện sắp diễn ra gần nhất.",
-    "replying": "Đang phản hồi...",
+    "loadingConversation": "Đang mở hội thoại…",
+    "turn": {
+      "sending": "Đang gửi…",
+      "processing": "Trợ lý đang xử lý…",
+      "reconciling": "Đang tải lại hội thoại…"
+    },
     "send": "Gửi",
     "discoveryEmpty": "Discovery không tìm thấy sự kiện phù hợp với yêu cầu này.",
     "discoveryFound": "Discovery tìm thấy {{count}} kết quả liên quan.",

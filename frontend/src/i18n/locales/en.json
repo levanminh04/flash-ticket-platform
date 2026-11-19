@@ -215,7 +215,12 @@
     "quickTicketTypesPrompt": "Show events that still have ticket types on sale.",
     "quickUpcoming": "Upcoming soon",
     "quickUpcomingPrompt": "List the nearest upcoming events.",
-    "replying": "Replying...",
+    "loadingConversation": "Opening conversation…",
+    "turn": {
+      "sending": "Sending…",
+      "processing": "Assistant is processing…",
+      "reconciling": "Refreshing conversation…"
+    },
     "send": "Send",
     "discoveryEmpty": "Discovery did not find matching events for this request.",
     "discoveryFound": "Discovery found {{count}} related results.",

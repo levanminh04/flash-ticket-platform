@@ -35,16 +35,16 @@ function runCli(commandArgs, timeout = 300000) {
 try {
   // Chỉ dùng origin phục vụ FE đang mở; API/Keycloak do Vite nạp từ root .env.
   const origin = "http://127.0.0.1:5173";
-  runCli(["open", origin, "--headed"], 60000);
+  runCli(["open", args[0] === "--fixtures" ? "about:blank" : origin, "--headed"], 60000);
   let result;
   if (args[0] === "--fixtures") {
     const groups = [
       ["public-api.browser.js"], ["header-responsive.browser.js"],
       ["home-layout.browser.js", "home-colors.browser.js", "home-polish.browser.js"],
-      ["booking-flow.browser.js"], ["keycloak-nonce.browser.js"],
+      ["booking-flow.browser.js"], ["keycloak-nonce.browser.js"], ["assistant-ui.browser.js"],
     ];
     const calls = groups.map(group => `{
-      const context = await page.context().browser().newContext();
+      const context = await page.context().browser().newContext(${group.includes("assistant-ui.browser.js") ? '{ serviceWorkers: "block" }' : ''});
       try { const target = await context.newPage();
         ${group.map(file => `try { const result = await (${readTest(file)})(target);
           results.push({file:${JSON.stringify(file)},status:"PASS",...result});

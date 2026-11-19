@@ -21,10 +21,15 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const root = useRef<HTMLDivElement>(null);
   const messages = useRef<HTMLDivElement>(null);
   const visible = fullPage || opened;
-  const { allowed, open, conversation, busy, ownerScope } = assistant;
+  const { allowed, open, conversation, busy, turnPhase, ownerScope } = assistant;
 
   useEffect(() => { setInput(""); }, [ownerScope, conversation?.conversationId]);
-  useEffect(() => { if (visible && allowed) void open(); }, [visible, allowed, ownerScope, open]);
+  useEffect(() => {
+    if (!visible || !allowed) return;
+    // Đợi provider dọn phiên cũ trước khi mở hội thoại sau khi khởi tạo tài khoản.
+    const timer = window.setTimeout(() => void open(), 0);
+    return () => window.clearTimeout(timer);
+  }, [visible, allowed, ownerScope, open]);
   useEffect(() => { messages.current?.scrollTo({ top: messages.current.scrollHeight, behavior: "smooth" }); }, [conversation, busy]);
   useEffect(() => {
     const handlePrompt = (event: Event) => {
@@ -93,8 +98,10 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
               <time className="floating-msg-time" dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</time>
             </div>
           </article>)}
-          {busy && <p><LoaderCircle size={14} className="spin" /> {t("chatbot.replying")}</p>}
         </div>
+        <div className="assistant-progress" role="status">{busy && <p className="assistant-status">
+          <LoaderCircle size={14} className="spin" aria-hidden="true" /> {t(turnPhase ? `chatbot.turn.${turnPhase}` : "chatbot.loadingConversation")}
+        </p>}</div>
         <div className="assistant-status">
           {assistant.notice && <p role="status">{assistant.notice}</p>}
           {assistant.error && <p role="alert">{assistant.error}</p>}
