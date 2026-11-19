@@ -44,7 +44,8 @@ class AssistantSecurityTests {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     mvc.perform(streamRequest.with(organizer)).andExpect(status().isForbidden()).andExpect(request().asyncNotStarted())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
-    verifyNoInteractions(sseExecutor, service);
+    verify(sseExecutor, never()).execute(any(Runnable.class));
+    verifyNoInteractions(service);
   }
 
   @Test

@@ -90,7 +90,8 @@ class AssistantControllerTests {
     mvc.perform(streamRequest.content("{}")).andExpect(status().isBadRequest()).andExpect(request().asyncNotStarted())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    verifyNoInteractions(sseExecutor, service);
+    verify(sseExecutor, never()).execute(any(Runnable.class));
+    verifyNoInteractions(service);
 
     var request = new ChatRequest();
     request.setConversationId(UUID.randomUUID());
