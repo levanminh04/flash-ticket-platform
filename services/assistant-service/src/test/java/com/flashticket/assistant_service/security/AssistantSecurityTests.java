@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,6 +33,20 @@ class AssistantSecurityTests {
   @Autowired MockMvc mvc;
   @MockitoBean AssistantConversationService service;
   @MockitoBean JwtDecoder decoder;
+  @MockitoBean(name = "assistantSseExecutor") ThreadPoolTaskExecutor sseExecutor;
+
+  @Test
+  void requiresBuyerForMessageStream() throws Exception {
+    var organizer = jwt().authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"));
+    var streamRequest = post("/api/v1/assistant/messages/stream").contentType(MediaType.APPLICATION_JSON)
+        .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_PROBLEM_JSON).content("{}");
+    mvc.perform(streamRequest).andExpect(status().isUnauthorized()).andExpect(request().asyncNotStarted())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    mvc.perform(streamRequest.with(organizer)).andExpect(status().isForbidden()).andExpect(request().asyncNotStarted())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    verify(sseExecutor, never()).execute(any(Runnable.class));
+    verifyNoInteractions(service);
+  }
 
   @Test
   void requiresBuyerAndValidJwt() {
