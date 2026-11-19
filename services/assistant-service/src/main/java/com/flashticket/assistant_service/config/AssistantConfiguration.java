@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
@@ -42,6 +43,18 @@ public class AssistantConfiguration {
     // Không queue: provider chậm không được chiếm thêm hàng đợi vô hạn.
     return new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, new SynchronousQueue<>(),
         new ThreadPoolExecutor.AbortPolicy());
+  }
+
+  @Bean
+  public ThreadPoolTaskExecutor assistantSseExecutor() {
+    // Worker SSE chờ lượt chat; dùng riêng để không chiếm chỗ của worker chạy model.
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(4);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(0);
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+    executor.setThreadNamePrefix("assistant-sse-");
+    return executor;
   }
 
   @Bean

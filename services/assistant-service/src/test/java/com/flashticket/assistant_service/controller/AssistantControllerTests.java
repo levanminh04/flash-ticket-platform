@@ -12,12 +12,14 @@ import com.flashticket.assistant_service.exception.*;
 import com.flashticket.assistant_service.service.AssistantConversationService;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,6 +33,103 @@ class AssistantControllerTests {
   @Autowired JsonMapper mapper;
   @MockitoBean AssistantConversationService service;
   @MockitoBean JwtDecoder decoder;
+  @MockitoBean(name = "assistantSseExecutor") ThreadPoolTaskExecutor sseExecutor;
+
+  @Test
+  void streamsProcessingThenCommittedResult() throws Exception {
+    var token = Jwt.withTokenValue("fixture").header("alg", "RS256").issuer("https://issuer.test")
+        .subject("real-buyer").expiresAt(Instant.now().plusSeconds(300)).build();
+    var auth = jwt().jwt(token).authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+    var request = new ChatRequest();
+    request.setConversationId(UUID.randomUUID());
+    request.setVersion(UUID.randomUUID());
+    request.setRequestId(UUID.randomUUID());
+    request.setMessage("Hello");
+    var response = new ChatResponse();
+    response.setRequestId(request.getRequestId());
+    response.setConversationId(request.getConversationId());
+    response.setVersion(UUID.randomUUID());
+    response.setMessage("Private fixture transcript");
+    when(service.sendMessage(eq(token), any(ChatRequest.class))).thenReturn(response);
+    doAnswer(invocation -> {
+      invocation.getArgument(0, Runnable.class).run();
+      return null;
+    }).when(sseExecutor).execute(any(Runnable.class));
+
+    var pending = mvc.perform(post("/api/v1/assistant/messages/stream").with(auth)
+            .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_PROBLEM_JSON)
+            .content(mapper.writeValueAsBytes(request)))
+        .andExpect(request().asyncStarted()).andReturn();
+    var completed = mvc.perform(asyncDispatch(pending)).andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
+        .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+        .andExpect(header().doesNotExist(HttpHeaders.CONTENT_LENGTH)).andReturn();
+    String[] frames = completed.getResponse().getContentAsString().split("\n\n", -1);
+    assertEquals(3, frames.length);
+    String processingPrefix = "event:processing\ndata:";
+    String resultPrefix = "event:result\ndata:";
+    assertTrue(frames[0].startsWith(processingPrefix));
+    assertTrue(frames[1].startsWith(resultPrefix));
+    assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId())),
+        mapper.readTree(frames[0].substring(processingPrefix.length())));
+    assertEquals(mapper.valueToTree(Map.of("requestId", response.getRequestId(),
+            "conversationId", response.getConversationId(), "version", response.getVersion())),
+        mapper.readTree(frames[1].substring(resultPrefix.length())));
+    assertEquals("", frames[2]);
+    var capturedRequest = ArgumentCaptor.forClass(ChatRequest.class);
+    verify(sseExecutor).execute(any(Runnable.class));
+    verify(service).sendMessage(eq(token), capturedRequest.capture());
+    assertEquals(mapper.valueToTree(request), mapper.valueToTree(capturedRequest.getValue()));
+  }
+
+  @Test
+  void separatesHttpProblemsFromStreamErrors() throws Exception {
+    var auth = jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+    var streamRequest = post("/api/v1/assistant/messages/stream").with(auth).contentType(MediaType.APPLICATION_JSON)
+        .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_PROBLEM_JSON);
+    mvc.perform(streamRequest.content("{}")).andExpect(status().isBadRequest()).andExpect(request().asyncNotStarted())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    verifyNoInteractions(sseExecutor, service);
+
+    var request = new ChatRequest();
+    request.setConversationId(UUID.randomUUID());
+    request.setVersion(UUID.randomUUID());
+    request.setRequestId(UUID.randomUUID());
+    request.setMessage("Hello");
+    streamRequest.content(mapper.writeValueAsBytes(request));
+    doThrow(new RejectedExecutionException()).when(sseExecutor).execute(any(Runnable.class));
+    mvc.perform(streamRequest).andExpect(status().isServiceUnavailable()).andExpect(request().asyncNotStarted())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+        .andExpect(jsonPath("$.code").value("ASSISTANT_CAPACITY_EXCEEDED"));
+    verifyNoInteractions(service);
+
+    doAnswer(invocation -> {
+      invocation.getArgument(0, Runnable.class).run();
+      return null;
+    }).when(sseExecutor).execute(any(Runnable.class));
+    var knownError = new AssistantProblem(HttpStatus.CONFLICT, "CONVERSATION_BUSY", "Private fixture detail");
+    var unexpectedError = new IllegalStateException("Private fixture exception");
+    doThrow(knownError, unexpectedError).when(service).sendMessage(any(Jwt.class), any(ChatRequest.class));
+    for (String code : List.of("CONVERSATION_BUSY", "INTERNAL_ERROR")) {
+      var pending = mvc.perform(streamRequest).andExpect(request().asyncStarted()).andReturn();
+      var completed = mvc.perform(asyncDispatch(pending)).andExpect(status().isOk())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM)).andReturn();
+      String[] frames = completed.getResponse().getContentAsString().split("\n\n", -1);
+      assertEquals(3, frames.length);
+      String processingPrefix = "event:processing\ndata:";
+      String errorPrefix = "event:turn_error\ndata:";
+      assertTrue(frames[0].startsWith(processingPrefix));
+      assertTrue(frames[1].startsWith(errorPrefix));
+      assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId())),
+          mapper.readTree(frames[0].substring(processingPrefix.length())));
+      assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId(), "code", code)),
+          mapper.readTree(frames[1].substring(errorPrefix.length())));
+      assertEquals("", frames[2]);
+    }
+    verify(service, times(2)).sendMessage(any(Jwt.class), any(ChatRequest.class));
+  }
 
   @Test
   void validatesRequestsAndUsesJwtIdentity() {
