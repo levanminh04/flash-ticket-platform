@@ -17,4 +17,5 @@ public class TranscriptMessage {
   private Instant createdAt;
   private PurchaseDraft draft;
   private List<EventView> events;
+  private List<OrderReadView> orders;
 }

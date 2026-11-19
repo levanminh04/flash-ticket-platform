@@ -2,11 +2,32 @@
 .assistant-event-link { display: block; margin: 6px 0; }
 .assistant-status { padding: 6px 12px; font-size: 13px; }
 .assistant-status p { margin: 4px 0; }
-.assistant-purchase-form { padding: 12px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a; }
-.assistant-purchase-form p { font-size: 13px; margin: 6px 0; }
+.assistant-order-card, .assistant-purchase-form {
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+.assistant-order-card { border-inline-start: 3px solid var(--brand, #cc9900); }
+.assistant-order-card strong, .assistant-order-card small { display: block; }
+.assistant-order-card small, .assistant-receipt-note { color: #475569; }
+.assistant-order-card p, .assistant-purchase-form p { font-size: 13px; margin: 6px 0; }
+.assistant-card-link { display: inline-block; margin-block-start: 4px; font-weight: 600; color: var(--brand-ink, #805c00); text-decoration: underline; }
+.assistant-card-link:focus-visible, .assistant-purchase-form :is(input, button, a):focus-visible {
+  outline: 2px solid var(--brand-ink, #805c00);
+  outline-offset: 3px;
+}
 .assistant-purchase-form label, .assistant-purchase-form input { display: block; width: 100%; }
-.assistant-purchase-form input { margin: 6px 0; padding: 8px; border: 1px solid #94a3b8; border-radius: 6px; }
+.assistant-purchase-form input { margin: 6px 0; padding: 8px; border: 1px solid #94a3b8; border-radius: 6px; box-sizing: border-box; }
 .assistant-purchase-form button { white-space: normal; }
+.assistant-ticket-lines { list-style: none; padding: 0; margin: 8px 0; font-size: 13px; }
+.assistant-ticket-lines li, .assistant-ticket-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; }
+.assistant-ticket-lines li + li { margin-top: 4px; }
+.assistant-ticket-total { padding-top: 8px; border-top: 1px dashed #94a3b8; font-variant-numeric: tabular-nums; }
+.assistant-purchase-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-block-start: 10px; }
 .assistant-full-page .chatbot-shell { display: flex; flex-direction: column; min-height: 500px; }
 .assistant-full-page .chatbot-messages { flex: 1; max-height: 65vh; overflow: auto; padding: 12px; }
 .floating-chatbot-header > div { display: flex; align-items: center; gap: 8px; }

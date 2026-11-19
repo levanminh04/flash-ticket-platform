@@ -6,12 +6,15 @@ import { MessageCircle, X, SendHorizontal, LoaderCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAssistantConversation } from "./AssistantConversationProvider";
 import AssistantPurchaseForm from "./AssistantPurchaseForm";
+import { orderIdPattern } from "../common/OrderLookupForm";
+import { formatAssistantMoney } from "./assistantMoney";
 
 export const CHATBOT_PROMPT_EVENT = "flashTicket:chatbotPrompt";
 
 export default function FloatingChatbot({ fullPage = false }: { fullPage?: boolean }) {
   const { keycloak } = useKeycloak();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === "vi" ? "vi-VN" : "en";
   const assistant = useAssistantConversation();
   const [opened, setOpened] = useState(fullPage);
   const [input, setInput] = useState("");
@@ -66,6 +69,26 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
             <div className="floating-msg-body">
               <p className="assistant-message-text">{message.text}</p>
               {message.events?.map(event => <Link className="assistant-event-link" key={event.eventId} to={`/event/${encodeURIComponent(event.eventId)}`}>{event.title}</Link>)}
+              {message.role === "assistant" && Array.isArray(message.orders) && (message.orders.length === 0
+                ? <div className="assistant-order-card">
+                  <p>{t("chatbot.orderSnapshot.empty")}</p>
+                  <Link className="assistant-card-link" to="/my-orders">{t("chatbot.orderSnapshot.myOrders")}</Link>
+                </div>
+                : message.orders.map(order => {
+                  if (typeof order?.orderId !== "string" || !orderIdPattern.test(order.orderId)) return null;
+                  const lookedUpAt = Date.parse(message.createdAt);
+                  const holdExpiresAt = order.state === "PENDING_PAYMENT" ? Date.parse(order.expiresAt || "") : NaN;
+                  const knownState = ["PENDING_PAYMENT", "ISSUING", "COMPLETED", "CANCELLED", "EXPIRED", "ISSUANCE_FAILED"].includes(order.state || "");
+                  return <div className="assistant-order-card" key={order.orderId}>
+                    <strong>{typeof order.eventTitle === "string" && order.eventTitle.trim() ? order.eventTitle : t("chatbot.orderSnapshot.unknownEvent")}</strong>
+                    <small>{t("paymentV1.orderId")}: {order.orderId}</small>
+                    <p>{knownState ? t(`bookingState.${order.state}`) : t("chatbot.orderSnapshot.unknownState")}</p>
+                    <p><b>{formatAssistantMoney(order.total, order.currency, locale)}</b></p>
+                    {Number.isFinite(holdExpiresAt) && <p>{t("chatbot.orderSnapshot.holdsUntil", { time: new Date(holdExpiresAt).toLocaleString(locale) })}</p>}
+                    <small>{t("chatbot.orderSnapshot.asOf", { time: Number.isFinite(lookedUpAt) ? new Date(lookedUpAt).toLocaleString(locale) : "—" })}</small>
+                    <Link className="assistant-card-link" to={`/my-orders?orderId=${encodeURIComponent(order.orderId)}`}>{t("chatbot.orderSnapshot.view")}</Link>
+                  </div>;
+                }))}
               {message.draft && <AssistantPurchaseForm key={`${ownerScope}:${conversation.conversationId}:${message.draft.draftId}`} draft={message.draft} conversationId={conversation.conversationId} />}
               <time className="floating-msg-time" dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</time>
             </div>

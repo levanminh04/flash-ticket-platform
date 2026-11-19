@@ -35,18 +35,32 @@ class AssistantConversationServiceTests {
     try (var executor = Executors.newSingleThreadExecutor()) {
       var service = new AssistantConversationService(store, api, model, executor, clock, validator);
       var state = new ConversationState(); state.setConversationId(UUID.randomUUID()); state.setVersion(UUID.randomUUID()); state.setContextJson("[]"); state.setMessages(List.of());
-      var request = new ChatRequest(); request.setConversationId(state.getConversationId()); request.setVersion(state.getVersion()); request.setRequestId(UUID.randomUUID()); request.setMessage("Có sự kiện nào?");
+      var request = new ChatRequest(); request.setConversationId(state.getConversationId()); request.setVersion(state.getVersion()); request.setRequestId(UUID.randomUUID()); request.setMessage("Tôi có đơn nào?");
       when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
       when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
-      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from("Thông tin công khai")).build());
+      var order = new OrderReadView(); order.setOrderId(UUID.randomUUID());
+      var page = new OrderReadPage(); page.setItems(List.of(order));
+      when(api.getMyOrders(jwt, 0, "")).thenReturn(page);
+      var tool = ToolExecutionRequest.builder().id("orders-1").name("getMyOrders").arguments("{\"page\":0,\"state\":\"\"}").build();
+      var toolCall = dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from(tool)).build();
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(toolCall,
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from("Kết quả tra đơn")).build());
       when(store.commitTurn(anyString(), any(), any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(4));
-      var response = service.sendMessage(jwt, request); assertEquals("Thông tin công khai", response.getMessage()); assertNotEquals(state.getVersion(), response.getVersion());
+      var response = service.sendMessage(jwt, request); assertEquals("Kết quả tra đơn", response.getMessage()); assertNotEquals(state.getVersion(), response.getVersion());
       var committed = ArgumentCaptor.forClass(ConversationState.class);
       verify(store).commitTurn(anyString(), eq(state.getConversationId()), eq(state.getVersion()), any(), committed.capture());
-      assertEquals(List.of("user", "assistant"), committed.getValue().getMessages().stream().map(TranscriptMessage::getRole).toList());
-      assertTrue(committed.getValue().getContextJson().contains("Thông tin công khai")); assertEquals(request.getRequestId(), committed.getValue().getLastRequestId());
+      var next = committed.getValue();
+      assertEquals(List.of("user", "assistant"), next.getMessages().stream().map(TranscriptMessage::getRole).toList());
+      assertEquals(List.of(order), response.getOrders()); assertSame(response, next.getLastResponse());
+      assertNull(next.getMessages().getFirst().getOrders()); assertEquals(response.getOrders(), next.getMessages().getLast().getOrders());
+      next.setExpiresAtEpochMillis(now.plusSeconds(86400).toEpochMilli());
+      when(store.read(anyString())).thenReturn(next);
+      assertEquals(response.getOrders(), service.getConversation(jwt).getMessages().getLast().getOrders());
+      assertTrue(next.getContextJson().contains("Kết quả tra đơn")); assertEquals(request.getRequestId(), next.getLastRequestId());
+      assertTrue(ChatMessageDeserializer.messagesFromJson(next.getContextJson()).contains(AiMessage.from("Kết quả tra đơn")));
+      assertFalse(next.getContextJson().contains("\"orders\":"));
       clearInvocations(store);
-      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenThrow(new IllegalStateException("secret-provider-body"));
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(toolCall).thenThrow(new IllegalStateException("secret-provider-body"));
       assertEquals("MODEL_TURN_FAILED", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any()); verify(store).release(anyString(), any());
     }
@@ -92,9 +106,22 @@ class AssistantConversationServiceTests {
       var service = new AssistantConversationService(store, api, model, executor, clock, validator);
       var request = new ChatRequest(); request.setConversationId(UUID.randomUUID()); request.setVersion(UUID.randomUUID()); request.setRequestId(UUID.randomUUID()); request.setMessage("Hello");
       String hash = ReflectionTestUtils.invokeMethod(service, "requestHash", request);
-      var state = new ConversationState(); state.setLastRequestId(request.getRequestId()); state.setLastRequestHash(hash); var saved = new ChatResponse(); saved.setMessage("Saved"); state.setLastResponse(saved);
+      var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+      var state = mapper.readValue("{\"messages\":[{\"role\":\"assistant\"}],\"lastResponse\":{\"message\":\"Saved\"}}", ConversationState.class);
+      state.setLastRequestId(request.getRequestId()); state.setLastRequestHash(hash);
       when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
-      assertSame(saved, service.sendMessage(jwt, request)); verifyNoInteractions(model); verify(store, never()).release(anyString(), any());
+      assertNull(state.getMessages().getFirst().getOrders()); assertNull(service.sendMessage(jwt, request).getOrders());
+      var order = new OrderReadView(); order.setOrderId(UUID.randomUUID());
+      for (List<OrderReadView> orders : List.of(List.<OrderReadView>of(), List.of(order))) {
+        state.getLastResponse().setOrders(orders); state.getMessages().getFirst().setOrders(orders);
+        var restored = mapper.readValue(mapper.writeValueAsBytes(state), ConversationState.class);
+        when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(restored);
+        var replay = service.sendMessage(jwt, request);
+        assertSame(restored.getLastResponse(), replay); assertEquals("Saved", replay.getMessage());
+        assertEquals(orders.stream().map(OrderReadView::getOrderId).toList(), replay.getOrders().stream().map(OrderReadView::getOrderId).toList());
+        assertEquals(replay.getOrders().stream().map(OrderReadView::getOrderId).toList(), restored.getMessages().getFirst().getOrders().stream().map(OrderReadView::getOrderId).toList());
+      }
+      verifyNoInteractions(model, api); verify(store, never()).release(anyString(), any());
       request.setMessage("different"); assertEquals("REQUEST_ID_CONFLICT", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any());
     }

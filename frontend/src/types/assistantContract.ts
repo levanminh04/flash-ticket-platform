@@ -26,6 +26,14 @@ export interface ChatRequest {
   requestId: string;
   message: string;
 }
+export interface AssistantOrderSummary {
+  orderId: string;
+  eventTitle?: string | null;
+  state?: string | null;
+  total?: string | null;
+  currency?: string | null;
+  expiresAt?: string | null;
+}
 export interface ChatResponse {
   conversationId: string;
   version: string;
@@ -33,6 +41,7 @@ export interface ChatResponse {
   message: string;
   draft?: PurchaseDraft | null;
   events: AssistantEvent[];
+  orders?: AssistantOrderSummary[] | null;
 }
 export interface TranscriptMessage {
   id: string;
@@ -41,6 +50,7 @@ export interface TranscriptMessage {
   createdAt: string;
   draft?: PurchaseDraft | null;
   events?: AssistantEvent[];
+  orders?: AssistantOrderSummary[] | null;
 }
 export interface ConversationView {
   conversationId: string;
