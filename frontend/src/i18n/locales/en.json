@@ -160,6 +160,19 @@
     "payment": "Payment"
   },
   "chatbot": {
+    "organizerTitle": "Organizer Assistant",
+    "switchToBuyer": "Chat to buy tickets",
+    "switchToOrganizer": "Chat about sales",
+    "organizerOnly": "The assistant is only available to event organizers.",
+    "organizerWelcome": "Ask about ticket sales, revenue, or the status of your events.",
+    "organizerPrompts": {
+      "salesSummary": "This month's sales",
+      "salesSummaryPrompt": "How many tickets did I sell this month, and what was my ticket revenue?",
+      "topEvents": "Top 5 by revenue",
+      "topEventsPrompt": "Which five events earned the most ticket revenue last week?",
+      "pendingEvents": "Events awaiting approval",
+      "pendingEventsPrompt": "Which of my events are awaiting approval?"
+    },
     "orderSnapshot": {
       "asOf": "Looked up at {{time}}",
       "unknownEvent": "Ticket order",

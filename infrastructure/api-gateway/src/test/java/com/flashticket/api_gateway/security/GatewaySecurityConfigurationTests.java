@@ -184,6 +184,7 @@ class GatewaySecurityConfigurationTests {
     for (String path :
         List.of(
             "/api/v1/assistant/messages",
+            "/api/v1/assistant/messages/stream",
             "/api/v1/assistant/conversations/current",
             "/api/v1/assistant/conversations/reset")) {
       assertFalse(reachesDownstream(HttpMethod.POST, path, null), path);
@@ -192,6 +193,28 @@ class GatewaySecurityConfigurationTests {
       assertFalse(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_ADMIN")), path);
       assertTrue(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_BUYER")), path);
     }
+  }
+
+  @Test
+  void requiresOrganizerForOrganizerAssistantEndpoints() {
+    String root = "/api/v1/assistant/organizer";
+    var organizer = authenticatedAs("ROLE_ORGANIZER");
+    var buyer = authenticatedAs("ROLE_BUYER");
+    var both = UsernamePasswordAuthenticationToken.authenticated(
+        "subject-1", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ORGANIZER"),
+            new SimpleGrantedAuthority("ROLE_BUYER")));
+    for (String endpoint : List.of("/messages", "/messages/stream", "/conversations/current",
+        "/conversations/reset")) {
+      String path = root + endpoint;
+      assertTrue(reachesDownstream(HttpMethod.POST, path, organizer), path);
+      assertTrue(reachesDownstream(HttpMethod.POST, path, both), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, buyer), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, authenticatedAs("ROLE_ADMIN")), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, null), path);
+    }
+    assertTrue(reachesDownstream(HttpMethod.GET, root + "/conversations/current", organizer));
+    assertFalse(reachesDownstream(HttpMethod.GET, root + "/conversations/current", buyer));
+    assertTrue(reachesDownstream(HttpMethod.POST, "/api/v1/assistant/messages/stream", both));
   }
 
   @Test

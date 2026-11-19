@@ -1,0 +1,39 @@
+package com.flashticket.assistant_service.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class OrganizerEventSalesSummary {
+  private UUID eventId;
+  private String eventTitle;
+  private LocalDate from;
+  private LocalDate to;
+  private String timeZone;
+  private String currency;
+  private Instant asOf;
+  private Long soldOrderCount;
+  private Long soldTicketCount;
+  private String soldRevenue;
+  private List<TicketTypeSales> byTicketType;
+  private boolean ticketTypesTruncated;
+
+  @Getter
+  @Setter
+  @NoArgsConstructor
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public static class TicketTypeSales {
+    private UUID ticketTypeId;
+    private String ticketTypeName;
+    private Long soldQuantity;
+  }
+}

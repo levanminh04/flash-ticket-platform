@@ -24,6 +24,9 @@ async (page, origin = "http://127.0.0.1:5173") => {
   let reads = 0, readStatus, nextMessage;
   const api = "/api/v1/assistant";
   const current = `${api}/conversations/current`;
+  const organizerApi = `${api}/organizer`;
+  const organizerConversation = { ...conversation, conversationId: "00000000-0000-4000-8000-000000000013", messages: [] };
+  let organizerReads = 0;
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
 
   await context.route("**/*", async route => {
@@ -45,6 +48,10 @@ async (page, origin = "http://127.0.0.1:5173") => {
       return reply(conversation);
     }
     if (path === current && method === "GET") { reads++; return readStatus ? reply({}, readStatus) : reply(conversation); }
+    if (path === `${organizerApi}/conversations/current`) {
+      if (method === "GET") organizerReads++;
+      return reply(organizerConversation);
+    }
     if (path === "/api/v1/orders" && method === "POST") {
       const body = request.postDataJSON();
       bookings.push({ body, key: request.headers()["idempotency-key"] });
@@ -58,45 +65,48 @@ async (page, origin = "http://127.0.0.1:5173") => {
 
   const prepare = async (target, role, language = "vi") => {
     target.on("pageerror", error => errors.push(error.message));
-    await target.exposeFunction("beginAssistantFixture", ({ body, authorization, accept }) => {
+    await target.exposeFunction("beginAssistantFixture", ({ body, authorization, accept, path }) => {
       assert(authorization === "Bearer fixture-token" && accept === "text/event-stream, application/problem+json",
         "SSE POST must use the normal authenticated client");
       chat.push(body);
       assert(nextMessage, "Unscheduled SSE request");
       const fixture = nextMessage;
       nextMessage = null;
-      if (!fixture.status) streaming.set(body.requestId, { ...fixture, body });
+      const scopedConversation = path.startsWith(organizerApi) ? organizerConversation : conversation;
+      assert(body.conversationId === scopedConversation.conversationId, "SSE request used the wrong workspace");
+      if (!fixture.status) streaming.set(body.requestId, { ...fixture, body, scopedConversation });
       return { status: fixture.status || 200, oversize: fixture.outcome === "oversize" };
     });
     await target.exposeFunction("finishAssistantFixture", async requestId => {
-      const { response, ready, outcome, body } = streaming.get(requestId);
+      const { response, ready, outcome, body, scopedConversation } = streaming.get(requestId);
       streaming.delete(requestId);
       await ready;
       if (outcome === "beforeCommit" || outcome === "oversize") return "";
       if (outcome === "turnError") return `event:turn_error\ndata:${JSON.stringify({ requestId, code: "ASSISTANT_CAPACITY_EXCEEDED" })}\n\n`;
       if (outcome === "conflict") {
-        conversation.version = "00000000-0000-4000-8000-000000000011";
-        conversation.lastRequestId = "00000000-0000-4000-8000-000000000012";
+        scopedConversation.version = "00000000-0000-4000-8000-000000000011";
+        scopedConversation.lastRequestId = "00000000-0000-4000-8000-000000000012";
         return `event:turn_error\ndata:${JSON.stringify({ requestId, code: "CONVERSATION_CONFLICT" })}\n\n`;
       }
-      conversation.version = requestId;
-      conversation.lastRequestId = requestId;
-      conversation.messages.push(
+      scopedConversation.version = requestId;
+      scopedConversation.lastRequestId = requestId;
+      scopedConversation.messages.push(
         { id: `${requestId}-user`, role: "user", text: body.message, createdAt },
         { id: `${requestId}-assistant`, role: "assistant", createdAt, ...response },
       );
       if (outcome === "afterCommit") return "";
       if (outcome === "malformed") return "event:result\ndata:invalid-json\n\n";
-      return `event:result\rdata:${JSON.stringify({ requestId, conversationId, version: conversation.version })}\r\r`;
+      return `event:result\rdata:${JSON.stringify({ requestId, conversationId: scopedConversation.conversationId, version: scopedConversation.version })}\r\r`;
     });
-    await target.addInitScript(({ role, language, streamPath }) => {
+    await target.addInitScript(({ role, language, streamPaths }) => {
       localStorage.setItem("flashTicket.language", language);
       const fetchOriginal = window.fetch.bind(window);
       window.fetch = async (input, init) => {
         const request = new Request(input, init);
-        if (new URL(request.url).pathname !== streamPath) return fetchOriginal(input, init);
+        const path = new URL(request.url).pathname;
+        if (!streamPaths.includes(path)) return fetchOriginal(input, init);
         const body = await request.json();
-        const { status, oversize } = await window.beginAssistantFixture({ body, authorization: request.headers.get("authorization"), accept: request.headers.get("accept") });
+        const { status, oversize } = await window.beginAssistantFixture({ body, path, authorization: request.headers.get("authorization"), accept: request.headers.get("accept") });
         if (status !== 200) return new Response("{}", { status, headers: { "content-type": "application/problem+json" } });
         const encoder = new TextEncoder();
         const first = encoder.encode(`: chờ\r\nevent:processing\r\ndata:{\r\ndata:"requestId":"${body.requestId}"}\r\n\r\n`);
@@ -115,17 +125,18 @@ async (page, origin = "http://127.0.0.1:5173") => {
         });
         return new Response(stream, { headers: { "content-type": "text/event-stream;charset=UTF-8" } });
       };
-      const authenticated = Boolean(role);
+      const roles = Array.isArray(role) ? role : role ? [role] : [];
+      const authenticated = roles.length > 0;
       window.__KEYCLOAK_INSTANCE__ = {
         authenticated, token: authenticated ? "fixture-token" : undefined,
         idToken: authenticated ? "fixture-id-token" : undefined,
-        tokenParsed: authenticated ? { iss: "fixture", sub: `assistant-fixture-${role}`, realm_access: { roles: [role] } } : undefined,
-        hasRealmRole(name) { return name === role; },
+        tokenParsed: authenticated ? { iss: "fixture", sub: `assistant-fixture-${role}`, realm_access: { roles } } : undefined,
+        hasRealmRole(name) { return roles.includes(name); },
         init() { setTimeout(() => this.onReady?.(authenticated), 0); return Promise.resolve(authenticated); },
         isTokenExpired() { return false; }, updateToken() { return Promise.resolve(false); },
         login() { return Promise.resolve(); }, logout() { return Promise.resolve(); },
       };
-    }, { role, language, streamPath: `${api}/messages/stream` });
+    }, { role, language, streamPaths: [`${api}/messages/stream`, `${organizerApi}/messages/stream`] });
   };
   try {
     await prepare(page, "BUYER");
@@ -268,6 +279,83 @@ async (page, origin = "http://127.0.0.1:5173") => {
       assert(chat.length === sentBeforeLogout + 1 && reads === readsBeforeLogout, "Logout while reading must prevent stale reconciliation");
       checks.push("logout during stream blocks stale reconciliation");
     } finally { await english.close(); }
+    const buyerOnly = await context.newPage();
+    try {
+      await prepare(buyerOnly, "BUYER");
+      await buyerOnly.goto(`${origin}/organizer/chatbot`);
+      await buyerOnly.getByRole("heading", { name: /chưa được cấp quyền Nhà tổ chức/i }).waitFor({ timeout: 7000 });
+      assert(await buyerOnly.locator(".chatbot-shell").count() === 0, "Buyer-only session must not open Organizer chat");
+    } finally { await buyerOnly.close(); }
+
+    const organizer = await context.newPage();
+    try {
+      await prepare(organizer, "ORGANIZER");
+      await organizer.goto(`${origin}/organizer/chatbot`);
+      const shell = organizer.locator(".chatbot-shell");
+      await shell.locator(".floating-chatbot-input input:not(:disabled)").waitFor({ timeout: 7000 });
+      assert(await shell.getByRole("link", { name: "Chat mua vé", exact: true }).count() === 0,
+        "Organizer-only session must not advertise a Buyer action");
+    } finally { await organizer.close(); }
+
+    const dual = await context.newPage();
+    try {
+      await prepare(dual, ["BUYER", "ORGANIZER"]);
+      await dual.goto(`${origin}/organizer`);
+      await dual.getByRole("link", { name: "Chat thống kê", exact: true }).click({ timeout: 7000 });
+      await dual.waitForURL(`${origin}/organizer/chatbot`);
+      const shell = dual.locator('.chatbot-shell[aria-label="Trợ lý nhà tổ chức"]');
+      const buyerShell = dual.locator('.chatbot-shell[aria-label="FlashTicket Assistant"]');
+      const input = shell.locator(".floating-chatbot-input input");
+      await shell.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
+      assert(await dual.locator(".floating-chatbot-trigger").count() === 0, "Organizer chat should have a single composer");
+      const buyerReadsBefore = reads;
+      const bookingsBefore = bookings.length;
+      let releaseOrganizer;
+      nextMessage = { response: { text: "Hãy bấm Chat mua vé để tìm vé." }, ready: new Promise(resolve => { releaseOrganizer = resolve; }) };
+      try {
+        await input.fill("Tôi muốn mua vé");
+        await input.press("Enter");
+        await shell.getByRole("status").filter({ hasText: "Trợ lý đang xử lý" }).waitFor();
+        assert(organizerReads === 0 && reads === buyerReadsBefore, "Organizer progress must arrive before its GET");
+      } finally { releaseOrganizer(); }
+      await shell.getByText("Hãy bấm Chat mua vé để tìm vé.", { exact: true }).waitFor();
+      assert(organizerReads === 1 && reads === buyerReadsBefore && bookings.length === bookingsBefore,
+        "Organizer must reconcile its own transcript without buying tickets");
+      await shell.getByRole("link", { name: "Chat mua vé", exact: true }).click();
+      await dual.waitForURL(`${origin}/chatbot`);
+      await buyerShell.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
+      assert(await buyerShell.getByText("Hãy bấm Chat mua vé để tìm vé.", { exact: true }).count() === 0,
+        "Buyer must not display the Organizer transcript");
+      const buyerDraft = { ...draft, draftId: "00000000-0000-4000-8000-000000000014" };
+      nextMessage = { response: { text: "Đây là nháp vé từ chat Buyer.", draft: buyerDraft } };
+      const buyerInput = buyerShell.locator(".floating-chatbot-input input");
+      await buyerInput.fill("Tạo nháp mua hai vé");
+      await buyerInput.press("Enter");
+      const buyerReply = buyerShell.locator("article").filter({ hasText: "Đây là nháp vé từ chat Buyer." });
+      const form = buyerReply.locator("form.assistant-purchase-form");
+      await form.waitFor();
+      assert(reads === buyerReadsBefore + 1 && organizerReads === 1 && bookings.length === bookingsBefore,
+        "Buyer draft must use its own GET and wait for confirmation");
+      await form.getByRole("textbox").fill(customerEmail);
+      await form.evaluate(node => node.requestSubmit());
+      await buyerReply.locator(`a[href="/checkout?orderId=${orderId}"]`).waitFor();
+      assert(bookings.length === bookingsBefore + 1 && bookings.at(-1).key === buyerDraft.draftId,
+        "Dual-role user must confirm a single order through the Buyer form");
+      await buyerShell.getByRole("link", { name: "Chat thống kê", exact: true }).click();
+      await dual.waitForURL(`${origin}/organizer/chatbot`);
+      await shell.getByText("Hãy bấm Chat mua vé để tìm vé.", { exact: true }).waitFor();
+      assert(await shell.getByText("Đây là nháp vé từ chat Buyer.", { exact: true }).count() === 0,
+        "Organizer must not display the Buyer transcript");
+      for (const width of [390, 320]) {
+        await dual.setViewportSize({ width, height: 844 });
+        const box = await shell.boundingBox();
+        assert(box && box.width >= width - 36, `Organizer chat should use the mobile viewport at ${width}px`);
+        assert(await shell.getByRole("link", { name: "Chat mua vé", exact: true }).isVisible(),
+          "Chat mua vé should be reachable on mobile");
+      }
+      checks.push("organizer role gate, SSE workspace isolation and dual-role purchase confirmation");
+    } finally { await dual.close(); }
+
     assert(unexpected.length === 0 && errors.length === 0, `Unexpected API/page errors: ${[...unexpected, ...errors].join("; ")}`);
     return { checks: [...checks, "VI/EN progress and no unexpected writes"] };
   } finally {

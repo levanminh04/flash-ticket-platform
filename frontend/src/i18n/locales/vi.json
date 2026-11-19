@@ -160,6 +160,19 @@
     "payment": "Thanh toán"
   },
   "chatbot": {
+    "organizerTitle": "Trợ lý nhà tổ chức",
+    "switchToBuyer": "Chat mua vé",
+    "switchToOrganizer": "Chat thống kê",
+    "organizerOnly": "Trợ lý chỉ hỗ trợ tài khoản nhà tổ chức.",
+    "organizerWelcome": "Hỏi về số vé bán, doanh thu hoặc trạng thái sự kiện của bạn.",
+    "organizerPrompts": {
+      "salesSummary": "Bán vé tháng này",
+      "salesSummaryPrompt": "Tháng này tôi bán được bao nhiêu vé và doanh thu là bao nhiêu?",
+      "topEvents": "Top 5 theo doanh thu",
+      "topEventsPrompt": "Top 5 sự kiện có doanh thu bán vé cao nhất tuần trước là những sự kiện nào?",
+      "pendingEvents": "Sự kiện chờ duyệt",
+      "pendingEventsPrompt": "Tôi có sự kiện nào đang chờ duyệt?"
+    },
     "orderSnapshot": {
       "asOf": "Tại lúc tra cứu: {{time}}",
       "unknownEvent": "Đơn vé",

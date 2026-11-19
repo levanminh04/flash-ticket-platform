@@ -3,9 +3,13 @@ import axiosClient from "../lib/axiosClient";
 import keycloak from "../lib/keycloak";
 import type { ChatRequest, ConversationView, ResetConversationRequest } from "../types/assistantContract";
 
-export function assistantOwnerScope(): string | null {
+export type AssistantWorkspace = "buyer" | "organizer";
+
+export function assistantOwnerScope(workspace: AssistantWorkspace = "buyer"): string | null {
   if (!keycloak.authenticated || !keycloak.tokenParsed?.iss || !keycloak.tokenParsed?.sub) return null;
-  return JSON.stringify([import.meta.env.VITE_API_GATEWAY_URL || "", keycloak.tokenParsed.iss, keycloak.tokenParsed.sub]);
+  const scope = [import.meta.env.VITE_API_GATEWAY_URL || "", keycloak.tokenParsed.iss, keycloak.tokenParsed.sub];
+  if (workspace === "organizer") scope.push(workspace);
+  return JSON.stringify(scope);
 }
 
 function requestConfig(signal?: AbortSignal) {
@@ -17,7 +21,10 @@ function requestConfig(signal?: AbortSignal) {
   };
 }
 
-const root = "/api/v1/assistant";
+const roots: Record<AssistantWorkspace, string> = {
+  buyer: "/api/v1/assistant",
+  organizer: "/api/v1/assistant/organizer",
+};
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 async function readTurnStream(body: ReadableStream<Uint8Array>, request: ChatRequest, onProcessing: () => void): Promise<string | undefined> {
@@ -78,14 +85,14 @@ async function readTurnStream(body: ReadableStream<Uint8Array>, request: ChatReq
 }
 
 export const chatService = {
-  openConversation: async (signal?: AbortSignal): Promise<ConversationView> =>
-    (await axiosClient.post<ConversationView>(`${root}/conversations/current`, undefined, requestConfig(signal))).data,
-  getConversation: async (signal?: AbortSignal): Promise<ConversationView> =>
-    (await axiosClient.get<ConversationView>(`${root}/conversations/current`, requestConfig(signal))).data,
+  openConversation: async (signal?: AbortSignal, workspace: AssistantWorkspace = "buyer"): Promise<ConversationView> =>
+    (await axiosClient.post<ConversationView>(`${roots[workspace]}/conversations/current`, undefined, requestConfig(signal))).data,
+  getConversation: async (signal?: AbortSignal, workspace: AssistantWorkspace = "buyer"): Promise<ConversationView> =>
+    (await axiosClient.get<ConversationView>(`${roots[workspace]}/conversations/current`, requestConfig(signal))).data,
   streamMessage: async (payload: ChatRequest, signal: AbortSignal, isRequestContextCurrent: () => boolean,
-    onProcessing: () => void): Promise<string | undefined> => {
+    onProcessing: () => void, workspace: AssistantWorkspace = "buyer"): Promise<string | undefined> => {
     if (typeof ReadableStream === "undefined" || typeof TextDecoder === "undefined") throw new Error("ASSISTANT_STREAM_UNAVAILABLE");
-    const response = await axiosClient.post<ReadableStream<Uint8Array>>(`${root}/messages/stream`, payload, {
+    const response = await axiosClient.post<ReadableStream<Uint8Array>>(`${roots[workspace]}/messages/stream`, payload, {
       ...requestConfig(signal), isRequestContextCurrent, adapter: "fetch", responseType: "stream",
       fetchOptions: { redirect: "error" }, maxContentLength: 8192,
       headers: { Accept: "text/event-stream, application/problem+json" },
@@ -99,6 +106,7 @@ export const chatService = {
     }
     return readTurnStream(response.data, payload, onProcessing);
   },
-  resetConversation: async (payload: ResetConversationRequest, signal?: AbortSignal): Promise<ConversationView> =>
-    (await axiosClient.post<ConversationView>(`${root}/conversations/reset`, payload, requestConfig(signal))).data,
+  resetConversation: async (payload: ResetConversationRequest, signal?: AbortSignal,
+    workspace: AssistantWorkspace = "buyer"): Promise<ConversationView> =>
+    (await axiosClient.post<ConversationView>(`${roots[workspace]}/conversations/reset`, payload, requestConfig(signal))).data,
 };

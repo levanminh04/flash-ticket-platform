@@ -121,6 +121,7 @@ function AppRoutes() {
           <Route path="/my-tickets" element={<MyTicketsPage />} />
           <Route path="/my-orders" element={<MyOrdersPage />} />
           <Route path="/chatbot" element={<ChatbotPage />} />
+          <Route path="/organizer/chatbot" element={<ChatbotPage workspace="organizer" />} />
           <Route path="/organizer" element={<OrganizerHubPage />} />
           <Route path="/organizer/events" element={<OrganizerEventsPage />} />
           <Route

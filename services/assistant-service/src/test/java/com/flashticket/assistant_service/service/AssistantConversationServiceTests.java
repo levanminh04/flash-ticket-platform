@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.flashticket.assistant_service.client.BuyerApiClient;
+import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.AssistantProblem;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -26,7 +26,7 @@ class AssistantConversationServiceTests {
   private final Clock clock = Clock.fixed(now, ZoneOffset.UTC);
   private final Jwt jwt = Jwt.withTokenValue("fixture-token").header("alg", "RS256").issuer("https://issuer.test").subject("buyer").expiresAt(now.plusSeconds(300)).build();
   private final RedisConversationStore store = mock(RedisConversationStore.class);
-  private final BuyerApiClient api = mock(BuyerApiClient.class);
+  private final AssistantApiClient api = mock(AssistantApiClient.class);
   private final ChatModel model = mock(ChatModel.class);
   private final Validator validator = mock(Validator.class);
 
@@ -46,7 +46,7 @@ class AssistantConversationServiceTests {
       when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(toolCall,
           dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from("Kết quả tra đơn")).build());
       when(store.commitTurn(anyString(), any(), any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(4));
-      var response = service.sendMessage(jwt, request); assertEquals("Kết quả tra đơn", response.getMessage()); assertNotEquals(state.getVersion(), response.getVersion());
+      var response = service.sendMessage(jwt, request, false); assertEquals("Kết quả tra đơn", response.getMessage()); assertNotEquals(state.getVersion(), response.getVersion());
       var committed = ArgumentCaptor.forClass(ConversationState.class);
       verify(store).commitTurn(anyString(), eq(state.getConversationId()), eq(state.getVersion()), any(), committed.capture());
       var next = committed.getValue();
@@ -55,14 +55,45 @@ class AssistantConversationServiceTests {
       assertNull(next.getMessages().getFirst().getOrders()); assertEquals(response.getOrders(), next.getMessages().getLast().getOrders());
       next.setExpiresAtEpochMillis(now.plusSeconds(86400).toEpochMilli());
       when(store.read(anyString())).thenReturn(next);
-      assertEquals(response.getOrders(), service.getConversation(jwt).getMessages().getLast().getOrders());
+      assertEquals(response.getOrders(), service.getConversation(jwt, false).getMessages().getLast().getOrders());
       assertTrue(next.getContextJson().contains("Kết quả tra đơn")); assertEquals(request.getRequestId(), next.getLastRequestId());
       assertTrue(ChatMessageDeserializer.messagesFromJson(next.getContextJson()).contains(AiMessage.from("Kết quả tra đơn")));
       assertFalse(next.getContextJson().contains("\"orders\":"));
       clearInvocations(store);
       when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(toolCall).thenThrow(new IllegalStateException("secret-provider-body"));
-      assertEquals("MODEL_TURN_FAILED", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request)).getCode());
+      assertEquals("MODEL_TURN_FAILED", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request, false)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any()); verify(store).release(anyString(), any());
+    }
+  }
+
+  @Test
+  void separatesBuyerAndOrganizerConversationsForSameJwt() {
+    String buyerKey = "cfeb594e411920ba4993b662b327c7ff7925455634a9919635f03e0f24eace33";
+    String organizerKey = "7002ea9b1f9c192f445df537f16b980f4912c425e9515f58ea8fac678b25f3bb";
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var service = new AssistantConversationService(store, api, model, executor, clock, validator);
+      var buyer = new ConversationState();
+      buyer.setConversationId(UUID.randomUUID());
+      buyer.setMessages(List.of());
+      var organizer = new ConversationState();
+      organizer.setConversationId(UUID.randomUUID());
+      organizer.setVersion(UUID.randomUUID());
+      organizer.setMessages(List.of());
+      when(store.read(buyerKey)).thenReturn(buyer);
+      when(store.read(organizerKey)).thenThrow(new AssistantProblem(HttpStatus.GONE, "CONVERSATION_EXPIRED", "fixture"))
+          .thenReturn(organizer);
+      when(store.open(organizerKey)).thenReturn(organizer);
+      assertEquals(buyer.getConversationId(), service.openConversation(jwt, false).getConversationId());
+      assertEquals(organizer.getConversationId(), service.openConversation(jwt, true).getConversationId());
+      assertEquals(organizer.getConversationId(), service.getConversation(jwt, true).getConversationId());
+      var reset = new ResetConversationRequest();
+      reset.setConversationId(organizer.getConversationId());
+      reset.setVersion(organizer.getVersion());
+      when(store.reset(organizerKey, reset)).thenReturn(organizer);
+      service.resetConversation(jwt, reset, true);
+      verify(store).reset(organizerKey, reset);
+      verify(store, never()).reset(eq(buyerKey), any());
+      assertEquals(buyer.getConversationId(), service.getConversation(jwt, false).getConversationId());
     }
   }
 
@@ -81,12 +112,12 @@ class AssistantConversationServiceTests {
       when(store.commitTurn(anyString(), any(), any(), any(), any())).thenThrow(new AssistantProblem(HttpStatus.CONFLICT, "LEASE_LOST", "Reset won"));
       var service = new AssistantConversationService(store, api, model, executor, clock, validator);
       try (var callers = Executors.newSingleThreadExecutor()) {
-        var result = callers.submit(() -> service.sendMessage(jwt, request));
+        var result = callers.submit(() -> service.sendMessage(jwt, request, false));
         assertTrue(assertDoesNotThrow(() -> entered.await(5, TimeUnit.SECONDS)));
         var reset = new ResetConversationRequest(); reset.setConversationId(state.getConversationId()); reset.setVersion(state.getVersion());
         var fresh = new ConversationState(); fresh.setConversationId(UUID.randomUUID()); fresh.setVersion(UUID.randomUUID()); fresh.setMessages(List.of()); fresh.setExpiresAtEpochMillis(now.plusSeconds(86400).toEpochMilli());
         when(store.reset(anyString(), eq(reset))).thenReturn(fresh);
-        assertEquals(fresh.getConversationId(), service.resetConversation(jwt, reset).getConversationId());
+        assertEquals(fresh.getConversationId(), service.resetConversation(jwt, reset, false).getConversationId());
         finish.countDown();
         var failure = assertThrows(ExecutionException.class, () -> result.get(5, TimeUnit.SECONDS));
         assertEquals("LEASE_LOST", ((AssistantProblem) failure.getCause()).getCode());
@@ -95,7 +126,7 @@ class AssistantConversationServiceTests {
       var movingClock = mock(Clock.class);
       when(movingClock.instant()).thenReturn(now, now, now.plusSeconds(46));
       var lateService = new AssistantConversationService(store, api, model, executor, movingClock, validator);
-      assertEquals("TURN_DEADLINE_EXCEEDED", assertThrows(AssistantProblem.class, () -> lateService.sendMessage(jwt, request)).getCode());
+      assertEquals("TURN_DEADLINE_EXCEEDED", assertThrows(AssistantProblem.class, () -> lateService.sendMessage(jwt, request, false)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any());
     }
   }
@@ -110,19 +141,19 @@ class AssistantConversationServiceTests {
       var state = mapper.readValue("{\"messages\":[{\"role\":\"assistant\"}],\"lastResponse\":{\"message\":\"Saved\"}}", ConversationState.class);
       state.setLastRequestId(request.getRequestId()); state.setLastRequestHash(hash);
       when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
-      assertNull(state.getMessages().getFirst().getOrders()); assertNull(service.sendMessage(jwt, request).getOrders());
+      assertNull(state.getMessages().getFirst().getOrders()); assertNull(service.sendMessage(jwt, request, false).getOrders());
       var order = new OrderReadView(); order.setOrderId(UUID.randomUUID());
       for (List<OrderReadView> orders : List.of(List.<OrderReadView>of(), List.of(order))) {
         state.getLastResponse().setOrders(orders); state.getMessages().getFirst().setOrders(orders);
         var restored = mapper.readValue(mapper.writeValueAsBytes(state), ConversationState.class);
         when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(restored);
-        var replay = service.sendMessage(jwt, request);
+        var replay = service.sendMessage(jwt, request, false);
         assertSame(restored.getLastResponse(), replay); assertEquals("Saved", replay.getMessage());
         assertEquals(orders.stream().map(OrderReadView::getOrderId).toList(), replay.getOrders().stream().map(OrderReadView::getOrderId).toList());
         assertEquals(replay.getOrders().stream().map(OrderReadView::getOrderId).toList(), restored.getMessages().getFirst().getOrders().stream().map(OrderReadView::getOrderId).toList());
       }
       verifyNoInteractions(model, api); verify(store, never()).release(anyString(), any());
-      request.setMessage("different"); assertEquals("REQUEST_ID_CONFLICT", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request)).getCode());
+      request.setMessage("different"); assertEquals("REQUEST_ID_CONFLICT", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request, false)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any());
     }
   }
@@ -149,12 +180,12 @@ class AssistantConversationServiceTests {
     try (var executor = Executors.newSingleThreadExecutor()) {
       var service = new AssistantConversationService(store, api, model, executor, clock, validator);
       var otherIssuer = Jwt.withTokenValue("other-token").header("alg", "RS256").issuer("https://other.test").subject("buyer").expiresAt(now.plusSeconds(300)).build();
-      String owner = ReflectionTestUtils.invokeMethod(service, "ownerKey", jwt);
-      String other = ReflectionTestUtils.invokeMethod(service, "ownerKey", otherIssuer);
+      String owner = ReflectionTestUtils.invokeMethod(service, "ownerKey", jwt, false);
+      String other = ReflectionTestUtils.invokeMethod(service, "ownerKey", otherIssuer, false);
       assertNotEquals(owner, other); assertTrue(owner.matches("[a-f0-9]{64}")); assertFalse(owner.contains("buyer"));
       String redacted = ReflectionTestUtils.invokeMethod(service, "redactSensitiveText", " mail@example.test Bearer abcd-token abcdefgh.ijklmnop.qrstuvwx ");
       assertEquals("[REDACTED] [REDACTED] [REDACTED]", redacted);
-      assertThrows(AssistantProblem.class, () -> service.getConversation(null));
+      assertThrows(AssistantProblem.class, () -> service.getConversation(null, false));
       assertThrows(AssistantProblem.class, () -> ReflectionTestUtils.invokeMethod(service, "boundedContext", List.of(UserMessage.from("Q"), AiMessage.from("mail@example.test"))));
       verifyNoInteractions(store, model);
     }

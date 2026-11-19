@@ -2,7 +2,9 @@ package com.flashticket.assistant_service.service;
 
 import com.flashticket.assistant_service.agent.BuyerAssistantAgent;
 import com.flashticket.assistant_service.agent.BuyerAssistantTools;
-import com.flashticket.assistant_service.client.BuyerApiClient;
+import com.flashticket.assistant_service.agent.OrganizerAssistantAgent;
+import com.flashticket.assistant_service.agent.OrganizerAssistantTools;
+import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.AssistantProblem;
 import dev.langchain4j.data.message.*;
@@ -16,6 +18,8 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -38,15 +42,15 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class AssistantConversationService {
   private final RedisConversationStore conversationStore;
-  private final BuyerApiClient buyerApiClient;
+  private final AssistantApiClient apiClient;
   private final ChatModel chatModel;
   private final ExecutorService assistantExecutor;
   private final Clock clock;
   private final Validator validator;
   private final JsonMapper transcriptMapper = JsonMapper.builder().build();
 
-  public ConversationView openConversation(Jwt jwt) {
-    String owner = ownerKey(jwt);
+  public ConversationView openConversation(Jwt jwt, boolean organizer) {
+    String owner = ownerKey(jwt, organizer);
     try {
       return toView(conversationStore.read(owner), null);
     } catch (AssistantProblem error) {
@@ -55,12 +59,12 @@ public class AssistantConversationService {
     }
   }
 
-  public ConversationView getConversation(Jwt jwt) {
-    return toView(conversationStore.read(ownerKey(jwt)), null);
+  public ConversationView getConversation(Jwt jwt, boolean organizer) {
+    return toView(conversationStore.read(ownerKey(jwt, organizer)), null);
   }
 
-  public ChatResponse sendMessage(Jwt jwt, ChatRequest request) {
-    String owner = ownerKey(jwt);
+  public ChatResponse sendMessage(Jwt jwt, ChatRequest request, boolean organizer) {
+    String owner = ownerKey(jwt, organizer);
     if (request == null || !validator.validate(request).isEmpty() || request.getMessage().trim().isEmpty()) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thông tin gửi lên không hợp lệ.");
     }
@@ -79,11 +83,11 @@ public class AssistantConversationService {
     }
     Future<TurnResult> future = null;
     try {
-      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline));
+      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline, organizer));
       long remaining = Duration.between(clock.instant(), deadline).toNanos();
       if (remaining <= 0) throw new TimeoutException();
       TurnResult result = future.get(remaining, TimeUnit.NANOSECONDS);
-      ownerKey(jwt); // Token có thể hết hạn trong lúc chờ provider.
+      ownerKey(jwt, organizer); // Token có thể hết hạn trong lúc chờ provider.
       if (!clock.instant().isBefore(deadline)) throw new TimeoutException();
       ChatResponse response = new ChatResponse();
       response.setConversationId(stored.getConversationId()); response.setVersion(UUID.randomUUID());
@@ -115,14 +119,14 @@ public class AssistantConversationService {
     }
   }
 
-  public ConversationView resetConversation(Jwt jwt, ResetConversationRequest request) {
+  public ConversationView resetConversation(Jwt jwt, ResetConversationRequest request, boolean organizer) {
     if (request == null || !validator.validate(request).isEmpty()) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thông tin gửi lên không hợp lệ.");
     }
-    return toView(conversationStore.reset(ownerKey(jwt), request), "CONVERSATION_RESET");
+    return toView(conversationStore.reset(ownerKey(jwt, organizer), request), "CONVERSATION_RESET");
   }
 
-  private String ownerKey(Jwt jwt) {
+  private String ownerKey(Jwt jwt, boolean organizer) {
     if (jwt == null || jwt.getIssuer() == null || jwt.getSubject() == null || jwt.getSubject().isBlank()
         || jwt.getExpiresAt() == null || !clock.instant().isBefore(jwt.getExpiresAt())) {
       throw new AssistantProblem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Vui lòng đăng nhập lại.");
@@ -130,6 +134,8 @@ public class AssistantConversationService {
     try {
       String issuer = jwt.getIssuer().toString();
       String canonicalOwner = issuer.length() + ":" + issuer + jwt.getSubject().length() + ":" + jwt.getSubject();
+      // Giữ hash Buyer để đọc hội thoại cũ của tài khoản có cả hai quyền.
+      if (organizer) canonicalOwner = "organizer:" + canonicalOwner;
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonicalOwner.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception error) {
       throw new AssistantProblem(HttpStatus.INTERNAL_SERVER_ERROR, "OWNER_SCOPE_UNAVAILABLE", "Không xác định được phạm vi hội thoại.");
@@ -144,8 +150,9 @@ public class AssistantConversationService {
     return view;
   }
 
-  private TurnResult runTurn(Jwt jwt, String ownerKey, UUID leaseToken, ChatRequest request, ConversationState storedState, Instant deadline) {
-    ownerKey(jwt);
+  private TurnResult runTurn(Jwt jwt, String ownerKey, UUID leaseToken, ChatRequest request,
+      ConversationState storedState, Instant deadline, boolean organizer) {
+    ownerKey(jwt, organizer);
     if (Thread.currentThread().isInterrupted() || !clock.instant().isBefore(deadline)
         || !conversationStore.isLeaseCurrent(ownerKey, request.getConversationId(), leaseToken)) {
       throw new AssistantProblem(HttpStatus.CONFLICT, "LEASE_LOST", "Hội thoại không còn sẵn sàng cho lượt này.");
@@ -159,11 +166,24 @@ public class AssistantConversationService {
       throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "CONVERSATION_CONTEXT_INVALID", "Không đọc được ngữ cảnh đã lưu.");
     }
     if (!context.isEmpty()) memory.add(ChatMessageDeserializer.messagesFromJson(boundedContext(context)));
-    BuyerAssistantTools tools = new BuyerAssistantTools(buyerApiClient, conversationStore, validator, clock, jwt,
-        ownerKey, request.getConversationId(), leaseToken, deadline);
-    BuyerAssistantAgent agent = AiServices.builder(BuyerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
-        .tools(tools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation()).build();
-    String answer = agent.chat(request.getMessage());
+    BuyerAssistantTools buyerTools = null;
+    String answer;
+    if (organizer) {
+      var tools = new OrganizerAssistantTools(apiClient, conversationStore, clock, jwt, ownerKey,
+          request.getConversationId(), leaseToken, deadline);
+      var agent = AiServices.builder(OrganizerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
+          .tools(tools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
+          .build();
+      String today = LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Ho_Chi_Minh")).toString();
+      answer = agent.chat(request.getMessage(), today);
+    } else {
+      buyerTools = new BuyerAssistantTools(apiClient, conversationStore, validator, clock, jwt,
+          ownerKey, request.getConversationId(), leaseToken, deadline);
+      var agent = AiServices.builder(BuyerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
+          .tools(buyerTools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
+          .build();
+      answer = agent.chat(request.getMessage());
+    }
     if (answer == null || answer.isBlank()) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "MODEL_EMPTY_REPLY", "Trợ lý chưa có câu trả lời phù hợp.");
     }
@@ -179,8 +199,13 @@ public class AssistantConversationService {
     }
     TurnResult result = new TurnResult();
     result.setAnswer(answer); result.setContextJson(boundedContext(messages));
-    result.setDraft(tools.getPurchaseDraft()); result.setEvents(tools.getReferencedEvents());
-    result.setOrders(tools.getReferencedOrders());
+    if (buyerTools != null) {
+      result.setDraft(buyerTools.getPurchaseDraft());
+      result.setEvents(buyerTools.getReferencedEvents());
+      result.setOrders(buyerTools.getReferencedOrders());
+    } else {
+      result.setEvents(List.of());
+    }
     return result;
   }
 

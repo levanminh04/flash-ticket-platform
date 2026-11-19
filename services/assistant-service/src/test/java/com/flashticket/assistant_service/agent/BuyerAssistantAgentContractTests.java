@@ -3,13 +3,18 @@ package com.flashticket.assistant_service.agent;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.flashticket.assistant_service.client.BuyerApiClient;
+import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.config.AssistantConfiguration;
 import com.flashticket.assistant_service.dto.OrderReadPage;
+import com.flashticket.assistant_service.dto.ConversationState;
+import com.flashticket.assistant_service.dto.OrganizerSalesTrend;
+import com.flashticket.assistant_service.service.AssistantConversationService;
 import com.flashticket.assistant_service.service.RedisConversationStore;
 import com.sun.net.httpserver.HttpServer;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -23,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -32,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 class BuyerAssistantAgentContractTests {
   @Test
   void runsToolsWithPerTurnMemoryAndBoundedLoop() {
-    var model = mock(ChatModel.class); var api = mock(BuyerApiClient.class); var store = mock(RedisConversationStore.class);
+    var model = mock(ChatModel.class); var api = mock(AssistantApiClient.class); var store = mock(RedisConversationStore.class);
     var now = Instant.parse("2026-11-18T00:00:00Z");
     var jwt = Jwt.withTokenValue("fixture-private-token").header("alg", "RS256").subject("buyer").expiresAt(now.plusSeconds(300)).build();
     when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
@@ -52,6 +59,59 @@ class BuyerAssistantAgentContractTests {
       var fresh = MessageWindowChatMemory.withMaxMessages(30); assertTrue(fresh.messages().isEmpty());
       clearInvocations(model, api); when(model.chat(any(ChatRequest.class))).thenReturn(toolResponse);
       assertThrows(RuntimeException.class, () -> agent.chat("Tra cứu tiếp")); verify(model, atMost(4)).chat(any(ChatRequest.class));
+    }
+  }
+
+  @Test
+  void organizerUsesOnlySalesReportTools() {
+    var model = mock(ChatModel.class);
+    var api = mock(AssistantApiClient.class);
+    var store = mock(RedisConversationStore.class);
+    var now = Instant.parse("2026-11-18T20:00:00Z");
+    var jwt = Jwt.withTokenValue("fixture-private-token").header("alg", "RS256")
+        .issuer("https://issuer.test").subject("organizer").expiresAt(now.plusSeconds(300)).build();
+    var stored = new ConversationState();
+    stored.setConversationId(UUID.randomUUID());
+    stored.setVersion(UUID.randomUUID());
+    stored.setContextJson("[]");
+    stored.setMessages(List.of());
+    when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(stored);
+    when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+    when(store.commitTurn(anyString(), any(), any(), any(), any()))
+        .thenAnswer(org.mockito.AdditionalAnswers.returnsArgAt(4));
+    var from = LocalDate.parse("2026-11-09");
+    var to = LocalDate.parse("2026-11-15");
+    var trend = new OrganizerSalesTrend();
+    trend.setItems(List.of());
+    when(api.getOrganizerSalesTrend(jwt, from, to, "WEEK")).thenReturn(trend);
+    var call = ToolExecutionRequest.builder().id("trend-call").name("getMySalesTrend")
+        .arguments("{\"from\":\"2026-11-09\",\"to\":\"2026-11-15\",\"groupBy\":\"WEEK\"}").build();
+    var answer = ChatResponse.builder().aiMessage(AiMessage.from("Kết quả tuần trước")).build();
+    when(model.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder().aiMessage(AiMessage.from(call)).build(), answer);
+    try (var executor = Executors.newSingleThreadExecutor();
+        var factory = Validation.buildDefaultValidatorFactory()) {
+      var service = new AssistantConversationService(store, api, model, executor,
+          Clock.fixed(now, ZoneOffset.UTC), factory.getValidator());
+      var request = new com.flashticket.assistant_service.dto.ChatRequest();
+      request.setConversationId(stored.getConversationId());
+      request.setVersion(stored.getVersion());
+      request.setRequestId(UUID.randomUUID());
+      request.setMessage("Xu hướng bán vé tuần trước?");
+      var result = service.sendMessage(jwt, request, true);
+      assertEquals("Kết quả tuần trước", result.getMessage());
+      assertNull(result.getDraft());
+      assertNull(result.getOrders());
+      assertTrue(result.getEvents().isEmpty());
+      verify(api).getOrganizerSalesTrend(jwt, from, to, "WEEK");
+      verifyNoMoreInteractions(api);
+      var captured = ArgumentCaptor.forClass(ChatRequest.class);
+      verify(model, times(2)).chat(captured.capture());
+      var first = captured.getAllValues().getFirst();
+      assertEquals(Set.of("getMySalesSummary", "getMyTopEvents", "listMyEvents", "getMyEvent",
+              "getMySalesTrend", "getMyEventSales"),
+          new HashSet<>(first.parameters().toolSpecifications().stream().map(ToolSpecification::name).toList()));
+      assertTrue(((SystemMessage) first.messages().getFirst()).text().contains("2026-11-19"));
+      assertFalse(captured.getAllValues().toString().contains("fixture-private-token"));
     }
   }
 
@@ -92,7 +152,7 @@ class BuyerAssistantAgentContractTests {
       ReflectionTestUtils.setField(config, "baseUrl", "http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
       ReflectionTestUtils.setField(config, "apiKey", "fixture-proxy-key");
       ReflectionTestUtils.setField(config, "model", "gemini-3.8-flash-high");
-      var api = mock(BuyerApiClient.class);
+      var api = mock(AssistantApiClient.class);
       var store = mock(RedisConversationStore.class);
       var now = Instant.parse("2026-11-18T00:00:00Z");
       var jwt = Jwt.withTokenValue("fixture-buyer-jwt").header("alg", "RS256").subject("buyer").expiresAt(now.plusSeconds(300)).build();

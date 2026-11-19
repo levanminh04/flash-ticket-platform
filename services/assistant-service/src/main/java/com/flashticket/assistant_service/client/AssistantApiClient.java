@@ -5,7 +5,10 @@ import com.flashticket.assistant_service.exception.AssistantProblem;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,13 +25,14 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @RequiredArgsConstructor
-public class BuyerApiClient {
-  private static final Logger log = LoggerFactory.getLogger(BuyerApiClient.class);
+public class AssistantApiClient {
+  private static final Logger log = LoggerFactory.getLogger(AssistantApiClient.class);
 
   private final RestClient buyerRestClient;
   private final JsonMapper jsonMapper;
@@ -96,9 +100,76 @@ public class BuyerApiClient {
     return order;
   }
 
+  public OrganizerSalesSummary getOrganizerSalesSummary(Jwt jwt, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .pathSegment("api", "v1", "organizers", jwt.getSubject(), "sales", "summary")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .build().encode().toUri();
+    return get("getOrganizerSalesSummary", uri, jwt, OrganizerSalesSummary.class);
+  }
+
+  public OrganizerEventSalesPage getOrganizerTopEvents(Jwt jwt, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .pathSegment("api", "v1", "organizers", jwt.getSubject(), "events", "sales-statistics")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .queryParam("page", 0).queryParam("size", 5)
+        .queryParam("sortBy", "soldRevenue").queryParam("direction", "DESC")
+        .build().encode().toUri();
+    return get("getOrganizerTopEvents", uri, jwt, OrganizerEventSalesPage.class);
+  }
+
+  public OrganizerOwnedEventPage listOrganizerEvents(Jwt jwt, String status, String cursor) {
+    var uri = UriComponentsBuilder.fromUri(eventBaseUrl).path("/api/v1/organizer/events")
+        .queryParam("size", 5);
+    if (status != null && !status.isBlank()) uri.queryParam("status", status);
+    if (cursor != null && !cursor.isBlank()) uri.queryParam("cursor", cursor);
+    return get("listOrganizerEvents", uri.build().encode().toUri(), jwt, OrganizerOwnedEventPage.class);
+  }
+
+  public OrganizerEventView getOrganizerEvent(Jwt jwt, UUID eventId) {
+    URI uri = UriComponentsBuilder.fromUri(eventBaseUrl)
+        .path("/api/v1/organizer/events/" + eventId).build().toUri();
+    return get("getOrganizerEvent", uri, jwt, OrganizerEventView.class);
+  }
+
+  public OrganizerSalesTrend getOrganizerSalesTrend(Jwt jwt, LocalDate from, LocalDate to, String groupBy) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .pathSegment("api", "v1", "organizers", jwt.getSubject(), "sales", "chart")
+        .queryParam("from", from).queryParam("to", to).queryParam("groupBy", groupBy)
+        .build().encode().toUri();
+    return get("getOrganizerSalesTrend", uri, jwt, OrganizerSalesTrend.class);
+  }
+
+  public OrganizerEventSalesSummary getOrganizerEventSales(Jwt jwt, UUID eventId, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .path("/api/v1/organizer/events/" + eventId + "/sales-summary")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .build().encode().toUri();
+    var summary = get("getOrganizerEventSales", uri, jwt, OrganizerEventSalesSummary.class);
+    var ticketTypes = summary.getByTicketType();
+    if (ticketTypes != null) {
+      summary.setTicketTypesTruncated(ticketTypes.size() > 10);
+      summary.setByTicketType(ticketTypes.stream()
+          .sorted(Comparator.comparing(OrganizerEventSalesSummary.TicketTypeSales::getSoldQuantity,
+              Comparator.nullsLast(Comparator.reverseOrder())))
+          .limit(10).toList());
+    }
+    return summary;
+  }
+
   private <T> T get(String operation, URI uri, Jwt jwt, Class<T> responseType) {
     // Base URL chỉ là origin cố định; model không thể chọn host/path/header.
     String uuid = "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}";
+    String path = uri.getPath();
+    String organizerPath = jwt == null || jwt.getSubject() == null ? null
+        : "/api/v1/organizers/" + UriUtils.encodePathSegment(jwt.getSubject(), StandardCharsets.UTF_8);
+    String rawPath = uri.getRawPath();
+    boolean organizerReport = organizerPath != null && (rawPath.equals(organizerPath + "/sales/summary")
+        || rawPath.equals(organizerPath + "/sales/chart")
+        || rawPath.equals(organizerPath + "/events/sales-statistics"));
     boolean allowed = false;
     for (URI base : List.of(eventBaseUrl, bookingBaseUrl)) {
       if (base.getHost() == null || base.getUserInfo() != null || base.getQuery() != null || base.getFragment() != null
@@ -107,9 +178,11 @@ public class BuyerApiClient {
         throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_CONFIGURATION_INVALID", "Cấu hình dịch vụ chưa sẵn sàng.");
       }
       if (base.getScheme().equals(uri.getScheme()) && base.getRawAuthority().equals(uri.getRawAuthority())) {
-        if (base.equals(eventBaseUrl) && uri.getPath().matches("/api/v1/events(?:/" + uuid + ")?")) allowed = true;
-        if (base.equals(bookingBaseUrl) && (uri.getPath().matches("/api/v1/orders(?:/" + uuid + ")?")
-            || uri.getPath().matches("/api/v1/events/" + uuid + "/availability"))) allowed = true;
+        if (base.equals(eventBaseUrl) && (path.matches("/api/v1/events(?:/" + uuid + ")?")
+            || path.matches("/api/v1/organizer/events(?:/" + uuid + ")?"))) allowed = true;
+        if (base.equals(bookingBaseUrl) && (path.matches("/api/v1/orders(?:/" + uuid + ")?")
+            || path.matches("/api/v1/events/" + uuid + "/availability") || organizerReport
+            || path.matches("/api/v1/organizer/events/" + uuid + "/sales-summary"))) allowed = true;
       }
     }
     if (!allowed || uri.getUserInfo() != null || uri.getFragment() != null) {
@@ -131,7 +204,7 @@ public class BuyerApiClient {
     } catch (AssistantProblem error) { throw error;
     } catch (Exception error) {
       Throwable cause = error.getCause();
-      log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE errorType={} causeType={} durationMs={}",
+      log.warn("Assistant API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE errorType={} causeType={} durationMs={}",
           operation, error.getClass().getSimpleName(), cause == null ? "none" : cause.getClass().getSimpleName(),
           TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos));
       throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");
@@ -191,10 +264,10 @@ public class BuyerApiClient {
           }
           long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
           if (downstreamCode == null) {
-            log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} durationMs={}",
+            log.warn("Assistant API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} durationMs={}",
                 operation, status, durationMs);
           } else {
-            log.warn("Buyer API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} downstreamCode={} durationMs={}",
+            log.warn("Assistant API call failed: operation={} reasonCode=DOWNSTREAM_UNAVAILABLE downstreamStatus={} downstreamCode={} durationMs={}",
                 operation, status, downstreamCode, durationMs);
           }
           yield new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_UNAVAILABLE", "Dịch vụ dữ liệu chưa sẵn sàng.");

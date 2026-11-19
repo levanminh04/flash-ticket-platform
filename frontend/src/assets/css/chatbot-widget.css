@@ -577,3 +577,43 @@
     max-width: 84%;
   }
 }
+
+.organizer-page.organizer-chat-page {
+  padding: 0;
+  background: var(--bg-main);
+}
+
+.organizer-chat-page .organizer-layout.is-no-sidebar-layout {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.organizer-chat-page .organizer-content {
+  box-sizing: border-box;
+  width: min(100%, 900px);
+  margin-inline: auto;
+  padding: clamp(12px, 3vw, 24px);
+}
+
+.organizer-chat-page .floating-chatbot-header {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-block: 6px;
+}
+
+.organizer-chat-page .floating-chatbot-header h1 {
+  margin: 0;
+  color: var(--text-primary, #0f172a);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.assistant-full-page .assistant-workspace-actions { flex-wrap: wrap; }
+.assistant-workspace-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+}
