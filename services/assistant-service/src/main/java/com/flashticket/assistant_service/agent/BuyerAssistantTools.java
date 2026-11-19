@@ -31,6 +31,7 @@ public final class BuyerAssistantTools {
   private int executions;
   private PurchaseDraft purchaseDraft;
   private final List<EventView> referencedEvents = new ArrayList<>();
+  private List<OrderReadView> referencedOrders;
 
   public BuyerAssistantTools(BuyerApiClient buyerApiClient, RedisConversationStore conversationStore, Validator validator,
       Clock clock, Jwt jwt, String ownerKey, UUID conversationId, UUID leaseToken, Instant deadline) {
@@ -84,13 +85,25 @@ public final class BuyerAssistantTools {
         && !Set.of("PENDING_PAYMENT", "ISSUING", "COMPLETED", "CANCELLED", "EXPIRED", "ISSUANCE_FAILED").contains(state))) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_ORDER_FILTER", "Bộ lọc đơn không hợp lệ.");
     }
-    return buyerApiClient.getMyOrders(jwt, page, state);
+    OrderReadPage result = buyerApiClient.getMyOrders(jwt, page, state);
+    Set<UUID> seen = new HashSet<>();
+    List<OrderReadView> orders = new ArrayList<>();
+    for (OrderReadView order : result.getItems()) {
+      if (order != null && order.getOrderId() != null && seen.add(order.getOrderId())) {
+        orders.add(order);
+        if (orders.size() == 5) break;
+      }
+    }
+    referencedOrders = List.copyOf(orders);
+    return result;
   }
 
   @Tool
   public OrderReadView getMyOrder(@P("UUID đơn") UUID orderId) {
     beforeTool(); requireValidToolInput(orderId);
-    return buyerApiClient.getMyOrder(jwt, orderId);
+    OrderReadView order = buyerApiClient.getMyOrder(jwt, orderId);
+    referencedOrders = List.of(order);
+    return order;
   }
 
   @Tool
@@ -176,4 +189,6 @@ public final class BuyerAssistantTools {
   public PurchaseDraft getPurchaseDraft() { return purchaseDraft; }
 
   public List<EventView> getReferencedEvents() { return List.copyOf(referencedEvents); }
+
+  public List<OrderReadView> getReferencedOrders() { return referencedOrders; }
 }

@@ -13,4 +13,5 @@ public class TurnResult {
   private String contextJson;
   private PurchaseDraft draft;
   private List<EventView> events;
+  private List<OrderReadView> orders;
 }

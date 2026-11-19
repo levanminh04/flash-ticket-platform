@@ -39,7 +39,27 @@ class BuyerAssistantToolsTests {
       assertEquals("250001.00", draft.getEstimatedTotal()); assertEquals(now.plusSeconds(600), draft.getExpiresAt());
       assertEquals(eventId, draft.getEventId()); assertNotNull(draft.getDraftId()); assertSame(draft, tools.getPurchaseDraft());
       assertThrows(AssistantProblem.class, () -> tools.prepareQuantityPurchase(eventId, List.of(line)));
-      verify(api).getEvent(jwt, eventId); verify(api).getAvailability(jwt, eventId); verifyNoMoreInteractions(api);
+      assertNull(tools.getReferencedOrders());
+      var empty = new OrderReadPage(); empty.setItems(List.of());
+      var detail = new OrderReadView(); detail.setOrderId(UUID.randomUUID());
+      var duplicate = new OrderReadView(); duplicate.setOrderId(detail.getOrderId());
+      List<OrderReadView> unique = new ArrayList<>(List.of(detail));
+      for (int index = 0; index < 5; index++) {
+        var order = new OrderReadView(); order.setOrderId(UUID.randomUUID()); unique.add(order);
+      }
+      var items = new ArrayList<>(unique); items.add(1, duplicate);
+      var page = new OrderReadPage(); page.setItems(items);
+      when(api.getMyOrders(jwt, 0, "")).thenReturn(empty);
+      when(api.getMyOrders(jwt, 1, "COMPLETED")).thenReturn(page);
+      when(api.getMyOrder(jwt, detail.getOrderId())).thenReturn(detail);
+      assertSame(empty, tools.getMyOrders(0, "")); assertEquals(List.of(), tools.getReferencedOrders());
+      assertSame(page, tools.getMyOrders(1, "COMPLETED")); assertEquals(unique.subList(0, 5), tools.getReferencedOrders());
+      assertThrows(UnsupportedOperationException.class, () -> tools.getReferencedOrders().clear());
+      assertSame(detail, tools.getMyOrder(detail.getOrderId())); assertEquals(List.of(detail), tools.getReferencedOrders());
+      assertSame(empty, tools.getMyOrders(0, "")); assertEquals(List.of(), tools.getReferencedOrders());
+      verify(api).getEvent(jwt, eventId); verify(api).getAvailability(jwt, eventId);
+      verify(api, times(2)).getMyOrders(jwt, 0, ""); verify(api).getMyOrders(jwt, 1, "COMPLETED");
+      verify(api).getMyOrder(jwt, detail.getOrderId()); verifyNoMoreInteractions(api);
     }
   }
 

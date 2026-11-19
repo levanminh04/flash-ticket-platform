@@ -89,6 +89,7 @@ public class AssistantConversationService {
       response.setConversationId(stored.getConversationId()); response.setVersion(UUID.randomUUID());
       response.setRequestId(safeRequest.getRequestId()); response.setMessage(result.getAnswer());
       response.setDraft(result.getDraft()); response.setEvents(result.getEvents());
+      response.setOrders(result.getOrders());
       ConversationState next = new ConversationState();
       next.setConversationId(stored.getConversationId()); next.setVersion(response.getVersion());
       next.setLastRequestId(safeRequest.getRequestId()); next.setLastRequestHash(hash); next.setLastResponse(response);
@@ -179,6 +180,7 @@ public class AssistantConversationService {
     TurnResult result = new TurnResult();
     result.setAnswer(answer); result.setContextJson(boundedContext(messages));
     result.setDraft(tools.getPurchaseDraft()); result.setEvents(tools.getReferencedEvents());
+    result.setOrders(tools.getReferencedOrders());
     return result;
   }
 
@@ -260,6 +262,7 @@ public class AssistantConversationService {
     TranscriptMessage assistant = new TranscriptMessage();
     assistant.setId(UUID.randomUUID()); assistant.setRole("assistant"); assistant.setText(result.getAnswer());
     assistant.setCreatedAt(completedAt); assistant.setDraft(result.getDraft()); assistant.setEvents(result.getEvents());
+    assistant.setOrders(result.getOrders());
     transcript.add(user); transcript.add(assistant);
     while (transcript.size() > 50 || transcriptMapper.writeValueAsBytes(transcript).length > 98304) {
       if (transcript.size() <= 2) {

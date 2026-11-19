@@ -62,8 +62,18 @@ class BuyerApiClientTests {
     var projected = JsonMapper.builder().build().writeValueAsString(event); assertFalse(projected.contains("customerEmail"));
     body = "{\"orderId\":\"" + orderId + "\",\"eventId\":\"" + eventId + "\",\"state\":\"COMPLETED\",\"customerEmail\":\"private@example.test\",\"qr\":\"secret\"}";
     var other = Jwt.withTokenValue("other-current-token").header("alg", "RS256").subject("other").expiresAt(Instant.now().plusSeconds(300)).build();
-    assertEquals(orderId, client.getMyOrder(other, orderId).getOrderId()); assertEquals("Bearer other-current-token", authorization);
+    var order = client.getMyOrder(other, orderId);
+    assertEquals(orderId, order.getOrderId()); assertEquals("Bearer other-current-token", authorization);
+    assertEquals("GET", method); assertEquals("/api/v1/orders/" + orderId, path);
+    var orderJson = JsonMapper.builder().build().writeValueAsString(order);
+    assertFalse(orderJson.contains("private@example.test")); assertFalse(orderJson.contains("\"qr\""));
+    status = 404;
+    var missing = assertThrows(AssistantProblem.class, () -> client.getMyOrder(jwt, orderId));
+    assertEquals(404, missing.getStatus().value()); assertFalse(missing.getSafeDetail().contains("private@example.test"));
+    status = 200;
     body = "{\"items\":[],\"page\":0,\"size\":5}"; client.getMyOrders(jwt, 0, ""); assertEquals("/api/v1/orders", path);
+    assertEquals("GET", method); assertEquals("Bearer current-token", authorization); assertEquals("page=0&size=5", query);
+    client.getMyOrders(jwt, 2, "COMPLETED"); assertEquals("page=2&size=5&state=COMPLETED", query);
     body = "{\"items\":[],\"nextCursor\":null}";
     var search = new EventSearchRequest();
     for (String cursor : new String[] {null, "", " \t"}) {
