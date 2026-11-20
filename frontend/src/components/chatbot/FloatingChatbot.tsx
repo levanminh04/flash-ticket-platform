@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
-import { ArrowLeftRight, CalendarCheck, LayoutGrid, LoaderCircle, MessageCircle, SendHorizontal, X } from "lucide-react";
+import { ArrowLeftRight, CalendarCheck, ChevronRight, Expand, LayoutGrid, LoaderCircle, Plus, SendHorizontal, Ticket, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import robot from "../../assets/images/chatbot/chatbot-robot.webp";
 import { useAssistantConversation } from "./AssistantConversationProvider";
 import AssistantPurchaseForm from "./AssistantPurchaseForm";
 import { orderIdPattern } from "../common/OrderLookupForm";
@@ -11,6 +12,9 @@ import { formatAssistantMoney } from "./assistantMoney";
 
 export const CHATBOT_PROMPT_EVENT = "flashTicket:chatbotPrompt";
 
+const quickPrompts = ["quickHot", "quickUpcoming", "quickLocation", "quickTicketTypes", "quickCheckOrders", "quickGuide"];
+const organizerPrompts = ["salesSummary", "topEvents", "pendingEvents"];
+const adminPrompts = ["salesSummary", "salesTrend", "topEvents", "pendingEvents"];
 const workspaceLinks = [
   { target: "buyer", role: "BUYER", href: "/chatbot", label: "chatbot.switchToBuyer" },
   { target: "organizer", role: "ORGANIZER", href: "/organizer/chatbot", label: "chatbot.switchToOrganizer" },
@@ -18,7 +22,7 @@ const workspaceLinks = [
 ] as const;
 
 export default function FloatingChatbot({ fullPage = false }: { fullPage?: boolean }) {
-  const { keycloak } = useKeycloak();
+  const { keycloak, initialized } = useKeycloak();
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "vi" ? "vi-VN" : "en";
   const assistant = useAssistantConversation();
@@ -26,12 +30,17 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const [input, setInput] = useState("");
   const root = useRef<HTMLDivElement>(null);
   const messages = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const composer = useRef<HTMLInputElement>(null);
+  const panelId = useId();
   const visible = fullPage || opened;
-  const { workspace, allowed, open, conversation, busy, turnPhase, ownerScope } = assistant;
+  const { workspace, allowed, open, conversation, busy, turnPhase, ownerScope, error, notice } = assistant;
   const isBuyer = workspace === "buyer";
   const isOrganizer = workspace === "organizer";
   const isAdmin = workspace === "admin";
-  const title = isAdmin ? t("chatbot.adminTitle") : isOrganizer ? t("chatbot.organizerTitle") : "FlashTicket Assistant";
+  const title = t(isAdmin ? "chatbot.adminTitle" : isOrganizer ? "chatbot.organizerTitle" : "chatbot.title");
+  const promptKeys = isAdmin ? adminPrompts : isOrganizer ? organizerPrompts : quickPrompts;
+  const hasMessages = Boolean(conversation?.messages.length);
 
   useEffect(() => { setInput(""); }, [ownerScope, conversation?.conversationId]);
   useEffect(() => {
@@ -40,7 +49,13 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
     const timer = window.setTimeout(() => void open(), 0);
     return () => window.clearTimeout(timer);
   }, [visible, allowed, ownerScope, open]);
-  useEffect(() => { messages.current?.scrollTo({ top: messages.current.scrollHeight, behavior: "smooth" }); }, [conversation, busy]);
+  useEffect(() => {
+    if (!visible || !hasMessages || !messages.current) return;
+    messages.current.scrollTo({
+      top: messages.current.scrollHeight,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    });
+  }, [conversation, busy, hasMessages, visible]);
   useEffect(() => {
     const handlePrompt = (event: Event) => {
       const prompt = (event as CustomEvent<string>).detail;
@@ -59,22 +74,27 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, [opened, fullPage]);
 
+  const close = () => { setOpened(false); trigger.current?.focus(); };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await assistant.send(input);
     // Giữ nội dung để retry cùng requestId khi kết quả chưa rõ.
   };
-  const quickPrompts = isAdmin
-    ? ["salesSummary", "salesTrend", "topEvents", "pendingEvents"]
-    : isOrganizer
-    ? ["salesSummary", "topEvents", "pendingEvents"]
-    : ["quickHot", "quickUpcoming", "quickLocation", "quickTicketTypes", "quickCheckOrders", "quickGuide"];
-  const promptNamespace = isBuyer ? "chatbot" : "chatbot." + workspace + "Prompts";
-  return <div className={fullPage ? "assistant-full-page" : "floating-chatbot"} ref={root}>
-    {visible && <section className={fullPage ? "chatbot-shell" : "floating-chatbot-panel"} aria-label={title}>
+
+  return <div className={fullPage ? "assistant-full-page" : "floating-chatbot"} ref={root}
+    onKeyDown={event => { if (!fullPage && opened && event.key === "Escape") close(); }}>
+    {!fullPage && <button ref={trigger} type="button" className="floating-chatbot-trigger"
+      onClick={() => setOpened(value => !value)} aria-expanded={opened} aria-controls={opened ? panelId : undefined}
+      aria-label={t(opened ? "chatbot.close" : "chatbot.open")}>
+      {opened ? <X size={24} aria-hidden="true" /> : <img src={robot} alt="" />}
+    </button>}
+    {visible && <section id={panelId} className={fullPage ? "chatbot-shell" : "floating-chatbot-panel"} aria-label={title}>
       <header className="floating-chatbot-header">
-        {isBuyer ? <strong>{title}</strong> : <h1>{title}</h1>}
-        <div className="assistant-workspace-actions">
+        <div className="assistant-identity">
+          {fullPage && <img src={robot} alt="" />}
+          {isBuyer ? <strong>{title}</strong> : <h1>{title}</h1>}
+        </div>
+        <div className="assistant-header-actions">
           {isOrganizer && <Link to="/organizer">
             <LayoutGrid size={16} aria-hidden="true" />
             {t("organizer.dashboard")}
@@ -95,62 +115,91 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
               <ArrowLeftRight size={16} aria-hidden="true" />
               {t(label)}
             </Link>)}
-          {allowed && <button type="button" onClick={() => void assistant.reset()} disabled={!conversation}>Hội thoại mới</button>}
-          {!fullPage && <><Link to="/chatbot">Mở rộng</Link><button type="button" onClick={() => setOpened(false)} aria-label={t("chatbot.close")}><X size={16} /></button></>}
+          {allowed && <button type="button" onClick={() => void assistant.reset()} disabled={!conversation}>
+            <Plus size={16} aria-hidden="true" />{t("chatbot.newConversation")}
+          </button>}
+          {!fullPage && <>
+            <Link to="/chatbot" aria-label={t("chatbot.expand")} title={t("chatbot.expand")}><Expand size={16} aria-hidden="true" /></Link>
+            <button type="button" onClick={close} aria-label={t("chatbot.close")}><X size={20} aria-hidden="true" /></button>
+          </>}
         </div>
       </header>
-      {!allowed ? <div className="assistant-status">
-        <p>{keycloak.authenticated
-          ? isAdmin ? t("chatbot.adminOnly") : isOrganizer ? t("chatbot.organizerOnly") : "Trợ lý hiện chỉ dành cho tài khoản BUYER."
-          : t("chatbot.loginRequired")}</p>
-        {!keycloak.authenticated && <button type="button" onClick={() => void keycloak.login()}>{t("auth.signIn")}</button>}
+      {!allowed ? <div className="assistant-gate">
+        <p role="status">{t(!initialized ? "chatbot.loadingAccount" : keycloak.authenticated
+          ? isAdmin ? "chatbot.adminOnly" : isOrganizer ? "chatbot.organizerOnly" : "chatbot.buyerOnly"
+          : "chatbot.loginRequired")}</p>
+        {initialized && !keycloak.authenticated && <button className="assistant-primary" type="button" onClick={() => void keycloak.login()}>{t("auth.signIn")}</button>}
       </div> : <>
-        <div className={fullPage ? "chatbot-messages" : "floating-chatbot-messages"} ref={messages} aria-live="polite" aria-busy={busy}>
-          {!conversation?.messages.length && <><p>{t(isAdmin ? "chatbot.adminWelcome" : isOrganizer ? "chatbot.organizerWelcome" : "chatbot.welcomeMessage")}</p><p>Không gửi mật khẩu, token hoặc thông tin nhạy cảm vào chat.</p></>}
-          {conversation?.messages.map(message => <article key={message.id} className={`floating-msg floating-msg--${message.role}`}>
-            <div className="floating-msg-body">
-              <p className="assistant-message-text">{message.text}</p>
-              {isBuyer && message.events?.map(event => <Link className="assistant-event-link" key={event.eventId} to={`/event/${encodeURIComponent(event.eventId)}`}>{event.title}</Link>)}
-              {isBuyer && message.role === "assistant" && Array.isArray(message.orders) && (message.orders.length === 0
-                ? <div className="assistant-order-card">
-                  <p>{t("chatbot.orderSnapshot.empty")}</p>
-                  <Link className="assistant-card-link" to="/my-orders">{t("chatbot.orderSnapshot.myOrders")}</Link>
-                </div>
-                : message.orders.map(order => {
-                  if (typeof order?.orderId !== "string" || !orderIdPattern.test(order.orderId)) return null;
-                  const lookedUpAt = Date.parse(message.createdAt);
-                  const holdExpiresAt = order.state === "PENDING_PAYMENT" ? Date.parse(order.expiresAt || "") : NaN;
-                  const knownState = ["PENDING_PAYMENT", "ISSUING", "COMPLETED", "CANCELLED", "EXPIRED", "ISSUANCE_FAILED"].includes(order.state || "");
-                  return <div className="assistant-order-card" key={order.orderId}>
-                    <strong>{typeof order.eventTitle === "string" && order.eventTitle.trim() ? order.eventTitle : t("chatbot.orderSnapshot.unknownEvent")}</strong>
-                    <small>{t("paymentV1.orderId")}: {order.orderId}</small>
-                    <p>{knownState ? t(`bookingState.${order.state}`) : t("chatbot.orderSnapshot.unknownState")}</p>
-                    <p><b>{formatAssistantMoney(order.total, order.currency, locale)}</b></p>
-                    {Number.isFinite(holdExpiresAt) && <p>{t("chatbot.orderSnapshot.holdsUntil", { time: new Date(holdExpiresAt).toLocaleString(locale) })}</p>}
-                    <small>{t("chatbot.orderSnapshot.asOf", { time: Number.isFinite(lookedUpAt) ? new Date(lookedUpAt).toLocaleString(locale) : "—" })}</small>
-                    <Link className="assistant-card-link" to={`/my-orders?orderId=${encodeURIComponent(order.orderId)}`}>{t("chatbot.orderSnapshot.view")}</Link>
-                  </div>;
-                }))}
-              {isBuyer && message.draft && <AssistantPurchaseForm key={`${ownerScope}:${conversation.conversationId}:${message.draft.draftId}`} draft={message.draft} conversationId={conversation.conversationId} />}
-              <time className="floating-msg-time" dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</time>
-            </div>
-          </article>)}
+        <div className="assistant-transcript" ref={messages} tabIndex={0} role="region" aria-label={t("chatbot.transcript")}>
+          {!hasMessages && !busy && !error && <div className="assistant-welcome">
+            <Ticket size={24} aria-hidden="true" />
+            <h2>{t("chatbot.welcomeTitle")}</h2>
+            <p>{t(isAdmin ? "chatbot.adminWelcome" : isOrganizer ? "chatbot.organizerWelcome" : "chatbot.welcomeMessage")}</p>
+            <div className="floating-chatbot-options">{promptKeys.map(key => {
+              const label = isBuyer ? `chatbot.${key}` : `chatbot.${workspace}Prompts.${key}`;
+              return <button key={key} type="button"
+                disabled={!conversation} onClick={() => { setInput(t(`${label}Prompt`)); composer.current?.focus(); }}>
+                {t(label)}<ChevronRight size={14} aria-hidden="true" />
+              </button>;
+            })}</div>
+          </div>}
+          <div className="assistant-messages" role="log" aria-label={t("chatbot.transcript")}>
+            {conversation?.messages.map(message => <article key={message.id} className={`floating-msg floating-msg--${message.role}`}>
+              <div className="floating-msg-body">
+                <span className="assistant-message-author">{t(message.role === "user" ? "chatbot.you" : "chatbot.assistant")}</span>
+                <p className="assistant-message-text">{message.text}</p>
+                {isBuyer && message.events?.map(event => <Link className="assistant-event-link" key={event.eventId} to={`/event/${encodeURIComponent(event.eventId)}`}>
+                  <Ticket size={16} aria-hidden="true" /><span>{event.title}</span><ChevronRight size={16} aria-hidden="true" />
+                </Link>)}
+                {isBuyer && message.role === "assistant" && Array.isArray(message.orders) && (message.orders.length === 0
+                  ? <div className="assistant-order-card">
+                    <p>{t("chatbot.orderSnapshot.empty")}</p>
+                    <Link className="assistant-card-link" to="/my-orders">{t("chatbot.orderSnapshot.myOrders")}</Link>
+                  </div>
+                  : message.orders.map(order => {
+                    if (typeof order?.orderId !== "string" || !orderIdPattern.test(order.orderId)) return null;
+                    const lookedUpAt = Date.parse(message.createdAt);
+                    const holdExpiresAt = order.state === "PENDING_PAYMENT" ? Date.parse(order.expiresAt || "") : NaN;
+                    const knownState = ["PENDING_PAYMENT", "ISSUING", "COMPLETED", "CANCELLED", "EXPIRED", "ISSUANCE_FAILED"].includes(order.state || "");
+                    return <div className="assistant-order-card" key={order.orderId}>
+                      <strong>{typeof order.eventTitle === "string" && order.eventTitle.trim() ? order.eventTitle : t("chatbot.orderSnapshot.unknownEvent")}</strong>
+                      <small>{t("paymentV1.orderId")}: {order.orderId}</small>
+                      <p className="assistant-order-state">{knownState ? t(`bookingState.${order.state}`) : t("chatbot.orderSnapshot.unknownState")}</p>
+                      {Number.isFinite(holdExpiresAt) && <p>{t("chatbot.orderSnapshot.holdsUntil", { time: new Date(holdExpiresAt).toLocaleString(locale) })}</p>}
+                      <small>{t("chatbot.orderSnapshot.asOf", { time: Number.isFinite(lookedUpAt) ? new Date(lookedUpAt).toLocaleString(locale) : "—" })}</small>
+                      <p className="assistant-ticket-total"><span>{t("chatbot.orderTotal")}</span><b>{formatAssistantMoney(order.total, order.currency, locale)}</b></p>
+                      <Link className="assistant-card-link" to={`/my-orders?orderId=${encodeURIComponent(order.orderId)}`}>{t("chatbot.orderSnapshot.view")}</Link>
+                    </div>;
+                  }))}
+                {isBuyer && message.draft && <AssistantPurchaseForm key={`${ownerScope}:${conversation.conversationId}:${message.draft.draftId}`} draft={message.draft} conversationId={conversation.conversationId} />}
+                <time className="floating-msg-time" dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
+              </div>
+            </article>)}
+          </div>
+          <div className="assistant-progress" role="status">{busy && <>
+            <LoaderCircle size={16} aria-hidden="true" />{t(turnPhase ? `chatbot.turn.${turnPhase}` : "chatbot.loadingConversation")}
+          </>}</div>
         </div>
-        <div className="assistant-progress" role="status">{busy && <p className="assistant-status">
-          <LoaderCircle size={14} className="spin" aria-hidden="true" /> {t(turnPhase ? `chatbot.turn.${turnPhase}` : "chatbot.loadingConversation")}
-        </p>}</div>
-        <div className="assistant-status">
-          {assistant.notice && <p role="status">{assistant.notice}</p>}
-          {assistant.error && <p role="alert">{assistant.error}</p>}
-          <button type="button" disabled={busy} onClick={() => void open()}>{conversation ? "Đọc lại hội thoại" : "Mở hội thoại"}</button>
-        </div>
-        {!conversation?.messages.length && <div className="floating-chatbot-options">{quickPrompts.map(key => <button key={key} type="button" onClick={() => setInput(t(`${promptNamespace}.${key}Prompt`))}>{t(`${promptNamespace}.${key}`)}</button>)}</div>}
-        <form className="floating-chatbot-input" onSubmit={submit}>
-          <input aria-label="Tin nhắn cho trợ lý" value={input} onChange={event => setInput(event.target.value)} placeholder={t("chatbot.placeholder")} maxLength={2000} disabled={!conversation || busy} />
-          <button type="submit" disabled={!conversation || busy || !input.trim()} aria-label={t("chatbot.send")}><SendHorizontal size={16} /></button>
-        </form>
+        <footer className="assistant-footer">
+          <div className="assistant-status">
+            <p role="status">{notice}</p>
+            <p role="alert">{error}</p>
+          </div>
+          <form className="floating-chatbot-input" onSubmit={submit}>
+            <input ref={composer} aria-label={t("chatbot.messageLabel")} value={input} onChange={event => setInput(event.target.value)}
+              placeholder={t("chatbot.placeholder")} maxLength={2000} disabled={!conversation || busy} />
+            <button className="assistant-primary" type="submit" disabled={!conversation || busy || !input.trim()} aria-label={t("chatbot.send")}>
+              <SendHorizontal size={20} aria-hidden="true" />
+            </button>
+          </form>
+          <div className="assistant-footer-meta">
+            <small>{t("chatbot.privacyHint")}</small>
+            <button type="button" disabled={busy} onClick={() => void open()}>
+              {t(conversation ? "chatbot.reloadConversation" : "chatbot.openConversation")}
+            </button>
+          </div>
+        </footer>
       </>}
     </section>}
-    {!fullPage && <button type="button" className="floating-chatbot-trigger" onClick={() => setOpened(value => !value)} aria-expanded={opened} aria-label={t("chatbot.open")}><MessageCircle size={20} /></button>}
   </div>;
 }

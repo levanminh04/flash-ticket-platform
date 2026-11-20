@@ -46,7 +46,7 @@ try {
     const calls = groups.map(group => `{
       const context = await page.context().browser().newContext(${group.includes("assistant-ui.browser.js") ? '{ serviceWorkers: "block" }' : ''});
       try { const target = await context.newPage();
-        ${group.map(file => `try { const result = await (${readTest(file)})(target);
+        ${group.map(file => `try { const result = await (${readTest(file)})(target, ${JSON.stringify(origin)}, ${JSON.stringify(outputDir)});
           results.push({file:${JSON.stringify(file)},status:"PASS",...result});
         } catch(error) { results.push({file:${JSON.stringify(file)},status:"FAIL",error:error.message.split("\\n")[0]}); }`).join("\n")}
       } finally { await context.close(); }

@@ -45,7 +45,7 @@ export default function ChatbotPage({ workspace = "buyer" }: { workspace?: Assis
     <div className="container account-layout-container">
       <AccountSidebar />
       <section className="account-main-content">
-        <h1 className="page-title">Trợ lý FlashTicket</h1>
+        <h1 className="page-title">{t("chatbot.title")}</h1>
         <FloatingChatbot fullPage />
       </section>
     </div>

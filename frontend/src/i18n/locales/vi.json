@@ -160,6 +160,7 @@
     "payment": "Thanh toán"
   },
   "chatbot": {
+    "title": "Trợ lý FlashTicket",
     "organizerTitle": "Trợ lý nhà tổ chức",
     "adminTitle": "Trợ lý quản trị",
     "switchToAdmin": "Chat Admin",
@@ -177,7 +178,6 @@
       "pendingEvents": "Sự kiện chờ duyệt",
       "pendingEventsPrompt": "Liệt kê các sự kiện đang chờ duyệt."
     },
-    "loadingAccount": "Đang kiểm tra đăng nhập…",
     "switchToBuyer": "Chat mua vé",
     "switchToOrganizer": "Chat thống kê",
     "organizerOnly": "Trợ lý chỉ hỗ trợ tài khoản nhà tổ chức.",
@@ -190,6 +190,20 @@
       "pendingEvents": "Sự kiện chờ duyệt",
       "pendingEventsPrompt": "Tôi có sự kiện nào đang chờ duyệt?"
     },
+    "newConversation": "Hội thoại mới",
+    "expand": "Mở rộng",
+    "loadingAccount": "Đang kiểm tra đăng nhập…",
+    "buyerOnly": "Trợ lý chỉ hỗ trợ tài khoản người mua vé.",
+    "welcomeTitle": "Bạn cần hỗ trợ gì?",
+    "transcript": "Cuộc trò chuyện",
+    "you": "Bạn",
+    "assistant": "Trợ lý",
+    "orderTotal": "Tổng đơn",
+    "loadingConversation": "Đang mở hội thoại…",
+    "messageLabel": "Tin nhắn cho trợ lý",
+    "privacyHint": "Không gửi thông tin nhạy cảm trong chat.",
+    "reloadConversation": "Đọc lại hội thoại",
+    "openConversation": "Mở hội thoại",
     "orderSnapshot": {
       "asOf": "Tại lúc tra cứu: {{time}}",
       "unknownEvent": "Đơn vé",
@@ -245,7 +259,6 @@
     "quickTicketTypesPrompt": "Cho tôi xem các sự kiện còn loại vé đang mở bán.",
     "quickUpcoming": "Sắp diễn ra",
     "quickUpcomingPrompt": "Liệt kê các sự kiện sắp diễn ra gần nhất.",
-    "loadingConversation": "Đang mở hội thoại…",
     "turn": {
       "sending": "Đang gửi…",
       "processing": "Trợ lý đang xử lý…",
