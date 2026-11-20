@@ -4,14 +4,19 @@ import { useKeycloak } from "@react-keycloak/web";
 import { isAxiosError } from "axios";
 import { useQueryClient } from "@tanstack/react-query";
 import { assistantOwnerScope, chatService } from "../../services/chatService";
+import type { AssistantWorkspace } from "../../services/chatService";
 import { confirmDestructiveAction } from "../../lib/swal";
 import type { ChatRequest, ConversationView } from "../../types/assistantContract";
 
+type TurnPhase = "sending" | "processing" | "reconciling";
+
 interface AssistantConversationContextValue {
+  workspace: AssistantWorkspace;
   conversation: ConversationView | null;
   ownerScope: string | null;
   generation: number;
   busy: boolean;
+  turnPhase?: TurnPhase;
   error: string;
   notice: string;
   allowed: boolean;
@@ -25,16 +30,35 @@ interface ScopedState {
   owner: string | null;
   conversation: ConversationView | null;
   busy: boolean;
+  turnPhase?: TurnPhase;
   error: string;
   notice: string;
 }
 const AssistantContext = createContext<AssistantConversationContextValue | null>(null);
 
-export function AssistantConversationProvider({ children }: { children: ReactNode }): JSX.Element {
+function turnFailure(code: string | number | undefined): string {
+  switch (code) {
+    case 401:
+    case "UNAUTHENTICATED": return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+    case 403: return "Tài khoản này không có quyền sử dụng trợ lý.";
+    case 429: return "Bạn đã đạt giới hạn yêu cầu. Vui lòng đợi một phút.";
+    case 503:
+    case "ASSISTANT_CAPACITY_EXCEEDED": return "Trợ lý đang bận. Vui lòng thử lại sau.";
+    case "CONVERSATION_BUSY": return "Hội thoại đang xử lý một lượt. Vui lòng thử lại sau.";
+    case "CONVERSATION_CONFLICT":
+    case "LEASE_LOST": return "Hội thoại đã thay đổi. Vui lòng đọc lại trước khi gửi.";
+    default: return "Chưa xác nhận được kết quả. Bạn có thể thử lại cùng nội dung; không tự gửi lại lượt cũ.";
+  }
+}
+
+export function AssistantConversationProvider({ children, workspace = "buyer" }: {
+  children: ReactNode;
+  workspace?: AssistantWorkspace;
+}): JSX.Element {
   const { keycloak, initialized } = useKeycloak();
   const queryClient = useQueryClient();
-  const owner = assistantOwnerScope();
-  const allowed = Boolean(initialized && owner && keycloak.hasRealmRole("BUYER"));
+  const owner = assistantOwnerScope(workspace);
+  const allowed = Boolean(initialized && owner && keycloak.hasRealmRole(workspace.toUpperCase()));
   const [state, setState] = useState<ScopedState>({ owner, conversation: null, busy: false, error: "", notice: "" });
   const current = useRef(state);
   const generation = useRef(0);
@@ -52,11 +76,11 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
     controller.current?.abort();
     controller.current = null;
     pending.current = null;
-    const next = { owner: assistantOwnerScope(), conversation: null, busy: false, error: "", notice: "" };
+    const next = { owner: assistantOwnerScope(workspace), conversation: null, busy: false, error: "", notice: "" };
     current.current = next;
     setState(next);
     queryClient.removeQueries({ queryKey: ["assistant"] });
-  }, [queryClient]);
+  }, [queryClient, workspace]);
 
   useEffect(() => {
     if (lifecycleOwner.current !== owner || lifecycleAllowed.current !== allowed) {
@@ -81,12 +105,12 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
   }, []);
 
   const isCurrent = useCallback((conversationId: string, requestedOwner: string, requestedGeneration?: number) =>
-    renderedAllowed.current && assistantOwnerScope() === requestedOwner && renderedOwner.current === requestedOwner
+    renderedAllowed.current && assistantOwnerScope(workspace) === requestedOwner && renderedOwner.current === requestedOwner
       && current.current.owner === requestedOwner && current.current.conversation?.conversationId === conversationId
-      && (requestedGeneration === undefined || generation.current === requestedGeneration), []);
+      && (requestedGeneration === undefined || generation.current === requestedGeneration), [workspace]);
 
   const open = useCallback(async () => {
-    const requestedOwner = assistantOwnerScope();
+    const requestedOwner = assistantOwnerScope(workspace);
     if (!allowed || !requestedOwner || (current.current.owner === requestedOwner && current.current.busy)) return;
     if (current.current.owner !== requestedOwner) {
       generation.current++;
@@ -98,23 +122,23 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
     current.current = { ...current.current, owner: requestedOwner, busy: true, error: "" };
     setState(current.current);
     try {
-      const conversation = await chatService.openConversation(abort.signal);
-      if (abort.signal.aborted || assistantOwnerScope() !== requestedOwner || generation.current !== capturedGeneration) return;
+      const conversation = await chatService.openConversation(abort.signal, workspace);
+      if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
       if (pending.current && (conversation.lastRequestId === pending.current.request.requestId
           || conversation.version !== pending.current.request.version)) pending.current = null;
       current.current = { owner: requestedOwner, conversation, busy: false, error: "",
         notice: conversation.notice === "NEW_CONVERSATION" ? "Đã mở hội thoại mới." : "" };
       setState(current.current);
     } catch {
-      if (!abort.signal.aborted && assistantOwnerScope() === requestedOwner && generation.current === capturedGeneration) {
+      if (!abort.signal.aborted && assistantOwnerScope(workspace) === requestedOwner && generation.current === capturedGeneration) {
         current.current = { ...current.current, owner: requestedOwner, busy: false, error: "Không mở được hội thoại. Vui lòng thử lại." };
         setState(current.current);
       }
     }
-  }, [allowed]);
+  }, [allowed, workspace]);
 
   const send = useCallback(async (message: string) => {
-    const requestedOwner = assistantOwnerScope();
+    const requestedOwner = assistantOwnerScope(workspace);
     const stored = current.current;
     const text = message.trim();
     if (!allowed || !requestedOwner || stored.owner !== requestedOwner || !stored.conversation || stored.busy || !text) return;
@@ -130,41 +154,44 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
     };
     pending.current = { owner: requestedOwner, request };
     const abort = new AbortController(); controller.current = abort;
-    current.current = { ...stored, busy: true, error: "", notice: "" }; setState(current.current);
+    const isActive = () => !abort.signal.aborted && isCurrent(conversationId, requestedOwner, capturedGeneration);
+    current.current = { ...stored, busy: true, turnPhase: "sending", error: "", notice: "" }; setState(current.current);
+    let code: string | number | undefined;
     try {
-      await chatService.sendMessage(request, abort.signal);
-      if (!isCurrent(conversationId, requestedOwner, capturedGeneration) || abort.signal.aborted) return;
-      const conversation = await chatService.getConversation(abort.signal);
-      if (!isCurrent(conversationId, requestedOwner, capturedGeneration) || abort.signal.aborted) return;
-      pending.current = null;
-      current.current = { owner: requestedOwner, conversation, busy: false, error: "", notice: "" }; setState(current.current);
+      code = await chatService.streamMessage(request, abort.signal, isActive, () => {
+        if (!isActive()) return;
+        current.current = { ...current.current, turnPhase: "processing" }; setState(current.current);
+      }, workspace);
     } catch (error: unknown) {
-      if (!isCurrent(conversationId, requestedOwner, capturedGeneration) || abort.signal.aborted) return;
-      let conversation: ConversationView | null = stored.conversation;
-      let notice = "";
-      let failure = isAxiosError(error) && error.response?.status === 429
-        ? "Bạn đã đạt giới hạn yêu cầu. Vui lòng đợi một phút."
-        : "Chưa xác nhận được kết quả. Bạn có thể thử lại cùng nội dung; không tự gửi lại lượt cũ.";
-      try {
-        conversation = await chatService.getConversation(abort.signal);
-        if (!isCurrent(conversationId, requestedOwner, capturedGeneration) || abort.signal.aborted) return;
-        if (conversation.lastRequestId === request.requestId) { pending.current = null; failure = ""; }
-        else if (conversation.version !== request.version || conversation.conversationId !== conversationId) {
-          pending.current = null; notice = "Hội thoại đã thay đổi ở nơi khác. Đã tải trạng thái mới.";
-        }
-      } catch (readError: unknown) {
-        if (!isCurrent(conversationId, requestedOwner, capturedGeneration) || abort.signal.aborted) return;
-        if (isAxiosError(readError) && readError.response?.status === 410) {
-          conversation = null; pending.current = null;
-          notice = "Hội thoại đã hết hạn. Hãy mở hội thoại mới; tin nhắn cũ sẽ không được gửi lại.";
-        }
-      }
-      current.current = { owner: requestedOwner, conversation, busy: false, error: failure, notice }; setState(current.current);
+      if (isAxiosError(error)) code = error.response?.status;
     }
-  }, [allowed, isCurrent]);
+    if (!isActive()) return;
+    current.current = { ...current.current, turnPhase: "reconciling" }; setState(current.current);
+    let conversation: ConversationView | null = stored.conversation;
+    let notice = "";
+    let failure = turnFailure(code);
+    try {
+      // Kể cả mất stream, server có thể đã lưu lượt. Chỉ GET xác nhận kết quả.
+      conversation = await chatService.getConversation(abort.signal, workspace);
+      if (!isActive()) return;
+      if (conversation.conversationId === conversationId && conversation.lastRequestId === request.requestId) {
+        pending.current = null; failure = "";
+      } else if (conversation.conversationId !== conversationId || conversation.version !== request.version) {
+        pending.current = null; failure = "";
+        notice = "Hội thoại đã thay đổi ở nơi khác. Đã tải trạng thái mới.";
+      }
+    } catch (readError: unknown) {
+      if (!isActive()) return;
+      if (isAxiosError(readError) && readError.response?.status === 410) {
+        conversation = null; pending.current = null; failure = "";
+        notice = "Hội thoại đã hết hạn. Hãy mở hội thoại mới; tin nhắn cũ sẽ không được gửi lại.";
+      }
+    }
+    current.current = { owner: requestedOwner, conversation, busy: false, error: failure, notice }; setState(current.current);
+  }, [allowed, isCurrent, workspace]);
 
   const reset = useCallback(async () => {
-    const requestedOwner = assistantOwnerScope();
+    const requestedOwner = assistantOwnerScope(workspace);
     const stored = current.current;
     if (!allowed || !requestedOwner || stored.owner !== requestedOwner || !stored.conversation) return;
     const originalGeneration = generation.current;
@@ -179,8 +206,8 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
     setState(current.current);
     try {
       const conversation = await chatService.resetConversation({ conversationId: stored.conversation.conversationId,
-        version: stored.conversation.version }, abort.signal);
-      if (abort.signal.aborted || assistantOwnerScope() !== requestedOwner || generation.current !== capturedGeneration) return;
+        version: stored.conversation.version }, abort.signal, workspace);
+      if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
       try {
         const prefix = `flashTicket.assistant:${requestedOwner}:draft:`;
         for (const key of Object.keys(localStorage)) if (key.startsWith(prefix)) localStorage.removeItem(key);
@@ -189,23 +216,23 @@ export function AssistantConversationProvider({ children }: { children: ReactNod
       }
       current.current = { owner: requestedOwner, conversation, busy: false, error: "", notice: "Đã bắt đầu hội thoại mới." };
     } catch {
-      if (abort.signal.aborted || assistantOwnerScope() !== requestedOwner || generation.current !== capturedGeneration) return;
+      if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
       try {
-        const conversation = await chatService.getConversation(abort.signal);
-        if (abort.signal.aborted || assistantOwnerScope() !== requestedOwner || generation.current !== capturedGeneration) return;
+        const conversation = await chatService.getConversation(abort.signal, workspace);
+        if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
         current.current = { owner: requestedOwner, conversation, busy: false, error: "Chưa xác nhận được reset. Đã đọc lại trạng thái hiện hành.", notice: "" };
       } catch {
-        if (abort.signal.aborted || assistantOwnerScope() !== requestedOwner || generation.current !== capturedGeneration) return;
+        if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
         current.current = { owner: requestedOwner, conversation: null, busy: false, error: "Không đặt lại được hội thoại. Vui lòng đọc lại trước khi tiếp tục.", notice: "" };
       }
     }
     setState(current.current);
-  }, [allowed, isCurrent]);
+  }, [allowed, isCurrent, workspace]);
 
   // Che dữ liệu ngay trong render khi đổi account; không đợi effect cleanup.
   const visible = allowed && state.owner === owner ? state : null;
-  return <AssistantContext.Provider value={{ conversation: visible?.conversation || null, ownerScope: owner,
-    generation: generation.current, busy: visible?.busy || false, error: visible?.error || "", notice: visible?.notice || "",
+  return <AssistantContext.Provider value={{ workspace, conversation: visible?.conversation || null, ownerScope: owner,
+    generation: generation.current, busy: visible?.busy || false, turnPhase: visible?.turnPhase, error: visible?.error || "", notice: visible?.notice || "",
     allowed, open, send, reset, clearOwner, isCurrent }}>{children}</AssistantContext.Provider>;
 }
 

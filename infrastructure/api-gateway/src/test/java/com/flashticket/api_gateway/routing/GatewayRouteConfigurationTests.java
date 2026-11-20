@@ -115,7 +115,11 @@ class GatewayRouteConfigurationTests {
     "POST, /api/v1/orders/id-1/ticket-deliveries, lb://ticket-service",
     "GET, /api/v1/orders/id-1/tickets, lb://ticket-service",
     "GET, /api/v1/tickets/id-1/qr, lb://ticket-service",
-    "POST, /api/v1/assistant/messages, lb://assistant-service"
+    "POST, /api/v1/assistant/messages, lb://assistant-service",
+    "POST, /api/v1/assistant/organizer/messages/stream, lb://assistant-service",
+    "GET, /api/v1/assistant/organizer/conversations/current, lb://assistant-service",
+    "GET, /api/v1/assistant/admin/conversations/current, lb://assistant-service",
+    "POST, /api/v1/assistant/admin/messages/stream, lb://assistant-service"
   })
   void routesEveryServiceEndpointToItsOwner(String method, String path, String expectedUri) {
     Route route = resolve(method, path);

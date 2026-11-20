@@ -28,6 +28,8 @@ public class AssistantSecurityConfiguration {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
             .requestMatchers("/internal/**", "/actuator/**").denyAll()
+            .requestMatchers("/api/v1/assistant/admin/**").hasRole("ADMIN")
+            .requestMatchers("/api/v1/assistant/organizer/**").hasRole("ORGANIZER")
             .requestMatchers("/api/v1/assistant/**").hasRole("BUYER")
             .anyRequest().denyAll())
         .exceptionHandling(config -> config.authenticationEntryPoint(errors::handleUnauthenticated)

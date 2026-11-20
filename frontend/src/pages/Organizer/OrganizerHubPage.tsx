@@ -16,6 +16,7 @@ import {
   ExternalLink,
   FileEdit,
   LayoutGrid,
+  MessageCircle,
   LogOut,
   MoreHorizontal,
   PlusCircle,
@@ -573,6 +574,10 @@ export function TixOrganizerDashboard({ subject, issuer }: { subject: string; is
             <Link to="/organizer/events" className="tix-pill-item">
               <Calendar size={15} aria-hidden="true" />
               <span>{t("organizer.events", { defaultValue: "Sự kiện của tôi" })}</span>
+            </Link>
+            <Link to="/organizer/chatbot" className="tix-pill-item">
+              <MessageCircle size={15} aria-hidden="true" />
+              <span>{t("chatbot.switchToOrganizer")}</span>
             </Link>
             <Link to="/organizer/profile" className="tix-pill-item">
               <Building2 size={15} aria-hidden="true" />

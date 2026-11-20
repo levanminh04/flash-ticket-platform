@@ -8,6 +8,7 @@ import {
   Calendar,
   ChevronDown,
   LogOut,
+  MessageCircle,
   RotateCcw,
   Scale,
   UserRound,
@@ -17,7 +18,7 @@ import LanguageSwitcher from "../common/LanguageSwitcher";
 import { confirmDestructiveAction } from "../../lib/swal";
 import "../organizer/tix-organizer-nav.css";
 
-export type TixAdminNavTab = "sales" | "organizers" | "events" | "reconciliation" | "refunds";
+export type TixAdminNavTab = "sales" | "organizers" | "events" | "reconciliation" | "refunds" | "chatbot";
 
 interface TixAdminTopNavProps {
   activeTab?: TixAdminNavTab;
@@ -39,6 +40,8 @@ export default function TixAdminTopNav({ activeTab }: TixAdminTopNavProps) {
       ? "reconciliation"
       : location.pathname.startsWith("/admin/refunds")
       ? "refunds"
+      : location.pathname.startsWith("/admin/chatbot")
+      ? "chatbot"
       : "organizers");
 
   const { data: userProfile } = useUserProfile();
@@ -148,6 +151,14 @@ export default function TixAdminTopNav({ activeTab }: TixAdminTopNavProps) {
         >
           <RotateCcw size={15} aria-hidden="true" />
           <span>{isVi ? "Hoàn tiền" : "Refunds"}</span>
+        </Link>
+        <Link
+          to="/admin/chatbot"
+          className={`tix-pill-item ${currentTab === "chatbot" ? "active" : ""}`}
+          aria-current={currentTab === "chatbot" ? "page" : undefined}
+        >
+          <MessageCircle size={15} aria-hidden="true" />
+          <span>{t("chatbot.switchToAdmin")}</span>
         </Link>
       </nav>
 

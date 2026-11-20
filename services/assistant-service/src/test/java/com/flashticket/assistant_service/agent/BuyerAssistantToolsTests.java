@@ -3,7 +3,7 @@ package com.flashticket.assistant_service.agent;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.flashticket.assistant_service.client.BuyerApiClient;
+import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.AssistantProblem;
 import com.flashticket.assistant_service.service.RedisConversationStore;
@@ -20,7 +20,7 @@ class BuyerAssistantToolsTests {
     var names = Arrays.stream(BuyerAssistantTools.class.getDeclaredMethods())
         .filter(method -> method.isAnnotationPresent(Tool.class)).map(java.lang.reflect.Method::getName).collect(java.util.stream.Collectors.toSet());
     assertEquals(Set.of("searchEvents", "getEvent", "getAvailability", "getMyOrders", "getMyOrder", "prepareQuantityPurchase"), names);
-    var api = mock(BuyerApiClient.class);
+    var api = mock(AssistantApiClient.class);
     var store = mock(RedisConversationStore.class);
     when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
     var now = Instant.parse("2026-11-18T00:00:00Z");
@@ -65,7 +65,7 @@ class BuyerAssistantToolsTests {
 
   @Test
   void rejectsInvalidSelectionAndStaleExecution() {
-    var api = mock(BuyerApiClient.class); var store = mock(RedisConversationStore.class);
+    var api = mock(AssistantApiClient.class); var store = mock(RedisConversationStore.class);
     var now = Instant.parse("2026-11-18T00:00:00Z"); var clock = Clock.fixed(now, ZoneOffset.UTC);
     var jwt = Jwt.withTokenValue("fixture").header("alg", "RS256").subject("buyer").expiresAt(now.plusSeconds(300)).build();
     try (var factory = Validation.buildDefaultValidatorFactory()) {

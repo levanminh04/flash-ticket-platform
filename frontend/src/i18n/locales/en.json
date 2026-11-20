@@ -160,6 +160,36 @@
     "payment": "Payment"
   },
   "chatbot": {
+    "organizerTitle": "Organizer Assistant",
+    "adminTitle": "Admin Assistant",
+    "switchToAdmin": "Admin chat",
+    "adminOnly": "The assistant is only available to administrators.",
+    "adminWelcome": "Ask about platform ticket sales or events awaiting approval.",
+    "adminSales": "Sales dashboard",
+    "adminReview": "Events awaiting approval",
+    "adminPrompts": {
+      "salesSummary": "Sales this month",
+      "salesSummaryPrompt": "How many tickets were sold across the platform this month, and what was the total ticket revenue?",
+      "salesTrend": "Sales trend",
+      "salesTrendPrompt": "Show this month's platform ticket sales by week.",
+      "topEvents": "Top 5 events",
+      "topEventsPrompt": "Which five events earned the most ticket revenue last week?",
+      "pendingEvents": "Events awaiting approval",
+      "pendingEventsPrompt": "List the events awaiting approval."
+    },
+    "loadingAccount": "Checking sign-in…",
+    "switchToBuyer": "Chat to buy tickets",
+    "switchToOrganizer": "Chat about sales",
+    "organizerOnly": "The assistant is only available to event organizers.",
+    "organizerWelcome": "Ask about ticket sales, revenue, or the status of your events.",
+    "organizerPrompts": {
+      "salesSummary": "This month's sales",
+      "salesSummaryPrompt": "How many tickets did I sell this month, and what was my ticket revenue?",
+      "topEvents": "Top 5 by revenue",
+      "topEventsPrompt": "Which five events earned the most ticket revenue last week?",
+      "pendingEvents": "Events awaiting approval",
+      "pendingEventsPrompt": "Which of my events are awaiting approval?"
+    },
     "orderSnapshot": {
       "asOf": "Looked up at {{time}}",
       "unknownEvent": "Ticket order",
@@ -215,7 +245,12 @@
     "quickTicketTypesPrompt": "Show events that still have ticket types on sale.",
     "quickUpcoming": "Upcoming soon",
     "quickUpcomingPrompt": "List the nearest upcoming events.",
-    "replying": "Replying...",
+    "loadingConversation": "Opening conversation…",
+    "turn": {
+      "sending": "Sending…",
+      "processing": "Assistant is processing…",
+      "reconciling": "Refreshing conversation…"
+    },
     "send": "Send",
     "discoveryEmpty": "Discovery did not find matching events for this request.",
     "discoveryFound": "Discovery found {{count}} related results.",

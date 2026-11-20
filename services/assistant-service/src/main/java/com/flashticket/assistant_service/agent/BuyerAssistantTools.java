@@ -1,6 +1,6 @@
 package com.flashticket.assistant_service.agent;
 
-import com.flashticket.assistant_service.client.BuyerApiClient;
+import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.AssistantProblem;
 import com.flashticket.assistant_service.service.RedisConversationStore;
@@ -19,7 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 public final class BuyerAssistantTools {
-  private final BuyerApiClient buyerApiClient;
+  private final AssistantApiClient buyerApiClient;
   private final RedisConversationStore conversationStore;
   private final Validator validator;
   private final Clock clock;
@@ -33,7 +33,7 @@ public final class BuyerAssistantTools {
   private final List<EventView> referencedEvents = new ArrayList<>();
   private List<OrderReadView> referencedOrders;
 
-  public BuyerAssistantTools(BuyerApiClient buyerApiClient, RedisConversationStore conversationStore, Validator validator,
+  public BuyerAssistantTools(AssistantApiClient buyerApiClient, RedisConversationStore conversationStore, Validator validator,
       Clock clock, Jwt jwt, String ownerKey, UUID conversationId, UUID leaseToken, Instant deadline) {
     this.buyerApiClient = buyerApiClient; this.conversationStore = conversationStore;
     this.validator = validator; this.clock = clock; this.jwt = jwt; this.ownerKey = ownerKey;
