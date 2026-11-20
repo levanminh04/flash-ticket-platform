@@ -45,6 +45,7 @@ function turnFailure(code: string | number | undefined): string {
     case 503:
     case "ASSISTANT_CAPACITY_EXCEEDED": return "Trợ lý đang bận. Vui lòng thử lại sau.";
     case "CONVERSATION_BUSY": return "Hội thoại đang xử lý một lượt. Vui lòng thử lại sau.";
+    case "INVALID_DATE_RANGE": return "Khoảng ngày không hợp lệ. Hãy sửa hoặc thu hẹp khoảng ngày rồi gửi lại.";
     case "CONVERSATION_CONFLICT":
     case "LEASE_LOST": return "Hội thoại đã thay đổi. Vui lòng đọc lại trước khi gửi.";
     default: return "Chưa xác nhận được kết quả. Bạn có thể thử lại cùng nội dung; không tự gửi lại lượt cũ.";
@@ -166,6 +167,8 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
       if (isAxiosError(error)) code = error.response?.status;
     }
     if (!isActive()) return;
+    // Chỉ terminal đã khớp requestId xác nhận lượt bị từ chối trước khi lưu.
+    if (code === "INVALID_DATE_RANGE") pending.current = null;
     current.current = { ...current.current, turnPhase: "reconciling" }; setState(current.current);
     let conversation: ConversationView | null = stored.conversation;
     let notice = "";

@@ -174,6 +174,37 @@ class BuyerApiClientTests {
   }
 
   @Test
+  void mapsInvalidDateRangeOnlyForBookingSalesReports() {
+    var jwt = Jwt.withTokenValue("fixture").header("alg", "RS256").subject("fixture-user")
+        .expiresAt(Instant.now().plusSeconds(300)).build();
+    var from = LocalDate.parse("2026-11-18");
+    var to = LocalDate.parse("2026-11-01");
+    String rangeError = "{\"code\":\"INVALID_DATE_RANGE\",\"message\":\"private@example.test Bearer hidden-secret\"}";
+    status = 400;
+    body = rangeError;
+    var admin = assertThrows(AssistantProblem.class, () -> client.getPlatformSalesSummary(jwt, from, to));
+    var organizer = assertThrows(AssistantProblem.class, () -> client.getOrganizerSalesSummary(jwt, from, to));
+    for (var rejection : new AssistantProblem[] {admin, organizer}) {
+      assertEquals(400, rejection.getStatus().value());
+      assertEquals("INVALID_DATE_RANGE", rejection.getCode());
+      assertFalse(rejection.getSafeDetail().contains("hidden-secret"));
+    }
+    assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class,
+        () -> client.searchEvents(jwt, new EventSearchRequest())).getCode());
+    assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class,
+        () -> client.getMyOrder(jwt, orderId)).getCode());
+    for (String invalidBody : new String[] {"{\"code\":\"INVALID_REQUEST\"}", rangeError + " {}", rangeError + " ".repeat(2048)}) {
+      body = invalidBody;
+      assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class,
+          () -> client.getPlatformSalesSummary(jwt, from, to)).getCode());
+    }
+    body = rangeError;
+    status = 500;
+    assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class,
+        () -> client.getPlatformSalesSummary(jwt, from, to)).getCode());
+  }
+
+  @Test
   void readsSalesReportsOnlyForCurrentOrganizer() {
     var jwt = Jwt.withTokenValue("organizer-token").header("alg", "RS256").subject("organizer-1")
         .expiresAt(Instant.now().plusSeconds(300)).build();

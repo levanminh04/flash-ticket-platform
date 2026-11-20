@@ -315,8 +315,14 @@ public class AssistantApiClient {
         case 429 -> new AssistantProblem(HttpStatus.TOO_MANY_REQUESTS, "DOWNSTREAM_RATE_LIMITED", "Dịch vụ đang giới hạn yêu cầu.");
         default -> {
           String downstreamCode = null;
-          if (status == 400 && "searchEvents".equals(operation)) {
-            // Chỉ trích mã đã biết từ JSON lỗi nhỏ, không ghi body hoặc tham số tìm kiếm.
+          boolean salesReport = switch (operation) {
+            case "getOrganizerSalesSummary", "getOrganizerTopEvents", "getOrganizerSalesTrend", "getOrganizerEventSales",
+                "getPlatformSalesSummary", "getPlatformSalesTrend", "getPlatformTopEvents", "getAdminEventSales",
+                "getAdminOrganizerSalesSummary" -> true;
+            default -> false;
+          };
+          if (status == 400 && (salesReport || "searchEvents".equals(operation))) {
+            // Chỉ đọc mã lỗi đã biết của từng thao tác, không dùng nội dung lỗi downstream.
             try {
               int maxErrorBytes = 2048;
               var headers = response.getHeaders();
@@ -331,12 +337,16 @@ public class AssistantApiClient {
                   String code = jsonMapper.reader()
                       .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                       .readTree(bytes).path("code").asString("");
-                  if ("INVALID_CURSOR".equals(code) || "INVALID_REQUEST".equals(code)) downstreamCode = code;
+                  if (salesReport ? "INVALID_DATE_RANGE".equals(code)
+                      : "INVALID_CURSOR".equals(code) || "INVALID_REQUEST".equals(code)) downstreamCode = code;
                 }
               }
             } catch (IOException | RuntimeException ignored) {
-              // Lỗi đọc chẩn đoán không được thay đổi mã lỗi trả về.
+              // Phản hồi lỗi không đọc được vẫn dùng mã lỗi chung.
             }
+          }
+          if ("INVALID_DATE_RANGE".equals(downstreamCode)) {
+            yield new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", "Khoảng ngày báo cáo không hợp lệ.");
           }
           long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
           if (downstreamCode == null) {

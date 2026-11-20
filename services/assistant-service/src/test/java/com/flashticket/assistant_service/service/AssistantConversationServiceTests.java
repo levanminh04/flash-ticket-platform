@@ -148,6 +148,44 @@ class AssistantConversationServiceTests {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(value = AssistantWorkspace.class, names = {"ADMIN", "ORGANIZER"})
+  void rejectsInvalidSalesDateRangeWithoutCommitting(AssistantWorkspace workspace) {
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var service = new AssistantConversationService(store, api, model, executor, clock, validator);
+      var state = new ConversationState();
+      state.setConversationId(UUID.randomUUID()); state.setVersion(UUID.randomUUID());
+      state.setContextJson("[]"); state.setMessages(List.of());
+      var request = new ChatRequest();
+      request.setConversationId(state.getConversationId()); request.setVersion(state.getVersion());
+      request.setRequestId(UUID.randomUUID()); request.setMessage("Doanh thu từ 18/11 đến 1/11 năm 2026?");
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
+      when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+      var from = LocalDate.parse("2026-11-18");
+      var to = LocalDate.parse("2026-11-01");
+      var rejection = new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE", "Khoảng ngày không hợp lệ.");
+      String toolName;
+      if (workspace == AssistantWorkspace.ADMIN) {
+        toolName = "getPlatformSalesSummary";
+        when(api.getPlatformSalesSummary(jwt, from, to)).thenThrow(rejection);
+      } else {
+        toolName = "getMySalesSummary";
+        when(api.getOrganizerSalesSummary(jwt, from, to)).thenThrow(rejection);
+      }
+      var tool = ToolExecutionRequest.builder().id("sales-invalid-range").name(toolName)
+          .arguments("{\"from\":\"%s\",\"to\":\"%s\"}".formatted(from, to)).build();
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from(tool)).build());
+
+      assertSame(rejection, assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request, workspace)));
+      verify(store, never()).commitTurn(anyString(), any(), any(), any(), any());
+      var owner = ArgumentCaptor.forClass(String.class);
+      var lease = ArgumentCaptor.forClass(UUID.class);
+      verify(store).beginTurn(owner.capture(), any(), anyString(), lease.capture());
+      verify(store).release(owner.getValue(), lease.getValue());
+    }
+  }
+
   @Test
   void separatesBuyerAndOrganizerConversationsForSameJwt() {
     String buyerKey = "cfeb594e411920ba4993b662b327c7ff7925455634a9919635f03e0f24eace33";
