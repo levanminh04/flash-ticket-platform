@@ -298,16 +298,28 @@ class BookingPersistenceIT {
       }
       var page = org.springframework.data.domain.PageRequest.of(0, 2);
       var first = orders.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, cutoff, page);
-      assertThat(first).extracting(candidate -> candidate.getOrderId()).containsExactly(firstId, secondId);
+      assertThat(first)
+          .extracting(candidate -> candidate.getOrderId())
+          .containsExactly(firstId, secondId);
       assertThat(first.getLast().getExpiresAt()).isEqualTo(firstExpiry);
       var next =
           orders.findExpiredOrderCandidatesAfter(
-              OrderState.PENDING_PAYMENT, cutoff, first.getLast().getExpiresAt(), first.getLast().getOrderId(), page);
-      assertThat(next).extracting(candidate -> candidate.getOrderId()).containsExactly(thirdId, lowerId);
+              OrderState.PENDING_PAYMENT,
+              cutoff,
+              first.getLast().getExpiresAt(),
+              first.getLast().getOrderId(),
+              page);
+      assertThat(next)
+          .extracting(candidate -> candidate.getOrderId())
+          .containsExactly(thirdId, lowerId);
       assertThat(next.getLast().getExpiresAt()).isEqualTo(cutoff);
       assertThat(
               orders.findExpiredOrderCandidatesAfter(
-                  OrderState.PENDING_PAYMENT, cutoff, next.getLast().getExpiresAt(), next.getLast().getOrderId(), page))
+                  OrderState.PENDING_PAYMENT,
+                  cutoff,
+                  next.getLast().getExpiresAt(),
+                  next.getLast().getOrderId(),
+                  page))
           .isEmpty();
       assertThat(
               orders.findExpiredOrderCandidates(
@@ -9092,9 +9104,12 @@ class BookingPersistenceIT {
                         order.getOrderId()))
                 .isEqualTo(moneyBefore);
             assertThat(
-                    orders.findEventCancellationCandidates(
-                        org.springframework.data.domain.PageRequest.of(0, 20))
-                            .stream().map(candidate -> candidate.getOrderId()).toList())
+                    orders
+                        .findEventCancellationCandidates(
+                            org.springframework.data.domain.PageRequest.of(0, 20))
+                        .stream()
+                        .map(candidate -> candidate.getOrderId())
+                        .toList())
                 .doesNotContain(order.getOrderId());
             var request = createOrderRequest(config, 1);
             assertThatThrownBy(() -> orderService.createOrder("other", UUID.randomUUID(), request))
@@ -9383,9 +9398,12 @@ class BookingPersistenceIT {
                   order.getOrderId()))
           .isEqualTo("COMMITTED");
       assertThat(
-              orders.findEventCancellationCandidates(
-                  org.springframework.data.domain.PageRequest.of(0, 20))
-                      .stream().map(candidate -> candidate.getOrderId()).toList())
+              orders
+                  .findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream()
+                  .map(candidate -> candidate.getOrderId())
+                  .toList())
           .contains(order.getOrderId());
       orderService.cancelOrderForEventCancellation(order.getOrderId());
       assertThat(
@@ -9395,9 +9413,12 @@ class BookingPersistenceIT {
                   config.ticketTypes().getFirst().ticketTypeId()))
           .isZero();
       assertThat(
-              orders.findEventCancellationCandidates(
-                  org.springframework.data.domain.PageRequest.of(0, 20))
-                      .stream().map(candidate -> candidate.getOrderId()).toList())
+              orders
+                  .findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream()
+                  .map(candidate -> candidate.getOrderId())
+                  .toList())
           .doesNotContain(order.getOrderId());
       var before = captureOrderCreationState(config.eventId());
       orderService.processBookingIssuanceResult(with(result, "messageId", UUID.randomUUID()));
@@ -9534,13 +9555,21 @@ class BookingPersistenceIT {
       }
       var page = org.springframework.data.domain.PageRequest.of(0, 2);
       var first = orders.findEventCancellationCandidates(page);
-      assertThat(first).extracting(candidate -> candidate.getOrderId()).containsExactly(firstId, secondId);
-      assertThat(first).extracting(candidate -> candidate.getEventId()).containsExactly(firstEvent, firstEvent);
+      assertThat(first)
+          .extracting(candidate -> candidate.getOrderId())
+          .containsExactly(firstId, secondId);
+      assertThat(first)
+          .extracting(candidate -> candidate.getEventId())
+          .containsExactly(firstEvent, firstEvent);
       var next =
           orders.findEventCancellationCandidatesAfter(
               first.getLast().getEventId(), first.getLast().getOrderId(), page);
-      assertThat(next).extracting(candidate -> candidate.getOrderId()).containsExactly(thirdId, lowId);
-      assertThat(next).extracting(candidate -> candidate.getEventId()).containsExactly(firstEvent, nextEvent);
+      assertThat(next)
+          .extracting(candidate -> candidate.getOrderId())
+          .containsExactly(thirdId, lowId);
+      assertThat(next)
+          .extracting(candidate -> candidate.getEventId())
+          .containsExactly(firstEvent, nextEvent);
       assertThat(
               orders.findEventCancellationCandidatesAfter(
                   next.getLast().getEventId(), next.getLast().getOrderId(), page))
@@ -9595,9 +9624,12 @@ class BookingPersistenceIT {
               null,
               data));
       var orderedIds =
-          orders.findEventCancellationCandidates(
-              org.springframework.data.domain.PageRequest.of(0, 20))
-                  .stream().map(candidate -> candidate.getOrderId()).toList();
+          orders
+              .findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+              .stream()
+              .map(candidate -> candidate.getOrderId())
+              .toList();
       assertThat(orderedIds).containsExactlyInAnyOrderElementsOf(ids);
       var bad = orderedIds.getFirst();
       jdbc.execute(
@@ -9622,18 +9654,24 @@ class BookingPersistenceIT {
                   config.ticketTypes().getFirst().ticketTypeId()))
           .isEqualTo(2L);
       assertThat(
-              orders.findEventCancellationCandidates(
-                  org.springframework.data.domain.PageRequest.of(0, 20))
-                      .stream().map(candidate -> candidate.getOrderId()).toList())
+              orders
+                  .findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream()
+                  .map(candidate -> candidate.getOrderId())
+                  .toList())
           .containsExactly(bad);
       jdbc.execute("drop trigger event_batch_commit_failure on booking_schema.tbl_orders");
       var restarted = new EventCancellationWorker(orders, orderService);
       org.springframework.test.util.ReflectionTestUtils.setField(restarted, "batchSize", 3);
       restarted.cancelOrdersForCancelledEvents();
       assertThat(
-              orders.findEventCancellationCandidates(
-                  org.springframework.data.domain.PageRequest.of(0, 20))
-                      .stream().map(candidate -> candidate.getOrderId()).toList())
+              orders
+                  .findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream()
+                  .map(candidate -> candidate.getOrderId())
+                  .toList())
           .isEmpty();
       assertThat(
               jdbc.queryForObject(
@@ -9793,9 +9831,12 @@ class BookingPersistenceIT {
       orderService.cancelOrderForEventCancellation(failed.getOrderId());
       assertThat(captureOrderCreationState(config.eventId())).isEqualTo(terminalBefore);
       assertThat(
-              orders.findEventCancellationCandidates(
-                  org.springframework.data.domain.PageRequest.of(0, 20))
-                      .stream().map(candidate -> candidate.getOrderId()).toList())
+              orders
+                  .findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream()
+                  .map(candidate -> candidate.getOrderId())
+                  .toList())
           .isEmpty();
       assertThat(captureOrderCreationState(other.eventId())).isEqualTo(before);
     } finally {
@@ -10171,9 +10212,12 @@ class BookingPersistenceIT {
                       config.ticketTypes().getFirst().ticketTypeId()))
               .isZero();
           assertThat(
-                  orders.findEventCancellationCandidates(
-                      org.springframework.data.domain.PageRequest.of(0, 20))
-                          .stream().map(candidate -> candidate.getOrderId()).toList())
+                  orders
+                      .findEventCancellationCandidates(
+                          org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream()
+                      .map(candidate -> candidate.getOrderId())
+                      .toList())
               .doesNotContain(order.getOrderId());
         }
     } finally {

@@ -44,9 +44,11 @@ class EventCancellationWorkerTests {
     var next = new EventCancellationCandidate(UUID.randomUUID(), UUID.randomUUID());
     var page = PageRequest.of(0, 1);
     when(orderRepository.findEventCancellationCandidates(page)).thenReturn(List.of(bad));
-    when(orderRepository.findEventCancellationCandidatesAfter(bad.getEventId(), bad.getOrderId(), page))
+    when(orderRepository.findEventCancellationCandidatesAfter(
+            bad.getEventId(), bad.getOrderId(), page))
         .thenReturn(List.of(next));
-    when(orderRepository.findEventCancellationCandidatesAfter(next.getEventId(), next.getOrderId(), page))
+    when(orderRepository.findEventCancellationCandidatesAfter(
+            next.getEventId(), next.getOrderId(), page))
         .thenReturn(List.of());
     doThrow(new IllegalStateException("commit rejected"))
         .when(orderService)

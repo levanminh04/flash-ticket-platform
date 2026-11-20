@@ -68,17 +68,24 @@ class OrderExpiryWorkerTests {
     var newCutoff = Instant.EPOCH.plusSeconds(5);
     var page = PageRequest.of(0, 1);
     when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH, newCutoff);
-    when(orderRepository.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, Instant.EPOCH, page))
+    when(orderRepository.findExpiredOrderCandidates(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, page))
         .thenReturn(List.of(bad));
     when(orderRepository.findExpiredOrderCandidatesAfter(
             OrderState.PENDING_PAYMENT, Instant.EPOCH, bad.getExpiresAt(), bad.getOrderId(), page))
         .thenReturn(List.of(next));
     when(orderRepository.findExpiredOrderCandidatesAfter(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, next.getExpiresAt(), next.getOrderId(), page))
+            OrderState.PENDING_PAYMENT,
+            Instant.EPOCH,
+            next.getExpiresAt(),
+            next.getOrderId(),
+            page))
         .thenReturn(List.of());
     when(orderRepository.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, newCutoff, page))
         .thenReturn(List.of(bad));
-    doThrow(new IllegalStateException("bad order")).when(orderService).expireOrder(bad.getOrderId());
+    doThrow(new IllegalStateException("bad order"))
+        .when(orderService)
+        .expireOrder(bad.getOrderId());
     worker.expireDueOrders();
     worker.expireDueOrders();
     verify(orderService).expireOrder(next.getOrderId());
@@ -102,7 +109,11 @@ class OrderExpiryWorkerTests {
     ReflectionTestUtils.setField(worker, "cycleCutoff", Instant.EPOCH);
     var page = PageRequest.of(0, 2);
     when(orderRepository.findExpiredOrderCandidatesAfter(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor.getExpiresAt(), cursor.getOrderId(), page))
+            OrderState.PENDING_PAYMENT,
+            Instant.EPOCH,
+            cursor.getExpiresAt(),
+            cursor.getOrderId(),
+            page))
         .thenThrow(new IllegalStateException("database down"))
         .thenReturn(List.of());
     assertThatThrownBy(worker::expireDueOrders).isInstanceOf(IllegalStateException.class);
@@ -111,7 +122,11 @@ class OrderExpiryWorkerTests {
     worker.expireDueOrders();
     verify(orderRepository, times(2))
         .findExpiredOrderCandidatesAfter(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor.getExpiresAt(), cursor.getOrderId(), page);
+            OrderState.PENDING_PAYMENT,
+            Instant.EPOCH,
+            cursor.getExpiresAt(),
+            cursor.getOrderId(),
+            page);
     verify(orderRepository, never()).currentDatabaseTime();
     verifyNoInteractions(orderService);
   }
