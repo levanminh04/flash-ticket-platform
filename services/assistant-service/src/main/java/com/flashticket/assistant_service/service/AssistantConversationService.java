@@ -1,5 +1,8 @@
 package com.flashticket.assistant_service.service;
 
+import com.flashticket.assistant_service.AssistantWorkspace;
+import com.flashticket.assistant_service.agent.AdminAssistantAgent;
+import com.flashticket.assistant_service.agent.AdminAssistantTools;
 import com.flashticket.assistant_service.agent.BuyerAssistantAgent;
 import com.flashticket.assistant_service.agent.BuyerAssistantTools;
 import com.flashticket.assistant_service.agent.OrganizerAssistantAgent;
@@ -49,8 +52,8 @@ public class AssistantConversationService {
   private final Validator validator;
   private final JsonMapper transcriptMapper = JsonMapper.builder().build();
 
-  public ConversationView openConversation(Jwt jwt, boolean organizer) {
-    String owner = ownerKey(jwt, organizer);
+  public ConversationView openConversation(Jwt jwt, AssistantWorkspace workspace) {
+    String owner = ownerKey(jwt, workspace);
     try {
       return toView(conversationStore.read(owner), null);
     } catch (AssistantProblem error) {
@@ -59,12 +62,12 @@ public class AssistantConversationService {
     }
   }
 
-  public ConversationView getConversation(Jwt jwt, boolean organizer) {
-    return toView(conversationStore.read(ownerKey(jwt, organizer)), null);
+  public ConversationView getConversation(Jwt jwt, AssistantWorkspace workspace) {
+    return toView(conversationStore.read(ownerKey(jwt, workspace)), null);
   }
 
-  public ChatResponse sendMessage(Jwt jwt, ChatRequest request, boolean organizer) {
-    String owner = ownerKey(jwt, organizer);
+  public ChatResponse sendMessage(Jwt jwt, ChatRequest request, AssistantWorkspace workspace) {
+    String owner = ownerKey(jwt, workspace);
     if (request == null || !validator.validate(request).isEmpty() || request.getMessage().trim().isEmpty()) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thông tin gửi lên không hợp lệ.");
     }
@@ -83,11 +86,11 @@ public class AssistantConversationService {
     }
     Future<TurnResult> future = null;
     try {
-      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline, organizer));
+      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline, workspace));
       long remaining = Duration.between(clock.instant(), deadline).toNanos();
       if (remaining <= 0) throw new TimeoutException();
       TurnResult result = future.get(remaining, TimeUnit.NANOSECONDS);
-      ownerKey(jwt, organizer); // Token có thể hết hạn trong lúc chờ provider.
+      ownerKey(jwt, workspace); // Token có thể hết hạn trong lúc chờ provider.
       if (!clock.instant().isBefore(deadline)) throw new TimeoutException();
       ChatResponse response = new ChatResponse();
       response.setConversationId(stored.getConversationId()); response.setVersion(UUID.randomUUID());
@@ -119,14 +122,14 @@ public class AssistantConversationService {
     }
   }
 
-  public ConversationView resetConversation(Jwt jwt, ResetConversationRequest request, boolean organizer) {
+  public ConversationView resetConversation(Jwt jwt, ResetConversationRequest request, AssistantWorkspace workspace) {
     if (request == null || !validator.validate(request).isEmpty()) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thông tin gửi lên không hợp lệ.");
     }
-    return toView(conversationStore.reset(ownerKey(jwt, organizer), request), "CONVERSATION_RESET");
+    return toView(conversationStore.reset(ownerKey(jwt, workspace), request), "CONVERSATION_RESET");
   }
 
-  private String ownerKey(Jwt jwt, boolean organizer) {
+  private String ownerKey(Jwt jwt, AssistantWorkspace workspace) {
     if (jwt == null || jwt.getIssuer() == null || jwt.getSubject() == null || jwt.getSubject().isBlank()
         || jwt.getExpiresAt() == null || !clock.instant().isBefore(jwt.getExpiresAt())) {
       throw new AssistantProblem(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Vui lòng đăng nhập lại.");
@@ -134,8 +137,12 @@ public class AssistantConversationService {
     try {
       String issuer = jwt.getIssuer().toString();
       String canonicalOwner = issuer.length() + ":" + issuer + jwt.getSubject().length() + ":" + jwt.getSubject();
-      // Giữ hash Buyer để đọc hội thoại cũ của tài khoản có cả hai quyền.
-      if (organizer) canonicalOwner = "organizer:" + canonicalOwner;
+      // Giữ nguyên hash của hội thoại Buyer và Organizer đã lưu.
+      canonicalOwner = switch (workspace) {
+        case BUYER -> canonicalOwner;
+        case ORGANIZER -> "organizer:" + canonicalOwner;
+        case ADMIN -> "admin:" + canonicalOwner;
+      };
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonicalOwner.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception error) {
       throw new AssistantProblem(HttpStatus.INTERNAL_SERVER_ERROR, "OWNER_SCOPE_UNAVAILABLE", "Không xác định được phạm vi hội thoại.");
@@ -151,8 +158,8 @@ public class AssistantConversationService {
   }
 
   private TurnResult runTurn(Jwt jwt, String ownerKey, UUID leaseToken, ChatRequest request,
-      ConversationState storedState, Instant deadline, boolean organizer) {
-    ownerKey(jwt, organizer);
+      ConversationState storedState, Instant deadline, AssistantWorkspace workspace) {
+    ownerKey(jwt, workspace);
     if (Thread.currentThread().isInterrupted() || !clock.instant().isBefore(deadline)
         || !conversationStore.isLeaseCurrent(ownerKey, request.getConversationId(), leaseToken)) {
       throw new AssistantProblem(HttpStatus.CONFLICT, "LEASE_LOST", "Hội thoại không còn sẵn sàng cho lượt này.");
@@ -168,7 +175,15 @@ public class AssistantConversationService {
     if (!context.isEmpty()) memory.add(ChatMessageDeserializer.messagesFromJson(boundedContext(context)));
     BuyerAssistantTools buyerTools = null;
     String answer;
-    if (organizer) {
+    if (workspace == AssistantWorkspace.ADMIN) {
+      var tools = new AdminAssistantTools(apiClient, conversationStore, clock, jwt, ownerKey,
+          request.getConversationId(), leaseToken, deadline);
+      var agent = AiServices.builder(AdminAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
+          .tools(tools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
+          .build();
+      String today = LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Ho_Chi_Minh")).toString();
+      answer = agent.chat(request.getMessage(), today);
+    } else if (workspace == AssistantWorkspace.ORGANIZER) {
       var tools = new OrganizerAssistantTools(apiClient, conversationStore, clock, jwt, ownerKey,
           request.getConversationId(), leaseToken, deadline);
       var agent = AiServices.builder(OrganizerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)

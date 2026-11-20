@@ -74,6 +74,8 @@ public class GatewaySecurityConfiguration {
                     .hasRole("ADMIN")
                     .pathMatchers("/api/v1/organizer/**")
                     .hasRole("ORGANIZER")
+                    .pathMatchers("/api/v1/assistant/admin/**")
+                    .hasRole("ADMIN")
                     .pathMatchers("/api/v1/assistant/organizer/**")
                     .hasRole("ORGANIZER")
                     .pathMatchers("/api/v1/assistant/**")

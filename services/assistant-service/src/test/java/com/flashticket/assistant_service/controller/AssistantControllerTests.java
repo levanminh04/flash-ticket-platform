@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.flashticket.assistant_service.AssistantWorkspace;
 import com.flashticket.assistant_service.config.AssistantSecurityConfiguration;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.*;
@@ -50,7 +51,7 @@ class AssistantControllerTests {
     response.setConversationId(request.getConversationId());
     response.setVersion(UUID.randomUUID());
     response.setMessage("Private fixture transcript");
-    when(service.sendMessage(eq(token), any(ChatRequest.class), eq(false))).thenReturn(response);
+    when(service.sendMessage(eq(token), any(ChatRequest.class), eq(AssistantWorkspace.BUYER))).thenReturn(response);
     doAnswer(invocation -> {
       invocation.getArgument(0, Runnable.class).run();
       return null;
@@ -78,7 +79,7 @@ class AssistantControllerTests {
     assertEquals("", frames[2]);
     var capturedRequest = ArgumentCaptor.forClass(ChatRequest.class);
     verify(sseExecutor).execute(any(Runnable.class));
-    verify(service).sendMessage(eq(token), capturedRequest.capture(), eq(false));
+    verify(service).sendMessage(eq(token), capturedRequest.capture(), eq(AssistantWorkspace.BUYER));
     assertEquals(mapper.valueToTree(request), mapper.valueToTree(capturedRequest.getValue()));
   }
 
@@ -112,7 +113,7 @@ class AssistantControllerTests {
     }).when(sseExecutor).execute(any(Runnable.class));
     var knownError = new AssistantProblem(HttpStatus.CONFLICT, "CONVERSATION_BUSY", "Private fixture detail");
     var unexpectedError = new IllegalStateException("Private fixture exception");
-    doThrow(knownError, unexpectedError).when(service).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(false));
+    doThrow(knownError, unexpectedError).when(service).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER));
     for (String code : List.of("CONVERSATION_BUSY", "INTERNAL_ERROR")) {
       var pending = mvc.perform(streamRequest).andExpect(request().asyncStarted()).andReturn();
       var completed = mvc.perform(asyncDispatch(pending)).andExpect(status().isOk())
@@ -129,7 +130,7 @@ class AssistantControllerTests {
           mapper.readTree(frames[1].substring(errorPrefix.length())));
       assertEquals("", frames[2]);
     }
-    verify(service, times(2)).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(false));
+    verify(service, times(2)).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER));
   }
 
   @Test
@@ -138,7 +139,7 @@ class AssistantControllerTests {
     var auth = jwt().jwt(token).authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
     var request = new ChatRequest(); request.setConversationId(UUID.randomUUID()); request.setVersion(UUID.randomUUID()); request.setRequestId(UUID.randomUUID()); request.setMessage("Hello");
     assertDoesNotThrow(() -> mvc.perform(post("/api/v1/assistant/messages").with(auth).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request))).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store")));
-    var captured = ArgumentCaptor.forClass(Jwt.class); verify(service).sendMessage(captured.capture(), any(), eq(false)); assertEquals("real-buyer", captured.getValue().getSubject());
+    var captured = ArgumentCaptor.forClass(Jwt.class); verify(service).sendMessage(captured.capture(), any(), eq(AssistantWorkspace.BUYER)); assertEquals("real-buyer", captured.getValue().getSubject());
     clearInvocations(service);
     for (String message : List.of(" ", "x".repeat(2001))) {
       request.setMessage(message);
@@ -153,11 +154,11 @@ class AssistantControllerTests {
   void returnsSafeNoStoreProblems() {
     var auth = jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
     for (var status : List.of(HttpStatus.CONFLICT, HttpStatus.GONE, HttpStatus.TOO_MANY_REQUESTS, HttpStatus.SERVICE_UNAVAILABLE, HttpStatus.GATEWAY_TIMEOUT)) {
-      doThrow(new AssistantProblem(status, "SAFE_CODE", "Thông báo an toàn")).when(service).getConversation(any(), eq(false));
+      doThrow(new AssistantProblem(status, "SAFE_CODE", "Thông báo an toàn")).when(service).getConversation(any(), eq(AssistantWorkspace.BUYER));
       var result = assertDoesNotThrow(() -> mvc.perform(get("/api/v1/assistant/conversations/current").with(auth)).andExpect(status().is(status.value())).andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.code").value("SAFE_CODE")).andReturn());
       assertFalse(new String(result.getResponse().getContentAsByteArray(), java.nio.charset.StandardCharsets.UTF_8).contains("fixture-token"));
     }
-    doThrow(new IllegalStateException("Bearer private-secret mail@example.test")).when(service).getConversation(any(), eq(false));
+    doThrow(new IllegalStateException("Bearer private-secret mail@example.test")).when(service).getConversation(any(), eq(AssistantWorkspace.BUYER));
     var result = assertDoesNotThrow(() -> mvc.perform(get("/api/v1/assistant/conversations/current").with(auth)).andExpect(status().isInternalServerError()).andReturn());
     assertFalse(new String(result.getResponse().getContentAsByteArray(), java.nio.charset.StandardCharsets.UTF_8).contains("private-secret"));
     assertDoesNotThrow(() -> mvc.perform(post("/api/v1/assistant/messages").with(auth).contentType(MediaType.APPLICATION_JSON).content("{broken secret}")).andExpect(status().isBadRequest()).andExpect(header().string("Cache-Control", "no-store")));

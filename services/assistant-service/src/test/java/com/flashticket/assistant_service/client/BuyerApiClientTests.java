@@ -8,6 +8,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.flashticket.assistant_service.AssistantWorkspace;
 import com.flashticket.assistant_service.config.AssistantConfiguration;
 import com.flashticket.assistant_service.dto.EventSearchRequest;
 import com.flashticket.assistant_service.exception.AssistantProblem;
@@ -227,6 +228,76 @@ class BuyerApiClientTests {
     status = 404;
     var missing = assertThrows(AssistantProblem.class, () -> client.getOrganizerEventSales(jwt, eventId, null, null));
     assertEquals(404, missing.getStatus().value());
+  }
+
+  @Test
+  void readsOnlyAllowedAdminReports() {
+    var jwt = Jwt.withTokenValue("admin-token").header("alg", "RS256").subject("admin")
+        .expiresAt(Instant.now().plusSeconds(300)).build();
+    LocalDate from = LocalDate.parse("2026-11-02");
+    LocalDate to = LocalDate.parse("2026-11-08");
+    body = """
+        {"soldRevenue":"9007199254740993","soldTicketCount":4,"customerEmail":"private@example.test"}
+        """;
+    var summary = client.getPlatformSalesSummary(jwt, from, to);
+    assertEquals("9007199254740993", summary.getSoldRevenue());
+    assertFalse(JsonMapper.builder().build().writeValueAsString(summary).contains("customerEmail"));
+    assertEquals("/api/v1/admin/sales/summary", path);
+    assertEquals("from=2026-11-02&to=2026-11-08", query);
+    assertEquals("GET", method);
+    assertEquals("Bearer admin-token", authorization);
+
+    body = "{\"groupBy\":\"WEEK\",\"items\":[]}";
+    assertEquals("WEEK", client.getPlatformSalesTrend(jwt, from, to, "WEEK").getGroupBy());
+    assertEquals("/api/v1/admin/sales/chart", path);
+    assertEquals("from=2026-11-02&to=2026-11-08&groupBy=WEEK", query);
+
+    body = """
+        {"items":[{"eventId":"%s","soldRevenue":"120000"}]}
+        """.formatted(eventId);
+    assertEquals(eventId, client.getPlatformTopEvents(jwt, null, null).getItems().getFirst().getEventId());
+    assertEquals("/api/v1/admin/events/sales-statistics", path);
+    assertEquals("page=0&size=5&sortBy=soldRevenue&direction=DESC", query);
+
+    body = """
+        {"eventId":"%s","byTicketType":[%s{"soldQuantity":11}]}
+        """.formatted(eventId, "{\"soldQuantity\":1},".repeat(10));
+    var eventSales = client.getAdminEventSales(jwt, eventId, null, to);
+    assertEquals("/api/v1/events/" + eventId + "/sales-statistics", path);
+    assertEquals("to=2026-11-08", query);
+    assertTrue(eventSales.isTicketTypesTruncated());
+    assertEquals(10, eventSales.getByTicketType().size());
+    assertEquals(11L, eventSales.getByTicketType().getFirst().getSoldQuantity());
+
+    body = "{\"soldRevenue\":\"120000\",\"organizerSubject\":\"private\"}";
+    var organizerSales = client.getAdminOrganizerSalesSummary(jwt, orderId, from, null);
+    assertEquals("120000", organizerSales.getSoldRevenue());
+    assertFalse(JsonMapper.builder().build().writeValueAsString(organizerSales).contains("organizerSubject"));
+    assertEquals("/api/v1/organizers/" + orderId + "/sales/summary", path);
+    assertEquals("from=2026-11-02", query);
+
+    body = """
+        {"items":[{"eventId":"%s","title":"Workshop","status":"PENDING_APPROVAL",
+        "organizerSubject":"private","description":"private"}],"nextCursor":"next_1"}
+        """.formatted(eventId);
+    var pending = client.listAdminEventsPendingReview(jwt, null);
+    assertEquals("/api/v1/admin/events", path);
+    assertEquals("status=PENDING_APPROVAL&size=5", query);
+    assertEquals(eventId, pending.getItems().getFirst().getEventId());
+    assertFalse(JsonMapper.builder().build().writeValueAsString(pending).contains("private"));
+    client.listAdminEventsPendingReview(jwt, pending.getNextCursor());
+    assertEquals("status=PENDING_APPROVAL&size=5&cursor=next_1", query);
+    assertEquals(7, requests);
+
+    URI adminReport = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/api/v1/admin/sales/summary");
+    URI otherOrigin = URI.create("http://localhost:" + server.getAddress().getPort() + "/api/v1/admin/sales/summary");
+    assertEquals("DOWNSTREAM_PATH_NOT_ALLOWED", assertThrows(AssistantProblem.class, () ->
+        ReflectionTestUtils.invokeMethod(client, "get", "fixture", adminReport, jwt, Object.class,
+            AssistantWorkspace.BUYER)).getCode());
+    assertEquals("DOWNSTREAM_PATH_NOT_ALLOWED", assertThrows(AssistantProblem.class, () ->
+        ReflectionTestUtils.invokeMethod(client, "get", "fixture", otherOrigin, jwt, Object.class,
+            AssistantWorkspace.ADMIN)).getCode());
+    assertEquals(7, requests);
   }
 
   @Test

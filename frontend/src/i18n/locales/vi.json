@@ -161,6 +161,23 @@
   },
   "chatbot": {
     "organizerTitle": "Trợ lý nhà tổ chức",
+    "adminTitle": "Trợ lý quản trị",
+    "switchToAdmin": "Chat Admin",
+    "adminOnly": "Trợ lý chỉ hỗ trợ tài khoản quản trị.",
+    "adminWelcome": "Hỏi về doanh số bán vé toàn hệ thống hoặc các sự kiện đang chờ duyệt.",
+    "adminSales": "Báo cáo doanh số",
+    "adminReview": "Sự kiện chờ duyệt",
+    "adminPrompts": {
+      "salesSummary": "Doanh số tháng này",
+      "salesSummaryPrompt": "Tháng này toàn hệ thống bán được bao nhiêu vé và doanh thu bán vé là bao nhiêu?",
+      "salesTrend": "Xu hướng bán vé",
+      "salesTrendPrompt": "Cho tôi xem xu hướng bán vé toàn hệ thống theo tuần trong tháng này.",
+      "topEvents": "Top 5 sự kiện",
+      "topEventsPrompt": "Top 5 sự kiện có doanh thu bán vé cao nhất tuần trước là những sự kiện nào?",
+      "pendingEvents": "Sự kiện chờ duyệt",
+      "pendingEventsPrompt": "Liệt kê các sự kiện đang chờ duyệt."
+    },
+    "loadingAccount": "Đang kiểm tra đăng nhập…",
     "switchToBuyer": "Chat mua vé",
     "switchToOrganizer": "Chat thống kê",
     "organizerOnly": "Trợ lý chỉ hỗ trợ tài khoản nhà tổ chức.",

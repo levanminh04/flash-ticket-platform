@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
-import { ArrowLeftRight, LayoutGrid, LoaderCircle, MessageCircle, SendHorizontal, X } from "lucide-react";
+import { ArrowLeftRight, CalendarCheck, LayoutGrid, LoaderCircle, MessageCircle, SendHorizontal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAssistantConversation } from "./AssistantConversationProvider";
 import AssistantPurchaseForm from "./AssistantPurchaseForm";
@@ -10,6 +10,12 @@ import { orderIdPattern } from "../common/OrderLookupForm";
 import { formatAssistantMoney } from "./assistantMoney";
 
 export const CHATBOT_PROMPT_EVENT = "flashTicket:chatbotPrompt";
+
+const workspaceLinks = [
+  { target: "buyer", role: "BUYER", href: "/chatbot", label: "chatbot.switchToBuyer" },
+  { target: "organizer", role: "ORGANIZER", href: "/organizer/chatbot", label: "chatbot.switchToOrganizer" },
+  { target: "admin", role: "ADMIN", href: "/admin/chatbot", label: "chatbot.switchToAdmin" },
+] as const;
 
 export default function FloatingChatbot({ fullPage = false }: { fullPage?: boolean }) {
   const { keycloak } = useKeycloak();
@@ -22,9 +28,10 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const messages = useRef<HTMLDivElement>(null);
   const visible = fullPage || opened;
   const { workspace, allowed, open, conversation, busy, turnPhase, ownerScope } = assistant;
+  const isBuyer = workspace === "buyer";
   const isOrganizer = workspace === "organizer";
-  const title = isOrganizer ? t("chatbot.organizerTitle") : "FlashTicket Assistant";
-  const canSwitchWorkspace = fullPage && allowed && keycloak.hasRealmRole(isOrganizer ? "BUYER" : "ORGANIZER");
+  const isAdmin = workspace === "admin";
+  const title = isAdmin ? t("chatbot.adminTitle") : isOrganizer ? t("chatbot.organizerTitle") : "FlashTicket Assistant";
 
   useEffect(() => { setInput(""); }, [ownerScope, conversation?.conversationId]);
   useEffect(() => {
@@ -57,40 +64,54 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
     await assistant.send(input);
     // Giữ nội dung để retry cùng requestId khi kết quả chưa rõ.
   };
-  const quickPrompts = isOrganizer
+  const quickPrompts = isAdmin
+    ? ["salesSummary", "salesTrend", "topEvents", "pendingEvents"]
+    : isOrganizer
     ? ["salesSummary", "topEvents", "pendingEvents"]
     : ["quickHot", "quickUpcoming", "quickLocation", "quickTicketTypes", "quickCheckOrders", "quickGuide"];
-  const promptNamespace = isOrganizer ? "chatbot.organizerPrompts" : "chatbot";
+  const promptNamespace = isBuyer ? "chatbot" : "chatbot." + workspace + "Prompts";
   return <div className={fullPage ? "assistant-full-page" : "floating-chatbot"} ref={root}>
     {visible && <section className={fullPage ? "chatbot-shell" : "floating-chatbot-panel"} aria-label={title}>
       <header className="floating-chatbot-header">
-        {isOrganizer ? <h1>{title}</h1> : <strong>{title}</strong>}
+        {isBuyer ? <strong>{title}</strong> : <h1>{title}</h1>}
         <div className="assistant-workspace-actions">
           {isOrganizer && <Link to="/organizer">
             <LayoutGrid size={16} aria-hidden="true" />
             {t("organizer.dashboard")}
           </Link>}
-          {canSwitchWorkspace && <Link to={isOrganizer ? "/chatbot" : "/organizer/chatbot"}>
-            <ArrowLeftRight size={16} aria-hidden="true" />
-            {t(isOrganizer ? "chatbot.switchToBuyer" : "chatbot.switchToOrganizer")}
-          </Link>}
+          {isAdmin && <>
+            <Link to="/admin/sales">
+              <LayoutGrid size={16} aria-hidden="true" />
+              {t("chatbot.adminSales")}
+            </Link>
+            <Link to="/admin/events">
+              <CalendarCheck size={16} aria-hidden="true" />
+              {t("chatbot.adminReview")}
+            </Link>
+          </>}
+          {fullPage && allowed && workspaceLinks
+            .filter(({ target, role }) => target !== workspace && keycloak.hasRealmRole(role))
+            .map(({ target, href, label }) => <Link key={target} to={href}>
+              <ArrowLeftRight size={16} aria-hidden="true" />
+              {t(label)}
+            </Link>)}
           {allowed && <button type="button" onClick={() => void assistant.reset()} disabled={!conversation}>Hội thoại mới</button>}
           {!fullPage && <><Link to="/chatbot">Mở rộng</Link><button type="button" onClick={() => setOpened(false)} aria-label={t("chatbot.close")}><X size={16} /></button></>}
         </div>
       </header>
       {!allowed ? <div className="assistant-status">
         <p>{keycloak.authenticated
-          ? isOrganizer ? t("chatbot.organizerOnly") : "Trợ lý hiện chỉ dành cho tài khoản BUYER."
+          ? isAdmin ? t("chatbot.adminOnly") : isOrganizer ? t("chatbot.organizerOnly") : "Trợ lý hiện chỉ dành cho tài khoản BUYER."
           : t("chatbot.loginRequired")}</p>
         {!keycloak.authenticated && <button type="button" onClick={() => void keycloak.login()}>{t("auth.signIn")}</button>}
       </div> : <>
         <div className={fullPage ? "chatbot-messages" : "floating-chatbot-messages"} ref={messages} aria-live="polite" aria-busy={busy}>
-          {!conversation?.messages.length && <><p>{t(isOrganizer ? "chatbot.organizerWelcome" : "chatbot.welcomeMessage")}</p><p>Không gửi mật khẩu, token hoặc thông tin nhạy cảm vào chat.</p></>}
+          {!conversation?.messages.length && <><p>{t(isAdmin ? "chatbot.adminWelcome" : isOrganizer ? "chatbot.organizerWelcome" : "chatbot.welcomeMessage")}</p><p>Không gửi mật khẩu, token hoặc thông tin nhạy cảm vào chat.</p></>}
           {conversation?.messages.map(message => <article key={message.id} className={`floating-msg floating-msg--${message.role}`}>
             <div className="floating-msg-body">
               <p className="assistant-message-text">{message.text}</p>
-              {message.events?.map(event => <Link className="assistant-event-link" key={event.eventId} to={`/event/${encodeURIComponent(event.eventId)}`}>{event.title}</Link>)}
-              {message.role === "assistant" && Array.isArray(message.orders) && (message.orders.length === 0
+              {isBuyer && message.events?.map(event => <Link className="assistant-event-link" key={event.eventId} to={`/event/${encodeURIComponent(event.eventId)}`}>{event.title}</Link>)}
+              {isBuyer && message.role === "assistant" && Array.isArray(message.orders) && (message.orders.length === 0
                 ? <div className="assistant-order-card">
                   <p>{t("chatbot.orderSnapshot.empty")}</p>
                   <Link className="assistant-card-link" to="/my-orders">{t("chatbot.orderSnapshot.myOrders")}</Link>
@@ -110,7 +131,7 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
                     <Link className="assistant-card-link" to={`/my-orders?orderId=${encodeURIComponent(order.orderId)}`}>{t("chatbot.orderSnapshot.view")}</Link>
                   </div>;
                 }))}
-              {!isOrganizer && message.draft && <AssistantPurchaseForm key={`${ownerScope}:${conversation.conversationId}:${message.draft.draftId}`} draft={message.draft} conversationId={conversation.conversationId} />}
+              {isBuyer && message.draft && <AssistantPurchaseForm key={`${ownerScope}:${conversation.conversationId}:${message.draft.draftId}`} draft={message.draft} conversationId={conversation.conversationId} />}
               <time className="floating-msg-time" dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</time>
             </div>
           </article>)}

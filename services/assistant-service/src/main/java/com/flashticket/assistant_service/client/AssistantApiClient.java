@@ -1,5 +1,6 @@
 package com.flashticket.assistant_service.client;
 
+import com.flashticket.assistant_service.AssistantWorkspace;
 import com.flashticket.assistant_service.dto.*;
 import com.flashticket.assistant_service.exception.AssistantProblem;
 import java.io.IOException;
@@ -50,7 +51,7 @@ public class AssistantApiClient {
         .queryParamIfPresent("maxPrice", Optional.ofNullable(request.getMaxPrice()))
         .queryParamIfPresent("cursor", Optional.ofNullable(request.getCursor()).filter(value -> !value.isBlank()))
         .build().encode().toUri();
-    EventPage page = get("searchEvents", uri, jwt, EventPage.class);
+    EventPage page = get("searchEvents", uri, jwt, EventPage.class, AssistantWorkspace.BUYER);
     if (page.getItems() == null || page.getItems().size() > 5) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Danh sách sự kiện không hợp lệ.");
     }
@@ -63,7 +64,7 @@ public class AssistantApiClient {
 
   public EventView getEvent(Jwt jwt, UUID eventId) {
     EventView event = minimizeEvent(get("getEvent", UriComponentsBuilder.fromUri(eventBaseUrl)
-        .path("/api/v1/events/" + eventId).build().toUri(), jwt, EventView.class));
+        .path("/api/v1/events/" + eventId).build().toUri(), jwt, EventView.class, AssistantWorkspace.BUYER));
     if (!eventId.equals(event.getEventId()) || jsonMapper.writeValueAsBytes(event).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được thông tin sự kiện phù hợp.");
     }
@@ -72,7 +73,7 @@ public class AssistantApiClient {
 
   public AvailabilityReadView getAvailability(Jwt jwt, UUID eventId) {
     AvailabilityReadView availability = get("getAvailability", UriComponentsBuilder.fromUri(bookingBaseUrl)
-        .path("/api/v1/events/" + eventId + "/availability").build().toUri(), jwt, AvailabilityReadView.class);
+        .path("/api/v1/events/" + eventId + "/availability").build().toUri(), jwt, AvailabilityReadView.class, AssistantWorkspace.BUYER);
     if (!eventId.equals(availability.getEventId()) || availability.getAsOf() == null || availability.getTicketTypes() == null
         || jsonMapper.writeValueAsBytes(availability).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được tồn vé phù hợp.");
@@ -84,7 +85,7 @@ public class AssistantApiClient {
     OrderReadPage result = get("getMyOrders", UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/orders")
         .queryParam("page", page).queryParam("size", 5)
         .queryParamIfPresent("state", Optional.ofNullable(state).filter(value -> !value.isBlank()))
-        .build().encode().toUri(), jwt, OrderReadPage.class);
+        .build().encode().toUri(), jwt, OrderReadPage.class, AssistantWorkspace.BUYER);
     if (result.getItems() == null || result.getItems().size() > 5 || jsonMapper.writeValueAsBytes(result).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được danh sách đơn phù hợp.");
     }
@@ -93,7 +94,7 @@ public class AssistantApiClient {
 
   public OrderReadView getMyOrder(Jwt jwt, UUID orderId) {
     OrderReadView order = get("getMyOrder", UriComponentsBuilder.fromUri(bookingBaseUrl)
-        .path("/api/v1/orders/" + orderId).build().toUri(), jwt, OrderReadView.class);
+        .path("/api/v1/orders/" + orderId).build().toUri(), jwt, OrderReadView.class, AssistantWorkspace.BUYER);
     if (!orderId.equals(order.getOrderId()) || jsonMapper.writeValueAsBytes(order).length > 16384) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được đơn phù hợp.");
     }
@@ -106,7 +107,7 @@ public class AssistantApiClient {
         .queryParamIfPresent("from", Optional.ofNullable(from))
         .queryParamIfPresent("to", Optional.ofNullable(to))
         .build().encode().toUri();
-    return get("getOrganizerSalesSummary", uri, jwt, OrganizerSalesSummary.class);
+    return get("getOrganizerSalesSummary", uri, jwt, OrganizerSalesSummary.class, AssistantWorkspace.ORGANIZER);
   }
 
   public OrganizerEventSalesPage getOrganizerTopEvents(Jwt jwt, LocalDate from, LocalDate to) {
@@ -117,7 +118,7 @@ public class AssistantApiClient {
         .queryParam("page", 0).queryParam("size", 5)
         .queryParam("sortBy", "soldRevenue").queryParam("direction", "DESC")
         .build().encode().toUri();
-    return get("getOrganizerTopEvents", uri, jwt, OrganizerEventSalesPage.class);
+    return get("getOrganizerTopEvents", uri, jwt, OrganizerEventSalesPage.class, AssistantWorkspace.ORGANIZER);
   }
 
   public OrganizerOwnedEventPage listOrganizerEvents(Jwt jwt, String status, String cursor) {
@@ -125,13 +126,13 @@ public class AssistantApiClient {
         .queryParam("size", 5);
     if (status != null && !status.isBlank()) uri.queryParam("status", status);
     if (cursor != null && !cursor.isBlank()) uri.queryParam("cursor", cursor);
-    return get("listOrganizerEvents", uri.build().encode().toUri(), jwt, OrganizerOwnedEventPage.class);
+    return get("listOrganizerEvents", uri.build().encode().toUri(), jwt, OrganizerOwnedEventPage.class, AssistantWorkspace.ORGANIZER);
   }
 
   public OrganizerEventView getOrganizerEvent(Jwt jwt, UUID eventId) {
     URI uri = UriComponentsBuilder.fromUri(eventBaseUrl)
         .path("/api/v1/organizer/events/" + eventId).build().toUri();
-    return get("getOrganizerEvent", uri, jwt, OrganizerEventView.class);
+    return get("getOrganizerEvent", uri, jwt, OrganizerEventView.class, AssistantWorkspace.ORGANIZER);
   }
 
   public OrganizerSalesTrend getOrganizerSalesTrend(Jwt jwt, LocalDate from, LocalDate to, String groupBy) {
@@ -139,7 +140,7 @@ public class AssistantApiClient {
         .pathSegment("api", "v1", "organizers", jwt.getSubject(), "sales", "chart")
         .queryParam("from", from).queryParam("to", to).queryParam("groupBy", groupBy)
         .build().encode().toUri();
-    return get("getOrganizerSalesTrend", uri, jwt, OrganizerSalesTrend.class);
+    return get("getOrganizerSalesTrend", uri, jwt, OrganizerSalesTrend.class, AssistantWorkspace.ORGANIZER);
   }
 
   public OrganizerEventSalesSummary getOrganizerEventSales(Jwt jwt, UUID eventId, LocalDate from, LocalDate to) {
@@ -148,7 +149,74 @@ public class AssistantApiClient {
         .queryParamIfPresent("from", Optional.ofNullable(from))
         .queryParamIfPresent("to", Optional.ofNullable(to))
         .build().encode().toUri();
-    var summary = get("getOrganizerEventSales", uri, jwt, OrganizerEventSalesSummary.class);
+    return projectEventSales(get("getOrganizerEventSales", uri, jwt, OrganizerEventSalesSummary.class,
+        AssistantWorkspace.ORGANIZER));
+  }
+
+  public OrganizerSalesSummary getPlatformSalesSummary(Jwt jwt, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/admin/sales/summary")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .build().encode().toUri();
+    return get("getPlatformSalesSummary", uri, jwt, OrganizerSalesSummary.class, AssistantWorkspace.ADMIN);
+  }
+
+  public OrganizerSalesTrend getPlatformSalesTrend(Jwt jwt, LocalDate from, LocalDate to, String groupBy) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/admin/sales/chart")
+        .queryParam("from", from).queryParam("to", to).queryParam("groupBy", groupBy)
+        .build().encode().toUri();
+    return get("getPlatformSalesTrend", uri, jwt, OrganizerSalesTrend.class, AssistantWorkspace.ADMIN);
+  }
+
+  public OrganizerEventSalesPage getPlatformTopEvents(Jwt jwt, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl).path("/api/v1/admin/events/sales-statistics")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .queryParam("page", 0).queryParam("size", 5)
+        .queryParam("sortBy", "soldRevenue").queryParam("direction", "DESC")
+        .build().encode().toUri();
+    return get("getPlatformTopEvents", uri, jwt, OrganizerEventSalesPage.class, AssistantWorkspace.ADMIN);
+  }
+
+  public OrganizerEventSalesSummary getAdminEventSales(Jwt jwt, UUID eventId, LocalDate from, LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .pathSegment("api", "v1", "events", eventId.toString(), "sales-statistics")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .build().encode().toUri();
+    return projectEventSales(get("getAdminEventSales", uri, jwt, OrganizerEventSalesSummary.class,
+        AssistantWorkspace.ADMIN));
+  }
+
+  public OrganizerSalesSummary getAdminOrganizerSalesSummary(Jwt jwt, UUID organizerSubject, LocalDate from,
+      LocalDate to) {
+    URI uri = UriComponentsBuilder.fromUri(bookingBaseUrl)
+        .pathSegment("api", "v1", "organizers", organizerSubject.toString(), "sales", "summary")
+        .queryParamIfPresent("from", Optional.ofNullable(from))
+        .queryParamIfPresent("to", Optional.ofNullable(to))
+        .build().encode().toUri();
+    return get("getAdminOrganizerSalesSummary", uri, jwt, OrganizerSalesSummary.class, AssistantWorkspace.ADMIN);
+  }
+
+  public OrganizerOwnedEventPage listAdminEventsPendingReview(Jwt jwt, String cursor) {
+    var builder = UriComponentsBuilder.fromUri(eventBaseUrl).path("/api/v1/admin/events")
+        .queryParam("status", "PENDING_APPROVAL").queryParam("size", 5);
+    URI uri = cursor == null || cursor.isBlank() ? builder.build().toUri()
+        : builder.queryParam("cursor", "{cursor}").encode().buildAndExpand(cursor).toUri();
+    var page = get("listAdminEventsPendingReview", uri, jwt, OrganizerOwnedEventPage.class, AssistantWorkspace.ADMIN);
+    if (page.getItems() == null || page.getItems().size() > 5) {
+      throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Danh sách sự kiện không hợp lệ.");
+    }
+    for (OrganizerEventView event : page.getItems()) {
+      event.setSaleStartsAt(null);
+      event.setSaleEndsAt(null);
+      event.setApprovedAt(null);
+    }
+    return page;
+  }
+
+
+  private OrganizerEventSalesSummary projectEventSales(OrganizerEventSalesSummary summary) {
     var ticketTypes = summary.getByTicketType();
     if (ticketTypes != null) {
       summary.setTicketTypesTruncated(ticketTypes.size() > 10);
@@ -160,16 +228,15 @@ public class AssistantApiClient {
     return summary;
   }
 
-  private <T> T get(String operation, URI uri, Jwt jwt, Class<T> responseType) {
+  private <T> T get(String operation, URI uri, Jwt jwt, Class<T> responseType, AssistantWorkspace workspace) {
     // Base URL chỉ là origin cố định; model không thể chọn host/path/header.
     String uuid = "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}";
-    String path = uri.getPath();
     String organizerPath = jwt == null || jwt.getSubject() == null ? null
         : "/api/v1/organizers/" + UriUtils.encodePathSegment(jwt.getSubject(), StandardCharsets.UTF_8);
-    String rawPath = uri.getRawPath();
-    boolean organizerReport = organizerPath != null && (rawPath.equals(organizerPath + "/sales/summary")
-        || rawPath.equals(organizerPath + "/sales/chart")
-        || rawPath.equals(organizerPath + "/events/sales-statistics"));
+    String path = uri.getRawPath();
+    boolean organizerReport = organizerPath != null && (path.equals(organizerPath + "/sales/summary")
+        || path.equals(organizerPath + "/sales/chart")
+        || path.equals(organizerPath + "/events/sales-statistics"));
     boolean allowed = false;
     for (URI base : List.of(eventBaseUrl, bookingBaseUrl)) {
       if (base.getHost() == null || base.getUserInfo() != null || base.getQuery() != null || base.getFragment() != null
@@ -178,11 +245,20 @@ public class AssistantApiClient {
         throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_CONFIGURATION_INVALID", "Cấu hình dịch vụ chưa sẵn sàng.");
       }
       if (base.getScheme().equals(uri.getScheme()) && base.getRawAuthority().equals(uri.getRawAuthority())) {
-        if (base.equals(eventBaseUrl) && (path.matches("/api/v1/events(?:/" + uuid + ")?")
-            || path.matches("/api/v1/organizer/events(?:/" + uuid + ")?"))) allowed = true;
-        if (base.equals(bookingBaseUrl) && (path.matches("/api/v1/orders(?:/" + uuid + ")?")
-            || path.matches("/api/v1/events/" + uuid + "/availability") || organizerReport
-            || path.matches("/api/v1/organizer/events/" + uuid + "/sales-summary"))) allowed = true;
+        allowed |= switch (workspace) {
+          case BUYER -> (base.equals(eventBaseUrl) && path.matches("/api/v1/events(?:/" + uuid + ")?"))
+              || (base.equals(bookingBaseUrl) && (path.matches("/api/v1/orders(?:/" + uuid + ")?")
+                  || path.matches("/api/v1/events/" + uuid + "/availability")));
+          case ORGANIZER -> (base.equals(eventBaseUrl) && path.matches("/api/v1/organizer/events(?:/" + uuid + ")?"))
+              || (base.equals(bookingBaseUrl) && (organizerReport
+                  || path.matches("/api/v1/organizer/events/" + uuid + "/sales-summary")));
+          case ADMIN -> (base.equals(eventBaseUrl) && path.equals("/api/v1/admin/events"))
+              || (base.equals(bookingBaseUrl) && (path.equals("/api/v1/admin/sales/summary")
+                  || path.equals("/api/v1/admin/sales/chart")
+                  || path.equals("/api/v1/admin/events/sales-statistics")
+                  || path.matches("/api/v1/events/" + uuid + "/sales-statistics")
+                  || path.matches("/api/v1/organizers/" + uuid + "/sales/summary")));
+        };
       }
     }
     if (!allowed || uri.getUserInfo() != null || uri.getFragment() != null) {

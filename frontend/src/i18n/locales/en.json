@@ -161,6 +161,23 @@
   },
   "chatbot": {
     "organizerTitle": "Organizer Assistant",
+    "adminTitle": "Admin Assistant",
+    "switchToAdmin": "Admin chat",
+    "adminOnly": "The assistant is only available to administrators.",
+    "adminWelcome": "Ask about platform ticket sales or events awaiting approval.",
+    "adminSales": "Sales dashboard",
+    "adminReview": "Events awaiting approval",
+    "adminPrompts": {
+      "salesSummary": "Sales this month",
+      "salesSummaryPrompt": "How many tickets were sold across the platform this month, and what was the total ticket revenue?",
+      "salesTrend": "Sales trend",
+      "salesTrendPrompt": "Show this month's platform ticket sales by week.",
+      "topEvents": "Top 5 events",
+      "topEventsPrompt": "Which five events earned the most ticket revenue last week?",
+      "pendingEvents": "Events awaiting approval",
+      "pendingEventsPrompt": "List the events awaiting approval."
+    },
+    "loadingAccount": "Checking sign-in…",
     "switchToBuyer": "Chat to buy tickets",
     "switchToOrganizer": "Chat about sales",
     "organizerOnly": "The assistant is only available to event organizers.",

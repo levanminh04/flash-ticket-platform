@@ -3,12 +3,12 @@ import axiosClient from "../lib/axiosClient";
 import keycloak from "../lib/keycloak";
 import type { ChatRequest, ConversationView, ResetConversationRequest } from "../types/assistantContract";
 
-export type AssistantWorkspace = "buyer" | "organizer";
+export type AssistantWorkspace = "buyer" | "organizer" | "admin";
 
 export function assistantOwnerScope(workspace: AssistantWorkspace = "buyer"): string | null {
   if (!keycloak.authenticated || !keycloak.tokenParsed?.iss || !keycloak.tokenParsed?.sub) return null;
   const scope = [import.meta.env.VITE_API_GATEWAY_URL || "", keycloak.tokenParsed.iss, keycloak.tokenParsed.sub];
-  if (workspace === "organizer") scope.push(workspace);
+  if (workspace !== "buyer") scope.push(workspace);
   return JSON.stringify(scope);
 }
 
@@ -24,6 +24,7 @@ function requestConfig(signal?: AbortSignal) {
 const roots: Record<AssistantWorkspace, string> = {
   buyer: "/api/v1/assistant",
   organizer: "/api/v1/assistant/organizer",
+  admin: "/api/v1/assistant/admin",
 };
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 

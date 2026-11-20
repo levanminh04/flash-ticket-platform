@@ -58,7 +58,7 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
   const { keycloak, initialized } = useKeycloak();
   const queryClient = useQueryClient();
   const owner = assistantOwnerScope(workspace);
-  const allowed = Boolean(initialized && owner && keycloak.hasRealmRole(workspace === "organizer" ? "ORGANIZER" : "BUYER"));
+  const allowed = Boolean(initialized && owner && keycloak.hasRealmRole(workspace.toUpperCase()));
   const [state, setState] = useState<ScopedState>({ owner, conversation: null, busy: false, error: "", notice: "" });
   const current = useRef(state);
   const generation = useRef(0);

@@ -218,6 +218,30 @@ class GatewaySecurityConfigurationTests {
   }
 
   @Test
+  void requiresAdminForAdminAssistantEndpoints() {
+    String root = "/api/v1/assistant/admin";
+    var admin = authenticatedAs("ROLE_ADMIN");
+    var buyer = authenticatedAs("ROLE_BUYER");
+    var organizer = authenticatedAs("ROLE_ORGANIZER");
+    var both = UsernamePasswordAuthenticationToken.authenticated(
+        "subject-1", "N/A", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"),
+            new SimpleGrantedAuthority("ROLE_BUYER")));
+    for (String endpoint : List.of("/messages", "/messages/stream", "/conversations/current",
+        "/conversations/reset")) {
+      String path = root + endpoint;
+      assertTrue(reachesDownstream(HttpMethod.POST, path, admin), path);
+      assertTrue(reachesDownstream(HttpMethod.POST, path, both), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, buyer), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, organizer), path);
+      assertFalse(reachesDownstream(HttpMethod.POST, path, null), path);
+    }
+    assertTrue(reachesDownstream(HttpMethod.GET, root + "/conversations/current", admin));
+    assertFalse(reachesDownstream(HttpMethod.GET, root + "/conversations/current", buyer));
+    assertFalse(reachesDownstream(HttpMethod.POST, "/api/v1/assistant/messages/stream", admin));
+    assertTrue(reachesDownstream(HttpMethod.POST, "/api/v1/assistant/messages/stream", both));
+  }
+
+  @Test
   void permitsAssistantPreflightWithoutPublicizingChat() {
     assertTrue(reachesDownstream(HttpMethod.OPTIONS, "/api/v1/assistant/messages", null));
     assertFalse(reachesDownstream(HttpMethod.GET, "/api/v1/assistant/conversations/current", null));

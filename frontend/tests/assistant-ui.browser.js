@@ -26,7 +26,9 @@ async (page, origin = "http://127.0.0.1:5173") => {
   const current = `${api}/conversations/current`;
   const organizerApi = `${api}/organizer`;
   const organizerConversation = { ...conversation, conversationId: "00000000-0000-4000-8000-000000000013", messages: [] };
-  let organizerReads = 0;
+  const adminApi = api + "/admin";
+  const adminConversation = { ...conversation, conversationId: "00000000-0000-4000-8000-000000000015", messages: [] };
+  let organizerReads = 0, adminReads = 0, adminOpens = 0, adminAborts = 0;
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
 
   await context.route("**/*", async route => {
@@ -52,6 +54,11 @@ async (page, origin = "http://127.0.0.1:5173") => {
       if (method === "GET") organizerReads++;
       return reply(organizerConversation);
     }
+    if (path === adminApi + "/conversations/current") {
+      if (method === "GET") adminReads++;
+      if (method === "POST") adminOpens++;
+      return reply(adminConversation);
+    }
     if (path === "/api/v1/orders" && method === "POST") {
       const body = request.postDataJSON();
       bookings.push({ body, key: request.headers()["idempotency-key"] });
@@ -72,10 +79,14 @@ async (page, origin = "http://127.0.0.1:5173") => {
       assert(nextMessage, "Unscheduled SSE request");
       const fixture = nextMessage;
       nextMessage = null;
-      const scopedConversation = path.startsWith(organizerApi) ? organizerConversation : conversation;
+      const scopedConversation = path.startsWith(adminApi) ? adminConversation
+        : path.startsWith(organizerApi) ? organizerConversation : conversation;
       assert(body.conversationId === scopedConversation.conversationId, "SSE request used the wrong workspace");
       if (!fixture.status) streaming.set(body.requestId, { ...fixture, body, scopedConversation });
       return { status: fixture.status || 200, oversize: fixture.outcome === "oversize" };
+    });
+    await target.exposeFunction("abortAssistantFixture", path => {
+      if (path === adminApi + "/messages/stream") adminAborts++;
     });
     await target.exposeFunction("finishAssistantFixture", async requestId => {
       const { response, ready, outcome, body, scopedConversation } = streaming.get(requestId);
@@ -112,7 +123,10 @@ async (page, origin = "http://127.0.0.1:5173") => {
         const first = encoder.encode(`: chờ\r\nevent:processing\r\ndata:{\r\ndata:"requestId":"${body.requestId}"}\r\n\r\n`);
         const stream = new ReadableStream({
           start(controller) {
-            request.signal.addEventListener("abort", () => controller.error(request.signal.reason), { once: true });
+            request.signal.addEventListener("abort", () => {
+              void window.abortAssistantFixture(path).then(() => { window.lastAssistantFixtureAbort = path; });
+              controller.error(request.signal.reason);
+            }, { once: true });
             for (const [start, end] of [[0, 5], [5, first.length - 1], [first.length - 1, first.length]]) {
               controller.enqueue(first.slice(start, end));
             }
@@ -136,7 +150,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
         isTokenExpired() { return false; }, updateToken() { return Promise.resolve(false); },
         login() { return Promise.resolve(); }, logout() { return Promise.resolve(); },
       };
-    }, { role, language, streamPaths: [`${api}/messages/stream`, `${organizerApi}/messages/stream`] });
+    }, { role, language, streamPaths: [api, organizerApi, adminApi].map(root => root + "/messages/stream") });
   };
   try {
     await prepare(page, "BUYER");
@@ -355,6 +369,91 @@ async (page, origin = "http://127.0.0.1:5173") => {
       }
       checks.push("organizer role gate, SSE workspace isolation and dual-role purchase confirmation");
     } finally { await dual.close(); }
+
+    for (const role of ["BUYER", "ORGANIZER", "ADMIN"]) {
+      const target = await context.newPage();
+      try {
+        await prepare(target, role);
+        const beforeOpen = adminOpens;
+        await target.goto(origin + (role === "ADMIN" ? "/admin/sales" : "/admin/chatbot"));
+        const shell = target.locator(".chatbot-shell");
+        if (role === "ADMIN") {
+          await target.getByRole("navigation", { name: "Admin Navigation" })
+            .getByRole("link", { name: "Chat Admin", exact: true }).click();
+          await target.waitForURL(origin + "/admin/chatbot");
+          await shell.getByRole("heading", { name: "Trợ lý quản trị" }).waitFor();
+          await shell.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
+          assert(adminOpens === beforeOpen + 1, "Admin-only session must open the Admin workspace");
+          assert(await shell.getByRole("link", { name: /Chat mua vé|Chat thống kê/ }).count() === 0,
+            "Admin-only session must not advertise Buyer or Organizer actions");
+          await shell.getByRole("link", { name: "Sự kiện chờ duyệt" }).waitFor();
+          await target.goto(origin + "/chatbot");
+          await shell.getByText(/chỉ (?:dành cho tài khoản BUYER|hỗ trợ tài khoản người mua vé)/i).waitFor();
+        } else {
+          await target.getByText("Trợ lý chỉ hỗ trợ tài khoản quản trị.", { exact: true }).waitFor();
+          assert(adminOpens === beforeOpen && await shell.count() === 0,
+            role + " session must not open Admin chat");
+        }
+      } finally { await target.close(); }
+    }
+
+    const multiRole = await context.newPage();
+    try {
+      await prepare(multiRole, ["ADMIN", "BUYER", "ORGANIZER"]);
+      await multiRole.goto(origin + "/admin/chatbot");
+      const adminShell = multiRole.locator('.chatbot-shell[aria-label="Trợ lý quản trị"]');
+      const adminInput = adminShell.locator(".floating-chatbot-input input");
+      await adminShell.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
+      const [buyerReadsBefore, organizerReadsBefore, bookingsBefore] = [reads, organizerReads, bookings.length];
+      nextMessage = { response: { text: "Doanh thu hệ thống là 300.000 VND.", draft } };
+      await adminInput.fill("Doanh thu bán vé toàn hệ thống?");
+      await adminInput.press("Enter");
+      await adminShell.getByText("Doanh thu hệ thống là 300.000 VND.", { exact: true }).waitFor();
+      assert(adminReads === 1 && reads === buyerReadsBefore && organizerReads === organizerReadsBefore,
+        "Admin SSE must reconcile only through the Admin GET");
+      assert(await adminShell.locator("form.assistant-purchase-form").count() === 0,
+        "Admin must never render a purchase form");
+      await adminShell.getByRole("link", { name: "Chat thống kê", exact: true }).click();
+      await multiRole.waitForURL(origin + "/organizer/chatbot");
+      await multiRole.locator(".chatbot-shell").getByRole("link", { name: "Chat Admin", exact: true }).click();
+      await multiRole.waitForURL(origin + "/admin/chatbot");
+
+      let releaseAdmin;
+      nextMessage = { outcome: "beforeCommit", ready: new Promise(resolve => { releaseAdmin = resolve; }) };
+      try {
+        await adminInput.fill("Sự kiện nào đang chờ duyệt?");
+        await adminInput.press("Enter");
+        await adminShell.getByRole("status").filter({ hasText: "Trợ lý đang xử lý" }).waitFor();
+        for (const width of [390, 320]) {
+          await multiRole.setViewportSize({ width, height: 844 });
+          const box = await adminShell.boundingBox();
+          assert(box && box.x >= 0 && box.x + box.width <= width, "Admin chat must fit at " + width + "px");
+        }
+        await adminShell.getByRole("link", { name: "Chat mua vé", exact: true }).click();
+        await multiRole.waitForURL(origin + "/chatbot");
+        await multiRole.waitForFunction(path => window.lastAssistantFixtureAbort === path, adminApi + "/messages/stream");
+        assert(adminAborts === 1 && adminReads === 1 && reads === buyerReadsBefore,
+          "Leaving Admin must abort its active stream without reconciling either workspace");
+      } finally { releaseAdmin(); }
+
+      const buyerShell = multiRole.getByRole("region", { name: /^(FlashTicket Assistant|Trợ lý FlashTicket)$/ });
+      assert(await buyerShell.getByText("Doanh thu hệ thống là 300.000 VND.", { exact: true }).count() === 0,
+        "Buyer must not display the Admin transcript");
+      const buyerDraft = { ...draft, draftId: "00000000-0000-4000-8000-000000000016" };
+      nextMessage = { response: { text: "Nháp vé sau khi chuyển từ Admin.", draft: buyerDraft } };
+      const buyerInput = buyerShell.locator(".floating-chatbot-input input");
+      await buyerInput.fill("Tạo nháp mua hai vé");
+      await buyerInput.press("Enter");
+      const buyerReply = buyerShell.locator("article").filter({ hasText: "Nháp vé sau khi chuyển từ Admin." });
+      const form = buyerReply.locator("form.assistant-purchase-form");
+      await form.getByRole("textbox").fill(customerEmail);
+      assert(bookings.length === bookingsBefore, "Creating a draft must not book tickets");
+      await form.evaluate(node => node.requestSubmit());
+      await buyerReply.locator('a[href="/checkout?orderId=' + orderId + '"]').waitFor();
+      assert(bookings.length === bookingsBefore + 1 && bookings.at(-1).key === buyerDraft.draftId,
+        "Admin-to-Buyer switch must let the user confirm one order in Buyer");
+      checks.push("admin role gate, scoped SSE and GET, abort on role switch and Buyer purchase confirmation");
+    } finally { await multiRole.close(); }
 
     assert(unexpected.length === 0 && errors.length === 0, `Unexpected API/page errors: ${[...unexpected, ...errors].join("; ")}`);
     return { checks: [...checks, "VI/EN progress and no unexpected writes"] };

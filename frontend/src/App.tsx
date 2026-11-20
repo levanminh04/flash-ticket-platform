@@ -108,6 +108,7 @@ function AppRoutes() {
           <Route path="/organizers/:slug" element={<PublicOrganizerPage />} />
           <Route path="/admin" element={<Navigate to="/admin/sales" replace />} />
           <Route path="/admin/sales" element={<AdminSalesPage />} />
+          <Route path="/admin/chatbot" element={<ChatbotPage workspace="admin" />} />
           <Route path="/admin/events" element={<AdminEventReviewPage />} />
           <Route path="/admin/organizers" element={<AdminOrganizerReviewPage />} />
           <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />

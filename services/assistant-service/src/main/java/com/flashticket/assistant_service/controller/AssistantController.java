@@ -1,5 +1,6 @@
 package com.flashticket.assistant_service.controller;
 
+import com.flashticket.assistant_service.AssistantWorkspace;
 import com.flashticket.assistant_service.dto.ChatRequest;
 import com.flashticket.assistant_service.dto.ChatResponse;
 import com.flashticket.assistant_service.dto.ConversationView;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping({"/api/v1/assistant", "/api/v1/assistant/{workspace:organizer}"})
+@RequestMapping({"/api/v1/assistant", "/api/v1/assistant/{workspace:organizer|admin}"})
 public class AssistantController {
   private final AssistantConversationService conversationService;
   private final ThreadPoolTaskExecutor assistantSseExecutor;
@@ -37,14 +38,14 @@ public class AssistantController {
   public ResponseEntity<ConversationView> openConversation(@AuthenticationPrincipal Jwt jwt,
       @PathVariable(name = "workspace", required = false) String workspace) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(conversationService.openConversation(jwt, workspace != null));
+        .body(conversationService.openConversation(jwt, AssistantWorkspace.fromPath(workspace)));
   }
 
   @GetMapping("/conversations/current")
   public ResponseEntity<ConversationView> getConversation(@AuthenticationPrincipal Jwt jwt,
       @PathVariable(name = "workspace", required = false) String workspace) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(conversationService.getConversation(jwt, workspace != null));
+        .body(conversationService.getConversation(jwt, AssistantWorkspace.fromPath(workspace)));
   }
 
   @PostMapping("/messages")
@@ -52,16 +53,17 @@ public class AssistantController {
       @PathVariable(name = "workspace", required = false) String workspace,
       @Valid @RequestBody ChatRequest request) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(conversationService.sendMessage(jwt, request, workspace != null));
+        .body(conversationService.sendMessage(jwt, request, AssistantWorkspace.fromPath(workspace)));
   }
 
   @PostMapping(value = "/messages/stream", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public ResponseEntity<SseEmitter> streamMessage(@AuthenticationPrincipal Jwt jwt,
       @PathVariable(name = "workspace", required = false) String workspace,
       @Valid @RequestBody ChatRequest request) {
+    AssistantWorkspace selectedWorkspace = AssistantWorkspace.fromPath(workspace);
     SseEmitter emitter = new SseEmitter(50_000L);
     try {
-      assistantSseExecutor.execute(() -> writeMessageStream(emitter, jwt, request, workspace != null));
+      assistantSseExecutor.execute(() -> writeMessageStream(emitter, jwt, request, selectedWorkspace));
     } catch (RejectedExecutionException error) {
       throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "ASSISTANT_CAPACITY_EXCEEDED",
           "Trợ lý đang bận. Vui lòng thử lại sau.");
@@ -69,13 +71,13 @@ public class AssistantController {
     return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).cacheControl(CacheControl.noStore()).body(emitter);
   }
 
-  private void writeMessageStream(SseEmitter emitter, Jwt jwt, ChatRequest request, boolean organizer) {
+  private void writeMessageStream(SseEmitter emitter, Jwt jwt, ChatRequest request, AssistantWorkspace workspace) {
     try {
       emitter.send(SseEmitter.event().name("processing")
           .data(Map.of("requestId", request.getRequestId()), MediaType.APPLICATION_JSON));
       SseEmitter.SseEventBuilder terminal;
       try {
-        ChatResponse response = conversationService.sendMessage(jwt, request, organizer);
+        ChatResponse response = conversationService.sendMessage(jwt, request, workspace);
         terminal = SseEmitter.event().name("result").data(Map.of("requestId", response.getRequestId(),
             "conversationId", response.getConversationId(), "version", response.getVersion()), MediaType.APPLICATION_JSON);
       } catch (RuntimeException error) {
@@ -95,6 +97,6 @@ public class AssistantController {
       @PathVariable(name = "workspace", required = false) String workspace,
       @Valid @RequestBody ResetConversationRequest request) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(conversationService.resetConversation(jwt, request, workspace != null));
+        .body(conversationService.resetConversation(jwt, request, AssistantWorkspace.fromPath(workspace)));
   }
 }

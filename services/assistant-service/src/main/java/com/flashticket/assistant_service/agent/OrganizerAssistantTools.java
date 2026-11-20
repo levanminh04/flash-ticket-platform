@@ -14,9 +14,6 @@ import dev.langchain4j.agent.tool.Tool;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
-import java.util.Locale;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -49,7 +46,7 @@ public final class OrganizerAssistantTools {
       @P(name = "from", value = "Ngày bắt đầu ISO yyyy-MM-dd", required = false) String from,
       @P(name = "to", value = "Ngày kết thúc ISO yyyy-MM-dd", required = false) String to) {
     beforeTool();
-    return apiClient.getOrganizerSalesSummary(jwt, parseSalesDate(from), parseSalesDate(to));
+    return apiClient.getOrganizerSalesSummary(jwt, AssistantSalesDates.parseSalesDate(from), AssistantSalesDates.parseSalesDate(to));
   }
 
   @Tool("Top 5 sự kiện của organizer theo doanh thu bán vé giảm dần")
@@ -57,7 +54,7 @@ public final class OrganizerAssistantTools {
       @P(name = "from", value = "Ngày bắt đầu ISO yyyy-MM-dd", required = false) String from,
       @P(name = "to", value = "Ngày kết thúc ISO yyyy-MM-dd", required = false) String to) {
     beforeTool();
-    return apiClient.getOrganizerTopEvents(jwt, parseSalesDate(from), parseSalesDate(to));
+    return apiClient.getOrganizerTopEvents(jwt, AssistantSalesDates.parseSalesDate(from), AssistantSalesDates.parseSalesDate(to));
   }
 
   @Tool("Liệt kê từng trang 5 sự kiện của organizer và lọc theo trạng thái")
@@ -84,22 +81,9 @@ public final class OrganizerAssistantTools {
       @P(name = "to", value = "Ngày kết thúc ISO yyyy-MM-dd") String to,
       @P(name = "groupBy", value = "DAY, WEEK hoặc MONTH") String groupBy) {
     beforeTool();
-    LocalDate fromDate = parseSalesDate(from);
-    LocalDate toDate = parseSalesDate(to);
-    String grouping = groupBy == null ? "" : groupBy.trim().toUpperCase(Locale.ROOT);
-    int maxDays = switch (grouping) {
-      case "DAY" -> 31;
-      case "WEEK" -> 180;
-      case "MONTH" -> 366;
-      default -> throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_SALES_GROUPING",
-          "Chọn nhóm thống kê theo ngày, tuần hoặc tháng.");
-    };
-    // Tính cả ngày đầu và ngày cuối như báo cáo Booking.
-    if (fromDate == null || toDate == null || fromDate.isAfter(toDate)
-        || ChronoUnit.DAYS.between(fromDate, toDate) >= maxDays) {
-      throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_DATE_RANGE",
-          "Khoảng ngày thiếu hoặc vượt giới hạn của nhóm thống kê.");
-    }
+    LocalDate fromDate = AssistantSalesDates.parseSalesDate(from);
+    LocalDate toDate = AssistantSalesDates.parseSalesDate(to);
+    String grouping = AssistantSalesDates.validateTrendRange(fromDate, toDate, groupBy);
     return apiClient.getOrganizerSalesTrend(jwt, fromDate, toDate, grouping);
   }
 
@@ -112,7 +96,7 @@ public final class OrganizerAssistantTools {
     if (eventId == null) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_TOOL_INPUT", "Cần mã sự kiện hợp lệ.");
     }
-    return apiClient.getOrganizerEventSales(jwt, eventId, parseSalesDate(from), parseSalesDate(to));
+    return apiClient.getOrganizerEventSales(jwt, eventId, AssistantSalesDates.parseSalesDate(from), AssistantSalesDates.parseSalesDate(to));
   }
 
   private void beforeTool() {
@@ -131,16 +115,6 @@ public final class OrganizerAssistantTools {
     if (!conversationStore.isLeaseCurrent(ownerKey, conversationId, leaseToken)) {
       throw new AssistantProblem(HttpStatus.CONFLICT, "LEASE_LOST",
           "Hội thoại đã thay đổi. Vui lòng đọc lại trạng thái.");
-    }
-  }
-
-  private LocalDate parseSalesDate(String value) {
-    if (value == null || value.isBlank()) return null;
-    try {
-      return LocalDate.parse(value.trim());
-    } catch (DateTimeParseException error) {
-      throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_DATE_FORMAT",
-          "Ngày thống kê phải có định dạng yyyy-MM-dd.");
     }
   }
 }
