@@ -366,8 +366,10 @@ public class AssistantApiClient {
       // Bỏ field ngoài DTO trước, rồi che email/Bearer/JWT nhận diện được trong text.
       String safeJson = jsonMapper.writeValueAsString(projected)
           .replaceAll("(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*", "[REDACTED]")
-          .replaceAll("[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}", "[REDACTED]")
-          .replaceAll("[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+", "[REDACTED]");
+          // Chỉ thử khớp ở đầu mỗi chuỗi ký tự hợp lệ để giới hạn số lần quét.
+          .replaceAll("(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{8,}+\\.[A-Za-z0-9_-]{8,}+\\.[A-Za-z0-9_-]{8,}+", "[REDACTED]")
+          .replaceAll("(?<![A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]++"
+              + "@[A-Za-z0-9-]++(?:\\.[A-Za-z0-9-]++)++", "[REDACTED]");
       return jsonMapper.readValue(safeJson, responseType);
     } catch (Exception error) {
       throw new AssistantProblem(HttpStatus.BAD_GATEWAY, "INVALID_DOWNSTREAM_RESPONSE", "Không đọc được phản hồi dịch vụ.");

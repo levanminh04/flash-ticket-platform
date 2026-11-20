@@ -225,6 +225,9 @@ class AssistantConversationServiceTests {
       assertNotEquals(owner, other); assertTrue(owner.matches("[a-f0-9]{64}")); assertFalse(owner.contains("buyer"));
       String redacted = ReflectionTestUtils.invokeMethod(service, "redactSensitiveText", " mail@example.test Bearer abcd-token abcdefgh.ijklmnop.qrstuvwx ");
       assertEquals("[REDACTED] [REDACTED] [REDACTED]", redacted);
+      String message = "Liên hệ (sales+event@tickets.example.test), giá vé 250.000 VND.";
+      assertEquals("Liên hệ ([REDACTED]), giá vé 250.000 VND.",
+          ReflectionTestUtils.invokeMethod(service, "redactSensitiveText", message));
       assertThrows(AssistantProblem.class, () -> service.getConversation(null, AssistantWorkspace.BUYER));
       assertThrows(AssistantProblem.class, () -> ReflectionTestUtils.invokeMethod(service, "boundedContext", List.of(UserMessage.from("Q"), AiMessage.from("mail@example.test"))));
       verifyNoInteractions(store, model);
