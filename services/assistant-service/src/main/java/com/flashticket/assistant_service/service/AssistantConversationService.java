@@ -165,7 +165,11 @@ public class AssistantConversationService {
       throw new AssistantProblem(HttpStatus.CONFLICT, "LEASE_LOST", "Hội thoại không còn sẵn sàng cho lượt này.");
     }
     // Memory RAM mới mỗi lượt; framework không được ghi từng message/tool vào Redis.
-    MessageWindowChatMemory memory = MessageWindowChatMemory.withMaxMessages(30);
+    // Khi ngày thay đổi, giữ system prompt mới ở đầu thay vì chèn sau lịch sử.
+    MessageWindowChatMemory memory = MessageWindowChatMemory.builder()
+        .maxMessages(30)
+        .alwaysKeepSystemMessageFirst(true)
+        .build();
     List<ChatMessage> context;
     try {
       context = ChatMessageDeserializer.messagesFromJson(storedState.getContextJson());

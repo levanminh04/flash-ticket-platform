@@ -1,8 +1,12 @@
 package com.flashticket.assistant_service.service;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.AdditionalAnswers.returnsLastArg;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.flashticket.assistant_service.AssistantWorkspace;
 import com.flashticket.assistant_service.client.AssistantApiClient;
@@ -64,6 +68,83 @@ class AssistantConversationServiceTests {
       when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(toolCall).thenThrow(new IllegalStateException("secret-provider-body"));
       assertEquals("MODEL_TURN_FAILED", assertThrows(AssistantProblem.class, () -> service.sendMessage(jwt, request, AssistantWorkspace.BUYER)).getCode());
       verify(store, never()).commitTurn(anyString(), any(), any(), any(), any()); verify(store).release(anyString(), any());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = AssistantWorkspace.class, names = {"ADMIN", "ORGANIZER"})
+  void preservesConversationAcrossVietnamMidnight(AssistantWorkspace workspace) {
+    Instant beforeMidnight = Instant.parse("2026-11-18T16:55:00Z");
+    Instant afterMidnight = beforeMidnight.plusSeconds(600);
+    Jwt caller = Jwt.withTokenValue("fixture-token").header("alg", "RS256").issuer("https://issuer.test")
+        .subject("fixture-user").expiresAt(afterMidnight.plusSeconds(300)).build();
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var eveningService = new AssistantConversationService(store, api, model, executor,
+          Clock.fixed(beforeMidnight, ZoneOffset.UTC), validator);
+      var morningService = new AssistantConversationService(store, api, model, executor,
+          Clock.fixed(afterMidnight, ZoneOffset.UTC), validator);
+      var initial = new ConversationState();
+      initial.setConversationId(UUID.randomUUID()); initial.setVersion(UUID.randomUUID());
+      initial.setContextJson("[]"); initial.setMessages(List.of());
+      var eveningRequest = new ChatRequest();
+      eveningRequest.setConversationId(initial.getConversationId()); eveningRequest.setVersion(initial.getVersion());
+      eveningRequest.setRequestId(UUID.randomUUID()); eveningRequest.setMessage("Tổng doanh thu là bao nhiêu?");
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(initial);
+      when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+      when(store.commitTurn(anyString(), any(), any(), any(), any())).thenAnswer(returnsLastArg());
+
+      String toolName = workspace == AssistantWorkspace.ADMIN ? "getPlatformSalesSummary" : "getMySalesSummary";
+      var tool = ToolExecutionRequest.builder().id("sales-1").name(toolName).arguments("{}").build();
+      var summary = new OrganizerSalesSummary();
+      if (workspace == AssistantWorkspace.ADMIN) {
+        when(api.getPlatformSalesSummary(caller, null, null)).thenReturn(summary);
+      } else {
+        when(api.getOrganizerSalesSummary(caller, null, null)).thenReturn(summary);
+      }
+      var eveningAnswer = AiMessage.from("Kết quả thống kê bán vé");
+      var morningAnswer = AiMessage.from("Đây là số liệu bán vé của kỳ trước");
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from(tool)).build(),
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(eveningAnswer).build(),
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(morningAnswer).build());
+      eveningService.sendMessage(caller, eveningRequest, workspace);
+      var committed = ArgumentCaptor.forClass(ConversationState.class);
+      verify(store).commitTurn(anyString(), eq(initial.getConversationId()), eq(initial.getVersion()), any(), committed.capture());
+      var eveningState = committed.getValue();
+      var eveningContext = ChatMessageDeserializer.messagesFromJson(eveningState.getContextJson());
+      assertEquals(5, eveningContext.size());
+      assertTrue(assertInstanceOf(SystemMessage.class, eveningContext.getFirst()).text().contains("2026-11-18"));
+      assertEquals(List.of(tool), assertInstanceOf(AiMessage.class, eveningContext.get(2)).toolExecutionRequests());
+      var toolResult = assertInstanceOf(ToolExecutionResultMessage.class, eveningContext.get(3));
+      assertEquals(tool.id(), toolResult.id()); assertEquals(toolName, toolResult.toolName());
+      assertEquals(eveningAnswer, eveningContext.getLast());
+
+      var morningRequest = new ChatRequest();
+      morningRequest.setConversationId(eveningState.getConversationId()); morningRequest.setVersion(eveningState.getVersion());
+      morningRequest.setRequestId(UUID.randomUUID()); morningRequest.setMessage("Nhắc lại số liệu vừa tra cứu");
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(eveningState);
+      var response = morningService.sendMessage(caller, morningRequest, workspace);
+
+      var modelRequests = ArgumentCaptor.forClass(dev.langchain4j.model.chat.request.ChatRequest.class);
+      verify(model, times(3)).chat(modelRequests.capture());
+      var morningMessages = modelRequests.getAllValues().getLast().messages();
+      assertEquals(6, morningMessages.size());
+      assertTrue(assertInstanceOf(SystemMessage.class, morningMessages.getFirst()).text().contains("2026-11-19"));
+      assertEquals(eveningContext.subList(1, 5), morningMessages.subList(1, 5));
+      assertEquals(UserMessage.from(morningRequest.getMessage()), morningMessages.getLast());
+      assertEquals(initial.getConversationId(), response.getConversationId());
+      assertNotEquals(eveningState.getVersion(), response.getVersion());
+      assertEquals(morningAnswer.text(), response.getMessage());
+      var morningCommit = ArgumentCaptor.forClass(ConversationState.class);
+      verify(store).commitTurn(anyString(), eq(initial.getConversationId()), eq(eveningState.getVersion()), any(), morningCommit.capture());
+      var morningState = morningCommit.getValue();
+      assertEquals(response.getVersion(), morningState.getVersion());
+      assertEquals(morningRequest.getRequestId(), morningState.getLastRequestId());
+      assertEquals(4, morningState.getMessages().size());
+      var morningContext = ChatMessageDeserializer.messagesFromJson(morningState.getContextJson());
+      assertEquals(7, morningContext.size());
+      assertEquals(morningMessages, morningContext.subList(0, 6));
+      assertEquals(morningAnswer, morningContext.getLast());
     }
   }
 
