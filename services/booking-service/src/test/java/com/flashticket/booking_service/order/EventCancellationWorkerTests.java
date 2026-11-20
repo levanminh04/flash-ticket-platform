@@ -3,6 +3,7 @@ package com.flashticket.booking_service.order;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.flashticket.booking_service.dto.projection.EventCancellationCandidate;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
 import java.util.List;
@@ -24,75 +25,80 @@ class EventCancellationWorkerTests {
   @Test
   void pollsEventCancelledOrdersInBoundedBatches() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
-    var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-    when(orderRepository.findOrderIdsForEventCancellation(null, PageRequest.of(0, 2)))
-        .thenReturn(ids);
+    var eventId = UUID.randomUUID();
+    var first = new EventCancellationCandidate(eventId, UUID.randomUUID());
+    var last = new EventCancellationCandidate(eventId, UUID.randomUUID());
+    when(orderRepository.findEventCancellationCandidates(PageRequest.of(0, 2)))
+        .thenReturn(List.of(first, last));
     worker.cancelOrdersForCancelledEvents();
     var ordered = inOrder(orderService);
-    ordered.verify(orderService).cancelOrderForEventCancellation(ids.getFirst());
-    ordered.verify(orderService).cancelOrderForEventCancellation(ids.getLast());
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(ids.getLast());
+    ordered.verify(orderService).cancelOrderForEventCancellation(first.getOrderId());
+    ordered.verify(orderService).cancelOrderForEventCancellation(last.getOrderId());
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(last);
   }
 
   @Test
   void continuesAndRetriesFailedEventOrderCancellations() {
     ReflectionTestUtils.setField(worker, "batchSize", 1);
-    var bad = UUID.randomUUID();
-    var next = UUID.randomUUID();
-    when(orderRepository.findOrderIdsForEventCancellation(null, PageRequest.of(0, 1)))
-        .thenReturn(List.of(bad));
-    when(orderRepository.findOrderIdsForEventCancellation(bad, PageRequest.of(0, 1)))
+    var bad = new EventCancellationCandidate(UUID.randomUUID(), UUID.randomUUID());
+    var next = new EventCancellationCandidate(UUID.randomUUID(), UUID.randomUUID());
+    var page = PageRequest.of(0, 1);
+    when(orderRepository.findEventCancellationCandidates(page)).thenReturn(List.of(bad));
+    when(orderRepository.findEventCancellationCandidatesAfter(bad.getEventId(), bad.getOrderId(), page))
         .thenReturn(List.of(next));
-    when(orderRepository.findOrderIdsForEventCancellation(next, PageRequest.of(0, 1)))
+    when(orderRepository.findEventCancellationCandidatesAfter(next.getEventId(), next.getOrderId(), page))
         .thenReturn(List.of());
     doThrow(new IllegalStateException("commit rejected"))
         .when(orderService)
-        .cancelOrderForEventCancellation(bad);
+        .cancelOrderForEventCancellation(bad.getOrderId());
     worker.cancelOrdersForCancelledEvents();
     worker.cancelOrdersForCancelledEvents();
-    verify(orderService).cancelOrderForEventCancellation(next);
+    verify(orderService).cancelOrderForEventCancellation(next.getOrderId());
     worker.cancelOrdersForCancelledEvents();
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isNull();
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isNull();
     worker.cancelOrdersForCancelledEvents();
     var restarted = new EventCancellationWorker(orderRepository, orderService);
     ReflectionTestUtils.setField(restarted, "batchSize", 1);
     restarted.cancelOrdersForCancelledEvents();
-    verify(orderService, times(3)).cancelOrderForEventCancellation(bad);
+    verify(orderService, times(3)).cancelOrderForEventCancellation(bad.getOrderId());
   }
 
   @Test
   void preservesEventCancellationCursorWhenQueryFails() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
-    var cursor = UUID.randomUUID();
-    ReflectionTestUtils.setField(worker, "lastOrderId", cursor);
-    when(orderRepository.findOrderIdsForEventCancellation(cursor, PageRequest.of(0, 2)))
+    var cursor = new EventCancellationCandidate(UUID.randomUUID(), UUID.randomUUID());
+    ReflectionTestUtils.setField(worker, "lastCandidate", cursor);
+    when(orderRepository.findEventCancellationCandidatesAfter(
+            cursor.getEventId(), cursor.getOrderId(), PageRequest.of(0, 2)))
         .thenThrow(new IllegalStateException("database unavailable"))
         .thenReturn(List.of());
     assertThatThrownBy(worker::cancelOrdersForCancelledEvents)
         .isInstanceOf(IllegalStateException.class);
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(cursor);
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(cursor);
     worker.cancelOrdersForCancelledEvents();
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isNull();
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isNull();
     verifyNoInteractions(orderService);
   }
 
   @Test
   void stopsEventCancellationBatchWhenInterrupted() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
-    var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-    when(orderRepository.findOrderIdsForEventCancellation(null, PageRequest.of(0, 2)))
-        .thenReturn(ids);
+    var eventId = UUID.randomUUID();
+    var first = new EventCancellationCandidate(eventId, UUID.randomUUID());
+    var last = new EventCancellationCandidate(eventId, UUID.randomUUID());
+    when(orderRepository.findEventCancellationCandidates(PageRequest.of(0, 2)))
+        .thenReturn(List.of(first, last));
     doAnswer(
             invocation -> {
               Thread.currentThread().interrupt();
               return null;
             })
         .when(orderService)
-        .cancelOrderForEventCancellation(ids.getFirst());
+        .cancelOrderForEventCancellation(first.getOrderId());
     try {
       worker.cancelOrdersForCancelledEvents();
-      verify(orderService, never()).cancelOrderForEventCancellation(ids.getLast());
-      assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(ids.getFirst());
+      verify(orderService, never()).cancelOrderForEventCancellation(last.getOrderId());
+      assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(first);
     } finally {
       Thread.interrupted();
     }

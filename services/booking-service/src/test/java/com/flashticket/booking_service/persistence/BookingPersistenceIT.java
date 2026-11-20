@@ -273,39 +273,45 @@ class BookingPersistenceIT {
   void selectsExpiredPendingOrderIdsWithBoundedCursor() throws Exception {
     try {
       var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5);
-      for (int i = 0; i < 5; i++)
-        orderService.createOrder(
-            "query-buyer-" + i, UUID.randomUUID(), createOrderRequest(config, 1));
-      var cutoff =
-          jdbc.queryForObject(
-                  "select max(expires_at) from booking_schema.tbl_orders where event_id=?",
-                  java.sql.Timestamp.class,
-                  config.eventId())
-              .toInstant();
-      var ids =
-          jdbc.queryForList(
-              "select id from booking_schema.tbl_orders where event_id=? order by id",
-              UUID.class,
-              config.eventId());
-      jdbc.update(
-          "update booking_schema.tbl_orders set lifecycle_state='CANCELLED' where id=?",
-          ids.get(1));
+      var lowerId = UUID.fromString("01000000-0000-0000-0000-000000000000");
+      var firstId = UUID.fromString("02000000-0000-0000-0000-000000000000");
+      var secondId = UUID.fromString("80000000-0000-0000-0000-000000000000");
+      var thirdId = UUID.fromString("ff000000-0000-0000-0000-000000000000");
+      var firstExpiry = Instant.parse("2026-10-30T00:00:00.123456Z");
+      var cutoff = firstExpiry.plusSeconds(1);
+      var ids = List.of(lowerId, firstId, secondId, thirdId, UUID.randomUUID(), UUID.randomUUID());
+      for (int i = 0; i < ids.size(); i++) {
+        var expiresAt = i == 0 ? cutoff : i == 5 ? cutoff.plusSeconds(1) : firstExpiry;
+        jdbc.update(
+            """
+            insert into booking_schema.tbl_orders
+              (id,event_id,buyer_subject,sales_mode,lifecycle_state,customer_email,
+               subtotal,total,currency,expires_at,source_config_version,created_at)
+            values (?, ?, 'query-buyer', 'QUANTITY', ?, 'fixture@example.test',
+                    1, 1, 'VND', ?, 1, ?)
+            """,
+            ids.get(i),
+            config.eventId(),
+            i == 4 ? "CANCELLED" : "PENDING_PAYMENT",
+            java.sql.Timestamp.from(expiresAt),
+            java.sql.Timestamp.from(expiresAt.minusSeconds(60)));
+      }
       var page = org.springframework.data.domain.PageRequest.of(0, 2);
-      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, null, page))
-          .containsExactly(ids.get(0), ids.get(2));
-      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, ids.get(2), page))
-          .containsExactly(ids.get(3), ids.get(4));
-      assertThat(orders.findExpiredOrderIds(OrderState.PENDING_PAYMENT, cutoff, ids.get(4), page))
-          .isEmpty();
-      Instant firstExpiry =
-          jdbc.queryForObject(
-                  "select min(expires_at) from booking_schema.tbl_orders where event_id=?",
-                  java.sql.Timestamp.class,
-                  config.eventId())
-              .toInstant();
+      var first = orders.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, cutoff, page);
+      assertThat(first).extracting(candidate -> candidate.getOrderId()).containsExactly(firstId, secondId);
+      assertThat(first.getLast().getExpiresAt()).isEqualTo(firstExpiry);
+      var next =
+          orders.findExpiredOrderCandidatesAfter(
+              OrderState.PENDING_PAYMENT, cutoff, first.getLast().getExpiresAt(), first.getLast().getOrderId(), page);
+      assertThat(next).extracting(candidate -> candidate.getOrderId()).containsExactly(thirdId, lowerId);
+      assertThat(next.getLast().getExpiresAt()).isEqualTo(cutoff);
       assertThat(
-              orders.findExpiredOrderIds(
-                  OrderState.PENDING_PAYMENT, firstExpiry.minusNanos(1000), null, page))
+              orders.findExpiredOrderCandidatesAfter(
+                  OrderState.PENDING_PAYMENT, cutoff, next.getLast().getExpiresAt(), next.getLast().getOrderId(), page))
+          .isEmpty();
+      assertThat(
+              orders.findExpiredOrderCandidates(
+                  OrderState.PENDING_PAYMENT, firstExpiry.minusNanos(1000), page))
           .isEmpty();
       var index =
           Arrays.stream(Order.class.getAnnotation(Table.class).indexes())
@@ -9086,8 +9092,9 @@ class BookingPersistenceIT {
                         order.getOrderId()))
                 .isEqualTo(moneyBefore);
             assertThat(
-                    orders.findOrderIdsForEventCancellation(
-                        null, org.springframework.data.domain.PageRequest.of(0, 20)))
+                    orders.findEventCancellationCandidates(
+                        org.springframework.data.domain.PageRequest.of(0, 20))
+                            .stream().map(candidate -> candidate.getOrderId()).toList())
                 .doesNotContain(order.getOrderId());
             var request = createOrderRequest(config, 1);
             assertThatThrownBy(() -> orderService.createOrder("other", UUID.randomUUID(), request))
@@ -9376,8 +9383,9 @@ class BookingPersistenceIT {
                   order.getOrderId()))
           .isEqualTo("COMMITTED");
       assertThat(
-              orders.findOrderIdsForEventCancellation(
-                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              orders.findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream().map(candidate -> candidate.getOrderId()).toList())
           .contains(order.getOrderId());
       orderService.cancelOrderForEventCancellation(order.getOrderId());
       assertThat(
@@ -9387,8 +9395,9 @@ class BookingPersistenceIT {
                   config.ticketTypes().getFirst().ticketTypeId()))
           .isZero();
       assertThat(
-              orders.findOrderIdsForEventCancellation(
-                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              orders.findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream().map(candidate -> candidate.getOrderId()).toList())
           .doesNotContain(order.getOrderId());
       var before = captureOrderCreationState(config.eventId());
       orderService.processBookingIssuanceResult(with(result, "messageId", UUID.randomUUID()));
@@ -9487,6 +9496,63 @@ class BookingPersistenceIT {
 
   @Test
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  void selectsCancellationCandidatesAcrossEventsWithBoundedCursor() throws Exception {
+    try {
+      var a = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5).eventId();
+      var b = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5).eventId();
+      var otherEvent = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 20, 5).eventId();
+      var firstEvent = a.toString().compareTo(b.toString()) < 0 ? a : b;
+      var nextEvent = firstEvent.equals(a) ? b : a;
+      jdbc.update(
+          "update booking_schema.tbl_event_sales_snapshots set event_status='CANCELLED' where event_id in (?, ?)",
+          firstEvent,
+          nextEvent);
+      var lowId = UUID.fromString("01000000-0000-0000-0000-000000000000");
+      var firstId = UUID.fromString("02000000-0000-0000-0000-000000000000");
+      var secondId = UUID.fromString("80000000-0000-0000-0000-000000000000");
+      var thirdId = UUID.fromString("ff000000-0000-0000-0000-000000000000");
+      var ids = List.of(firstId, secondId, thirdId, lowId, UUID.randomUUID(), UUID.randomUUID());
+      var eventIds = List.of(firstEvent, firstEvent, firstEvent, nextEvent, firstEvent, otherEvent);
+      for (int i = 0; i < ids.size(); i++) {
+        jdbc.update(
+            """
+            with inserted as (
+              insert into booking_schema.tbl_orders
+                (id,event_id,buyer_subject,sales_mode,lifecycle_state,customer_email,
+                 subtotal,total,currency,expires_at,source_config_version)
+              values (?, ?, 'query-buyer', 'QUANTITY', ?, 'fixture@example.test',
+                      1, 1, 'VND', now() + interval '1 hour', 1)
+              returning id,event_id,buyer_subject,expires_at
+            )
+            insert into booking_schema.tbl_reservations (order_id,event_id,buyer_subject,state,expires_at)
+            select id,event_id,buyer_subject,?,expires_at from inserted
+            """,
+            ids.get(i),
+            eventIds.get(i),
+            i == 2 ? "CANCELLED" : "PENDING_PAYMENT",
+            i == 4 ? "RELEASED" : "HELD");
+      }
+      var page = org.springframework.data.domain.PageRequest.of(0, 2);
+      var first = orders.findEventCancellationCandidates(page);
+      assertThat(first).extracting(candidate -> candidate.getOrderId()).containsExactly(firstId, secondId);
+      assertThat(first).extracting(candidate -> candidate.getEventId()).containsExactly(firstEvent, firstEvent);
+      var next =
+          orders.findEventCancellationCandidatesAfter(
+              first.getLast().getEventId(), first.getLast().getOrderId(), page);
+      assertThat(next).extracting(candidate -> candidate.getOrderId()).containsExactly(thirdId, lowId);
+      assertThat(next).extracting(candidate -> candidate.getEventId()).containsExactly(firstEvent, nextEvent);
+      assertThat(
+              orders.findEventCancellationCandidatesAfter(
+                  next.getLast().getEventId(), next.getLast().getOrderId(), page))
+          .isEmpty();
+    } finally {
+      jdbc.execute(
+          "truncate booking_schema.tbl_event_sales_snapshots, booking_schema.tbl_inbox_messages, booking_schema.tbl_outbox_messages cascade");
+    }
+  }
+
+  @Test
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   void resumesEventCancellationBatchAfterFailureAndWorkerRestart() throws Exception {
     try {
       var config = seedOrderCreationConfiguration(SalesMode.QUANTITY, null, 30, 5);
@@ -9529,8 +9595,9 @@ class BookingPersistenceIT {
               null,
               data));
       var orderedIds =
-          orders.findOrderIdsForEventCancellation(
-              null, org.springframework.data.domain.PageRequest.of(0, 20));
+          orders.findEventCancellationCandidates(
+              org.springframework.data.domain.PageRequest.of(0, 20))
+                  .stream().map(candidate -> candidate.getOrderId()).toList();
       assertThat(orderedIds).containsExactlyInAnyOrderElementsOf(ids);
       var bad = orderedIds.getFirst();
       jdbc.execute(
@@ -9555,16 +9622,18 @@ class BookingPersistenceIT {
                   config.ticketTypes().getFirst().ticketTypeId()))
           .isEqualTo(2L);
       assertThat(
-              orders.findOrderIdsForEventCancellation(
-                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              orders.findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream().map(candidate -> candidate.getOrderId()).toList())
           .containsExactly(bad);
       jdbc.execute("drop trigger event_batch_commit_failure on booking_schema.tbl_orders");
       var restarted = new EventCancellationWorker(orders, orderService);
       org.springframework.test.util.ReflectionTestUtils.setField(restarted, "batchSize", 3);
       restarted.cancelOrdersForCancelledEvents();
       assertThat(
-              orders.findOrderIdsForEventCancellation(
-                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              orders.findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream().map(candidate -> candidate.getOrderId()).toList())
           .isEmpty();
       assertThat(
               jdbc.queryForObject(
@@ -9724,8 +9793,9 @@ class BookingPersistenceIT {
       orderService.cancelOrderForEventCancellation(failed.getOrderId());
       assertThat(captureOrderCreationState(config.eventId())).isEqualTo(terminalBefore);
       assertThat(
-              orders.findOrderIdsForEventCancellation(
-                  null, org.springframework.data.domain.PageRequest.of(0, 20)))
+              orders.findEventCancellationCandidates(
+                  org.springframework.data.domain.PageRequest.of(0, 20))
+                      .stream().map(candidate -> candidate.getOrderId()).toList())
           .isEmpty();
       assertThat(captureOrderCreationState(other.eventId())).isEqualTo(before);
     } finally {
@@ -10101,8 +10171,9 @@ class BookingPersistenceIT {
                       config.ticketTypes().getFirst().ticketTypeId()))
               .isZero();
           assertThat(
-                  orders.findOrderIdsForEventCancellation(
-                      null, org.springframework.data.domain.PageRequest.of(0, 20)))
+                  orders.findEventCancellationCandidates(
+                      org.springframework.data.domain.PageRequest.of(0, 20))
+                          .stream().map(candidate -> candidate.getOrderId()).toList())
               .doesNotContain(order.getOrderId());
         }
     } finally {

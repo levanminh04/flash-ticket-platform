@@ -160,6 +160,7 @@
     "payment": "Payment"
   },
   "chatbot": {
+    "title": "FlashTicket Assistant",
     "organizerTitle": "Organizer Assistant",
     "adminTitle": "Admin Assistant",
     "switchToAdmin": "Admin chat",
@@ -177,7 +178,6 @@
       "pendingEvents": "Events awaiting approval",
       "pendingEventsPrompt": "List the events awaiting approval."
     },
-    "loadingAccount": "Checking sign-in…",
     "switchToBuyer": "Chat to buy tickets",
     "switchToOrganizer": "Chat about sales",
     "organizerOnly": "The assistant is only available to event organizers.",
@@ -190,6 +190,20 @@
       "pendingEvents": "Events awaiting approval",
       "pendingEventsPrompt": "Which of my events are awaiting approval?"
     },
+    "newConversation": "New conversation",
+    "expand": "Expand chat",
+    "loadingAccount": "Checking sign-in…",
+    "buyerOnly": "The assistant is only available to ticket buyers.",
+    "welcomeTitle": "How can I help?",
+    "transcript": "Conversation",
+    "you": "You",
+    "assistant": "Assistant",
+    "orderTotal": "Order total",
+    "loadingConversation": "Opening conversation…",
+    "messageLabel": "Message to the assistant",
+    "privacyHint": "Keep sensitive information out of chat.",
+    "reloadConversation": "Reload conversation",
+    "openConversation": "Open conversation",
     "orderSnapshot": {
       "asOf": "Looked up at {{time}}",
       "unknownEvent": "Ticket order",
@@ -245,7 +259,6 @@
     "quickTicketTypesPrompt": "Show events that still have ticket types on sale.",
     "quickUpcoming": "Upcoming soon",
     "quickUpcomingPrompt": "List the nearest upcoming events.",
-    "loadingConversation": "Opening conversation…",
     "turn": {
       "sending": "Sending…",
       "processing": "Assistant is processing…",

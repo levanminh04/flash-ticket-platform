@@ -1,10 +1,11 @@
 package com.flashticket.booking_service.order;
 
+import com.flashticket.booking_service.dto.projection.ExpiredOrderCandidate;
 import com.flashticket.booking_service.enums.OrderState;
 import com.flashticket.booking_service.exception.ErrorCode;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
-import java.util.UUID;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,17 +28,27 @@ public class OrderExpiryWorker {
   @Value("${booking.expiry.batch-size:20}")
   private int batchSize;
 
-  private UUID lastOrderId;
+  private ExpiredOrderCandidate lastCandidate;
+  private Instant cycleCutoff;
 
   @Scheduled(fixedDelayString = "${booking.expiry.poll-interval:PT5S}")
   public void expireDueOrders() {
     if (batchSize <= 0) throw new IllegalArgumentException("Expiry batch size must be positive");
-    var cutoff = orderRepository.currentDatabaseTime();
+    // Giữ cùng mốc giờ DB qua các trang để vòng quét có điểm kết thúc.
+    var cutoff = cycleCutoff == null ? orderRepository.currentDatabaseTime() : cycleCutoff;
+    var page = PageRequest.of(0, batchSize);
     var candidates =
-        orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, cutoff, lastOrderId, PageRequest.of(0, batchSize));
-    for (UUID orderId : candidates) {
+        lastCandidate == null
+            ? orderRepository.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, cutoff, page)
+            : orderRepository.findExpiredOrderCandidatesAfter(
+                OrderState.PENDING_PAYMENT,
+                cutoff,
+                lastCandidate.getExpiresAt(),
+                lastCandidate.getOrderId(),
+                page);
+    for (var candidate : candidates) {
       if (Thread.currentThread().isInterrupted()) return;
+      var orderId = candidate.getOrderId();
       try {
         // Gọi qua service proxy: mỗi order commit/rollback xong mới xử lý ID tiếp theo.
         orderService.expireOrder(orderId);
@@ -46,8 +57,12 @@ public class OrderExpiryWorker {
             .warn("Expiry orderId={} errorCode={}", orderId, ErrorCode.from(exception));
       }
       // Tiến qua cả ID lỗi để không kẹt ở đầu hàng; cuối vòng sẽ quét lại các đơn còn pending.
-      lastOrderId = orderId;
+      lastCandidate = candidate;
+      cycleCutoff = cutoff;
     }
-    if (candidates.size() < batchSize) lastOrderId = null;
+    if (candidates.size() < batchSize) {
+      lastCandidate = null;
+      cycleCutoff = null;
+    }
   }
 }

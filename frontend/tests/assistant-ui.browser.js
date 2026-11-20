@@ -1,5 +1,5 @@
 // Browser fixture only: no API, login or payment request leaves this test.
-async (page, origin = "http://127.0.0.1:5173") => {
+async (page, origin = "http://127.0.0.1:5173", screenshotDir) => {
   if (!["http://127.0.0.1:5173", "http://localhost:5173"].includes(origin)) throw new Error("Assistant fixture requires local Vite");
   const context = page.context();
   const [conversationId, eventId, draftId, ticketTypeId, orderId, existingOrderId] = Array.from(
@@ -21,7 +21,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
   const customerEmail = "buyer@example.invalid";
   const chat = [], bookings = [], unexpected = [], errors = [], checks = [];
   const streaming = new Map();
-  let reads = 0, readStatus, nextMessage;
+  let reads = 0, opens = 0, failOpen = false, readStatus, nextMessage;
   const api = "/api/v1/assistant";
   const current = `${api}/conversations/current`;
   const organizerApi = `${api}/organizer`;
@@ -47,7 +47,8 @@ async (page, origin = "http://127.0.0.1:5173") => {
     }
     if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
     if (path === current && method === "POST") {
-      return reply(conversation);
+      opens++;
+      return failOpen ? reply({}, 503) : reply(conversation);
     }
     if (path === current && method === "GET") { reads++; return readStatus ? reply({}, readStatus) : reply(conversation); }
     if (path === `${organizerApi}/conversations/current`) {
@@ -153,42 +154,110 @@ async (page, origin = "http://127.0.0.1:5173") => {
     }, { role, language, streamPaths: [api, organizerApi, adminApi].map(root => root + "/messages/stream") });
   };
   try {
+    for (const [role, text] of [[null, /Vui lòng đăng nhập/], ["ORGANIZER", /chỉ hỗ trợ tài khoản người mua vé/]]) {
+      const target = await context.newPage();
+      try {
+        await prepare(target, role);
+        await target.goto(`${origin}/chatbot`);
+        await target.locator(".assistant-gate").getByRole("status").filter({ hasText: text }).waitFor();
+        assert(await target.locator(".assistant-gate button").count() === (role ? 0 : 1), "Only guest should see sign-in action");
+        assert(await target.locator(".floating-chatbot-input").count() === 0, "Unauthorized composer rendered");
+      } finally { await target.close(); }
+    }
+    assert(opens === 0 && chat.length === 0, "Guest/non-BUYER reached Assistant API");
+    checks.push("guest and non-BUYER gates");
+
     await prepare(page, "BUYER");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(origin);
     const launcher = page.locator(".floating-chatbot-trigger");
     const panel = page.locator(".floating-chatbot-panel");
+    await launcher.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Tab");
+    assert(await panel.locator(":focus-visible").count() === 1, "Panel must be reachable from launcher by keyboard");
+    await page.keyboard.press("Escape");
+    await panel.waitFor({ state: "hidden" });
+    assert(await launcher.evaluate(node => node === document.activeElement), "Escape did not restore launcher focus");
     await launcher.click();
-    const input = panel.locator(".floating-chatbot-input input");
-    await panel.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
-    await input.fill("Kiểm tra đơn vé gần đây");
+    const prompt = panel.getByRole("button", { name: "Kiểm tra đơn vé" });
+    await prompt.waitFor();
+    const capture = async (surface, name, width, height) => {
+      await page.setViewportSize({ width, height });
+      await surface.scrollIntoViewIfNeeded();
+      if (name === "results") await surface.evaluate(node => {
+        const nav = document.querySelector(".account-category-nav");
+        if (nav) window.scrollBy({ top: node.getBoundingClientRect().top - nav.getBoundingClientRect().bottom - 8, behavior: "instant" });
+      });
+      await page.evaluate(() => document.fonts.ready);
+      const composer = await surface.locator(".floating-chatbot-input input").boundingBox();
+      const overflow = await surface.evaluate(node => {
+        const transcript = node.querySelector(".assistant-transcript");
+        return document.documentElement.scrollWidth > innerWidth + 1 || transcript.scrollWidth > transcript.clientWidth + 1;
+      });
+      assert(!overflow && composer && composer.y >= 0 && composer.y + composer.height <= height + 1, `Overflow or hidden composer: ${name} ${width}`);
+      if (screenshotDir) await surface.screenshot({ path: `${screenshotDir}/assistant-${name}-${width}.png` });
+    };
+    for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) await capture(panel, "welcome", width, height);
+    await prompt.click();
+    const input = panel.getByRole("textbox", { name: "Tin nhắn cho trợ lý" });
+    assert((await input.inputValue()).includes("đơn vé gần đây") && await input.evaluate(node => node === document.activeElement)
+      && chat.length === 0, "Suggestion should only fill and focus composer");
     let release;
     nextMessage = { response: { text: "Không tìm thấy đơn.", orders: [] }, ready: new Promise(resolve => { release = resolve; }) };
     try {
-      await input.press("Enter");
+      await panel.getByRole("button", { name: "Gửi", exact: true }).click();
       const progress = panel.getByRole("status").filter({ hasText: "Trợ lý đang xử lý" });
       await progress.waitFor({ timeout: 7000 });
-      assert(await input.isDisabled(), "The composer must stay disabled while streaming");
+      assert(await input.isDisabled() && await progress.locator("svg").evaluate(node => getComputedStyle(node).animationName) === "none",
+        "Busy state must disable composer and respect reduced motion");
       assert(reads === 0 && await panel.getByText("Không tìm thấy đơn.").count() === 0,
         "Processing must appear before the turn is committed or any transcript GET");
     } finally { release(); }
     await panel.locator('.assistant-order-card a[href="/my-orders"]').waitFor();
     assert(chat.length === 1 && chat[0].conversationId === conversationId && chat[0].version === initialVersion && chat[0].requestId
       && reads === 1, "Send must reconcile one SSE turn from GET");
-    checks.push("widget progress before terminal, single GET and empty orders");
+    checks.push("keyboard, suggestions, streamed progress/reduced motion and empty orders");
 
+    failOpen = true;
+    await panel.getByRole("button", { name: "Đọc lại hội thoại" }).click();
+    const failed = panel.getByRole("alert").filter({ hasText: "Không mở được hội thoại" });
+    await failed.waitFor();
+    failOpen = false;
+    await panel.getByRole("button", { name: "Đọc lại hội thoại" }).click();
+    await failed.waitFor({ state: "hidden" });
     nextMessage = { response: { text: "Đây là sự kiện, đơn và nháp vé của bạn.", events, orders, draft } };
     await input.fill("Xem sự kiện, đơn và nháp vé");
     await input.press("Enter");
     await panel.locator(`a[href="/event/${eventId}"]`).waitFor();
+    for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) await capture(panel, "floating-results", width, height);
+    const shell = page.locator(".chatbot-shell");
     await panel.getByRole("link", { name: "Mở rộng" }).click();
     await page.waitForURL(`${origin}/chatbot`);
     await launcher.waitFor({ state: "detached" });
-    const shell = page.locator(".chatbot-shell");
-    await shell.locator("form.assistant-purchase-form").waitFor();
-    assert(await shell.locator("form.assistant-purchase-form").count() === 1
-      && await shell.locator(`a[href="/my-orders?orderId=${existingOrderId}"]`).count() === 1
-      && bookings.length === 0, "GET renders one draft and order without creating a booking");
-    checks.push("GET transcript with one event, order and purchase draft");
+    const order = shell.locator(`.assistant-order-card:has(a[href="/my-orders?orderId=${existingOrderId}"])`);
+    const form = shell.locator("form.assistant-purchase-form");
+    await form.waitFor();
+    assert(await order.getByText(existingOrderId, { exact: false }).count() === 1
+      && /300[.\s]000/.test(await order.locator(".assistant-ticket-total").innerText())
+      && await order.getByText(/Giữ vé đến/).count() === 1
+      && await shell.getByText("Invalid fixture order").count() === 0, "Wrong order details or invalid order ID exposure");
+    assert(/300[.\s]000/.test(await form.locator(".assistant-ticket-total").innerText())
+      && await form.getByText(/Nháp có hiệu lực đến/).count() === 1
+      && await form.getByText(/Nháp chưa giữ vé hoặc giá/).count() === 1
+      && bookings.length === 0, "Draft needs an estimate/deadline and must not book by itself");
+    for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) await capture(shell, "results", width, height);
+    await form.getByRole("textbox").fill(customerEmail);
+    await form.evaluate(node => {
+      node.requestSubmit();
+      node.requestSubmit();
+    });
+    await shell.locator(`a[href="/checkout?orderId=${orderId}"]`).waitFor();
+    assert(bookings.length === 1 && bookings[0].key === draftId && bookings[0].body.eventId === eventId
+      && bookings[0].body.customerEmail === customerEmail && bookings[0].body.selection.mode === "QUANTITY"
+      && JSON.stringify(bookings[0].body.selection.items) === JSON.stringify(items), "Expected one Booking request with draft idempotency key");
+    checks.push("reload recovery, event link, valid order, draft and one mock Booking with Checkout CTA");
 
     const fullInput = shell.getByRole("textbox", { name: "Tin nhắn cho trợ lý" });
     const fullError = shell.getByRole("alert");
@@ -249,9 +318,12 @@ async (page, origin = "http://127.0.0.1:5173") => {
     try {
       await prepare(english, "BUYER", "en");
       await english.goto(`${origin}/chatbot`);
-      await english.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
+      await english.getByRole("heading", { name: "FlashTicket Assistant" }).waitFor();
+      await english.locator('.floating-chatbot-input input:not(:disabled)').waitFor();
+      assert(await english.getByRole("textbox", { name: "Message to the assistant" }).count() === 1,
+        "Direct navigation must open the conversation and enable the English composer");
       const [sentBeforeLogout, readsBeforeLogout] = [chat.length, reads];
-      const englishInput = english.locator(".floating-chatbot-input input");
+      const englishInput = english.getByRole("textbox", { name: "Message to the assistant" });
       await english.evaluate(() => {
         const auth = window.__KEYCLOAK_INSTANCE__;
         auth.isTokenExpired = () => true;
@@ -266,7 +338,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
         auth.onAuthLogout?.();
         window.finishFixtureRefresh(false);
       });
-      await englishInput.waitFor({ state: "detached", timeout: 7000 });
+      await english.locator(".assistant-gate").waitFor({ timeout: 7000 });
       assert(chat.length === sentBeforeLogout && reads === readsBeforeLogout, "Logout during refresh must prevent the old POST and GET");
       checks.push("logout during JWT refresh blocks stale POST/GET");
 
@@ -288,7 +360,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
           auth.authenticated = false; auth.token = undefined; auth.idToken = undefined; auth.tokenParsed = undefined;
           auth.onAuthLogout?.();
         });
-        await englishInput.waitFor({ state: "detached", timeout: 7000 });
+        await english.locator(".assistant-gate").waitFor({ timeout: 7000 });
       } finally { releaseLogout(); }
       assert(chat.length === sentBeforeLogout + 1 && reads === readsBeforeLogout, "Logout while reading must prevent stale reconciliation");
       checks.push("logout during stream blocks stale reconciliation");
@@ -318,7 +390,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
       await dual.getByRole("link", { name: "Chat thống kê", exact: true }).click({ timeout: 7000 });
       await dual.waitForURL(`${origin}/organizer/chatbot`);
       const shell = dual.locator('.chatbot-shell[aria-label="Trợ lý nhà tổ chức"]');
-      const buyerShell = dual.locator('.chatbot-shell[aria-label="FlashTicket Assistant"]');
+      const buyerShell = dual.locator('.chatbot-shell[aria-label="Trợ lý FlashTicket"]');
       const input = shell.locator(".floating-chatbot-input input");
       await shell.locator(".floating-chatbot-input input:not(:disabled)").waitFor();
       assert(await dual.locator(".floating-chatbot-trigger").count() === 0, "Organizer chat should have a single composer");
@@ -456,7 +528,7 @@ async (page, origin = "http://127.0.0.1:5173") => {
     } finally { await multiRole.close(); }
 
     assert(unexpected.length === 0 && errors.length === 0, `Unexpected API/page errors: ${[...unexpected, ...errors].join("; ")}`);
-    return { checks: [...checks, "VI/EN progress and no unexpected writes"] };
+    return { checks: [...checks, "VI/EN labels, 1440/390/320 layouts and no unexpected writes"] };
   } finally {
     // Keep requests mocked until the runner closes this isolated context.
     await page.close();

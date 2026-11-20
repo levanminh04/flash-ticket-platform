@@ -3,6 +3,7 @@ package com.flashticket.booking_service.order;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.flashticket.booking_service.dto.projection.ExpiredOrderCandidate;
 import com.flashticket.booking_service.enums.OrderState;
 import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.order.service.OrderService;
@@ -27,99 +28,115 @@ class OrderExpiryWorkerTests {
   void pollsExpiredOrderIdsUsingDatabaseTime() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
     var cutoff = Instant.parse("2026-10-30T00:00:00Z");
-    var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+    var first = new ExpiredOrderCandidate(UUID.randomUUID(), cutoff.minusSeconds(1));
+    var last = new ExpiredOrderCandidate(UUID.randomUUID(), cutoff);
     when(orderRepository.currentDatabaseTime()).thenReturn(cutoff);
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, cutoff, null, PageRequest.of(0, 2)))
-        .thenReturn(ids);
+    when(orderRepository.findExpiredOrderCandidates(
+            OrderState.PENDING_PAYMENT, cutoff, PageRequest.of(0, 2)))
+        .thenReturn(List.of(first, last));
     worker.expireDueOrders();
     var ordered = inOrder(orderService);
-    ordered.verify(orderService).expireOrder(ids.getFirst());
-    ordered.verify(orderService).expireOrder(ids.getLast());
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(ids.getLast());
+    ordered.verify(orderService).expireOrder(first.getOrderId());
+    ordered.verify(orderService).expireOrder(last.getOrderId());
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(last);
+    assertThat(ReflectionTestUtils.getField(worker, "cycleCutoff")).isEqualTo(cutoff);
   }
 
   @Test
   void continuesAfterOrderExpiryFailure() {
     ReflectionTestUtils.setField(worker, "batchSize", 3);
-    var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+    var first = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH);
+    var last = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH);
     when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH);
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, null, PageRequest.of(0, 3)))
-        .thenReturn(ids);
+    when(orderRepository.findExpiredOrderCandidates(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, PageRequest.of(0, 3)))
+        .thenReturn(List.of(first, last));
     doThrow(new IllegalStateException("commit failed"))
         .when(orderService)
-        .expireOrder(ids.getFirst());
+        .expireOrder(first.getOrderId());
     assertThatCode(worker::expireDueOrders).doesNotThrowAnyException();
-    verify(orderService).expireOrder(ids.getLast());
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isNull();
+    verify(orderService).expireOrder(last.getOrderId());
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isNull();
+    assertThat(ReflectionTestUtils.getField(worker, "cycleCutoff")).isNull();
   }
 
   @Test
   void advancesAndWrapsExpiryCursorAfterFailures() {
     ReflectionTestUtils.setField(worker, "batchSize", 1);
-    UUID bad = UUID.randomUUID(), next = UUID.randomUUID();
-    when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH);
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, null, PageRequest.of(0, 1)))
+    var bad = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH.minusSeconds(1));
+    var next = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH);
+    var newCutoff = Instant.EPOCH.plusSeconds(5);
+    var page = PageRequest.of(0, 1);
+    when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH, newCutoff);
+    when(orderRepository.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, Instant.EPOCH, page))
         .thenReturn(List.of(bad));
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, bad, PageRequest.of(0, 1)))
+    when(orderRepository.findExpiredOrderCandidatesAfter(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, bad.getExpiresAt(), bad.getOrderId(), page))
         .thenReturn(List.of(next));
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, next, PageRequest.of(0, 1)))
+    when(orderRepository.findExpiredOrderCandidatesAfter(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, next.getExpiresAt(), next.getOrderId(), page))
         .thenReturn(List.of());
-    doThrow(new IllegalStateException("bad order")).when(orderService).expireOrder(bad);
+    when(orderRepository.findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, newCutoff, page))
+        .thenReturn(List.of(bad));
+    doThrow(new IllegalStateException("bad order")).when(orderService).expireOrder(bad.getOrderId());
     worker.expireDueOrders();
     worker.expireDueOrders();
-    verify(orderService).expireOrder(next);
+    verify(orderService).expireOrder(next.getOrderId());
     worker.expireDueOrders();
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isNull();
+    verify(orderRepository).currentDatabaseTime();
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isNull();
+    assertThat(ReflectionTestUtils.getField(worker, "cycleCutoff")).isNull();
     worker.expireDueOrders();
+    verify(orderRepository).findExpiredOrderCandidates(OrderState.PENDING_PAYMENT, newCutoff, page);
     var restarted = new OrderExpiryWorker(orderRepository, orderService);
     ReflectionTestUtils.setField(restarted, "batchSize", 1);
     restarted.expireDueOrders();
-    verify(orderService, times(3)).expireOrder(bad);
+    verify(orderService, times(3)).expireOrder(bad.getOrderId());
   }
 
   @Test
   void preservesExpiryCursorWhenCandidateQueryFails() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
-    var cursor = UUID.randomUUID();
-    ReflectionTestUtils.setField(worker, "lastOrderId", cursor);
-    when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH);
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor, PageRequest.of(0, 2)))
+    var cursor = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH.minusSeconds(1));
+    ReflectionTestUtils.setField(worker, "lastCandidate", cursor);
+    ReflectionTestUtils.setField(worker, "cycleCutoff", Instant.EPOCH);
+    var page = PageRequest.of(0, 2);
+    when(orderRepository.findExpiredOrderCandidatesAfter(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor.getExpiresAt(), cursor.getOrderId(), page))
         .thenThrow(new IllegalStateException("database down"))
         .thenReturn(List.of());
     assertThatThrownBy(worker::expireDueOrders).isInstanceOf(IllegalStateException.class);
-    assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(cursor);
+    assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(cursor);
+    assertThat(ReflectionTestUtils.getField(worker, "cycleCutoff")).isEqualTo(Instant.EPOCH);
     worker.expireDueOrders();
     verify(orderRepository, times(2))
-        .findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor, PageRequest.of(0, 2));
+        .findExpiredOrderCandidatesAfter(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, cursor.getExpiresAt(), cursor.getOrderId(), page);
+    verify(orderRepository, never()).currentDatabaseTime();
     verifyNoInteractions(orderService);
   }
 
   @Test
   void stopsExpiryBatchWhenThreadIsInterrupted() {
     ReflectionTestUtils.setField(worker, "batchSize", 2);
-    var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+    var first = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH);
+    var last = new ExpiredOrderCandidate(UUID.randomUUID(), Instant.EPOCH);
     when(orderRepository.currentDatabaseTime()).thenReturn(Instant.EPOCH);
-    when(orderRepository.findExpiredOrderIds(
-            OrderState.PENDING_PAYMENT, Instant.EPOCH, null, PageRequest.of(0, 2)))
-        .thenReturn(ids);
+    when(orderRepository.findExpiredOrderCandidates(
+            OrderState.PENDING_PAYMENT, Instant.EPOCH, PageRequest.of(0, 2)))
+        .thenReturn(List.of(first, last));
     doAnswer(
             invocation -> {
               Thread.currentThread().interrupt();
               return null;
             })
         .when(orderService)
-        .expireOrder(ids.getFirst());
+        .expireOrder(first.getOrderId());
     try {
       worker.expireDueOrders();
-      verify(orderService, never()).expireOrder(ids.getLast());
-      assertThat(ReflectionTestUtils.getField(worker, "lastOrderId")).isEqualTo(ids.getFirst());
+      verify(orderService, never()).expireOrder(last.getOrderId());
+      assertThat(ReflectionTestUtils.getField(worker, "lastCandidate")).isSameAs(first);
+      assertThat(ReflectionTestUtils.getField(worker, "cycleCutoff")).isEqualTo(Instant.EPOCH);
     } finally {
       Thread.interrupted();
     }

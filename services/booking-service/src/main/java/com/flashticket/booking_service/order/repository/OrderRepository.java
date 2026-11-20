@@ -3,8 +3,10 @@ package com.flashticket.booking_service.order.repository;
 import com.flashticket.booking_service.dto.projection.BuyerOrderPageRow;
 import com.flashticket.booking_service.dto.projection.DailyOrderSalesTotals;
 import com.flashticket.booking_service.dto.projection.DailyTicketSalesTotals;
+import com.flashticket.booking_service.dto.projection.EventCancellationCandidate;
 import com.flashticket.booking_service.dto.projection.EventOrderSalesTotals;
 import com.flashticket.booking_service.dto.projection.EventTicketSalesTotals;
+import com.flashticket.booking_service.dto.projection.ExpiredOrderCandidate;
 import com.flashticket.booking_service.dto.projection.OrderStateTotals;
 import com.flashticket.booking_service.dto.projection.StateTicketTotals;
 import com.flashticket.booking_service.dto.projection.TicketTypeStateTotals;
@@ -26,32 +28,66 @@ import org.springframework.data.repository.query.Param;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
   @Query(
       """
-      select o.id from Order o
-      join Reservation r on r.order = o
-      join EventSalesSnapshot s on s.eventId = o.eventId
-      where s.eventStatus = com.flashticket.booking_service.enums.EventState.CANCELLED
+      select new com.flashticket.booking_service.dto.projection.EventCancellationCandidate(r.eventId, r.order.id)
+      from Reservation r join r.order o
+      where r.eventId in (
+        select s.eventId from EventSalesSnapshot s
+        where s.eventStatus = com.flashticket.booking_service.enums.EventState.CANCELLED)
         and r.state in (com.flashticket.booking_service.enums.ReservationState.HELD,
                         com.flashticket.booking_service.enums.ReservationState.COMMITTED)
         and o.lifecycleState in (com.flashticket.booking_service.enums.OrderState.PENDING_PAYMENT,
                                  com.flashticket.booking_service.enums.OrderState.ISSUING,
                                  com.flashticket.booking_service.enums.OrderState.COMPLETED,
                                  com.flashticket.booking_service.enums.OrderState.CANCELLED)
-        and (:afterOrderId is null or o.id > :afterOrderId)
-      order by o.id asc
+      order by r.eventId asc, r.order.id asc
       """)
-  List<UUID> findOrderIdsForEventCancellation(
-      @Param("afterOrderId") UUID afterOrderId, Pageable pageable);
+  List<EventCancellationCandidate> findEventCancellationCandidates(Pageable pageable);
 
   @Query(
       """
-      select o.id from Order o
-      where o.lifecycleState = :state and o.expiresAt <= :cutoff
-        and (:afterOrderId is null or o.id > :afterOrderId)
-      order by o.id asc
+      select new com.flashticket.booking_service.dto.projection.EventCancellationCandidate(r.eventId, r.order.id)
+      from Reservation r join r.order o
+      where r.eventId in (
+        select s.eventId from EventSalesSnapshot s
+        where s.eventStatus = com.flashticket.booking_service.enums.EventState.CANCELLED)
+        and r.state in (com.flashticket.booking_service.enums.ReservationState.HELD,
+                        com.flashticket.booking_service.enums.ReservationState.COMMITTED)
+        and o.lifecycleState in (com.flashticket.booking_service.enums.OrderState.PENDING_PAYMENT,
+                                 com.flashticket.booking_service.enums.OrderState.ISSUING,
+                                 com.flashticket.booking_service.enums.OrderState.COMPLETED,
+                                 com.flashticket.booking_service.enums.OrderState.CANCELLED)
+        and r.eventId >= :afterEventId
+        and (r.eventId > :afterEventId or r.order.id > :afterOrderId)
+      order by r.eventId asc, r.order.id asc
       """)
-  List<UUID> findExpiredOrderIds(
+  List<EventCancellationCandidate> findEventCancellationCandidatesAfter(
+      @Param("afterEventId") UUID afterEventId,
+      @Param("afterOrderId") UUID afterOrderId,
+      Pageable pageable);
+
+  @Query(
+      """
+      select new com.flashticket.booking_service.dto.projection.ExpiredOrderCandidate(o.id, o.expiresAt)
+      from Order o
+      where o.lifecycleState = :state and o.expiresAt <= :cutoff
+      order by o.expiresAt asc, o.id asc
+      """)
+  List<ExpiredOrderCandidate> findExpiredOrderCandidates(
+      @Param("state") OrderState state, @Param("cutoff") Instant cutoff, Pageable pageable);
+
+  @Query(
+      """
+      select new com.flashticket.booking_service.dto.projection.ExpiredOrderCandidate(o.id, o.expiresAt)
+      from Order o
+      where o.lifecycleState = :state and o.expiresAt <= :cutoff
+        and o.expiresAt >= :afterExpiresAt
+        and (o.expiresAt > :afterExpiresAt or o.id > :afterOrderId)
+      order by o.expiresAt asc, o.id asc
+      """)
+  List<ExpiredOrderCandidate> findExpiredOrderCandidatesAfter(
       @Param("state") OrderState state,
       @Param("cutoff") Instant cutoff,
+      @Param("afterExpiresAt") Instant afterExpiresAt,
       @Param("afterOrderId") UUID afterOrderId,
       Pageable pageable);
 
