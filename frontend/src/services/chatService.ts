@@ -1,7 +1,8 @@
 import { isAxiosError } from "axios";
 import axiosClient from "../lib/axiosClient";
 import keycloak from "../lib/keycloak";
-import type { ChatRequest, ConversationView, ResetConversationRequest } from "../types/assistantContract";
+import { toolProgressOperations } from "../types/assistantContract";
+import type { ChatRequest, ConversationView, ResetConversationRequest, ToolProgressOperation } from "../types/assistantContract";
 
 export type AssistantWorkspace = "buyer" | "organizer" | "admin";
 
@@ -28,14 +29,17 @@ const roots: Record<AssistantWorkspace, string> = {
 };
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
-async function readTurnStream(body: ReadableStream<Uint8Array>, request: ChatRequest, onProcessing: () => void): Promise<string | undefined> {
+async function readTurnStream(body: ReadableStream<Uint8Array>, request: ChatRequest, workspace: AssistantWorkspace,
+  onProcessing: () => void, onToolProgress: (operation: ToolProgressOperation) => void): Promise<string | undefined> {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const reader = body.getReader();
+  const allowedOperations: readonly ToolProgressOperation[] = toolProgressOperations[workspace];
   let buffer = "";
   let skipLeadingLf = false;
   let event = "";
   let data: string[] = [];
   let processing = false;
+  let progressCount = 0;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -60,11 +64,16 @@ async function readTurnStream(body: ReadableStream<Uint8Array>, request: ChatReq
           continue;
         }
         if (data.length) {
-          const payload: { requestId?: unknown; conversationId?: unknown; version?: unknown; code?: unknown } | null = JSON.parse(data.join("\n"));
+          const payload: { requestId?: unknown; conversationId?: unknown; version?: unknown; code?: unknown; operation?: unknown } | null = JSON.parse(data.join("\n"));
           if (!payload || payload.requestId !== request.requestId) throw new Error("ASSISTANT_STREAM_INVALID");
           if (event === "processing" && !processing) {
             processing = true;
             onProcessing();
+          } else if (event === "tool_progress" && processing && Object.keys(payload).length === 2
+              && typeof payload.operation === "string" && ++progressCount <= 6) {
+            const operation = allowedOperations.find(value => value === payload.operation);
+            if (!operation) throw new Error("ASSISTANT_STREAM_INVALID");
+            onToolProgress(operation);
           } else if (event === "result" && processing && payload.conversationId === request.conversationId
               && typeof payload.version === "string" && uuidPattern.test(payload.version)) {
             return;
@@ -91,9 +100,10 @@ export const chatService = {
   getConversation: async (signal?: AbortSignal, workspace: AssistantWorkspace = "buyer"): Promise<ConversationView> =>
     (await axiosClient.get<ConversationView>(`${roots[workspace]}/conversations/current`, requestConfig(signal))).data,
   streamMessage: async (payload: ChatRequest, signal: AbortSignal, isRequestContextCurrent: () => boolean,
-    onProcessing: () => void, workspace: AssistantWorkspace = "buyer"): Promise<string | undefined> => {
+    onProcessing: () => void, onToolProgress: (operation: ToolProgressOperation) => void,
+    workspace: AssistantWorkspace): Promise<string | undefined> => {
     if (typeof ReadableStream === "undefined" || typeof TextDecoder === "undefined") throw new Error("ASSISTANT_STREAM_UNAVAILABLE");
-    const response = await axiosClient.post<ReadableStream<Uint8Array>>(`${roots[workspace]}/messages/stream`, payload, {
+    const response = await axiosClient.post<ReadableStream<Uint8Array>>(`${roots[workspace]}/messages/stream?progress=tool-v1`, payload, {
       ...requestConfig(signal), isRequestContextCurrent, adapter: "fetch", responseType: "stream",
       fetchOptions: { redirect: "error" }, maxContentLength: 8192,
       headers: { Accept: "text/event-stream, application/problem+json" },
@@ -105,7 +115,7 @@ export const chatService = {
       void response.data?.cancel?.().catch(() => {});
       throw new Error("ASSISTANT_STREAM_INVALID");
     }
-    return readTurnStream(response.data, payload, onProcessing);
+    return readTurnStream(response.data, payload, workspace, onProcessing, onToolProgress);
   },
   resetConversation: async (payload: ResetConversationRequest, signal?: AbortSignal,
     workspace: AssistantWorkspace = "buyer"): Promise<ConversationView> =>

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
@@ -27,14 +27,23 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const locale = i18n.language === "vi" ? "vi-VN" : "en";
   const assistant = useAssistantConversation();
   const [opened, setOpened] = useState(fullPage);
-  const [input, setInput] = useState("");
+  const [draft, setDraft] = useState<{ text: string; id: string; scope: string; revision: number } | null>(null);
+  const nearBottom = useRef(true);
+  const previousHistory = useRef<{ scope: string; conversationId: string; tailId: string | undefined; revision: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const messages = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const composer = useRef<HTMLInputElement>(null);
   const panelId = useId();
   const visible = fullPage || opened;
-  const { workspace, allowed, open, conversation, busy, turnPhase, ownerScope, error, notice } = assistant;
+  const { workspace, allowed, open, conversation, busy, turnPhase, operation, ownerScope, error, notice,
+    confirmedDraftId, composerRevision, historyRevision } = assistant;
+  const scope = allowed ? ownerScope : null;
+  const activeDraft = scope && draft?.scope === scope && draft.revision === composerRevision
+    && draft.id !== confirmedDraftId ? draft : null;
+  const input = activeDraft?.text ?? "";
+  const conversationId = conversation?.conversationId;
+  const tailId = conversation?.messages[conversation.messages.length - 1]?.id;
   const isBuyer = workspace === "buyer";
   const isOrganizer = workspace === "organizer";
   const isAdmin = workspace === "admin";
@@ -42,29 +51,45 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const promptKeys = isAdmin ? adminPrompts : isOrganizer ? organizerPrompts : quickPrompts;
   const hasMessages = Boolean(conversation?.messages.length);
 
-  useEffect(() => { setInput(""); }, [ownerScope, conversation?.conversationId]);
+  useEffect(() => {
+    setDraft(current => current && (current.scope !== scope || current.revision !== composerRevision
+      || current.id === confirmedDraftId) ? null : current);
+  }, [scope, composerRevision, confirmedDraftId]);
   useEffect(() => {
     if (!visible || !allowed) return;
     // Đợi provider dọn phiên cũ trước khi mở hội thoại sau khi khởi tạo tài khoản.
     const timer = window.setTimeout(() => void open(), 0);
     return () => window.clearTimeout(timer);
   }, [visible, allowed, ownerScope, open]);
-  useEffect(() => {
-    if (!visible || !hasMessages || !messages.current) return;
-    messages.current.scrollTo({
-      top: messages.current.scrollHeight,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
-    });
-  }, [conversation, busy, hasMessages, visible]);
+  useLayoutEffect(() => {
+    const transcript = messages.current;
+    if (!visible || !scope || !conversationId || !transcript) {
+      previousHistory.current = null;
+      nearBottom.current = true;
+      return;
+    }
+    const previous = previousHistory.current;
+    previousHistory.current = { scope, conversationId, tailId, revision: historyRevision };
+    const loadedHistory = !previous || previous.scope !== scope || previous.conversationId !== conversationId
+      || previous.revision !== historyRevision;
+    if (!loadedHistory && previous.tailId === tailId) return;
+    const isAppend = !loadedHistory && tailId && (!previous.tailId
+      || conversation?.messages.some(message => message.id === previous.tailId));
+    if (isAppend && !nearBottom.current) return;
+    const smooth = isAppend && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    transcript.scrollTo({ top: transcript.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+    if (!smooth) nearBottom.current = true;
+  }, [visible, scope, conversationId, tailId, historyRevision, conversation]);
   useEffect(() => {
     const handlePrompt = (event: Event) => {
       const prompt = (event as CustomEvent<string>).detail;
       if (typeof prompt !== "string") return;
-      setOpened(true); setInput(prompt.slice(0, 2000));
+      setOpened(true);
+      if (scope) setDraft({ text: prompt.slice(0, 2000), id: crypto.randomUUID(), scope, revision: composerRevision });
     };
     window.addEventListener(CHATBOT_PROMPT_EVENT, handlePrompt);
     return () => window.removeEventListener(CHATBOT_PROMPT_EVENT, handlePrompt);
-  }, []);
+  }, [scope, composerRevision]);
   useEffect(() => {
     if (!opened || fullPage) return;
     const closeOutside = (event: PointerEvent) => {
@@ -77,8 +102,7 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const close = () => { setOpened(false); trigger.current?.focus(); };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await assistant.send(input);
-    // Giữ nội dung để retry cùng requestId khi kết quả chưa rõ.
+    if (activeDraft) await assistant.send(activeDraft.text, activeDraft.id);
   };
 
   return <div className={fullPage ? "assistant-full-page" : "floating-chatbot"} ref={root}
@@ -130,7 +154,11 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
           : "chatbot.loginRequired")}</p>
         {initialized && !keycloak.authenticated && <button className="assistant-primary" type="button" onClick={() => void keycloak.login()}>{t("auth.signIn")}</button>}
       </div> : <>
-        <div className="assistant-transcript" ref={messages} tabIndex={0} role="region" aria-label={t("chatbot.transcript")}>
+        <div className="assistant-transcript" ref={messages} tabIndex={0} role="region" aria-label={t("chatbot.transcript")}
+          onScroll={event => {
+            const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+            nearBottom.current = scrollHeight - scrollTop - clientHeight <= 64;
+          }}>
           {!hasMessages && !busy && !error && <div className="assistant-welcome">
             <Ticket size={24} aria-hidden="true" />
             <h2>{t("chatbot.welcomeTitle")}</h2>
@@ -138,7 +166,10 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
             <div className="floating-chatbot-options">{promptKeys.map(key => {
               const label = isBuyer ? `chatbot.${key}` : `chatbot.${workspace}Prompts.${key}`;
               return <button key={key} type="button"
-                disabled={!conversation} onClick={() => { setInput(t(`${label}Prompt`)); composer.current?.focus(); }}>
+                disabled={!conversation} onClick={() => {
+                  if (scope) setDraft({ text: t(`${label}Prompt`), id: crypto.randomUUID(), scope, revision: composerRevision });
+                  composer.current?.focus();
+                }}>
                 {t(label)}<ChevronRight size={14} aria-hidden="true" />
               </button>;
             })}</div>
@@ -177,7 +208,8 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
             </article>)}
           </div>
           <div className="assistant-progress" role="status">{busy && <>
-            <LoaderCircle size={16} aria-hidden="true" />{t(turnPhase ? `chatbot.turn.${turnPhase}` : "chatbot.loadingConversation")}
+            <LoaderCircle size={16} aria-hidden="true" />{t(turnPhase === "processing" && operation
+              ? `chatbot.toolProgress.${operation}` : turnPhase ? `chatbot.turn.${turnPhase}` : "chatbot.loadingConversation")}
           </>}</div>
         </div>
         <footer className="assistant-footer">
@@ -186,8 +218,10 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
             <p role="alert">{error}</p>
           </div>
           <form className="floating-chatbot-input" onSubmit={submit}>
-            <input ref={composer} aria-label={t("chatbot.messageLabel")} value={input} onChange={event => setInput(event.target.value)}
-              placeholder={t("chatbot.placeholder")} maxLength={2000} disabled={!conversation || busy} />
+            <input ref={composer} aria-label={t("chatbot.messageLabel")} value={input} onChange={event => {
+              const text = event.target.value;
+              if (scope && text !== input) setDraft({ text, id: crypto.randomUUID(), scope, revision: composerRevision });
+            }} placeholder={t("chatbot.placeholder")} maxLength={2000} disabled={!conversation || busy} />
             <button className="assistant-primary" type="submit" disabled={!conversation || busy || !input.trim()} aria-label={t("chatbot.send")}>
               <SendHorizontal size={20} aria-hidden="true" />
             </button>

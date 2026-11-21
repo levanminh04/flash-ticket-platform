@@ -14,6 +14,7 @@ import dev.langchain4j.data.message.*;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.BeforeToolExecution;
 import dev.langchain4j.service.tool.ToolExecutionErrorHandler;
 import jakarta.validation.Validator;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +36,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -67,6 +69,11 @@ public class AssistantConversationService {
   }
 
   public ChatResponse sendMessage(Jwt jwt, ChatRequest request, AssistantWorkspace workspace) {
+    return sendMessage(jwt, request, workspace, null);
+  }
+
+  public ChatResponse sendMessage(Jwt jwt, ChatRequest request, AssistantWorkspace workspace,
+      Consumer<String> onToolProgress) {
     String owner = ownerKey(jwt, workspace);
     if (request == null || !validator.validate(request).isEmpty() || request.getMessage().trim().isEmpty()) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thông tin gửi lên không hợp lệ.");
@@ -86,7 +93,7 @@ public class AssistantConversationService {
     }
     Future<TurnResult> future = null;
     try {
-      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline, workspace));
+      future = assistantExecutor.submit(() -> runTurn(jwt, owner, lease, safeRequest, stored, deadline, workspace, onToolProgress));
       long remaining = Duration.between(clock.instant(), deadline).toNanos();
       if (remaining <= 0) throw new TimeoutException();
       TurnResult result = future.get(remaining, TimeUnit.NANOSECONDS);
@@ -158,7 +165,7 @@ public class AssistantConversationService {
   }
 
   private TurnResult runTurn(Jwt jwt, String ownerKey, UUID leaseToken, ChatRequest request,
-      ConversationState storedState, Instant deadline, AssistantWorkspace workspace) {
+      ConversationState storedState, Instant deadline, AssistantWorkspace workspace, Consumer<String> onToolProgress) {
     ownerKey(jwt, workspace);
     if (Thread.currentThread().isInterrupted() || !clock.instant().isBefore(deadline)
         || !conversationStore.isLeaseCurrent(ownerKey, request.getConversationId(), leaseToken)) {
@@ -177,6 +184,9 @@ public class AssistantConversationService {
       throw new AssistantProblem(HttpStatus.SERVICE_UNAVAILABLE, "CONVERSATION_CONTEXT_INVALID", "Không đọc được ngữ cảnh đã lưu.");
     }
     if (!context.isEmpty()) memory.add(ChatMessageDeserializer.messagesFromJson(boundedContext(context)));
+    Consumer<BeforeToolExecution> beforeToolExecution = event -> {
+      if (onToolProgress != null) reportToolProgress(workspace, event.request().name(), onToolProgress);
+    };
     BuyerAssistantTools buyerTools = null;
     String answer;
     if (workspace == AssistantWorkspace.ADMIN) {
@@ -184,7 +194,7 @@ public class AssistantConversationService {
           request.getConversationId(), leaseToken, deadline);
       var agent = AiServices.builder(AdminAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
           .tools(tools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
-          .build();
+          .beforeToolExecution(beforeToolExecution).build();
       String today = LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Ho_Chi_Minh")).toString();
       answer = agent.chat(request.getMessage(), today);
     } else if (workspace == AssistantWorkspace.ORGANIZER) {
@@ -192,7 +202,7 @@ public class AssistantConversationService {
           request.getConversationId(), leaseToken, deadline);
       var agent = AiServices.builder(OrganizerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
           .tools(tools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
-          .build();
+          .beforeToolExecution(beforeToolExecution).build();
       String today = LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Ho_Chi_Minh")).toString();
       answer = agent.chat(request.getMessage(), today);
     } else {
@@ -200,7 +210,7 @@ public class AssistantConversationService {
           ownerKey, request.getConversationId(), leaseToken, deadline);
       var agent = AiServices.builder(BuyerAssistantAgent.class).chatModel(chatModel).chatMemory(memory)
           .tools(buyerTools).maxToolCallingRoundTrips(3).toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation())
-          .build();
+          .beforeToolExecution(beforeToolExecution).build();
       answer = agent.chat(request.getMessage());
     }
     if (answer == null || answer.isBlank()) {
@@ -226,6 +236,39 @@ public class AssistantConversationService {
       result.setEvents(List.of());
     }
     return result;
+  }
+
+  private void reportToolProgress(AssistantWorkspace workspace, String toolName, Consumer<String> onToolProgress) {
+    if (toolName == null) return;
+    String operation = switch (workspace) {
+      case BUYER -> switch (toolName) {
+        case "searchEvents" -> "SEARCH_EVENTS";
+        case "getEvent" -> "READ_EVENT";
+        case "getAvailability" -> "CHECK_AVAILABILITY";
+        case "getMyOrders", "getMyOrder" -> "READ_ORDERS";
+        case "prepareQuantityPurchase" -> "PREPARE_DRAFT";
+        default -> null;
+      };
+      case ORGANIZER -> switch (toolName) {
+        case "getMySalesSummary", "getMySalesTrend" -> "ORGANIZER_SALES";
+        case "getMyTopEvents", "getMyEventSales" -> "ORGANIZER_EVENT_SALES";
+        case "listMyEvents", "getMyEvent" -> "ORGANIZER_EVENTS";
+        default -> null;
+      };
+      case ADMIN -> switch (toolName) {
+        case "getPlatformSalesSummary", "getPlatformSalesTrend" -> "PLATFORM_SALES";
+        case "getTopEventsBySales", "getEventSales" -> "PLATFORM_EVENT_SALES";
+        case "getOrganizerSalesSummary" -> "ORGANIZER_SALES_SUMMARY";
+        case "listEventsPendingReview" -> "PENDING_REVIEW";
+        default -> null;
+      };
+    };
+    if (operation == null) return;
+    try {
+      onToolProgress.accept(operation);
+    } catch (RuntimeException ignored) {
+      // Observer chỉ báo tiến trình; lỗi của observer không được đổi kết quả tool hoặc commit.
+    }
   }
 
   private String redactSensitiveText(String text) {

@@ -26,6 +26,13 @@ export interface ChatRequest {
   requestId: string;
   message: string;
 }
+export const toolProgressOperations = {
+  buyer: ["SEARCH_EVENTS", "READ_EVENT", "CHECK_AVAILABILITY", "READ_ORDERS", "PREPARE_DRAFT"],
+  organizer: ["ORGANIZER_SALES", "ORGANIZER_EVENT_SALES", "ORGANIZER_EVENTS"],
+  admin: ["PLATFORM_SALES", "PLATFORM_EVENT_SALES", "ORGANIZER_SALES_SUMMARY", "PENDING_REVIEW"],
+} as const;
+export type ToolProgressOperation = (typeof toolProgressOperations)[keyof typeof toolProgressOperations][number];
+
 export interface AssistantOrderSummary {
   orderId: string;
   eventTitle?: string | null;

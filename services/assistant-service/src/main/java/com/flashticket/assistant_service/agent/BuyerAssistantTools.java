@@ -41,7 +41,7 @@ public final class BuyerAssistantTools {
   }
 
   @Tool
-  public EventPage searchEvents(@P("Bộ lọc sự kiện công khai") EventSearchRequest request) {
+  public EventPage searchEvents(@P("Bộ lọc sự kiện công khai; để trống các trường chưa biết. Dùng đối tượng rỗng khi chỉ cần gợi ý.") EventSearchRequest request) {
     beforeTool(); requireValidToolInput(request);
     if (request.getFrom() != null && request.getTo() != null && request.getFrom().isAfter(request.getTo())) {
       throw new AssistantProblem(HttpStatus.BAD_REQUEST, "INVALID_EVENT_FILTER", "Khoảng ngày không hợp lệ.");

@@ -58,6 +58,17 @@ public class AssistantConfiguration {
   }
 
   @Bean
+  public ThreadPoolTaskExecutor assistantSseTurnExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(4);
+    executor.setMaxPoolSize(4);
+    executor.setQueueCapacity(0);
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+    executor.setThreadNamePrefix("assistant-sse-turn-");
+    return executor;
+  }
+
+  @Bean
   public Clock assistantClock() {
     return Clock.systemUTC();
   }
