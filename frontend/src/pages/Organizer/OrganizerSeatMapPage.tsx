@@ -98,32 +98,69 @@ function getBoundsFromPoints(points: Array<{ x: number; y: number }>): SeatMapEd
 }
 
 function getPublishValidationBounds(shape: SeatMapEditorShape): SeatMapEditorBounds {
-  if (shape.shapeType !== "ringSection" && shape.shapeType !== "fan") {
-    return shape.bounds;
+  let baseBounds: SeatMapEditorBounds = shape.bounds;
+
+  if (shape.shapeType === "ringSection" || shape.shapeType === "fan") {
+    const mapData = shape.mapData ?? {};
+    const cx = asNumber(mapData.cx) ?? shape.bounds.x + shape.bounds.width / 2;
+    const cy = asNumber(mapData.cy) ?? shape.bounds.y + shape.bounds.height / 2;
+    const outerRadius = Math.max(
+      asNumber(mapData.outerRadius) ?? Math.max(shape.bounds.width, shape.bounds.height) / 2,
+      1,
+    );
+    const innerRadius = Math.max(
+      asNumber(mapData.innerRadius) ?? (shape.shapeType === "ringSection" ? outerRadius * 0.72 : 0),
+      0,
+    );
+    const startAngle = asNumber(mapData.startAngle) ?? -70;
+    const endAngle = asNumber(mapData.endAngle) ?? 70;
+    const sampleAngles = [startAngle, endAngle, -180, -90, 0, 90, 180].filter((angle) =>
+      isAngleInSweep(angle, startAngle, endAngle),
+    );
+    const points = sampleAngles.flatMap((angle) => [
+      polarToCartesian(cx, cy, outerRadius, angle),
+      polarToCartesian(cx, cy, innerRadius, angle),
+    ]);
+
+    baseBounds = getBoundsFromPoints(points);
   }
 
-  const mapData = shape.mapData ?? {};
-  const cx = asNumber(mapData.cx) ?? shape.bounds.x + shape.bounds.width / 2;
-  const cy = asNumber(mapData.cy) ?? shape.bounds.y + shape.bounds.height / 2;
-  const outerRadius = Math.max(
-    asNumber(mapData.outerRadius) ?? Math.max(shape.bounds.width, shape.bounds.height) / 2,
-    1,
-  );
-  const innerRadius = Math.max(
-    asNumber(mapData.innerRadius) ?? (shape.shapeType === "ringSection" ? outerRadius * 0.72 : 0),
-    0,
-  );
-  const startAngle = asNumber(mapData.startAngle) ?? -70;
-  const endAngle = asNumber(mapData.endAngle) ?? 70;
-  const sampleAngles = [startAngle, endAngle, -180, -90, 0, 90, 180].filter((angle) =>
-    isAngleInSweep(angle, startAngle, endAngle),
-  );
-  const points = sampleAngles.flatMap((angle) => [
-    polarToCartesian(cx, cy, outerRadius, angle),
-    polarToCartesian(cx, cy, innerRadius, angle),
-  ]);
+  let minX = baseBounds.x;
+  let minY = baseBounds.y;
+  let maxX = baseBounds.x + baseBounds.width;
+  let maxY = baseBounds.y + baseBounds.height;
 
-  return getBoundsFromPoints(points);
+  const outlinePoints = shape.mapData?.transformedOutlinePoints;
+  if (Array.isArray(outlinePoints)) {
+    for (let index = 0; index + 1 < outlinePoints.length; index += 2) {
+      const px = asNumber(outlinePoints[index]);
+      const py = asNumber(outlinePoints[index + 1]);
+      if (px !== null && py !== null) {
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+    }
+  }
+
+  const seatPad = Math.max(shape.seatLayout?.seatRadius ?? 8.5, 8);
+  for (const seat of shape.seats) {
+    if (seat.hidden === true) continue;
+    if (Number.isFinite(seat.x) && Number.isFinite(seat.y)) {
+      minX = Math.min(minX, seat.x - seatPad);
+      minY = Math.min(minY, seat.y - seatPad);
+      maxX = Math.max(maxX, seat.x + seatPad);
+      maxY = Math.max(maxY, seat.y + seatPad);
+    }
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(maxX - minX, 1),
+    height: Math.max(maxY - minY, 1),
+  };
 }
 
 function getDocumentContentBounds(document: SeatMapEditorDocument) {

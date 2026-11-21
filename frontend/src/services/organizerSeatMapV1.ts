@@ -78,8 +78,13 @@ export function editorSeatMap({ seatMap: map, ticketTypes }: Owner): OrganizerSe
 
   const decorationItems = (map.layoutData?.decorations ?? []).map((dec, index) => {
     const rawShape = (dec.shape ?? {}) as Record<string, unknown>;
+    const cornerRadiusVal = Number(rawShape.cornerRadius ?? 0);
+    const fillLower = typeof rawShape.fill === "string" ? rawShape.fill.toLowerCase() : "";
     const isVenueFrame =
-      rawShape.isVenueShape === true && rawShape.venueVariant === "venue_frame";
+      (rawShape.isVenueShape === true && rawShape.venueVariant === "venue_frame") ||
+      (rawShape.shapeType === "roundedRect" &&
+        cornerRadiusVal >= 80 &&
+        (fillLower === "#f6ebe4" || String(dec.colorCode ?? "").toLowerCase() === "#e5b89b"));
     return {
       id: dec.id || createClientId(),
       name: dec.label || (isVenueFrame ? "Venue Shape" : "STAGE"),
@@ -92,6 +97,7 @@ export function editorSeatMap({ seatMap: map, ticketTypes }: Owner): OrganizerSe
         ...rawShape,
         decorative: true,
         hideSubtitle: true,
+        ...(isVenueFrame ? { isVenueShape: true, venueVariant: "venue_frame" } : {}),
       },
       seatsData: [],
     };
@@ -124,8 +130,6 @@ function wireShape(shape: SeatMapEditorShape) {
   if (mapData?.labelRotation !== undefined) extraMeta.labelRotation = mapData.labelRotation;
   if (mapData?.decorative) extraMeta.decorative = true;
   if (mapData?.hideSubtitle) extraMeta.hideSubtitle = true;
-  if (mapData?.isVenueShape !== undefined) extraMeta.isVenueShape = mapData.isVenueShape;
-  if (mapData?.venueVariant) extraMeta.venueVariant = mapData.venueVariant;
 
   if (shapeType === "polygon") return {
     ...extraMeta,

@@ -1304,16 +1304,32 @@ export function cloneShape(
   const deltaY = shape.bounds.y + shape.bounds.height + 44 <= canvasHeight ? 36 : -36;
   const translated = translateShape(shape, deltaX, deltaY);
 
+  const nextMapData = translated.mapData ? { ...translated.mapData } : undefined;
+  if (nextMapData) {
+    delete nextMapData.ticketTypeId;
+    delete nextMapData.ticketTypeIds;
+    delete nextMapData.ticketTypeName;
+    delete nextMapData.ticketTypeNames;
+  }
+
   return {
     ...translated,
     id: createClientId(),
     sectorId: createClientId(),
     name: nextName,
     label: nextName,
+    ticketTypeId: undefined,
+    ticketTypeName: undefined,
+    ticketTypeIds: [],
+    ticketTypeNames: [],
+    mapData: nextMapData,
     zIndex: existingShapes.length,
     seats: translated.seats.map((seat) => ({
       ...seat,
       id: createClientId(),
+      ticketTypeId: undefined,
+      colorCode: undefined,
+      inventoryStatus: undefined,
     })),
   };
 }
