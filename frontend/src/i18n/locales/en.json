@@ -264,6 +264,20 @@
       "processing": "Assistant is processing…",
       "reconciling": "Refreshing conversation…"
     },
+    "toolProgress": {
+      "SEARCH_EVENTS": "Searching for events…",
+      "READ_EVENT": "Checking event details…",
+      "CHECK_AVAILABILITY": "Checking ticket availability…",
+      "READ_ORDERS": "Looking up ticket orders…",
+      "PREPARE_DRAFT": "Preparing a ticket draft…",
+      "ORGANIZER_SALES": "Summarizing your sales…",
+      "ORGANIZER_EVENT_SALES": "Checking sales for your events…",
+      "ORGANIZER_EVENTS": "Looking up your events…",
+      "PLATFORM_SALES": "Summarizing platform sales…",
+      "PLATFORM_EVENT_SALES": "Checking sales by event…",
+      "ORGANIZER_SALES_SUMMARY": "Checking organizer sales…",
+      "PENDING_REVIEW": "Looking up events pending review…"
+    },
     "send": "Send",
     "discoveryEmpty": "Discovery did not find matching events for this request.",
     "discoveryFound": "Discovery found {{count}} related results.",

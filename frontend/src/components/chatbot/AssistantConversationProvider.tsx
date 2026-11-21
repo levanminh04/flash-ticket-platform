@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { assistantOwnerScope, chatService } from "../../services/chatService";
 import type { AssistantWorkspace } from "../../services/chatService";
 import { confirmDestructiveAction } from "../../lib/swal";
-import type { ChatRequest, ConversationView } from "../../types/assistantContract";
+import type { ChatRequest, ConversationView, ToolProgressOperation } from "../../types/assistantContract";
 
 type TurnPhase = "sending" | "processing" | "reconciling";
 
@@ -17,11 +17,15 @@ interface AssistantConversationContextValue {
   generation: number;
   busy: boolean;
   turnPhase?: TurnPhase;
+  operation?: ToolProgressOperation;
+  confirmedDraftId?: string;
+  composerRevision: number;
+  historyRevision: number;
   error: string;
   notice: string;
   allowed: boolean;
   open(): Promise<void>;
-  send(message: string): Promise<void>;
+  send(message: string, draftId: string): Promise<void>;
   reset(): Promise<void>;
   clearOwner(): void;
   isCurrent(conversationId: string, ownerScope: string, generation?: number): boolean;
@@ -31,6 +35,10 @@ interface ScopedState {
   conversation: ConversationView | null;
   busy: boolean;
   turnPhase?: TurnPhase;
+  operation?: ToolProgressOperation;
+  confirmedDraftId?: string;
+  composerRevision?: number;
+  historyRevision?: number;
   error: string;
   notice: string;
 }
@@ -64,7 +72,7 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
   const current = useRef(state);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
-  const pending = useRef<{ owner: string; request: ChatRequest } | null>(null);
+  const pending = useRef<{ owner: string; request: ChatRequest; draftId: string } | null>(null);
   const lifecycleOwner = useRef(owner);
   const lifecycleAllowed = useRef(allowed);
   const renderedOwner = useRef(owner);
@@ -77,7 +85,8 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     controller.current?.abort();
     controller.current = null;
     pending.current = null;
-    const next = { owner: assistantOwnerScope(workspace), conversation: null, busy: false, error: "", notice: "" };
+    const next = { owner: assistantOwnerScope(workspace), conversation: null, busy: false, error: "", notice: "",
+      composerRevision: (current.current.composerRevision ?? 0) + 1 };
     current.current = next;
     setState(next);
     queryClient.removeQueries({ queryKey: ["assistant"] });
@@ -124,10 +133,23 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     setState(current.current);
     try {
       const conversation = await chatService.openConversation(abort.signal, workspace);
-      if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
-      if (pending.current && (conversation.lastRequestId === pending.current.request.requestId
-          || conversation.version !== pending.current.request.version)) pending.current = null;
-      current.current = { owner: requestedOwner, conversation, busy: false, error: "",
+      if (abort.signal.aborted || !renderedAllowed.current || assistantOwnerScope(workspace) !== requestedOwner
+          || generation.current !== capturedGeneration) return;
+      const pendingTurn = pending.current;
+      let confirmedDraftId = current.current.confirmedDraftId;
+      if (pendingTurn?.owner === requestedOwner) {
+        if (conversation.conversationId === pendingTurn.request.conversationId
+            && conversation.lastRequestId === pendingTurn.request.requestId) {
+          confirmedDraftId = pendingTurn.draftId;
+          pending.current = null;
+        } else if (conversation.conversationId !== pendingTurn.request.conversationId
+            || conversation.version !== pendingTurn.request.version) {
+          pending.current = null;
+        }
+      }
+      current.current = { ...current.current, owner: requestedOwner, conversation, busy: false, error: "",
+        turnPhase: undefined, operation: undefined, confirmedDraftId,
+        historyRevision: (current.current.historyRevision ?? 0) + 1,
         notice: conversation.notice === "NEW_CONVERSATION" ? "Đã mở hội thoại mới." : "" };
       setState(current.current);
     } catch {
@@ -138,7 +160,7 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     }
   }, [allowed, workspace]);
 
-  const send = useCallback(async (message: string) => {
+  const send = useCallback(async (message: string, draftId: string) => {
     const requestedOwner = assistantOwnerScope(workspace);
     const stored = current.current;
     const text = message.trim();
@@ -153,15 +175,19 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     const request: ChatRequest = pending.current?.request || {
       conversationId, version: stored.conversation.version, requestId: crypto.randomUUID(), message: text,
     };
-    pending.current = { owner: requestedOwner, request };
+    const submittedDraftId = pending.current?.draftId ?? draftId;
+    pending.current = { owner: requestedOwner, request, draftId: submittedDraftId };
     const abort = new AbortController(); controller.current = abort;
     const isActive = () => !abort.signal.aborted && isCurrent(conversationId, requestedOwner, capturedGeneration);
-    current.current = { ...stored, busy: true, turnPhase: "sending", error: "", notice: "" }; setState(current.current);
+    current.current = { ...stored, busy: true, turnPhase: "sending", operation: undefined, error: "", notice: "" }; setState(current.current);
     let code: string | number | undefined;
     try {
       code = await chatService.streamMessage(request, abort.signal, isActive, () => {
         if (!isActive()) return;
         current.current = { ...current.current, turnPhase: "processing" }; setState(current.current);
+      }, operation => {
+        if (!isActive()) return;
+        current.current = { ...current.current, operation }; setState(current.current);
       }, workspace);
     } catch (error: unknown) {
       if (isAxiosError(error)) code = error.response?.status;
@@ -169,8 +195,9 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     if (!isActive()) return;
     // Chỉ terminal đã khớp requestId xác nhận lượt bị từ chối trước khi lưu.
     if (code === "INVALID_DATE_RANGE") pending.current = null;
-    current.current = { ...current.current, turnPhase: "reconciling" }; setState(current.current);
+    current.current = { ...current.current, turnPhase: "reconciling", operation: undefined }; setState(current.current);
     let conversation: ConversationView | null = stored.conversation;
+    let confirmedDraftId = stored.confirmedDraftId;
     let notice = "";
     let failure = turnFailure(code);
     try {
@@ -178,6 +205,7 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
       conversation = await chatService.getConversation(abort.signal, workspace);
       if (!isActive()) return;
       if (conversation.conversationId === conversationId && conversation.lastRequestId === request.requestId) {
+        if (code !== "INVALID_DATE_RANGE") confirmedDraftId = submittedDraftId;
         pending.current = null; failure = "";
       } else if (conversation.conversationId !== conversationId || conversation.version !== request.version) {
         pending.current = null; failure = "";
@@ -190,7 +218,9 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
         notice = "Hội thoại đã hết hạn. Hãy mở hội thoại mới; tin nhắn cũ sẽ không được gửi lại.";
       }
     }
-    current.current = { owner: requestedOwner, conversation, busy: false, error: failure, notice }; setState(current.current);
+    current.current = { ...stored, owner: requestedOwner, conversation, busy: false,
+      turnPhase: undefined, operation: undefined, confirmedDraftId, error: failure, notice };
+    setState(current.current);
   }, [allowed, isCurrent, workspace]);
 
   const reset = useCallback(async () => {
@@ -205,7 +235,8 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
     const capturedGeneration = generation.current;
     controller.current?.abort(); pending.current = null;
     const abort = new AbortController(); controller.current = abort;
-    current.current = { owner: requestedOwner, conversation: null, busy: true, error: "", notice: "Đang đặt lại hội thoại…" };
+    current.current = { owner: requestedOwner, conversation: null, busy: true, error: "", notice: "Đang đặt lại hội thoại…",
+      composerRevision: (stored.composerRevision ?? 0) + 1, historyRevision: stored.historyRevision };
     setState(current.current);
     try {
       const conversation = await chatService.resetConversation({ conversationId: stored.conversation.conversationId,
@@ -217,16 +248,17 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
       } catch {
         // Reset đã thành công trên server; lỗi storage không đổi kết quả đó.
       }
-      current.current = { owner: requestedOwner, conversation, busy: false, error: "", notice: "Đã bắt đầu hội thoại mới." };
+      current.current = { ...current.current, owner: requestedOwner, conversation, busy: false, error: "", notice: "Đã bắt đầu hội thoại mới." };
     } catch {
       if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
       try {
         const conversation = await chatService.getConversation(abort.signal, workspace);
         if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
-        current.current = { owner: requestedOwner, conversation, busy: false, error: "Chưa xác nhận được reset. Đã đọc lại trạng thái hiện hành.", notice: "" };
+        current.current = { ...current.current, owner: requestedOwner, conversation, busy: false, error: "Chưa xác nhận được reset. Đã đọc lại trạng thái hiện hành.", notice: "" };
       } catch {
         if (abort.signal.aborted || assistantOwnerScope(workspace) !== requestedOwner || generation.current !== capturedGeneration) return;
-        current.current = { owner: requestedOwner, conversation: null, busy: false, error: "Không đặt lại được hội thoại. Vui lòng đọc lại trước khi tiếp tục.", notice: "" };
+        current.current = { ...current.current, owner: requestedOwner, conversation: null, busy: false,
+          error: "Không đặt lại được hội thoại. Vui lòng đọc lại trước khi tiếp tục.", notice: "" };
       }
     }
     setState(current.current);
@@ -235,7 +267,9 @@ export function AssistantConversationProvider({ children, workspace = "buyer" }:
   // Che dữ liệu ngay trong render khi đổi account; không đợi effect cleanup.
   const visible = allowed && state.owner === owner ? state : null;
   return <AssistantContext.Provider value={{ workspace, conversation: visible?.conversation || null, ownerScope: owner,
-    generation: generation.current, busy: visible?.busy || false, turnPhase: visible?.turnPhase, error: visible?.error || "", notice: visible?.notice || "",
+    generation: generation.current, busy: visible?.busy || false, turnPhase: visible?.turnPhase, operation: visible?.operation,
+    confirmedDraftId: visible?.confirmedDraftId, composerRevision: visible?.composerRevision ?? 0,
+    historyRevision: visible?.historyRevision ?? 0, error: visible?.error || "", notice: visible?.notice || "",
     allowed, open, send, reset, clearOwner, isCurrent }}>{children}</AssistantContext.Provider>;
 }
 

@@ -38,6 +38,7 @@ class AssistantSecurityTests {
   @MockitoBean AssistantConversationService service;
   @MockitoBean JwtDecoder decoder;
   @MockitoBean(name = "assistantSseExecutor") ThreadPoolTaskExecutor sseExecutor;
+  @MockitoBean(name = "assistantSseTurnExecutor") ThreadPoolTaskExecutor sseTurnExecutor;
 
   @Test
   void requiresBuyerForMessageStream() throws Exception {

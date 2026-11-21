@@ -264,6 +264,20 @@
       "processing": "Trợ lý đang xử lý…",
       "reconciling": "Đang tải lại hội thoại…"
     },
+    "toolProgress": {
+      "SEARCH_EVENTS": "Đang tìm sự kiện…",
+      "READ_EVENT": "Đang xem thông tin sự kiện…",
+      "CHECK_AVAILABILITY": "Đang kiểm tra số vé…",
+      "READ_ORDERS": "Đang tra đơn vé…",
+      "PREPARE_DRAFT": "Đang chuẩn bị nháp vé…",
+      "ORGANIZER_SALES": "Đang tổng hợp doanh số của bạn…",
+      "ORGANIZER_EVENT_SALES": "Đang xem doanh số sự kiện của bạn…",
+      "ORGANIZER_EVENTS": "Đang tra sự kiện của bạn…",
+      "PLATFORM_SALES": "Đang tổng hợp doanh số nền tảng…",
+      "PLATFORM_EVENT_SALES": "Đang xem doanh số theo sự kiện…",
+      "ORGANIZER_SALES_SUMMARY": "Đang xem doanh số nhà tổ chức…",
+      "PENDING_REVIEW": "Đang tra sự kiện chờ duyệt…"
+    },
     "send": "Gửi",
     "discoveryEmpty": "Discovery không tìm thấy sự kiện phù hợp với yêu cầu này.",
     "discoveryFound": "Discovery tìm thấy {{count}} kết quả liên quan.",

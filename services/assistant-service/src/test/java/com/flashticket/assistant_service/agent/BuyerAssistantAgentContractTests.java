@@ -8,6 +8,8 @@ import com.flashticket.assistant_service.client.AssistantApiClient;
 import com.flashticket.assistant_service.config.AssistantConfiguration;
 import com.flashticket.assistant_service.dto.OrderReadPage;
 import com.flashticket.assistant_service.dto.ConversationState;
+import com.flashticket.assistant_service.dto.EventPage;
+import com.flashticket.assistant_service.dto.EventSearchRequest;
 import com.flashticket.assistant_service.dto.OrganizerSalesTrend;
 import com.flashticket.assistant_service.service.AssistantConversationService;
 import com.flashticket.assistant_service.service.RedisConversationStore;
@@ -166,6 +168,76 @@ class BuyerAssistantAgentContractTests {
           new HashSet<>(first.parameters().toolSpecifications().stream().map(ToolSpecification::name).toList()));
       assertTrue(((SystemMessage) first.messages().getFirst()).text().contains("2026-11-19"));
       assertFalse(captured.getAllValues().toString().contains("fixture-private-token"));
+    }
+  }
+
+  @Test
+  void exposesOptionalSearchFiltersAndAcceptsEmptyRequest() throws IOException {
+    var mapper = JsonMapper.builder().build();
+    var requests = new CopyOnWriteArrayList<JsonNode>();
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/v1/chat/completions", exchange -> {
+      try {
+        requests.add(mapper.readTree(exchange.getRequestBody()));
+        String choice = requests.size() == 1 ? """
+            {"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[
+              {"id":"search-fixture","type":"function","function":{"name":"searchEvents","arguments":"{\\"request\\":{}}"}}
+            ]}}
+            """ : """
+            {"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"No events in this page."}}
+            """;
+        byte[] response = ("""
+            {"id":"chatcmpl-fixture","object":"chat.completion","created":1794960000,"model":"gemini-3.8-flash-high","choices":[%s]}
+            """.formatted(choice)).getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, response.length);
+        exchange.getResponseBody().write(response);
+      } finally {
+        exchange.close();
+      }
+    });
+    server.start();
+    try (var factory = Validation.buildDefaultValidatorFactory()) {
+      var config = new AssistantConfiguration();
+      ReflectionTestUtils.setField(config, "baseUrl", "http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+      ReflectionTestUtils.setField(config, "apiKey", "fixture-proxy-key");
+      ReflectionTestUtils.setField(config, "model", "gemini-3.8-flash-high");
+      var api = mock(AssistantApiClient.class);
+      var store = mock(RedisConversationStore.class);
+      var now = Instant.parse("2026-11-18T00:00:00Z");
+      var jwt = Jwt.withTokenValue("fixture-buyer-jwt").header("alg", "RS256").subject("buyer").expiresAt(now.plusSeconds(300)).build();
+      var page = new EventPage();
+      page.setItems(List.of());
+      when(api.searchEvents(eq(jwt), any(EventSearchRequest.class))).thenReturn(page);
+      when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+      var tools = new BuyerAssistantTools(api, store, factory.getValidator(), Clock.fixed(now, ZoneOffset.UTC),
+          jwt, "owner", UUID.randomUUID(), UUID.randomUUID(), now.plusSeconds(45));
+      var agent = AiServices.builder(BuyerAssistantAgent.class).chatModel(config.buyerChatModel())
+          .chatMemory(MessageWindowChatMemory.withMaxMessages(30)).tools(tools).maxToolCallingRoundTrips(3)
+          .toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocation()).build();
+
+      assertEquals("No events in this page.", agent.chat("Suggest events"));
+      var captured = ArgumentCaptor.forClass(EventSearchRequest.class);
+      verify(api).searchEvents(eq(jwt), captured.capture());
+      EventSearchRequest filters = captured.getValue();
+      assertNotNull(filters);
+      assertNull(filters.getQ()); assertNull(filters.getVenue()); assertNull(filters.getCursor());
+      assertNull(filters.getCategoryId()); assertNull(filters.getFrom()); assertNull(filters.getTo()); assertNull(filters.getMaxPrice());
+      assertEquals(2, requests.size());
+      JsonNode searchSchema = null;
+      for (JsonNode tool : requests.getFirst().path("tools")) {
+        if ("searchEvents".equals(tool.at("/function/name").asString())) searchSchema = tool.at("/function/parameters");
+      }
+      assertNotNull(searchSchema);
+      assertEquals(mapper.readTree("[\"request\"]"), searchSchema.path("required"));
+      JsonNode requestSchema = searchSchema.at("/properties/request");
+      assertEquals(Set.of("q", "venue", "cursor", "categoryId", "from", "to", "maxPrice"), requestSchema.path("properties").propertyNames());
+      JsonNode requiredFilters = requestSchema.path("required");
+      assertTrue(requiredFilters.isMissingNode() || (requiredFilters.isArray() && requiredFilters.isEmpty()));
+      JsonNode messages = requests.getLast().path("messages");
+      assertEquals("search-fixture", messages.path(messages.size() - 1).path("tool_call_id").asString());
+    } finally {
+      server.stop(0);
     }
   }
 

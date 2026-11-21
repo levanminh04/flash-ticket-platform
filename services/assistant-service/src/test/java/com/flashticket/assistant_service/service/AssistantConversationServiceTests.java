@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,99 @@ class AssistantConversationServiceTests {
   private final AssistantApiClient api = mock(AssistantApiClient.class);
   private final ChatModel model = mock(ChatModel.class);
   private final Validator validator = mock(Validator.class);
+
+  @ParameterizedTest
+  @EnumSource(AssistantWorkspace.class)
+  void reportsOnlyWorkspaceToolAttemptsWithoutAffectingCommit(AssistantWorkspace workspace) {
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var service = new AssistantConversationService(store, api, model, executor, clock, validator);
+      var state = new ConversationState();
+      state.setConversationId(UUID.randomUUID()); state.setVersion(UUID.randomUUID());
+      state.setContextJson("[]"); state.setMessages(List.of());
+      var request = new ChatRequest();
+      request.setConversationId(state.getConversationId()); request.setVersion(state.getVersion());
+      request.setRequestId(UUID.randomUUID()); request.setMessage("Tra cứu");
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
+      when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+      when(store.commitTurn(anyString(), any(), any(), any(), any())).thenAnswer(returnsLastArg());
+      String toolName = switch (workspace) {
+        case BUYER -> "getMyOrders";
+        case ORGANIZER -> "getMySalesSummary";
+        case ADMIN -> "getPlatformSalesSummary";
+      };
+      String expectedOperation = switch (workspace) {
+        case BUYER -> "READ_ORDERS";
+        case ORGANIZER -> "ORGANIZER_SALES";
+        case ADMIN -> "PLATFORM_SALES";
+      };
+      var operations = new ArrayList<String>();
+      var page = new OrderReadPage(); page.setItems(List.of());
+      var summary = new OrganizerSalesSummary();
+      if (workspace == AssistantWorkspace.BUYER) {
+        when(api.getMyOrders(jwt, 0, "")).thenReturn(page);
+      } else if (workspace == AssistantWorkspace.ORGANIZER) {
+        when(api.getOrganizerSalesSummary(jwt, null, null)).thenReturn(summary);
+      } else {
+        when(api.getPlatformSalesSummary(jwt, null, null)).thenReturn(summary);
+      }
+      Consumer<String> observer = operation -> {
+        verifyNoInteractions(api);
+        operations.add(operation);
+        throw new IllegalStateException("Observer fixture");
+      };
+      var tool = ToolExecutionRequest.builder().id("progress-valid").name(toolName)
+          .arguments(workspace == AssistantWorkspace.BUYER ? "{\"page\":0,\"state\":\"\"}" : "{}").build();
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from(tool)).build(),
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from("Kết quả tra cứu")).build());
+      assertEquals("Kết quả tra cứu", service.sendMessage(jwt, request, workspace, observer).getMessage());
+      assertEquals(List.of(expectedOperation), operations);
+      var committed = ArgumentCaptor.forClass(ConversationState.class);
+      verify(store).commitTurn(anyString(), any(), any(), any(), committed.capture());
+      assertEquals(List.of("Tra cứu", "Kết quả tra cứu"), committed.getValue().getMessages().stream().map(TranscriptMessage::getText).toList());
+
+      clearInvocations(api, store);
+      operations.clear();
+      request.setRequestId(UUID.randomUUID());
+      String foreignTool = workspace == AssistantWorkspace.BUYER ? "getPlatformSalesSummary" : "getMyOrders";
+      var foreignCall = ToolExecutionRequest.builder().id("progress-foreign").name(foreignTool).arguments("{}").build();
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from(foreignCall)).build());
+      assertEquals("MODEL_TURN_FAILED", assertThrows(AssistantProblem.class,
+          () -> service.sendMessage(jwt, request, workspace, observer)).getCode());
+      assertTrue(operations.isEmpty());
+      verifyNoInteractions(api);
+      verify(store, never()).commitTurn(anyString(), any(), any(), any(), any());
+    }
+  }
+
+  @Test
+  void emitsNoToolProgressForDirectReplyOrReplay() {
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      var service = new AssistantConversationService(store, api, model, executor, clock, validator);
+      var state = new ConversationState();
+      state.setConversationId(UUID.randomUUID()); state.setVersion(UUID.randomUUID());
+      state.setContextJson("[]"); state.setMessages(List.of());
+      var request = new ChatRequest();
+      request.setConversationId(state.getConversationId()); request.setVersion(state.getVersion());
+      request.setRequestId(UUID.randomUUID()); request.setMessage("Hướng dẫn mua vé");
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(state);
+      when(store.isLeaseCurrent(anyString(), any(), any())).thenReturn(true);
+      when(store.commitTurn(anyString(), any(), any(), any(), any())).thenAnswer(returnsLastArg());
+      when(model.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class))).thenReturn(
+          dev.langchain4j.model.chat.response.ChatResponse.builder().aiMessage(AiMessage.from("Chọn sự kiện rồi chọn vé.")).build());
+      var operations = new ArrayList<String>();
+      var response = service.sendMessage(jwt, request, AssistantWorkspace.BUYER, operations::add);
+      var committed = ArgumentCaptor.forClass(ConversationState.class);
+      verify(store).commitTurn(anyString(), any(), any(), any(), committed.capture());
+      when(store.beginTurn(anyString(), any(), anyString(), any())).thenReturn(committed.getValue());
+      assertSame(response, service.sendMessage(jwt, request, AssistantWorkspace.BUYER, operations::add));
+      verify(model).chat(any(dev.langchain4j.model.chat.request.ChatRequest.class));
+      verify(store).commitTurn(anyString(), any(), any(), any(), any());
+      verifyNoInteractions(api);
+      assertTrue(operations.isEmpty());
+    }
+  }
 
   @Test
   void commitsOnlySuccessfulWholeTurn() {

@@ -14,8 +14,10 @@ import com.flashticket.assistant_service.service.AssistantConversationService;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -35,6 +37,100 @@ class AssistantControllerTests {
   @MockitoBean AssistantConversationService service;
   @MockitoBean JwtDecoder decoder;
   @MockitoBean(name = "assistantSseExecutor") ThreadPoolTaskExecutor sseExecutor;
+  @MockitoBean(name = "assistantSseTurnExecutor") ThreadPoolTaskExecutor sseTurnExecutor;
+
+  @Test
+  void streamsOptInProgressBeforeSingleTerminal() throws Exception {
+    var auth = jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+    var request = new ChatRequest();
+    request.setConversationId(UUID.randomUUID());
+    request.setVersion(UUID.randomUUID());
+    request.setRequestId(UUID.randomUUID());
+    request.setMessage("Gợi ý sự kiện");
+    var response = new ChatResponse();
+    response.setRequestId(request.getRequestId());
+    response.setConversationId(request.getConversationId());
+    response.setVersion(UUID.randomUUID());
+    Answer<Void> runTask = invocation -> {
+      invocation.getArgument(0, Runnable.class).run();
+      return null;
+    };
+    doAnswer(runTask).when(sseExecutor).execute(any(Runnable.class));
+    doAnswer(runTask).when(sseTurnExecutor).execute(any(Runnable.class));
+    List<String> operations = List.of("SEARCH_EVENTS", "READ_EVENT", "CHECK_AVAILABILITY", "READ_ORDERS",
+        "PREPARE_DRAFT", "READ_EVENT", "SEARCH_EVENTS");
+    Answer<ChatResponse> runTurn = invocation -> {
+      Consumer<String> observer = invocation.getArgument(3);
+      for (String operation : operations) observer.accept(operation);
+      return response;
+    };
+    when(service.sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER), any())).thenAnswer(runTurn);
+    when(service.sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER))).thenReturn(response);
+
+    var pending = mvc.perform(post("/api/v1/assistant/messages/stream").param("progress", "tool-v1").with(auth)
+        .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM).content(mapper.writeValueAsBytes(request)))
+        .andExpect(request().asyncStarted()).andReturn();
+    String[] frames = mvc.perform(asyncDispatch(pending)).andExpect(status().isOk()).andReturn()
+        .getResponse().getContentAsString().split("\n\n", -1);
+    String processingPrefix = "event:processing\ndata:";
+    String progressPrefix = "event:tool_progress\ndata:";
+    String resultPrefix = "event:result\ndata:";
+    assertEquals(9, frames.length);
+    assertTrue(frames[0].startsWith(processingPrefix));
+    assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId())),
+        mapper.readTree(frames[0].substring(processingPrefix.length())));
+    for (int index = 0; index < 6; index++) {
+      assertTrue(frames[index + 1].startsWith(progressPrefix));
+      assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId(), "operation", operations.get(index))),
+          mapper.readTree(frames[index + 1].substring(progressPrefix.length())));
+    }
+    assertTrue(frames[7].startsWith(resultPrefix));
+    assertEquals(mapper.valueToTree(Map.of("requestId", response.getRequestId(),
+            "conversationId", response.getConversationId(), "version", response.getVersion())),
+        mapper.readTree(frames[7].substring(resultPrefix.length())));
+    assertEquals("", frames[8]);
+
+    var legacy = mvc.perform(post("/api/v1/assistant/messages/stream").param("progress", "unknown").with(auth)
+        .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM).content(mapper.writeValueAsBytes(request)))
+        .andExpect(request().asyncStarted()).andReturn();
+    String[] legacyFrames = mvc.perform(asyncDispatch(legacy)).andExpect(status().isOk()).andReturn()
+        .getResponse().getContentAsString().split("\n\n", -1);
+    assertArrayEquals(new String[]{frames[0], frames[7], ""}, legacyFrames);
+    verify(sseTurnExecutor).execute(any(Runnable.class));
+    verify(service).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER), any());
+    verify(service).sendMessage(any(Jwt.class), any(ChatRequest.class), eq(AssistantWorkspace.BUYER));
+  }
+
+  @Test
+  void reportsProgressCoordinatorCapacityWithoutStartingTurn() throws Exception {
+    var auth = jwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+    var request = new ChatRequest();
+    request.setConversationId(UUID.randomUUID());
+    request.setVersion(UUID.randomUUID());
+    request.setRequestId(UUID.randomUUID());
+    request.setMessage("Gợi ý sự kiện");
+    doAnswer(invocation -> {
+      invocation.getArgument(0, Runnable.class).run();
+      return null;
+    }).when(sseExecutor).execute(any(Runnable.class));
+    doThrow(new RejectedExecutionException()).when(sseTurnExecutor).execute(any(Runnable.class));
+    var pending = mvc.perform(post("/api/v1/assistant/messages/stream").param("progress", "tool-v1").with(auth)
+        .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM).content(mapper.writeValueAsBytes(request)))
+        .andExpect(request().asyncStarted()).andReturn();
+    String[] frames = mvc.perform(asyncDispatch(pending)).andExpect(status().isOk()).andReturn()
+        .getResponse().getContentAsString().split("\n\n", -1);
+    assertEquals(3, frames.length);
+    String processingPrefix = "event:processing\ndata:";
+    String errorPrefix = "event:turn_error\ndata:";
+    assertTrue(frames[0].startsWith(processingPrefix));
+    assertTrue(frames[1].startsWith(errorPrefix));
+    assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId())),
+        mapper.readTree(frames[0].substring(processingPrefix.length())));
+    assertEquals(mapper.valueToTree(Map.of("requestId", request.getRequestId(), "code", "ASSISTANT_CAPACITY_EXCEEDED")),
+        mapper.readTree(frames[1].substring(errorPrefix.length())));
+    assertEquals("", frames[2]);
+    verifyNoInteractions(service);
+  }
 
   @Test
   void streamsProcessingThenCommittedResult() throws Exception {
