@@ -102,7 +102,7 @@ public class EventController {
   }
 
   @GetMapping("/events")
-  public EventViews.Page<EventViews.Public> publicList(
+  public EventViews.Page<?> publicList(
       @RequestParam(required = false) String q,
       @RequestParam(required = false) UUID categoryId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -111,8 +111,10 @@ public class EventController {
       @RequestParam(required = false) String venue,
       @RequestParam(required = false, defaultValue = "false") boolean includePast,
       @RequestParam(defaultValue = "20") int size,
-      @RequestParam(required = false) String cursor) {
-    return service.listPublic(q, categoryId, from, to, maxPrice, venue, includePast, size, cursor);
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "false") boolean compact) {
+    return service.listPublic(
+        q, categoryId, from, to, maxPrice, venue, includePast, size, cursor, compact);
   }
 
   @GetMapping("/categories")
