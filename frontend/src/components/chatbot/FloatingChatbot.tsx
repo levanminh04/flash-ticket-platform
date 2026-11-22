@@ -12,9 +12,6 @@ import { formatAssistantMoney } from "./assistantMoney";
 
 export const CHATBOT_PROMPT_EVENT = "flashTicket:chatbotPrompt";
 
-const quickPrompts = ["quickHot", "quickUpcoming", "quickLocation", "quickTicketTypes", "quickCheckOrders", "quickGuide"];
-const organizerPrompts = ["salesSummary", "topEvents", "pendingEvents"];
-const adminPrompts = ["salesSummary", "salesTrend", "topEvents", "pendingEvents"];
 const workspaceLinks = [
   { target: "buyer", role: "BUYER", href: "/chatbot", label: "chatbot.switchToBuyer" },
   { target: "organizer", role: "ORGANIZER", href: "/organizer/chatbot", label: "chatbot.switchToOrganizer" },
@@ -48,7 +45,6 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
   const isOrganizer = workspace === "organizer";
   const isAdmin = workspace === "admin";
   const title = t(isAdmin ? "chatbot.adminTitle" : isOrganizer ? "chatbot.organizerTitle" : "chatbot.title");
-  const promptKeys = isAdmin ? adminPrompts : isOrganizer ? organizerPrompts : quickPrompts;
   const hasMessages = Boolean(conversation?.messages.length);
 
   useEffect(() => {
@@ -163,16 +159,6 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
             <Ticket size={24} aria-hidden="true" />
             <h2>{t("chatbot.welcomeTitle")}</h2>
             <p>{t(isAdmin ? "chatbot.adminWelcome" : isOrganizer ? "chatbot.organizerWelcome" : "chatbot.welcomeMessage")}</p>
-            <div className="floating-chatbot-options">{promptKeys.map(key => {
-              const label = isBuyer ? `chatbot.${key}` : `chatbot.${workspace}Prompts.${key}`;
-              return <button key={key} type="button"
-                disabled={!conversation} onClick={() => {
-                  if (scope) setDraft({ text: t(`${label}Prompt`), id: crypto.randomUUID(), scope, revision: composerRevision });
-                  composer.current?.focus();
-                }}>
-                {t(label)}<ChevronRight size={14} aria-hidden="true" />
-              </button>;
-            })}</div>
           </div>}
           <div className="assistant-messages" role="log" aria-label={t("chatbot.transcript")}>
             {conversation?.messages.map(message => <article key={message.id} className={`floating-msg floating-msg--${message.role}`}>
