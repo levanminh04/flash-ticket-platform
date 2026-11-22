@@ -106,6 +106,30 @@ public final class EventViews {
     }
   }
 
+  public record PublicSearchItem(
+      UUID eventId,
+      String title,
+      Instant startsAt,
+      Instant endsAt,
+      String venueName,
+      String mode,
+      List<TicketType> ticketTypes) {
+    public PublicSearchItem {
+      ticketTypes = List.copyOf(ticketTypes);
+    }
+  }
+
+  public static PublicSearchItem compactPublicView(EventData event) {
+    return new PublicSearchItem(
+        event.id(),
+        event.title(),
+        event.startsAt(),
+        event.endsAt(),
+        event.venueName(),
+        event.mode(),
+        event.ticketTypes().stream().map(EventViews::ticketType).toList());
+  }
+
   public static TicketType ticketType(EventData.TicketType value) {
     return new TicketType(
         value.id(),

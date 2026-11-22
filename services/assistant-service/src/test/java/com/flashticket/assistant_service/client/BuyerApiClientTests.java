@@ -76,17 +76,17 @@ class BuyerApiClientTests {
     body = "{\"items\":[],\"page\":0,\"size\":5}"; client.getMyOrders(jwt, 0, ""); assertEquals("/api/v1/orders", path);
     assertEquals("GET", method); assertEquals("Bearer current-token", authorization); assertEquals("page=0&size=5", query);
     client.getMyOrders(jwt, 2, "COMPLETED"); assertEquals("page=2&size=5&state=COMPLETED", query);
-    body = "{\"items\":[],\"nextCursor\":null}";
+    body = "{\"items\":[{\"eventId\":\"" + eventId + "\",\"title\":\"Concert\",\"mode\":\"SEAT_MAP\",\"ticketTypes\":[]}],\"nextCursor\":null}";
     var search = new EventSearchRequest();
     for (String cursor : new String[] {null, "", " \t"}) {
       search.setCursor(cursor);
-      client.searchEvents(jwt, search);
-      assertEquals("size=5&includePast=false", query);
+      assertEquals(eventId, client.searchEvents(jwt, search).getItems().getFirst().getEventId());
+      assertEquals("size=5&includePast=false&compact=true", query);
     }
     String cursor = "MjAyNi0xMS0xOFQwMDowMDowMFp8MTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTEx";
     search.setCursor(cursor);
     client.searchEvents(jwt, search);
-    assertEquals("size=5&includePast=false&cursor=" + cursor, query);
+    assertEquals("size=5&includePast=false&compact=true&cursor=" + cursor, query);
     int before = requests;
     status = 302; assertEquals("DOWNSTREAM_UNAVAILABLE", assertThrows(AssistantProblem.class, () -> client.getEvent(jwt, eventId)).getCode()); assertEquals(before + 1, requests);
     ReflectionTestUtils.setField(client, "eventBaseUrl", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/forbidden"));

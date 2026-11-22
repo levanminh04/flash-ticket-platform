@@ -612,6 +612,42 @@ class EventFlowTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.seatMap.sectors[0].seats.length()").value(1))
         .andExpect(jsonPath("$.ticketTypes[0].configuredQuantity").isEmpty());
+    service.create("a", draft(input.title() + " draft"));
+    jdbc.update(
+        "UPDATE event_schema.tbl_events SET description = ? WHERE id = ?",
+        "x".repeat(256 * 1024),
+        event.eventId());
+    var fullList =
+        mvc.perform(get("/api/v1/events").param("q", input.title()).param("includePast", "true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].seatMap.sectors[0].seats.length()").value(1))
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+    var compactList =
+        mvc.perform(
+                get("/api/v1/events")
+                    .param("q", input.title())
+                    .param("includePast", "true")
+                    .param("compact", "true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items.length()").value(1))
+            .andExpect(jsonPath("$.items[0].eventId").value(event.eventId().toString()))
+            .andExpect(jsonPath("$.items[0].mode").value("SEAT_MAP"))
+            .andExpect(jsonPath("$.items[0].ticketTypes[0].ticketTypeId").value(type))
+            .andExpect(jsonPath("$.items[0].seatMap").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.items[0].images").doesNotHaveJsonPath())
+            .andExpect(jsonPath("$.items[0].description").doesNotHaveJsonPath())
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+    assertThat(fullList.length).isGreaterThan(256 * 1024);
+    assertThat(compactList.length).isLessThan(16 * 1024);
+    var fullPage = json.readTree(fullList);
+    var compactPage = json.readTree(compactList);
+    assertThat(compactPage.path("nextCursor")).isEqualTo(fullPage.path("nextCursor"));
+    assertThat(compactPage.at("/items/0/ticketTypes/0/unitPrice"))
+        .isEqualTo(fullPage.at("/items/0/ticketTypes/0/unitPrice"));
     String snapshot =
         jdbc.queryForObject(
             "SELECT payload::text FROM event_schema.tbl_outbox_messages WHERE message_type='event.sales-configured.v1'",

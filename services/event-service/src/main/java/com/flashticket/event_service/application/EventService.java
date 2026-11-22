@@ -146,11 +146,12 @@ public class EventService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public EventViews.Page<EventViews.Public> listPublic(
       String query, UUID category, int size, String cursor) {
-    return listPublic(query, category, null, null, null, null, false, size, cursor);
+    return listPublic(
+        query, category, null, null, null, null, false, size, cursor, EventViews::publicView);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public EventViews.Page<EventViews.Public> listPublic(
+  public EventViews.Page<?> listPublic(
       String query,
       UUID category,
       LocalDate from,
@@ -159,7 +160,45 @@ public class EventService {
       String venue,
       boolean includePast,
       int size,
-      String cursor) {
+      String cursor,
+      boolean compact) {
+    if (compact) {
+      return listPublic(
+          query,
+          category,
+          from,
+          to,
+          maxPrice,
+          venue,
+          includePast,
+          size,
+          cursor,
+          EventViews::compactPublicView);
+    }
+    return listPublic(
+        query,
+        category,
+        from,
+        to,
+        maxPrice,
+        venue,
+        includePast,
+        size,
+        cursor,
+        EventViews::publicView);
+  }
+
+  private <T> EventViews.Page<T> listPublic(
+      String query,
+      UUID category,
+      LocalDate from,
+      LocalDate to,
+      BigDecimal maxPrice,
+      String venue,
+      boolean includePast,
+      int size,
+      String cursor,
+      Function<EventData, T> mapper) {
     if (from != null && to != null && from.isAfter(to)) {
       throw EventProblem.invalid("dateRange");
     }
@@ -179,7 +218,7 @@ public class EventService {
         size,
         cursor,
         true,
-        EventViews::publicView,
+        mapper,
         true);
   }
 

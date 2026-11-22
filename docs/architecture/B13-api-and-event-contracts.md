@@ -47,6 +47,7 @@ Danh sách `code` không dùng làm enum mở cho trạng thái DB. Mỗi nhóm 
 
 | Method / path | Owner / actor | Input → output | Guard và tác dụng |
 |---|---|---|---|
+| GET `/events?compact=true` | Event / public | `Page<PublicSearchItem>` | Giữ bộ lọc, thứ tự và cursor như danh sách mặc định; chỉ trả `eventId`, `title`, `startsAt`, `endsAt`, `venueName`, `mode`, `ticketTypes`. Không trả mô tả, ảnh hoặc sơ đồ ghế; không đổi response mặc định |
 | GET `/events/{eventId}` | Event / public | `EventPublic` | Chỉ sự kiện công bố; không trả audit, cấu hình nháp hoặc thông tin danh tính riêng |
 | GET `/events/{eventId}/availability` | Booking / buyer hoặc public | `Availability` | Chỉ trạng thái đọc; không giữ ghế; thiếu snapshot trả `503 CONFIG_NOT_READY` |
 | POST `/orders` | Booking / BUYER | `CreateOrder` → 201 `OrderView` | Một transaction giữ tất cả nguồn cung/hạn mức và tạo đơn; không nhận giá từ FE |

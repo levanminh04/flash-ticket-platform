@@ -42,7 +42,7 @@ public class AssistantApiClient {
 
   public EventPage searchEvents(Jwt jwt, EventSearchRequest request) {
     URI uri = UriComponentsBuilder.fromUri(eventBaseUrl).path("/api/v1/events")
-        .queryParam("size", 5).queryParam("includePast", false)
+        .queryParam("size", 5).queryParam("includePast", false).queryParam("compact", true)
         .queryParamIfPresent("q", Optional.ofNullable(request.getQ()))
         .queryParamIfPresent("venue", Optional.ofNullable(request.getVenue()))
         .queryParamIfPresent("categoryId", Optional.ofNullable(request.getCategoryId()))
