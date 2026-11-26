@@ -54,6 +54,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -145,6 +146,32 @@ public class OrderServiceImpl implements OrderService {
       String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
     if (groupBy == null) throw new BusinessException(ErrorCode.INVALID_REQUEST);
     var filter = resolveSalesStatisticsFilter(organizerSubject, from, to);
+    var periodUnit =
+        switch (groupBy) {
+          case DAY -> ChronoUnit.DAYS;
+          case WEEK -> ChronoUnit.WEEKS;
+          case MONTH -> ChronoUnit.MONTHS;
+        };
+    int maxPeriods =
+        switch (groupBy) {
+          case DAY -> 366;
+          case WEEK -> 104;
+          case MONTH -> 60;
+        };
+    LocalDate firstPeriod;
+    LocalDate endExclusive;
+    int periodCount;
+    try {
+      // Tính cả kỳ đầu và kỳ cuối dù khoảng yêu cầu chỉ chứa một phần của kỳ.
+      firstPeriod = getSalesPeriodStart(filter.from, groupBy);
+      var lastPeriod = getSalesPeriodStart(filter.to, groupBy);
+      long periods = periodUnit.between(firstPeriod, lastPeriod) + 1;
+      if (periods > maxPeriods) throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+      endExclusive = lastPeriod.plus(1, periodUnit);
+      periodCount = (int) periods;
+    } catch (java.time.DateTimeException | ArithmeticException exception) {
+      throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+    }
     // Hai query cho toàn khoảng, không query riêng từng ngày/tuần/tháng.
     var orderTotals =
         organizerSubject == null
@@ -178,15 +205,10 @@ public class OrderServiceImpl implements OrderService {
       var period = getSalesPeriodStart(LocalDate.parse(row.getDay()), groupBy);
       tickets.merge(period, row.getTicketCount(), Long::sum);
     }
-    var items = new ArrayList<SalesStatisticsChartView.PeriodSales>();
-    var period = getSalesPeriodStart(filter.from, groupBy);
-    while (!period.isAfter(filter.to)) {
-      var next =
-          switch (groupBy) {
-            case DAY -> period.plusDays(1);
-            case WEEK -> period.plusWeeks(1);
-            case MONTH -> period.plusMonths(1);
-          };
+    var items = new ArrayList<SalesStatisticsChartView.PeriodSales>(periodCount);
+    var period = firstPeriod;
+    while (period.isBefore(endExclusive)) {
+      var next = period.plus(1, periodUnit);
       items.add(
           new SalesStatisticsChartView.PeriodSales(
               period,

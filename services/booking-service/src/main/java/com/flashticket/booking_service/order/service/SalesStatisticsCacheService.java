@@ -1,29 +1,46 @@
 package com.flashticket.booking_service.order.service;
 
+import com.flashticket.booking_service.config.BookingChartReplicaHealth;
 import com.flashticket.booking_service.dto.response.*;
 import com.flashticket.booking_service.enums.SalesGrouping;
 import com.flashticket.booking_service.redis.service.RedisService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SalesStatisticsCacheService {
+  private static final String CHART_SOURCE_METRIC = "booking.sales.chart.source";
+
   private final OrderService orderService;
   private final RedisService redisService;
   private final JsonMapper jsonMapper;
+  private final ObjectProvider<TransactionTemplate> chartTransactionProvider;
+  private final ObjectProvider<TransactionTemplate> reportTransactionProvider;
+  private final ObjectProvider<BookingChartReplicaHealth> replicaHealthProvider;
+  private final MeterRegistry metrics;
+
+  @Value("${booking.sales-organizer-report-replica.enabled:false}")
+  private boolean organizerReportReplicaEnabled;
+
+  @Value("${booking.sales-event-report-replica.enabled:false}")
+  private boolean eventReportReplicaEnabled;
 
   @Value("${booking.sales-statistics-cache.ttl:PT30S}")
   private Duration cacheTtl;
@@ -32,11 +49,132 @@ public class SalesStatisticsCacheService {
       "${booking.sales-statistics-cache.key-prefix:flash-ticket:dev:booking:sales-statistics:v1:}")
   private String keyPrefix;
 
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "Shares Spring-managed RedisService, JsonMapper, and MeterRegistry without exposing them.")
+  public SalesStatisticsCacheService(
+      OrderService orderService,
+      RedisService redisService,
+      JsonMapper jsonMapper,
+      @Qualifier("bookingAdminChartReadTransactionTemplate")
+          ObjectProvider<TransactionTemplate> chartTransactionProvider,
+      @Qualifier("bookingSalesReportReadTransactionTemplate")
+          ObjectProvider<TransactionTemplate> reportTransactionProvider,
+      @Qualifier("bookingChartReplicaHealth")
+          ObjectProvider<BookingChartReplicaHealth> replicaHealthProvider,
+      MeterRegistry metrics) {
+    this.orderService = orderService;
+    this.redisService = redisService;
+    this.jsonMapper = jsonMapper;
+    this.chartTransactionProvider = chartTransactionProvider;
+    this.reportTransactionProvider = reportTransactionProvider;
+    this.replicaHealthProvider = replicaHealthProvider;
+    this.metrics = metrics;
+  }
+
+  private SalesStatisticsSummaryView loadSalesStatisticsSummary(
+      String organizerSubject, LocalDate from, LocalDate to) {
+    if (!organizerReportReplicaEnabled
+        || organizerSubject == null
+        || TransactionSynchronizationManager.isActualTransactionActive()
+        || TransactionSynchronizationManager.isSynchronizationActive()) {
+      return orderService.getSalesStatisticsSummary(organizerSubject, from, to);
+    }
+    var transaction = reportTransactionProvider.getIfAvailable();
+    var health = transaction == null ? null : replicaHealthProvider.getIfAvailable();
+    if (health == null || !health.tryBeginRead()) {
+      return orderService.getSalesStatisticsSummary(organizerSubject, from, to);
+    }
+    try {
+      metrics
+          .counter("booking.sales.report.source", "report", "summary", "source", "reader")
+          .increment();
+      return transaction.execute(
+          status -> orderService.getSalesStatisticsSummary(organizerSubject, from, to));
+    } catch (RuntimeException failure) {
+      // Không thử lại writer sau khi đã mở đường đọc phụ.
+      health.invalidate();
+      metrics
+          .counter("booking.sales.report.replica.attempt.error", "report", "summary")
+          .increment();
+      throw failure;
+    } finally {
+      health.finishRead();
+    }
+  }
+
+  private EventSalesStatisticsPage loadEventSalesStatistics(
+      String organizerSubject,
+      LocalDate from,
+      LocalDate to,
+      int page,
+      int size,
+      String sortBy,
+      Sort.Direction direction) {
+    if (!organizerReportReplicaEnabled
+        || organizerSubject == null
+        || TransactionSynchronizationManager.isActualTransactionActive()
+        || TransactionSynchronizationManager.isSynchronizationActive()) {
+      return orderService.getEventSalesStatistics(
+          organizerSubject, from, to, page, size, sortBy, direction);
+    }
+    var transaction = reportTransactionProvider.getIfAvailable();
+    var health = transaction == null ? null : replicaHealthProvider.getIfAvailable();
+    if (health == null || !health.tryBeginRead()) {
+      return orderService.getEventSalesStatistics(
+          organizerSubject, from, to, page, size, sortBy, direction);
+    }
+    try {
+      metrics
+          .counter("booking.sales.report.source", "report", "events", "source", "reader")
+          .increment();
+      return transaction.execute(
+          status ->
+              orderService.getEventSalesStatistics(
+                  organizerSubject, from, to, page, size, sortBy, direction));
+    } catch (RuntimeException failure) {
+      health.invalidate();
+      metrics.counter("booking.sales.report.replica.attempt.error", "report", "events").increment();
+      throw failure;
+    } finally {
+      health.finishRead();
+    }
+  }
+
+  private SalesSummaryView loadEventSalesStatistics(
+      String organizerSubject, UUID eventId, LocalDate from, LocalDate to) {
+    if (!eventReportReplicaEnabled
+        || organizerSubject == null
+        || TransactionSynchronizationManager.isActualTransactionActive()
+        || TransactionSynchronizationManager.isSynchronizationActive()) {
+      return orderService.getEventSalesStatistics(organizerSubject, eventId, from, to);
+    }
+    var transaction = reportTransactionProvider.getIfAvailable();
+    var health = transaction == null ? null : replicaHealthProvider.getIfAvailable();
+    if (health == null || !health.tryBeginRead()) {
+      return orderService.getEventSalesStatistics(organizerSubject, eventId, from, to);
+    }
+    try {
+      metrics
+          .counter("booking.sales.report.source", "report", "event", "source", "reader")
+          .increment();
+      return transaction.execute(
+          status -> orderService.getEventSalesStatistics(organizerSubject, eventId, from, to));
+    } catch (RuntimeException failure) {
+      health.invalidate();
+      metrics.counter("booking.sales.report.replica.attempt.error", "report", "event").increment();
+      throw failure;
+    } finally {
+      health.finishRead();
+    }
+  }
+
   // Controller kiểm quyền trước cả cache hit; Redis I/O nằm ngoài transaction DB.
   public SalesStatisticsSummaryView getSalesStatisticsSummary(
       String organizerSubject, LocalDate from, LocalDate to) {
     if (cacheTtl.isZero() || cacheTtl.isNegative())
-      return orderService.getSalesStatisticsSummary(organizerSubject, from, to);
+      return loadSalesStatisticsSummary(organizerSubject, from, to);
     String scope =
         organizerSubject == null
             ? "system"
@@ -72,7 +210,7 @@ public class SalesStatisticsCacheService {
           exception.getClass().getSimpleName());
     }
     // Lỗi nghiệp vụ đi ra ngoài, không ghi vào cache.
-    var result = orderService.getSalesStatisticsSummary(organizerSubject, from, to);
+    var result = loadSalesStatisticsSummary(organizerSubject, from, to);
     if (dataKey != null) {
       try {
         redisService.set(dataKey, jsonMapper.writeValueAsString(result), cacheTtl);
@@ -89,7 +227,7 @@ public class SalesStatisticsCacheService {
   public SalesStatisticsChartView getSalesStatisticsChart(
       String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
     if (cacheTtl.isZero() || cacheTtl.isNegative())
-      return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+      return loadSalesStatisticsChart(organizerSubject, from, to, groupBy);
     String scope =
         organizerSubject == null
             ? "system"
@@ -99,7 +237,7 @@ public class SalesStatisticsCacheService {
                     .encodeToString(organizerSubject.getBytes(StandardCharsets.UTF_8));
     String dataKey =
         keyPrefix
-            + "chart:"
+            + "chart:v2:"
             + scope
             + ":"
             + (from == null ? "-" : from)
@@ -127,7 +265,7 @@ public class SalesStatisticsCacheService {
           exception.getClass().getSimpleName());
     }
     // Lỗi nghiệp vụ đi ra ngoài, không ghi vào cache.
-    var result = orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+    var result = loadSalesStatisticsChart(organizerSubject, from, to, groupBy);
     if (dataKey != null) {
       try {
         redisService.set(dataKey, jsonMapper.writeValueAsString(result), cacheTtl);
@@ -140,6 +278,46 @@ public class SalesStatisticsCacheService {
     return result;
   }
 
+  private SalesStatisticsChartView loadSalesStatisticsChart(
+      String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()
+        || TransactionSynchronizationManager.isSynchronizationActive()) {
+      // Không mở transaction đọc riêng khi caller đã quản lý transaction hoặc synchronization.
+      metrics
+          .counter(CHART_SOURCE_METRIC, "source", "existing_transaction", "reason", "caller")
+          .increment();
+      return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+    }
+
+    String writerReason = "organizer";
+    if (organizerSubject == null || organizerReportReplicaEnabled) {
+      var transaction =
+          organizerSubject == null
+              ? chartTransactionProvider.getIfAvailable()
+              : reportTransactionProvider.getIfAvailable();
+      var health = transaction == null ? null : replicaHealthProvider.getIfAvailable();
+      writerReason = health == null ? "not_configured" : "unavailable_or_busy";
+      if (health != null && health.tryBeginRead()) {
+        try {
+          metrics
+              .counter(CHART_SOURCE_METRIC, "source", "reader", "reason", "eligible")
+              .increment();
+          return transaction.execute(
+              status -> orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy));
+        } catch (RuntimeException failure) {
+          // Chỉ vô hiệu hóa mẫu cho request sau, không chạy lại report trên writer.
+          health.invalidate();
+          metrics.counter("booking.sales.chart.replica.attempt.error").increment();
+          throw failure;
+        } finally {
+          health.finishRead();
+        }
+      }
+    }
+    metrics.counter(CHART_SOURCE_METRIC, "source", "writer", "reason", writerReason).increment();
+    return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+  }
+
   // Controller kiểm quyền trước cả cache hit; Redis I/O nằm ngoài transaction DB.
   public EventSalesStatisticsPage getEventSalesStatistics(
       String organizerSubject,
@@ -150,8 +328,7 @@ public class SalesStatisticsCacheService {
       String sortBy,
       Sort.Direction direction) {
     if (cacheTtl.isZero() || cacheTtl.isNegative())
-      return orderService.getEventSalesStatistics(
-          organizerSubject, from, to, page, size, sortBy, direction);
+      return loadEventSalesStatistics(organizerSubject, from, to, page, size, sortBy, direction);
     String scope =
         organizerSubject == null
             ? "system"
@@ -196,8 +373,7 @@ public class SalesStatisticsCacheService {
     }
     // Lỗi nghiệp vụ đi ra ngoài, không ghi vào cache.
     var result =
-        orderService.getEventSalesStatistics(
-            organizerSubject, from, to, page, size, sortBy, direction);
+        loadEventSalesStatistics(organizerSubject, from, to, page, size, sortBy, direction);
     if (dataKey != null) {
       try {
         redisService.set(dataKey, jsonMapper.writeValueAsString(result), cacheTtl);
@@ -214,7 +390,7 @@ public class SalesStatisticsCacheService {
   public SalesSummaryView getEventSalesStatistics(
       String organizerSubject, UUID eventId, LocalDate from, LocalDate to) {
     if (cacheTtl.isZero() || cacheTtl.isNegative())
-      return orderService.getEventSalesStatistics(organizerSubject, eventId, from, to);
+      return loadEventSalesStatistics(organizerSubject, eventId, from, to);
     String scope =
         organizerSubject == null
             ? "system"
@@ -252,7 +428,7 @@ public class SalesStatisticsCacheService {
           exception.getClass().getSimpleName());
     }
     // Lỗi nghiệp vụ đi ra ngoài, không ghi vào cache.
-    var result = orderService.getEventSalesStatistics(organizerSubject, eventId, from, to);
+    var result = loadEventSalesStatistics(organizerSubject, eventId, from, to);
     if (dataKey != null) {
       try {
         redisService.set(dataKey, jsonMapper.writeValueAsString(result), cacheTtl);

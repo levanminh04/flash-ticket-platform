@@ -34,6 +34,17 @@ class SalesSummaryCacheServiceTests {
   private static final LocalDate TO = LocalDate.parse("2026-11-09");
 
   @Mock OrderService orderService;
+
+  @Mock
+  org.springframework.beans.factory.ObjectProvider<
+          org.springframework.transaction.support.TransactionTemplate>
+      reportTransactionProvider;
+
+  @Mock
+  org.springframework.beans.factory.ObjectProvider<
+          com.flashticket.booking_service.config.BookingChartReplicaHealth>
+      replicaHealthProvider;
+
   @Mock StringRedisTemplate stringRedisTemplate;
   @Mock ValueOperations<String, String> values;
   JsonMapper jsonMapper;
@@ -61,9 +72,67 @@ class SalesSummaryCacheServiceTests {
     jsonMapper = jsonMapper();
     cacheService =
         new SalesSummaryCacheService(
-            orderService, new RedisService(stringRedisTemplate), jsonMapper);
+            orderService,
+            new RedisService(stringRedisTemplate),
+            jsonMapper,
+            reportTransactionProvider,
+            replicaHealthProvider,
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     ReflectionTestUtils.setField(cacheService, "cacheTtl", TTL);
     ReflectionTestUtils.setField(cacheService, "keyPrefix", PREFIX);
+  }
+
+  @Test
+  void legacySummaryKeepsCacheScopeAndReplicaErrorContract() {
+    var manager = mock(org.springframework.transaction.PlatformTransactionManager.class);
+    var status = new org.springframework.transaction.support.SimpleTransactionStatus();
+    var transaction = new org.springframework.transaction.support.TransactionTemplate(manager);
+    transaction.setName("bookingSalesReportRead");
+    var health = mock(com.flashticket.booking_service.config.BookingChartReplicaHealth.class);
+    when(manager.getTransaction(transaction)).thenReturn(status);
+    when(health.tryBeginRead()).thenReturn(true);
+    when(stringRedisTemplate.opsForValue()).thenReturn(values);
+    when(orderService.getSalesSummary("organizer", EVENT, FROM, TO)).thenReturn(summary);
+    new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+        .withPropertyValues(
+            "booking.sales-event-report-replica.enabled=true",
+            "booking.sales-summary-cache.key-prefix=" + PREFIX)
+        .run(
+            context -> {
+              var beans = context.getBeanFactory();
+              beans.setConversionService(
+                  org.springframework.boot.convert.ApplicationConversionService
+                      .getSharedInstance());
+              beans.registerSingleton("orderService", orderService);
+              beans.registerSingleton("redisService", new RedisService(stringRedisTemplate));
+              beans.registerSingleton("jsonMapper", jsonMapper);
+              beans.registerSingleton("bookingSalesReportReadTransactionTemplate", transaction);
+              beans.registerSingleton("bookingChartReplicaHealth", health);
+              beans.registerSingleton(
+                  "metrics", new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+              var service = beans.createBean(SalesSummaryCacheService.class);
+              assertThat(service.getSalesSummary("organizer", EVENT, FROM, TO)).isSameAs(summary);
+              verify(manager).commit(status);
+              verify(health).finishRead();
+              String key = PREFIX + EVENT + ":organizer:2026-11-01:2026-11-09";
+              verify(values).set(eq(key), anyString(), eq(TTL));
+              clearInvocations(manager, health, orderService, values);
+              when(values.get(key)).thenReturn(jsonMapper.writeValueAsString(summary));
+              assertThat(service.getSalesSummary("organizer", EVENT, FROM, TO))
+                  .usingRecursiveComparison()
+                  .isEqualTo(summary);
+              verifyNoInteractions(manager, health, orderService);
+              when(values.get(key)).thenReturn(null);
+              when(orderService.getSalesSummary("organizer", EVENT, FROM, TO))
+                  .thenThrow(new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+              assertThatThrownBy(() -> service.getSalesSummary("organizer", EVENT, FROM, TO))
+                  .isInstanceOf(BusinessException.class);
+              verify(orderService).getSalesSummary("organizer", EVENT, FROM, TO);
+              verify(manager).rollback(status);
+              verify(health).invalidate();
+              verify(health).finishRead();
+              verify(values, never()).set(anyString(), anyString(), any(Duration.class));
+            });
   }
 
   @Test

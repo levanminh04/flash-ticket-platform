@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: booking-service
+  namespace: flash-ticket
+  labels:
+    app.kubernetes.io/name: booking-service
+    app.kubernetes.io/part-of: flash-ticket
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: booking-service

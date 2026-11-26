@@ -12,12 +12,14 @@ import com.flashticket.booking_service.order.repository.OrderRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionInventoryRepository;
 import com.flashticket.booking_service.promotion.repository.PromotionUsageRepository;
 import com.flashticket.booking_service.reservation.repository.ReservationRepository;
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(
     properties = {
+      "spring.data.jpa.repositories.enabled=false",
       "spring.rabbitmq.host=localhost",
       "spring.rabbitmq.port=5672",
       "spring.rabbitmq.username=guest",
@@ -43,7 +45,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       OrderRepository.class,
       PromotionInventoryRepository.class,
       PromotionUsageRepository.class,
-      ReservationRepository.class
+      ReservationRepository.class,
+      HikariDataSource.class
     })
 class BookingServiceApplicationTests {
   @org.springframework.beans.factory.annotation.Autowired
