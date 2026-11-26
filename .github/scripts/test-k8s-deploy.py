@@ -50,6 +50,24 @@ def fake_kubectl():
         resource = json.loads(Path(arguments[-1]).read_text())
         if resource['kind'] == 'Deployment':
             last_applied = json.dumps(resource)
+            deployment_path = api / 'Deployment.json'
+            if root.name == 'booking-fixture' and deployment_path.exists():
+                live = json.loads(deployment_path.read_text())
+                previous = json.loads(live['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'])
+                old_affinity = live['spec']['template']['spec'].get('affinity', {})
+                old_applied_affinity = previous['spec']['template']['spec'].get('affinity', {})
+                pod = resource['spec']['template']['spec']
+                affinity = pod.get('affinity', {})
+                # Client-side apply keeps live-only fields that both manifests omit.
+                if 'nodeAffinity' in affinity:
+                    if affinity['nodeAffinity'] is None:
+                        del affinity['nodeAffinity']
+                elif 'nodeAffinity' in old_affinity and 'nodeAffinity' not in old_applied_affinity:
+                    pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
+                drift = root / 'keep-booking-pinning-once'
+                if drift.exists():
+                    drift.unlink()
+                    pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
             desired = root / 'desired'
             if 'replicas' in resource['spec']:
                 desired.write_text(str(resource['spec']['replicas']))
@@ -68,6 +86,11 @@ def fake_kubectl():
                 workload_path.write_text(json.dumps(workload))
         (api / (resource['kind'] + '.json')).write_text(json.dumps(resource))
     elif arguments[0] == 'rollout':
+        if root.name == 'booking-fixture':
+            live = json.loads((api / 'Deployment.json').read_text())
+            affinity = live['spec']['template']['spec'].get('affinity', {})
+            if affinity.get('podAntiAffinity') and affinity.get('nodeAffinity'):
+                (root / 'rollout-waited-with-pinning').touch()
         fail = root / 'fail-once'
         if fail.exists():
             fail.unlink()
@@ -532,12 +555,40 @@ def booking_fixture(root, bash, env, scripts, deployment, config):
             assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == 2
             assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 2
             assert not any(k.startswith(prefix) for k in live('Secret')['data'])
+            # Reproduce the incident: pinning was added out of band, not by kubectl apply.
+            legacy_pinning = {'requiredDuringSchedulingIgnoredDuringExecution': {
+                'nodeSelectorTerms': [{'matchExpressions': [
+                    {'key': 'kubernetes.io/hostname', 'operator': 'In', 'values': ['ft84', 'server-2']},
+                ]}],
+            }}
+            live_deployment = live('Deployment')
+            live_deployment['spec']['template']['spec']['affinity']['nodeAffinity'] = legacy_pinning
+            last_applied = json.loads(live_deployment['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'])
+            last_applied['spec']['template']['spec']['affinity'].pop('nodeAffinity', None)
+            live_deployment['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'] = json.dumps(last_applied)
+            (root / 'api/Deployment.json').write_text(json.dumps(live_deployment))
             result = run({'ENABLED': 'false'})
             assert result.returncode == 0, result.stdout + result.stderr
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == spec['affinity'], 'Booking HA must clear live-only nodeAffinity'
             writer = (state / 'current').read_text().strip()
             old_config, old_secret = live('ConfigMap'), live('Secret')
             assert base64.b64decode(old_secret['data'][prefix + 'ENABLED']) == b'false'
             snapshot = state / writer
+            canonical = json.loads((snapshot / 'deployment.json').read_text())
+            assert canonical['spec']['template']['spec']['affinity'] == spec['affinity']
+
+            # Simulate pinning that survives apply; fail before rollout wait and restore the writer.
+            live_deployment = live('Deployment')
+            live_deployment['spec']['template']['spec']['affinity']['nodeAffinity'] = legacy_pinning
+            (root / 'api/Deployment.json').write_text(json.dumps(live_deployment))
+            (root / 'keep-booking-pinning-once').touch()
+            result = run(pilot)
+            assert result.returncode and 'BOOKING_HA_NODE_PINNING_PRESENT' in result.stderr, result.stdout + result.stderr
+            assert 'RESTORED_PREVIOUS' in result.stderr
+            assert not (root / 'rollout-waited-with-pinning').exists(), 'Must reject pinning before waiting for rollout'
+            assert (state / 'current').read_text().strip() == writer
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == spec['affinity']
+            assert live('Secret') == old_secret
             check_source = SCRIPT.read_text(encoding='utf-8').split(
                 '    if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<\'PY\'\n', 1)[1].split('\nPY\n', 1)[0]
             # Chạy chính validator của script, không dựng lại logic scheduler trong test.
@@ -685,7 +736,7 @@ def booking_fixture(root, bash, env, scripts, deployment, config):
             (legacy / 'writer-baseline').unlink(missing_ok=True)
             old_deployment = json.loads((legacy / 'deployment.json').read_text())
             old_deployment['spec']['template']['metadata']['annotations']['flash-ticket/release'] = legacy.name
-            old_deployment['spec']['template']['spec'].pop('affinity')
+            old_deployment['spec']['template']['spec']['affinity'] = {'nodeAffinity': legacy_pinning}
             (legacy / 'deployment.json').write_text(json.dumps(old_deployment))
             old_hpa = json.loads((legacy / 'hpa.json').read_text())
             old_hpa['spec'].update(minReplicas=1, maxReplicas=2)
@@ -696,6 +747,7 @@ def booking_fixture(root, bash, env, scripts, deployment, config):
             assert not (root / 'api/PodDisruptionBudget.json').exists()
             assert (state / 'current').read_text().strip() == legacy.name
             assert live('Deployment')['spec']['replicas'] == 1
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == {'nodeAffinity': legacy_pinning}
         finally:
             server.shutdown()
     print('Booking fixtures passed: 3 reader flags, dynamic 2-Pod placement, PDB presence/absence and writer-baseline rollback.')
