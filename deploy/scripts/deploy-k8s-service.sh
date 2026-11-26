@@ -76,11 +76,15 @@ PY
     # Restoring a revision without HPA explicitly restores fixed-replica operation.
     kubectl -n "$namespace" delete hpa "$service" --ignore-not-found >/dev/null || return 1
   fi
+  # Revision cũ có thể chưa có PDB; không để policy mới sót sau khi restore.
+  if [[ $service == booking-service && ! -f $revision/pdb.json ]]; then
+    kubectl -n "$namespace" delete pdb "$service" --ignore-not-found >/dev/null || return 1
+  fi
   if [[ $service != discovery-server && $service != frontend && $service != keycloak ]]; then
     if [[ $mode == rollback || $revision != "$target" ]]; then preparation=prepare-rollback; fi
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" "$preparation" "$revision" || return 1
   fi
-  for resource in configmap peer-service service ingress deployment statefulset hpa; do
+  for resource in configmap peer-service service ingress deployment statefulset hpa pdb; do
     [[ -f $revision/$resource.json ]] || continue
     manifest="$revision/$resource.json"
     if [[ $resource == deployment && -f $revision/deployment-effective.json ]]; then manifest="$revision/deployment-effective.json"; fi
@@ -97,6 +101,10 @@ check_revision() {
   local revision=$1 attempt kind=deployment
   if [[ -f $revision/statefulset.json ]]; then kind=statefulset; fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
+  if [[ $service == booking-service && -f $revision/pdb.json ]]; then
+    kubectl -n "$namespace" get pdb "$service" -o json > "$revision/pdb-live.json" || return 1
+    kubectl -n "$namespace" get hpa "$service" -o json > "$revision/hpa-live.json" || return 1
+  fi
   if [[ $service != frontend && $service != keycloak ]]; then
     kubectl -n "$namespace" get service discovery-server -o json > "$revision/discovery.json" || return 1
   fi
@@ -122,6 +130,14 @@ pods = [p for p in pod_list['items'] if not p['metadata'].get('deletionTimestamp
 if deployment['kind'] == 'StatefulSet':
     pods = [p for p in pods if p['metadata'].get('labels', {}).get('flash-ticket/discovery-generation') == 'peers']
 assert desired >= 1 and len(pods) == desired, 'REPLICA_COUNT_MISMATCH'
+if service == 'booking-service' and (root / 'pdb.json').is_file():
+    selector = {'matchLabels': {'app.kubernetes.io/name': 'booking-service'}}
+    hpa = json.loads((root / 'hpa-live.json').read_text())['spec']
+    pdb = json.loads((root / 'pdb-live.json').read_text())['spec']
+    assert desired == 2 and hpa['minReplicas'] == 2 and hpa['maxReplicas'] == 2, 'BOOKING_HA_REPLICA_COUNT_MISMATCH'
+    nodes = [p['spec'].get('nodeName') for p in pods]
+    assert all(nodes) and len(set(nodes)) == 2, 'BOOKING_HA_NODE_PLACEMENT_MISMATCH'
+    assert pdb.get('minAvailable') == 1 and pdb.get('selector') == selector and 'maxUnavailable' not in pdb, 'BOOKING_HA_PDB_MISMATCH'
 if service in ('frontend', 'keycloak'):
     assert desired == 1, 'FIXED_REPLICA_COUNT_MISMATCH'
 if service == 'assistant-service':
@@ -177,7 +193,7 @@ else
   target="$revision_root/$revision"
   mkdir -m 700 "$target"
   printf '%s\n' "$image" > "$target/image"
-  for resource in configmap peer-service service ingress deployment statefulset hpa; do
+  for resource in configmap peer-service service ingress deployment statefulset hpa pdb; do
     file="$source_root/deploy/k8s/$service/$resource.yaml"
     [[ -f $file ]] || { [[ $resource != configmap || $service == frontend || $service == keycloak ]] || die MISSING_MANIFEST; continue; }
     kubectl create --dry-run=client --validate=false -f "$file" -o json > "$target/$resource.json"
@@ -217,7 +233,10 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
         value = value.strip()
         if value[:1] in ('"', "'") and value[-1:] == value[:1]:
             value = value[1:-1]
-        if service == 'booking-service' and key == 'BOOKING_SALES_CHART_REPLICA_ENABLED' and value not in ('true', 'false'):
+        if service == 'booking-service' and key in (
+                'BOOKING_SALES_CHART_REPLICA_ENABLED',
+                'BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED',
+                'BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED') and value not in ('true', 'false'):
             sys.exit('INVALID_BOOKING_READER_FLAG')
         if value:
             values[key] = value
@@ -268,14 +287,15 @@ target = pathlib.Path(sys.argv[1])
 current, mode = sys.argv[2:]
 prefix = 'BOOKING_SALES_CHART_REPLICA_'
 flag = prefix + 'ENABLED'
+flags = (flag, 'BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED', 'BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED')
 
 
 def load(revision, file):
     return json.loads((revision / file).read_text(encoding='utf-8'))
 
 
-def enabled(secret):
-    value = secret.get(flag, 'ZmFsc2U=')  # base64 of false
+def enabled(secret, key=flag):
+    value = secret.get(key, 'ZmFsc2U=')  # base64 of false
     setting = base64.b64decode(value, validate=True)
     if setting not in (b'true', b'false'):
         sys.exit('INVALID_BOOKING_READER_FLAG')
@@ -283,21 +303,26 @@ def enabled(secret):
 
 
 def writer_revision(revision, pilot):
-    expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json')
-    if ((pilot / 'hpa.json').is_file() != (revision / 'hpa.json').is_file()
-            or not all((revision / file).is_file() for file in expected)):
+    expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json', 'hpa.json', 'pdb.json')
+    if not all((revision / file).is_file() and (pilot / file).is_file() for file in expected):
         return False
     deployment = load(revision, 'deployment.json')['spec']['template']
     config = load(revision, 'configmap.json')
     pilot_pod = load(pilot, 'deployment.json')['spec']['template']['spec']
     image = (revision / 'image').read_text().strip()
-    return (not enabled(load(revision, 'secret-env.json')['data'])
-            and flag not in config.get('data', {})
-            and not any(v.get('name') == flag for v in deployment['spec']['containers'][0].get('env', []))
+    return (not any(enabled(load(revision, 'secret-env.json')['data'], key) for key in flags)
+            and not any(key in config.get('data', {}) for key in flags)
+            and not any(v.get('name') in flags for v in deployment['spec']['containers'][0].get('env', []))
             and deployment['metadata']['annotations'].get('flash-ticket/release') == revision.name
             and deployment['spec']['containers'][0]['image'] == image == pilot_pod['containers'][0]['image']
             and image == (pilot / 'image').read_text().strip()
-            and deployment['spec'].get('affinity') == pilot_pod.get('affinity'))
+            and deployment['spec'].get('affinity') == pilot_pod.get('affinity')
+            and deployment['spec'].get('nodeName') == pilot_pod.get('nodeName')
+            and deployment['spec'].get('nodeSelector') == pilot_pod.get('nodeSelector')
+            and load(revision, 'hpa.json')['spec'] == load(pilot, 'hpa.json')['spec']
+            and load(revision, 'pdb.json')['spec'] == load(pilot, 'pdb.json')['spec']
+            and all(load(revision, resource)['metadata'].get(key) == load(pilot, resource)['metadata'].get(key)
+                    for resource in ('hpa.json', 'pdb.json') for key in ('name', 'namespace')))
 
 
 try:
@@ -305,9 +330,32 @@ try:
     use_reader = enabled(secret)
     config = load(target, 'configmap.json')
     pod = load(target, 'deployment.json')['spec']['template']['spec']
-    # The generated Secret must be the single source of the pilot switch.
-    if flag in config.get('data', {}) or any(v.get('name') == flag for v in pod['containers'][0].get('env', [])):
+    # Ba flag chỉ được lấy từ Secret revision, không bị override bởi nguồn khác.
+    settings = {key: enabled(secret, key) for key in flags}
+    if any(settings[key] for key in flags[1:]) and not use_reader:
+        sys.exit('BOOKING_READER_BASE_REQUIRED')
+    if any(key in config.get('data', {}) for key in flags) or any(v.get('name') in flags for v in pod['containers'][0].get('env', [])):
         sys.exit('INVALID_BOOKING_READER_FLAG_SOURCE')
+    hpa = load(target, 'hpa.json')['spec'] if (target / 'hpa.json').is_file() else {}
+    affinity = pod.get('affinity', {})
+    has_pdb = (target / 'pdb.json').is_file()
+    if has_pdb or 'podAntiAffinity' in affinity or hpa.get('minReplicas') == 2 or use_reader:
+        if not has_pdb or hpa.get('minReplicas') != 2 or hpa.get('maxReplicas') != 2:
+            sys.exit('INVALID_BOOKING_POD_HA')
+        pdb = load(target, 'pdb.json')
+        selector = {'matchLabels': {'app.kubernetes.io/name': 'booking-service'}}
+        rules = affinity.get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution', [])
+        if (pdb.get('apiVersion') != 'policy/v1' or pdb.get('kind') != 'PodDisruptionBudget'
+                or pdb['metadata'].get('name') != 'booking-service' or pdb['metadata'].get('namespace') != 'flash-ticket'
+                or pdb['spec'].get('minAvailable') != 1 or 'maxUnavailable' in pdb['spec']
+                or pdb['spec'].get('selector') != selector or pod.get('nodeName') or pod.get('nodeSelector')
+                or 'nodeAffinity' in affinity
+                or hpa.get('scaleTargetRef', {}).get('name') != 'booking-service'
+                or hpa.get('scaleTargetRef', {}).get('kind') != 'Deployment'
+                or not any(r.get('topologyKey') == 'kubernetes.io/hostname' and r.get('labelSelector') == selector
+                           and r.get('namespaces', ['flash-ticket']) == ['flash-ticket']
+                           and not r.get('matchLabelKeys') and not r.get('namespaceSelector') for r in rules)):
+            sys.exit('INVALID_BOOKING_POD_HA')
     if mode == 'rollback':
         if use_reader:
             sys.exit('BOOKING_ROLLBACK_REQUIRES_WRITER_REVISION')
@@ -328,16 +376,38 @@ try:
                 raise ValueError
         except ValueError:
             sys.exit('INVALID_BOOKING_READER_URL')
-        if not current or not writer_revision(target.parent / current, target):
+        if not current:
             sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
-    # Không đổi image hoặc lịch Pod khi tắt pilot bằng revision writer-only.
+        active = target.parent / current
+        baseline = current
+        if enabled(load(active, 'secret-env.json')['data']):
+            if not (active / 'writer-baseline').is_file():
+                sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+            baseline = (active / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not writer_revision(target.parent / baseline, target):
+            sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+        (target / 'writer-baseline').write_text(baseline + '\n')
+    # Tắt reader/rollback vẫn giữ cùng image và profile HA; không trỏ previous về active cũ.
     if current and not use_reader:
         active = target.parent / current
-        if enabled(load(active, 'secret-env.json')['data']) and not writer_revision(target, active):
+        if enabled(load(active, 'secret-env.json')['data']):
+            if not writer_revision(target, active):
+                sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+            if mode == 'rollback':
+                baseline = target.name
+            else:
+                baseline = (active / 'writer-baseline').read_text().strip()
+            if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not writer_revision(target.parent / baseline, target):
+                sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+            (target / 'writer-baseline').write_text(baseline + '\n')
+    if (target / 'writer-baseline').is_file():
+        baseline = (target / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not writer_revision(target.parent / baseline, target):
             sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
 except (OSError, ValueError, KeyError, TypeError, binascii.Error):
     sys.exit('INVALID_BOOKING_READER_CONFIG')
 PY
+  if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
 if apply_revision "$target" && check_revision "$target"; then
   if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
@@ -363,8 +433,16 @@ else
     fi
     exit 1
   fi
-  if [[ -n $previous ]]; then
+  if [[ -n $previous && $revision_root/$previous != "$target" ]]; then
     if apply_revision "$revision_root/$previous" && check_revision "$revision_root/$previous"; then
+      if [[ $service == booking-service ]]; then
+        printf '%s\n' "$previous" > "$revision_root/current.tmp"
+        mv -f "$revision_root/current.tmp" "$revision_root/current"
+        restored_image=$(cat "$revision_root/$previous/image")
+        printf '%s\n' "$restored_image" > "$state/$service.current.tmp"
+        mv -f "$state/$service.current.tmp" "$state/$service.current"
+        printf '%s\n' "$previous" > "$revision_root/previous"
+      fi
       echo "RESTORED_PREVIOUS $service $previous" >&2
     else
       echo "RESTORE_FAILED $service: operator intervention required" >&2

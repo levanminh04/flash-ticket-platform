@@ -68,6 +68,15 @@ host localhost cũ vào Secret. Key thiếu được báo bằng **tên**, khôn
 Với User, host Mongo loopback được đổi thành private IP, giữ credential/database/
 query. Kiểm lại URI nếu dùng multi-host/SRV thay vì URI một host hiện tại.
 
+### Booking: đọc phụ Admin Chart và 5 báo cáo Organizer/event
+
+- **Mặc định tắt:** Ba flag `BOOKING_SALES_CHART_REPLICA_ENABLED`, `BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED`, `BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED` chỉ từ env-file/Secret revision, mặc định false; không đặt trùng ConfigMap/Deployment. Hai group flag cần base flag bật. Writer-only không cần credential/timing reader.
+- **Whitelist:** base mở Admin Chart; Organizer mở summary/chart/events sales-statistics theo organizer; Event mở `/api/v1/events/{eventId}/sales-statistics` và `/api/v1/organizer/events/{eventId}/sales-summary`. Modern event vẫn lookup owner trên writer trước cache; legacy giữ owner/key/default ngày riêng. Admin Summary/ranking, order/availability và mọi worker vẫn writer. Một pool/permit reader dùng chung cho cả 6 API mỗi Pod.
+- **Freshness:** trần độ cũ end-to-end **60 giây gồm cache**, không phải request timeout/chu kỳ sync. Phải cộng tuổi mẫu, chờ pool/query, chờ cache write, TTL và biên an toàn; TTL mặc định 30s không tự chứng minh đạt. Mẫu hết hạn/lag/slot bận chọn writer trước đọc; đã thử reader mà lỗi thì invalidate và trả lỗi, không writer retry/cache lỗi.
+- **TLS chỉ cho pilot Booking:** URL chỉ có một đích private `ft70:5432/booking_db` đã đối chiếu trong preflight, với đúng `sslmode=require` và `targetServerType=secondary`. Không nhúng credential hoặc thêm tham số JDBC khác. TLS mã hóa nhưng **không xác minh danh tính máy chủ**, nên không tương đương `verify-full`; không đóng gói/mount CA phía Booking. Giữ nguyên chứng thư/TLS phía PostgreSQL, HBA và Security Group; không mặc định áp dụng chính sách này cho service khác.
+- **Baseline rồi từng nhóm:** Deploy writer-only trước, cả 3 flag off, cùng image với bản sẽ bật reader; kiểm 2 Pod khác hostname, HPA/PDB, readiness/Eureka và luồng writer. Sau khi budget 60s và điều kiện production đạt, bật Chart → Organizer → Event qua từng revision cùng image/placement/HPA/PDB. Script kiểm URL/snapshot, không tự xác minh host là `ft70` hay chứng minh freshness. Readiness chỉ kiểm app/writer.
+- **Rollback:** Revision active lưu `writer-baseline` đã kiểm; active→active kế thừa và xác minh lại, không đòi tắt reader xen kẽ. `previous` giữ writer-only tương thích, không trở thành pilot trước. Auto/manual rollback khôi phục Secret/ConfigMap/Deployment/Service/HPA/PDB và cập nhật pointer đúng baseline **2 Pod**, không chỉ đổi image hoặc `rollout undo`. Snapshot cũ absent PDB được xử lý khi rollback hạ tầng riêng; không dùng nó làm baseline bật reader. Kiểm revision, cả 3 flag và luồng writer sau hoàn tác. Chưa được phép vận hành thì chỉ chuẩn bị source, không tự rollout.
+
 Ticket giữ **key-ring thật hiện tại** ở
 `/opt/flash-ticket-app/secrets/ticket-qr/key-ring.json`. Template có dạng
 `{"keys":{"v1":""}}`; giá trị thật là Base64 của khóa AES 32 byte. Không sinh
@@ -122,7 +131,7 @@ chuyển K8s khi gate enabled. Riêng frontend chỉ bị chặn Compose khi đ�
 `state/k8s/frontend.current`, không chặn bởi marker enabled chung trước bootstrap.
 
 State K8s riêng `state/k8s/<service>/`: current/previous trỏ revision, mỗi revision
-có image, Deployment hoặc StatefulSet, ConfigMap/Service/Ingress/HPA và snapshot Secret. Thư mục mode
+có image, Deployment hoặc StatefulSet, ConfigMap/Service/Ingress/HPA/PDB (nếu có) và snapshot Secret. Thư mục mode
 700/file 600, chỉ người vận hành được đọc; **không upload artifact hoặc in cả
 thư mục**. Đây là dữ liệu nhạy cảm cần backup/retention theo chính sách vận hành.
 State Compose `state/<service>.current/.previous` được giữ nguyên cho rollback
@@ -134,6 +143,17 @@ thể đổi replica trong khi kiểm nên script lấy lại trạng thái mỗ
 index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗi rollout vẫn
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
+
+## Lịch Pod Booking
+
+**Booking:** HPA giữ `min=2,max=2`; scheduler tự chọn mọi node đủ điều kiện,
+không pin hostname hoặc mặc định loại `ft70`. Hard pod anti-affinity theo hostname
+và selector Booking trong namespace `flash-ticket` đặt hai Pod khác node, bao phủ
+cả old/new revision. PDB `booking-service` có `minAvailable=1`, chỉ giới hạn eviction
+tự nguyện; không bảo vệ node crash. Giữ RollingUpdate `maxUnavailable=0,maxSurge=1`,
+readiness/Eureka và drain hiện có: rollout cần **node thứ ba** schedulable đủ request.
+Thiếu capacity ⇒ NO-GO/Pending, không tự co-locate, hạ anti-affinity hoặc resize.
+Writer/Redis/RabbitMQ ở `ft84` vẫn là dependency SPOF; đây chỉ là HA tầng Pod.
 
 ## Frontend: bootstrap, cutover và rollback riêng
 
@@ -266,7 +286,7 @@ Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framewo
 ## Rollout giữ ứng dụng phục vụ trên node 84
 
 Gateway và năm core dùng `RollingUpdate`, `maxUnavailable: 0`, `maxSurge: 1`,
-`minReadySeconds: 75`. Bình thường Gateway có 1 Pod, core do HPA quản lý 1–2;
+`minReadySeconds: 75`. Gateway có 1 Pod; Booking giữ HPA min=max2, core khác 1–2;
 chỉ thêm Pod khi thay phiên bản. Pod mới phải đăng ký Eureka trước khi Ready.
 Pod cũ chạy preStop: PUT status OUT_OF_SERVICE, chờ 75 giây để client bỏ địa chỉ,
 rồi mới graceful shutdown. Không bật retry request ghi để che lỗi chuyển Pod.
@@ -336,7 +356,8 @@ Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads
 ## HPA cho năm service nghiệp vụ
 
 Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
-Eureka giữ hai peer. Cấu hình HPA trên node 84: min 1, max 2, CPU trung bình mục tiêu
+Eureka giữ hai peer. Booking cố định biên HPA min=max2; bốn service còn lại min1/max2.
+Đây là cấu hình source, không khẳng định đã apply lên cluster. CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%
 tương ứng trung bình 140m/Pod, không phải 70% CPU toàn node.
@@ -353,7 +374,7 @@ HPA khôi phục policy cũ; rollback về revision **chưa có HPA** xóa HPA c
 đó và khôi phục số replica cố định trong revision. Đây là thao tác có chủ đích,
 không dùng `kubectl scale` một lần để giữ số Pod khi HPA còn hoạt động.
 
-HPA hỗ trợ scale 1↔2; RollingUpdate giữ Pod phục vụ khi cập nhật như phần trên.
+HPA các service khác hỗ trợ scale 1↔2; Booking giữ 2 Pod. RollingUpdate giữ Pod phục vụ như phần trên.
 Hai cơ chế độc lập, không làm hệ thống chịu được lỗi máy 84.
 
 Nếu cả năm core đạt max 2, tổng request K8s ở cấu hình hiện tại khoảng 1700m CPU,

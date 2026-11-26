@@ -20,13 +20,14 @@ spec:
       labels: *id001
     spec:
       affinity:
-        nodeAffinity:
+        podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values: [ft84, server-2]
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: booking-service
+            namespaces:
+            - flash-ticket
+            topologyKey: kubernetes.io/hostname
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 180
       securityContext:

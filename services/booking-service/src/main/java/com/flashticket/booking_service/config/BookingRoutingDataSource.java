@@ -6,11 +6,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 final class BookingRoutingDataSource extends AbstractRoutingDataSource {
   @Override
   protected Object determineCurrentLookupKey() {
-    // Chi tiết đơn, tồn ghế và báo cáo Organizer cũng read-only nhưng phải đọc writer.
+    // Chỉ loader đã qua gate mới đặt marker; read-only thông thường vẫn đọc writer.
+    String transactionName = TransactionSynchronizationManager.getCurrentTransactionName();
     if (TransactionSynchronizationManager.isActualTransactionActive()
         && TransactionSynchronizationManager.isCurrentTransactionReadOnly()
-        && BookingDataSourceConfig.ADMIN_CHART_TRANSACTION.equals(
-            TransactionSynchronizationManager.getCurrentTransactionName())
+        && (BookingDataSourceConfig.ADMIN_CHART_TRANSACTION.equals(transactionName)
+            || BookingDataSourceConfig.SALES_REPORT_TRANSACTION.equals(transactionName))
         && getResolvedDataSources().containsKey("reader")) {
       return "reader";
     }

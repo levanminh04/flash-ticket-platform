@@ -11,6 +11,10 @@ booking:
   sales-statistics-cache:
     ttl: ${BOOKING_SALES_STATISTICS_CACHE_TTL:PT30S}
     key-prefix: ${BOOKING_SALES_STATISTICS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:sales-statistics:v1:}
+  sales-organizer-report-replica:
+    enabled: ${BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED:false}
+  sales-event-report-replica:
+    enabled: ${BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED:false}
   sales-chart-replica:
     enabled: ${BOOKING_SALES_CHART_REPLICA_ENABLED:false}
     probe-interval: ${BOOKING_SALES_CHART_REPLICA_PROBE_INTERVAL}

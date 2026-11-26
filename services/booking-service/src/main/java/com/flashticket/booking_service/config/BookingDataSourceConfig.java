@@ -27,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnableConfigurationProperties(DataSourceProperties.class)
 public class BookingDataSourceConfig {
   static final String ADMIN_CHART_TRANSACTION = "bookingAdminChartRead";
+  static final String SALES_REPORT_TRANSACTION = "bookingSalesReportRead";
 
   @Bean
   @ConfigurationProperties("spring.datasource.hikari")
@@ -77,6 +78,27 @@ public class BookingDataSourceConfig {
     }
     var template = new TransactionTemplate(transactionManager);
     template.setName(ADMIN_CHART_TRANSACTION);
+    template.setReadOnly(true);
+    template.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    template.setTimeout(readerTransactionTimeoutSeconds);
+    return template;
+  }
+
+  @Bean(defaultCandidate = false)
+  @ConditionalOnProperty(
+      prefix = "booking.sales-chart-replica",
+      name = "enabled",
+      havingValue = "true")
+  TransactionTemplate bookingSalesReportReadTransactionTemplate(
+      PlatformTransactionManager transactionManager,
+      @Value("${booking.sales-chart-replica.reader-transaction-timeout}")
+          int readerTransactionTimeoutSeconds) {
+    if (readerTransactionTimeoutSeconds <= 0) {
+      throw new IllegalArgumentException("Replica transaction timeout must be positive");
+    }
+    var template = new TransactionTemplate(transactionManager);
+    template.setName(SALES_REPORT_TRANSACTION);
     template.setReadOnly(true);
     template.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
