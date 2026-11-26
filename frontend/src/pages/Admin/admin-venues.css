@@ -1,0 +1,231 @@
+/* Admin Venues Management — extends admin-tix.css & organizer-dashboard.css */
+
+.tix-admin-venues-thumb {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #666b74);
+}
+
+.tix-admin-venues-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tix-admin-venues-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tix-admin-venues-item-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tix-admin-venues-card-head {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tix-admin-venues-card-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.tix-admin-venues-copy-btn {
+  flex-shrink: 0;
+}
+
+.tix-admin-venues-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.tix-admin-venues-image-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tix-admin-venues-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 240px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e2e6ed;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #666b74);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.tix-admin-venues-preview:hover,
+.tix-admin-venues-preview:focus-visible {
+  outline: none;
+  border-color: var(--brand, #cc9900);
+}
+
+.tix-admin-venues-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter 0.2s ease;
+}
+
+.tix-admin-venues-preview.has-image:hover img,
+.tix-admin-venues-preview.has-image:focus-visible img {
+  filter: brightness(0.65);
+}
+
+.tix-admin-venues-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.tix-admin-venues-preview:hover .tix-admin-venues-preview-empty,
+.tix-admin-venues-preview:focus-visible .tix-admin-venues-preview-empty {
+  opacity: 0;
+}
+
+.tix-admin-venues-camera-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  color: var(--text-strong, #15171a);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.tix-admin-venues-preview.has-image .tix-admin-venues-camera-overlay {
+  color: #ffffff;
+}
+
+.tix-admin-venues-preview:hover .tix-admin-venues-camera-overlay,
+.tix-admin-venues-preview:focus-visible .tix-admin-venues-camera-overlay {
+  opacity: 1;
+}
+
+.tix-admin-venues-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tix-admin-venues-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tix-admin-venues-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tix-admin-venues-field label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-strong, #15171a);
+}
+
+.tix-admin-venues-field input,
+.tix-admin-venues-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: var(--text-strong, #15171a);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tix-admin-venues-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.tix-admin-venues-field input:focus,
+.tix-admin-venues-field textarea:focus {
+  outline: none;
+  border-color: var(--brand, #cc9900);
+  box-shadow: 0 0 0 3px rgba(204, 153, 0, 0.16);
+}
+
+.tix-admin-venues-hint {
+  font-size: 12px;
+  color: var(--text-muted, #666b74);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tix-admin-venues-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand-ink, #805c00);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tix-admin-venues-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tix-admin-venues-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #efeae1;
+}

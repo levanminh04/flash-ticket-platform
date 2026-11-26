@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
-import { ArrowLeftRight, CalendarCheck, ChevronRight, Expand, LayoutGrid, LoaderCircle, Plus, SendHorizontal, Ticket, X } from "lucide-react";
+import { ArrowLeftRight, Bot, CalendarCheck, ChevronRight, Expand, LayoutGrid, LoaderCircle, LogIn, Plus, SendHorizontal, Ticket, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import robot from "../../assets/images/chatbot/chatbot-robot.webp";
 import { useAssistantConversation } from "./AssistantConversationProvider";
@@ -107,15 +107,17 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
 
   return <div className={fullPage ? "assistant-full-page" : "floating-chatbot"} ref={root}
     onKeyDown={event => { if (!fullPage && opened && event.key === "Escape") close(); }}>
-    {!fullPage && <button ref={trigger} type="button" className="floating-chatbot-trigger"
-      onClick={() => setOpened(value => !value)} aria-expanded={opened} aria-controls={opened ? panelId : undefined}
-      aria-label={t(opened ? "chatbot.close" : "chatbot.open")}>
-      {opened ? <X size={24} aria-hidden="true" /> : <img src={robot} alt="" />}
+    {!fullPage && !opened && <button ref={trigger} type="button" className="floating-chatbot-trigger"
+      onClick={() => setOpened(true)} aria-expanded={false}
+      aria-label={t("chatbot.open")}>
+      <img src={robot} alt="" />
     </button>}
     {visible && <section id={panelId} className={fullPage ? "chatbot-shell" : "floating-chatbot-panel"} aria-label={title}>
       <header className="floating-chatbot-header">
         <div className="assistant-identity">
-          {fullPage && <img src={robot} alt="" />}
+          <span className="assistant-avatar" aria-hidden="true">
+            <Bot size={18} />
+          </span>
           {isBuyer ? <strong>{title}</strong> : <h1>{title}</h1>}
         </div>
         <div className="assistant-header-actions">
@@ -149,10 +151,18 @@ export default function FloatingChatbot({ fullPage = false }: { fullPage?: boole
         </div>
       </header>
       {!allowed ? <div className="assistant-gate">
+        <div className="assistant-gate-icon" aria-hidden="true">
+          <Bot size={28} />
+        </div>
         <p role="status">{t(!initialized ? "chatbot.loadingAccount" : keycloak.authenticated
           ? isAdmin ? "chatbot.adminOnly" : isOrganizer ? "chatbot.organizerOnly" : "chatbot.buyerOnly"
           : "chatbot.loginRequired")}</p>
-        {initialized && !keycloak.authenticated && <button className="assistant-primary" type="button" onClick={() => void keycloak.login()}>{t("auth.signIn")}</button>}
+        {initialized && !keycloak.authenticated && (
+          <button className="assistant-primary" type="button" onClick={() => void keycloak.login()}>
+            <LogIn size={16} aria-hidden="true" />
+            {t("auth.signIn")}
+          </button>
+        )}
       </div> : <>
         <div className="assistant-transcript" ref={messages} tabIndex={0} role="region" aria-label={t("chatbot.transcript")}
           onScroll={event => {
