@@ -556,6 +556,7 @@ class EventFlowTests {
             "a",
             new EventCommands.Draft(
                 input.title(),
+                input.shortDescription(),
                 input.description(),
                 input.categoryId(),
                 input.venueId(),
@@ -1178,6 +1179,7 @@ class EventFlowTests {
             "a",
             new EventCommands.Draft(
                 v.title(),
+                v.shortDescription(),
                 v.description(),
                 v.categoryId(),
                 v.venueId(),
