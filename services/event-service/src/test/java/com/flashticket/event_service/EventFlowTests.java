@@ -143,6 +143,7 @@ class EventFlowTests {
   @MockitoBean com.flashticket.event_service.integration.EventImageStorage imageStorage;
   @MockitoSpyBean OutboxStore outbox;
   @MockitoSpyBean HttpEventSummaries summaries;
+  @MockitoSpyBean com.flashticket.event_service.persistence.SeatMapRepository seatMaps;
   @Autowired CancellationTransactions cancellationTransactions;
   static final UUID VENUE = UUID.fromString("00000000-0000-4000-8000-000000000001");
   static final UUID CATEGORY = UUID.fromString("00000000-0000-4000-8000-000000000002");
@@ -624,6 +625,19 @@ class EventFlowTests {
             .andReturn()
             .getResponse()
             .getContentAsByteArray();
+    clearInvocations(seatMaps);
+    mvc.perform(
+            get("/api/v1/events")
+                .param("q", input.title())
+                .param("includePast", "true")
+                .param("includeSeatMap", "false"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].eventId").value(event.eventId().toString()))
+        .andExpect(jsonPath("$.items[0].mode").value("SEAT_MAP"))
+        .andExpect(jsonPath("$.items[0].ticketTypes[0].ticketTypeId").value(type))
+        .andExpect(jsonPath("$.items[0].images").isArray())
+        .andExpect(jsonPath("$.items[0].seatMap").isEmpty());
     var compactList =
         mvc.perform(
                 get("/api/v1/events")
@@ -641,6 +655,7 @@ class EventFlowTests {
             .andReturn()
             .getResponse()
             .getContentAsByteArray();
+    verify(seatMaps, never()).load(any());
     assertThat(fullList.length).isGreaterThan(256 * 1024);
     assertThat(compactList.length).isLessThan(16 * 1024);
     var fullPage = json.readTree(fullList);

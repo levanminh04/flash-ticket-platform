@@ -147,7 +147,7 @@ public class EventService {
   public EventViews.Page<EventViews.Public> listPublic(
       String query, UUID category, int size, String cursor) {
     return listPublic(
-        query, category, null, null, null, null, false, size, cursor, EventViews::publicView);
+        query, category, null, null, null, null, false, size, cursor, EventViews::publicView, true);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -162,6 +162,23 @@ public class EventService {
       int size,
       String cursor,
       boolean compact) {
+    return listPublic(
+        query, category, from, to, maxPrice, venue, includePast, size, cursor, compact, !compact);
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public EventViews.Page<?> listPublic(
+      String query,
+      UUID category,
+      LocalDate from,
+      LocalDate to,
+      BigDecimal maxPrice,
+      String venue,
+      boolean includePast,
+      int size,
+      String cursor,
+      boolean compact,
+      boolean includeSeatMap) {
     if (compact) {
       return listPublic(
           query,
@@ -173,7 +190,8 @@ public class EventService {
           includePast,
           size,
           cursor,
-          EventViews::compactPublicView);
+          EventViews::compactPublicView,
+          false);
     }
     return listPublic(
         query,
@@ -185,7 +203,8 @@ public class EventService {
         includePast,
         size,
         cursor,
-        EventViews::publicView);
+        EventViews::publicView,
+        includeSeatMap);
   }
 
   private <T> EventViews.Page<T> listPublic(
@@ -198,7 +217,8 @@ public class EventService {
       boolean includePast,
       int size,
       String cursor,
-      Function<EventData, T> mapper) {
+      Function<EventData, T> mapper,
+      boolean includeSeatMap) {
     if (from != null && to != null && from.isAfter(to)) {
       throw EventProblem.invalid("dateRange");
     }
@@ -219,7 +239,8 @@ public class EventService {
         cursor,
         true,
         mapper,
-        true);
+        true,
+        includeSeatMap);
   }
 
   @Transactional(readOnly = true)
@@ -244,7 +265,7 @@ public class EventService {
       boolean children) {
     return page(
         actor, status, query, category, null, null, null, null, true, size, cursor, published,
-        mapper, children);
+        mapper, children, true);
   }
 
   private <T> EventViews.Page<T> page(
@@ -261,7 +282,8 @@ public class EventService {
       String cursor,
       boolean published,
       Function<EventData, T> mapper,
-      boolean children) {
+      boolean children,
+      boolean includeSeatMap) {
     if (size < 1 || size > 100) throw new EventProblem(400, "INVALID_PAGE_SIZE", "size");
     if (status != null
         && !Set.of("DRAFT", "PENDING_APPROVAL", "APPROVED", "PUBLISHED", "CANCELLED")
@@ -306,7 +328,7 @@ public class EventService {
               .withoutPadding()
               .encodeToString((cursorTime + "|" + last.id()).getBytes(StandardCharsets.UTF_8));
     }
-    var values = children ? repository.withChildren(selected) : selected;
+    var values = children ? repository.withChildren(selected, includeSeatMap) : selected;
     return new EventViews.Page<>(values.stream().map(mapper).toList(), next);
   }
 

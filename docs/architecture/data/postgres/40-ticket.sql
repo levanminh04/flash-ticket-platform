@@ -68,6 +68,7 @@ CREATE INDEX issuances_buyer_idx ON issuances(buyer_subject, created_at);
 CREATE INDEX issuances_event_idx ON issuances(event_id);
 CREATE INDEX tickets_issuance_idx ON tickets(issuance_id);
 CREATE INDEX deliveries_issuance_idx ON ticket_deliveries(issuance_id, requested_at);
+CREATE INDEX deliveries_pending_order_idx ON ticket_deliveries(requested_at, id) WHERE finished_at IS NULL;
 CREATE INDEX checkin_ticket_idx ON checkin_attempts(ticket_id, requested_at);
 CREATE INDEX checkin_event_idx ON checkin_attempts(requested_event_id, requested_at);
 COMMENT ON TABLE issuances IS 'Retry must compare immutable input and verify exact child count in one local transaction; a root uniqueness constraint alone is insufficient.';

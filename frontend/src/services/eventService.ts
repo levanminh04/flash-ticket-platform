@@ -57,6 +57,7 @@ export const eventService = {
       maxPrice?: string;
       venue?: string;
       includePast?: boolean;
+      includeSeatMap?: boolean;
       size?: number;
       cursor?: string;
       [key: string]: unknown;
@@ -73,6 +74,7 @@ export const eventService = {
         maxPrice: params.maxPrice || undefined,
         venue: params.venue || undefined,
         includePast: params.includePast ? true : undefined,
+        includeSeatMap: params.includeSeatMap ?? false,
         size: params.size ?? 20,
         cursor: params.cursor || undefined,
       },

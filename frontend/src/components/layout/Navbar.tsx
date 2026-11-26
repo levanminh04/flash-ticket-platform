@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogIn,
   LogOut,
+  MapPin,
   RotateCcw,
   Scale,
   Search,
@@ -607,6 +608,12 @@ const Navbar = () => {
                   <Link to="/admin/refunds" className="dropdown-item">
                     <RotateCcw size={17} />
                     {t("nav.adminRefunds", "Quản lý hoàn tiền")}
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <Link to="/admin/venues" className="dropdown-item">
+                    <MapPin size={17} />
+                    {t("nav.adminVenues", "Quản lý địa điểm")}
                   </Link>
                 ) : null}
                 <hr />

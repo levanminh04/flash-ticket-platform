@@ -112,9 +112,20 @@ public class EventController {
       @RequestParam(required = false, defaultValue = "false") boolean includePast,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "false") boolean compact) {
+      @RequestParam(defaultValue = "false") boolean compact,
+      @RequestParam(defaultValue = "true") boolean includeSeatMap) {
     return service.listPublic(
-        q, categoryId, from, to, maxPrice, venue, includePast, size, cursor, compact);
+        q,
+        categoryId,
+        from,
+        to,
+        maxPrice,
+        venue,
+        includePast,
+        size,
+        cursor,
+        compact,
+        includeSeatMap);
   }
 
   @GetMapping("/categories")

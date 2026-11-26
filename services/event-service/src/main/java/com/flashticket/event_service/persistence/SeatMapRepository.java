@@ -3,6 +3,7 @@ package com.flashticket.event_service.persistence;
 import com.flashticket.event_service.api.SeatMap;
 import com.flashticket.event_service.domain.EventData;
 import com.flashticket.event_service.web.EventProblem;
+import java.sql.Types;
 import java.util.*;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -11,6 +12,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Repository
 public class SeatMapRepository {
+  private static final int SEAT_BATCH_SIZE = 1000;
+  private static final String INSERT_SEAT_SQL =
+      "INSERT INTO event_schema.tbl_event_seats(id,event_id,sector_id,seat_label,row_name,seat_number,coord_x,coord_y,ticket_type_id,is_hidden) VALUES(?,?,?,?,?,?,?,?,?,?)";
+
   private final NamedParameterJdbcTemplate jdbc;
   private final JsonMapper json;
 
@@ -123,19 +128,30 @@ public class SeatMapRepository {
                   .addValue("color", sector.colorCode())
                   .addValue("geometry", json.writeValueAsString(sector.geometry())));
       if (count != 1) throw EventProblem.invalid("sectorId");
-      for (var seat : sector.seats())
-        jdbc.update(
-            "INSERT INTO event_schema.tbl_event_seats(id,event_id,sector_id,seat_label,row_name,seat_number,coord_x,coord_y,ticket_type_id,is_hidden) VALUES(:id,:event,:sector,:label,:row,:number,:x,:y,:type,:hidden)",
-            new MapSqlParameterSource("id", seat.seatId())
-                .addValue("event", id)
-                .addValue("sector", sector.sectorId())
-                .addValue("label", seat.seatLabel())
-                .addValue("row", seat.rowName())
-                .addValue("number", seat.seatNumber())
-                .addValue("x", seat.coordX())
-                .addValue("y", seat.coordY())
-                .addValue("type", seat.ticketTypeId())
-                .addValue("hidden", seat.isHidden()));
+      if (!sector.seats().isEmpty()) {
+        UUID sectorId = sector.sectorId();
+        jdbc.getJdbcTemplate()
+            .batchUpdate(
+                INSERT_SEAT_SQL,
+                sector.seats(),
+                SEAT_BATCH_SIZE,
+                (ps, seat) -> {
+                  ps.setObject(1, seat.seatId());
+                  ps.setObject(2, id);
+                  ps.setObject(3, sectorId);
+                  ps.setString(4, seat.seatLabel());
+                  ps.setString(5, seat.rowName());
+                  ps.setString(6, seat.seatNumber());
+                  ps.setBigDecimal(7, seat.coordX());
+                  ps.setBigDecimal(8, seat.coordY());
+                  if (seat.ticketTypeId() == null) {
+                    ps.setNull(9, Types.OTHER);
+                  } else {
+                    ps.setObject(9, seat.ticketTypeId());
+                  }
+                  ps.setBoolean(10, seat.isHidden());
+                });
+      }
     }
     bump(event);
   }

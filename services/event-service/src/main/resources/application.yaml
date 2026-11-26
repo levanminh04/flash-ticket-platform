@@ -20,6 +20,8 @@ spring:
       connection-init-sql: SET ROLE event_owner
       maximum-pool-size: 5
       minimum-idle: 1
+      data-source-properties:
+        reWriteBatchedInserts: true
   jpa:
     open-in-view: false
     hibernate:

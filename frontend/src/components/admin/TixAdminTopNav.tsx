@@ -8,6 +8,7 @@ import {
   Calendar,
   ChevronDown,
   LogOut,
+  MapPin,
   MessageCircle,
   RotateCcw,
   Scale,
@@ -18,7 +19,7 @@ import LanguageSwitcher from "../common/LanguageSwitcher";
 import { confirmDestructiveAction } from "../../lib/swal";
 import "../organizer/tix-organizer-nav.css";
 
-export type TixAdminNavTab = "sales" | "organizers" | "events" | "reconciliation" | "refunds" | "chatbot";
+export type TixAdminNavTab = "sales" | "organizers" | "events" | "venues" | "reconciliation" | "refunds" | "chatbot";
 
 interface TixAdminTopNavProps {
   activeTab?: TixAdminNavTab;
@@ -36,6 +37,8 @@ export default function TixAdminTopNav({ activeTab }: TixAdminTopNavProps) {
       ? "sales"
       : location.pathname.startsWith("/admin/events")
       ? "events"
+      : location.pathname.startsWith("/admin/venues")
+      ? "venues"
       : location.pathname.startsWith("/admin/reconciliation")
       ? "reconciliation"
       : location.pathname.startsWith("/admin/refunds")
@@ -137,6 +140,13 @@ export default function TixAdminTopNav({ activeTab }: TixAdminTopNavProps) {
         >
           <Calendar size={15} aria-hidden="true" />
           <span>{isVi ? "Sự kiện" : "Events"}</span>
+        </Link>
+        <Link
+          to="/admin/venues"
+          className={`tix-pill-item ${currentTab === "venues" ? "active" : ""}`}
+        >
+          <MapPin size={15} aria-hidden="true" />
+          <span>{isVi ? "Địa điểm" : "Venues"}</span>
         </Link>
         <Link
           to="/admin/reconciliation"
