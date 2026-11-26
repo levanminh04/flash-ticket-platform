@@ -240,6 +240,8 @@ Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framewo
   `lb://assistant-service`, không thêm Service/Ingress cho Assistant.
   `ENV_ASSISTANT_SERVICE` chỉ gồm `REDIS_PASSWORD` và `ASSISTANT_MODEL_API_KEY`;
   không đưa giá trị thật vào manifest hay log.
+  Redis dùng một instance standalone ở `ft84` qua `REDIS_HOST`/`REDIS_PORT`;
+  không dùng Sentinel. RabbitMQ cũng giữ một broker hiện có ở `ft84`.
 - **Preflight FT84:** Xác nhận Discovery StatefulSet có đúng một pod Ready và
   Service trỏ đúng pod đó; dừng nếu topology khác, không tự scale Discovery.
   Kiểm RAM/capacity cho pod surge và pod đang drain, GHCR pull, issuer, Redis

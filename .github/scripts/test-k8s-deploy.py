@@ -3,6 +3,7 @@
 This verifies release/config rollback and secret filtering; it does not prove
 cluster rollout, network connectivity or flock concurrency.
 """
+import base64
 import http.server
 import json
 import os
@@ -355,9 +356,59 @@ def run_fixtures():
                 live = json.loads((assistant_root / 'api/Deployment.json').read_text())
                 assert live['spec']['replicas'] == 1
                 assert live['spec']['template']['spec']['containers'][0]['image'] == assistant_repository + 'a' * 64
+
+                manifest = assistant_app / 'configmap.yaml'
+                state = assistant_root / 'state/k8s/assistant-service'
+                baseline = (state / 'current').read_text()
+                standalone_config = json.loads(manifest.read_text())
+                assert standalone_config['data']['REDIS_HOST'] == 'redis-standalone'
+                assert standalone_config['data']['REDIS_PORT'] == '6379'
+                fixture_env = assistant_env.read_text()
+                assert fixture_env.count('REDIS_PASSWORD=fixture-redis\n') == 1
+                revisions = []
+                for revision in ('first', 'second'):
+                    standalone_config['data']['ASSISTANT_REDIS_KEY_PREFIX'] = f'fixture-{revision}'
+                    manifest.write_text(json.dumps(standalone_config))
+                    assistant_env.write_text(fixture_env.replace(
+                        'REDIS_PASSWORD=fixture-redis\n', f'REDIS_PASSWORD=fixture-redis-{revision}\n'))
+                    result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=90)
+                    assert result.returncode == 0, result.stdout + result.stderr
+                    assert f'fixture-redis-{revision}' not in result.stdout + result.stderr
+                    assert json.loads((assistant_root / 'api/ConfigMap.json').read_text()) == standalone_config
+                    deployed = json.loads((assistant_root / 'api/Secret.json').read_text())['data']
+                    assert set(deployed) == set(secret)
+                    assert base64.b64decode(deployed['REDIS_PASSWORD']).decode() == f'fixture-redis-{revision}'
+                    assert {key: deployed[key] for key in secret if key != 'REDIS_PASSWORD'} == {
+                        key: value for key, value in secret.items() if key != 'REDIS_PASSWORD'}
+                    live = json.loads((assistant_root / 'api/Deployment.json').read_text())
+                    assert live['spec']['template']['spec']['containers'][0]['image'] == assistant_repository + 'a' * 64
+                    revisions.append(((state / 'current').read_text(), deployed,
+                                      json.loads(manifest.read_text())))
+                first, second = revisions
+                assert first[0] != baseline and second[0] != first[0]
+                assert second[1]['REDIS_PASSWORD'] != first[1]['REDIS_PASSWORD']
+                assert second[2] != first[2]
+                assert (state / 'previous').read_text() == first[0]
+                # Rollout lỗi phải phục hồi revision hiện tại, không lấy cấu hình bootstrap cũ.
+                standalone_config['data']['ASSISTANT_REDIS_KEY_PREFIX'] = 'fixture-failed'
+                manifest.write_text(json.dumps(standalone_config))
+                assistant_env.write_text(fixture_env.replace(
+                    'REDIS_PASSWORD=fixture-redis\n', 'REDIS_PASSWORD=fixture-redis-failed\n'))
+                (assistant_root / 'fail-once').touch()
+                result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=90)
+                assert result.returncode != 0 and 'RESTORED_PREVIOUS' in result.stderr
+                assert 'fixture-redis-failed' not in result.stdout + result.stderr
+                assert (state / 'current').read_text() == second[0]
+                assert json.loads((assistant_root / 'api/ConfigMap.json').read_text()) == second[2]
+                assert json.loads((assistant_root / 'api/Secret.json').read_text())['data'] == second[1]
+                result = subprocess.run([*command[:-1], 'rollback'], env=env, text=True, capture_output=True, timeout=90)
+                assert result.returncode == 0, result.stdout + result.stderr
+                assert (state / 'current').read_text() == first[0]
+                assert json.loads((assistant_root / 'api/ConfigMap.json').read_text()) == first[2]
+                assert json.loads((assistant_root / 'api/Secret.json').read_text())['data'] == first[1]
             finally:
                 server.shutdown()
-        print('Assistant bootstrap fixtures passed: required secrets, allowlist, no Compose fallback and Ready Eureka peer.')
+        print('Assistant fixtures passed: bootstrap, allowlist, Eureka and same-image standalone revision rollback.')
 
 
 if __name__ == '__main__':
