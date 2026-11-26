@@ -84,6 +84,18 @@ PY
     if [[ $mode == rollback || $revision != "$target" ]]; then preparation=prepare-rollback; fi
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" "$preparation" "$revision" || return 1
   fi
+  if [[ $service == booking-service && -f $revision/pdb.json ]]; then
+    # Bỏ field khỏi manifest không xóa nodeAffinity đã được đặt ngoài last-applied.
+    python3 - "$revision/deployment-effective.json" <<'PY' || return 1
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+deployment = json.loads(path.read_text())
+affinity = deployment['spec']['template']['spec'].get('affinity', {})
+if affinity.get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution') and 'nodeAffinity' not in affinity:
+    affinity['nodeAffinity'] = None
+    path.write_text(json.dumps(deployment))
+PY
+  fi
   for resource in configmap peer-service service ingress deployment statefulset hpa pdb; do
     [[ -f $revision/$resource.json ]] || continue
     manifest="$revision/$resource.json"
@@ -100,6 +112,17 @@ PY
 check_revision() {
   local revision=$1 attempt kind=deployment
   if [[ -f $revision/statefulset.json ]]; then kind=statefulset; fi
+  if [[ $service == booking-service && -f $revision/pdb.json ]]; then
+    # Dừng sớm nếu pinning live làm Pod HA không thể được xếp lịch như thiết kế.
+    kubectl -n "$namespace" get deployment "$service" -o json > "$revision/live-deployment.json" || return 1
+    python3 - "$revision/live-deployment.json" <<'PY' || return 1
+import json, pathlib, sys
+deployment = json.loads(pathlib.Path(sys.argv[1]).read_text())
+pod = deployment['spec']['template']['spec']
+if (pod.get('affinity', {}).get('nodeAffinity') or pod.get('nodeSelector') or pod.get('nodeName')):
+    sys.exit('BOOKING_HA_NODE_PINNING_PRESENT')
+PY
+  fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
   if [[ $service == booking-service && -f $revision/pdb.json ]]; then
     kubectl -n "$namespace" get pdb "$service" -o json > "$revision/pdb-live.json" || return 1
