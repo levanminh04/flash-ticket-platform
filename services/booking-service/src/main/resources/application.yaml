@@ -11,6 +11,20 @@ booking:
   sales-statistics-cache:
     ttl: ${BOOKING_SALES_STATISTICS_CACHE_TTL:PT30S}
     key-prefix: ${BOOKING_SALES_STATISTICS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:sales-statistics:v1:}
+  sales-chart-replica:
+    enabled: ${BOOKING_SALES_CHART_REPLICA_ENABLED:false}
+    probe-interval: ${BOOKING_SALES_CHART_REPLICA_PROBE_INTERVAL}
+    probe-query-timeout: ${BOOKING_SALES_CHART_REPLICA_PROBE_QUERY_TIMEOUT}
+    max-sample-age: ${BOOKING_SALES_CHART_REPLICA_MAX_SAMPLE_AGE}
+    reader-transaction-timeout: ${BOOKING_SALES_CHART_REPLICA_READER_TRANSACTION_TIMEOUT}
+    datasource:
+      jdbc-url: ${BOOKING_SALES_CHART_REPLICA_JDBC_URL}
+      username: ${BOOKING_SALES_CHART_REPLICA_USERNAME}
+      password: ${BOOKING_SALES_CHART_REPLICA_PASSWORD}
+      read-only: true
+      minimum-idle: 0
+      maximum-pool-size: 2
+      connection-timeout: 5000
   buyer-orders-cache:
     ttl: ${BOOKING_BUYER_ORDERS_CACHE_TTL:PT24H}
     key-prefix: ${BOOKING_BUYER_ORDERS_CACHE_KEY_PREFIX:flash-ticket:dev:booking:buyer-orders:v2:}

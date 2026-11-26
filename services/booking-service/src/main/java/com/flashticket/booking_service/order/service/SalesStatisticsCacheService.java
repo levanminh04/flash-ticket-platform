@@ -1,29 +1,39 @@
 package com.flashticket.booking_service.order.service;
 
+import com.flashticket.booking_service.config.BookingChartReplicaHealth;
 import com.flashticket.booking_service.dto.response.*;
 import com.flashticket.booking_service.enums.SalesGrouping;
 import com.flashticket.booking_service.redis.service.RedisService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SalesStatisticsCacheService {
+  private static final String CHART_SOURCE_METRIC = "booking.sales.chart.source";
+
   private final OrderService orderService;
   private final RedisService redisService;
   private final JsonMapper jsonMapper;
+  private final ObjectProvider<TransactionTemplate> chartTransactionProvider;
+  private final ObjectProvider<BookingChartReplicaHealth> replicaHealthProvider;
+  private final MeterRegistry metrics;
 
   @Value("${booking.sales-statistics-cache.ttl:PT30S}")
   private Duration cacheTtl;
@@ -31,6 +41,27 @@ public class SalesStatisticsCacheService {
   @Value(
       "${booking.sales-statistics-cache.key-prefix:flash-ticket:dev:booking:sales-statistics:v1:}")
   private String keyPrefix;
+
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "Shares Spring-managed RedisService, JsonMapper, and MeterRegistry without exposing them.")
+  public SalesStatisticsCacheService(
+      OrderService orderService,
+      RedisService redisService,
+      JsonMapper jsonMapper,
+      @Qualifier("bookingAdminChartReadTransactionTemplate")
+          ObjectProvider<TransactionTemplate> chartTransactionProvider,
+      @Qualifier("bookingChartReplicaHealth")
+          ObjectProvider<BookingChartReplicaHealth> replicaHealthProvider,
+      MeterRegistry metrics) {
+    this.orderService = orderService;
+    this.redisService = redisService;
+    this.jsonMapper = jsonMapper;
+    this.chartTransactionProvider = chartTransactionProvider;
+    this.replicaHealthProvider = replicaHealthProvider;
+    this.metrics = metrics;
+  }
 
   // Controller kiểm quyền trước cả cache hit; Redis I/O nằm ngoài transaction DB.
   public SalesStatisticsSummaryView getSalesStatisticsSummary(
@@ -89,7 +120,7 @@ public class SalesStatisticsCacheService {
   public SalesStatisticsChartView getSalesStatisticsChart(
       String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
     if (cacheTtl.isZero() || cacheTtl.isNegative())
-      return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+      return loadSalesStatisticsChart(organizerSubject, from, to, groupBy);
     String scope =
         organizerSubject == null
             ? "system"
@@ -99,7 +130,7 @@ public class SalesStatisticsCacheService {
                     .encodeToString(organizerSubject.getBytes(StandardCharsets.UTF_8));
     String dataKey =
         keyPrefix
-            + "chart:"
+            + "chart:v2:"
             + scope
             + ":"
             + (from == null ? "-" : from)
@@ -127,7 +158,7 @@ public class SalesStatisticsCacheService {
           exception.getClass().getSimpleName());
     }
     // Lỗi nghiệp vụ đi ra ngoài, không ghi vào cache.
-    var result = orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+    var result = loadSalesStatisticsChart(organizerSubject, from, to, groupBy);
     if (dataKey != null) {
       try {
         redisService.set(dataKey, jsonMapper.writeValueAsString(result), cacheTtl);
@@ -138,6 +169,43 @@ public class SalesStatisticsCacheService {
       }
     }
     return result;
+  }
+
+  private SalesStatisticsChartView loadSalesStatisticsChart(
+      String organizerSubject, LocalDate from, LocalDate to, SalesGrouping groupBy) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()
+        || TransactionSynchronizationManager.isSynchronizationActive()) {
+      // Không mở transaction đọc riêng khi caller đã quản lý transaction hoặc synchronization.
+      metrics
+          .counter(CHART_SOURCE_METRIC, "source", "existing_transaction", "reason", "caller")
+          .increment();
+      return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
+    }
+
+    String writerReason = "organizer";
+    if (organizerSubject == null) {
+      var transaction = chartTransactionProvider.getIfAvailable();
+      var health = transaction == null ? null : replicaHealthProvider.getIfAvailable();
+      writerReason = health == null ? "not_configured" : "unavailable_or_busy";
+      if (health != null && health.tryBeginRead()) {
+        try {
+          metrics
+              .counter(CHART_SOURCE_METRIC, "source", "reader", "reason", "eligible")
+              .increment();
+          return transaction.execute(
+              status -> orderService.getSalesStatisticsChart(null, from, to, groupBy));
+        } catch (RuntimeException failure) {
+          // Chỉ vô hiệu hóa mẫu cho request sau, không chạy lại report trên writer.
+          health.invalidate();
+          metrics.counter("booking.sales.chart.replica.attempt.error").increment();
+          throw failure;
+        } finally {
+          health.finishRead();
+        }
+      }
+    }
+    metrics.counter(CHART_SOURCE_METRIC, "source", "writer", "reason", writerReason).increment();
+    return orderService.getSalesStatisticsChart(organizerSubject, from, to, groupBy);
   }
 
   // Controller kiểm quyền trước cả cache hit; Redis I/O nằm ngoài transaction DB.

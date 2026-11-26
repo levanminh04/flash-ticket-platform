@@ -19,6 +19,14 @@ spec:
     metadata:
       labels: *id001
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values: [ft84, server-2]
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 180
       securityContext:

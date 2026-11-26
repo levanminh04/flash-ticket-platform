@@ -217,6 +217,8 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
         value = value.strip()
         if value[:1] in ('"', "'") and value[-1:] == value[:1]:
             value = value[1:-1]
+        if service == 'booking-service' and key == 'BOOKING_SALES_CHART_REPLICA_ENABLED' and value not in ('true', 'false'):
+            sys.exit('INVALID_BOOKING_READER_FLAG')
         if value:
             values[key] = value
 if service == 'payment-service':
@@ -258,6 +260,85 @@ PY
   fi
 fi
 target="$revision_root/$revision"
+if [[ $service == booking-service ]]; then
+  python3 - "$target" "$previous" "$mode" <<'PY'
+import base64, binascii, json, pathlib, re, sys, urllib.parse
+
+target = pathlib.Path(sys.argv[1])
+current, mode = sys.argv[2:]
+prefix = 'BOOKING_SALES_CHART_REPLICA_'
+flag = prefix + 'ENABLED'
+
+
+def load(revision, file):
+    return json.loads((revision / file).read_text(encoding='utf-8'))
+
+
+def enabled(secret):
+    value = secret.get(flag, 'ZmFsc2U=')  # base64 of false
+    setting = base64.b64decode(value, validate=True)
+    if setting not in (b'true', b'false'):
+        sys.exit('INVALID_BOOKING_READER_FLAG')
+    return setting == b'true'
+
+
+def writer_revision(revision, pilot):
+    expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json')
+    if ((pilot / 'hpa.json').is_file() != (revision / 'hpa.json').is_file()
+            or not all((revision / file).is_file() for file in expected)):
+        return False
+    deployment = load(revision, 'deployment.json')['spec']['template']
+    config = load(revision, 'configmap.json')
+    pilot_pod = load(pilot, 'deployment.json')['spec']['template']['spec']
+    image = (revision / 'image').read_text().strip()
+    return (not enabled(load(revision, 'secret-env.json')['data'])
+            and flag not in config.get('data', {})
+            and not any(v.get('name') == flag for v in deployment['spec']['containers'][0].get('env', []))
+            and deployment['metadata']['annotations'].get('flash-ticket/release') == revision.name
+            and deployment['spec']['containers'][0]['image'] == image == pilot_pod['containers'][0]['image']
+            and image == (pilot / 'image').read_text().strip()
+            and deployment['spec'].get('affinity') == pilot_pod.get('affinity'))
+
+
+try:
+    secret = load(target, 'secret-env.json')['data']
+    use_reader = enabled(secret)
+    config = load(target, 'configmap.json')
+    pod = load(target, 'deployment.json')['spec']['template']['spec']
+    # The generated Secret must be the single source of the pilot switch.
+    if flag in config.get('data', {}) or any(v.get('name') == flag for v in pod['containers'][0].get('env', [])):
+        sys.exit('INVALID_BOOKING_READER_FLAG_SOURCE')
+    if mode == 'rollback':
+        if use_reader:
+            sys.exit('BOOKING_ROLLBACK_REQUIRES_WRITER_REVISION')
+    elif use_reader:
+        keys = ('JDBC_URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'PROBE_QUERY_TIMEOUT',
+                'MAX_SAMPLE_AGE', 'READER_TRANSACTION_TIMEOUT')
+        missing = [prefix + key for key in keys if not secret.get(prefix + key)]
+        if missing:
+            sys.exit('MISSING_BOOKING_READER_KEYS ' + ','.join(missing))
+        jdbc = base64.b64decode(secret[prefix + 'JDBC_URL'], validate=True).decode('utf-8')
+        try:
+            url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
+            params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
+            required = {'sslmode': 'require', 'targetServerType': 'secondary'}
+            if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
+                    or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
+                    or url.path != '/booking_db' or len(params) != len(required) or dict(params) != required):
+                raise ValueError
+        except ValueError:
+            sys.exit('INVALID_BOOKING_READER_URL')
+        if not current or not writer_revision(target.parent / current, target):
+            sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+    # Không đổi image hoặc lịch Pod khi tắt pilot bằng revision writer-only.
+    if current and not use_reader:
+        active = target.parent / current
+        if enabled(load(active, 'secret-env.json')['data']) and not writer_revision(target, active):
+            sys.exit('BOOKING_WRITER_REVISION_REQUIRED')
+except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+    sys.exit('INVALID_BOOKING_READER_CONFIG')
+PY
+fi
 if apply_revision "$target" && check_revision "$target"; then
   if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" finish "$target" || die DISCOVERY_MIGRATION_FINALIZE_FAILED

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.flashticket.booking_service.config.BookingChartReplicaHealth;
 import com.flashticket.booking_service.dto.response.*;
 import com.flashticket.booking_service.enums.Currency;
 import com.flashticket.booking_service.enums.EventState;
@@ -26,11 +27,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +43,8 @@ class SalesStatisticsCacheServiceTests {
   private static final LocalDate FROM = LocalDate.parse("2026-11-01");
   private static final LocalDate TO = LocalDate.parse("2026-11-09");
   @Mock OrderService orderService;
+  @Mock ObjectProvider<TransactionTemplate> chartTransactionProvider;
+  @Mock ObjectProvider<BookingChartReplicaHealth> replicaHealthProvider;
   @Mock StringRedisTemplate stringRedisTemplate;
   @Mock ValueOperations<String, String> values;
   JsonMapper jsonMapper;
@@ -105,7 +110,12 @@ class SalesStatisticsCacheServiceTests {
     jsonMapper = jsonMapper();
     cacheService =
         new SalesStatisticsCacheService(
-            orderService, new RedisService(stringRedisTemplate), jsonMapper);
+            orderService,
+            new RedisService(stringRedisTemplate),
+            jsonMapper,
+            chartTransactionProvider,
+            replicaHealthProvider,
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     ReflectionTestUtils.setField(cacheService, "cacheTtl", TTL);
     ReflectionTestUtils.setField(cacheService, "keyPrefix", PREFIX);
   }
@@ -120,7 +130,9 @@ class SalesStatisticsCacheServiceTests {
               Object report =
                   key.contains(":summary:")
                       ? summary
-                      : key.contains(":chart:") ? chart : key.contains(":events:") ? page : detail;
+                      : key.startsWith(PREFIX + "chart:v2:")
+                          ? chart
+                          : key.contains(":events:") ? page : detail;
               return jsonMapper.writeValueAsString(report);
             });
     assertThat(cacheService.getSalesStatisticsSummary(null, FROM, TO))
@@ -137,7 +149,7 @@ class SalesStatisticsCacheServiceTests {
     assertThat(cacheService.getEventSalesStatistics("owner", EVENT, FROM, TO))
         .usingRecursiveComparison()
         .isEqualTo(detail);
-    verifyNoInteractions(orderService);
+    verifyNoInteractions(orderService, chartTransactionProvider);
     verify(values, never()).set(anyString(), anyString(), any(Duration.class));
   }
 
