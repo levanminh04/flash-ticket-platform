@@ -15,7 +15,7 @@ public final class Problem {
   @NotBlank private final String code;
   @NotBlank private final String message;
   @NotNull private final UUID correlationId;
-  @NotNull @Valid private final List<@NotNull @Valid Violation> violations;
+  @NotNull private final List<@NotNull @Valid Violation> violations;
 
   /** Mô tả một field không hợp lệ bằng tên field và mã lỗi, không chứa giá trị input. */
   @Getter

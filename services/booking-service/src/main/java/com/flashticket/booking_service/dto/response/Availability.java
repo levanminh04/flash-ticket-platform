@@ -23,9 +23,9 @@ public final class Availability {
   private final String sourceConfigVersion;
 
   @NotNull private final Instant asOf;
-  @NotNull @Valid private final List<@NotNull @Valid TicketTypeAvailability> ticketTypes;
-  @NotNull @Valid private final List<@NotNull @Valid SectorAvailability> sectors;
-  @NotNull @Valid private final List<@NotNull @Valid SeatAvailability> seats;
+  @NotNull private final List<@NotNull @Valid TicketTypeAvailability> ticketTypes;
+  @NotNull private final List<@NotNull @Valid SectorAvailability> sectors;
+  @NotNull private final List<@NotNull @Valid SeatAvailability> seats;
 
   @Getter
   @AllArgsConstructor

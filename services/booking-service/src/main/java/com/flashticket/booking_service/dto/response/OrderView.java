@@ -44,5 +44,5 @@ public final class OrderView {
   @DecimalMax("9223372036854775807")
   private final String sourceConfigVersion;
 
-  @NotNull @Valid private final List<@NotNull @Valid OrderItemView> items;
+  @NotNull private final List<@NotNull @Valid OrderItemView> items;
 }
