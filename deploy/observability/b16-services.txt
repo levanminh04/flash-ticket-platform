@@ -1,0 +1,9 @@
+# Service có hợp đồng log B16: CI kiểm target/b16-log-samples.jsonl (thiếu file = lỗi).
+# Thay schema/bộ kiểm trong deploy/observability/ thì build lại đúng các service này.
+discovery-server
+api-gateway
+user-service
+event-service
+ticket-service
+booking-service
+payment-service
