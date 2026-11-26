@@ -19,7 +19,8 @@ CREATE TABLE venues (
 CREATE TABLE events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organizer_subject nonempty_text NOT NULL,
   category_id uuid REFERENCES categories(id), venue_id uuid REFERENCES venues(id),
-  title nonempty_text NOT NULL, description text NOT NULL DEFAULT '',
+  title nonempty_text NOT NULL, short_description text NOT NULL DEFAULT '' CHECK (char_length(short_description) <= 300),
+  description text NOT NULL DEFAULT '',
   sales_mode text NOT NULL CHECK (sales_mode IN ('QUANTITY','SEAT_MAP')),
   status text NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','PENDING_APPROVAL','APPROVED','PUBLISHED','CANCELLED')),
   starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL,

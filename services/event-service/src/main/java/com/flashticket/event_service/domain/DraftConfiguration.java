@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record DraftConfiguration(
     String title,
+    String shortDescription,
     String description,
     UUID categoryId,
     UUID venueId,

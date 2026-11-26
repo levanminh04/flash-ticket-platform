@@ -249,6 +249,11 @@ export default function EventDetailPage() {
           />
           <div className="event-editorial-intro">
             <h1 id="event-editorial-title">{event.title}</h1>
+            {event.shortDescription?.trim() && (
+              <p className="event-editorial-short-desc" style={{ color: "var(--text-secondary)", fontSize: "1.02rem", lineHeight: 1.55, marginBlock: "8px 14px", maxWidth: "60ch" }}>
+                {event.shortDescription}
+              </p>
+            )}
             <div className="event-editorial-meta">
               {validStart && (
                 <div className="event-editorial-meta-item">

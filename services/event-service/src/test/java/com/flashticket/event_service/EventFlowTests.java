@@ -168,6 +168,7 @@ class EventFlowTests {
   static EventCommands.Draft draft(String title) {
     return new EventCommands.Draft(
         title,
+        "Short summary for " + title,
         "Description",
         CATEGORY,
         VENUE,
