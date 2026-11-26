@@ -20,6 +20,7 @@ import AdminOrganizerReviewPage from "./pages/Admin/AdminOrganizerReviewPage";
 import AdminReconciliationPage from "./pages/Admin/AdminReconciliationPage";
 import AdminRefundsPage from "./pages/Admin/AdminRefundsPage";
 import AdminSalesPage from "./pages/Admin/AdminSalesPage";
+import AdminVenuesPage from "./pages/Admin/AdminVenuesPage";
 import OrganizerApplyPage from "./pages/Organizer/OrganizerApplyPage";
 import PublicOrganizerPage from "./pages/Organizer/PublicOrganizerPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
@@ -114,6 +115,7 @@ function AppRoutes() {
           <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           <Route path="/admin/reconciliation/:eventId" element={<AdminReconciliationPage />} />
           <Route path="/admin/refunds" element={<AdminRefundsPage />} />
+          <Route path="/admin/venues" element={<AdminVenuesPage />} />
           <Route path="/events/:slug/book" element={<SelectTicketPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/payment-result" element={<PaymentResultPage />} />

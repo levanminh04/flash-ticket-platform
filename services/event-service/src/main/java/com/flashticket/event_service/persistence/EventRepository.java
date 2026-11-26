@@ -1,6 +1,7 @@
 package com.flashticket.event_service.persistence;
 
 import com.flashticket.event_service.api.EventViews;
+import com.flashticket.event_service.api.SeatMap;
 import com.flashticket.event_service.domain.DraftConfiguration;
 import com.flashticket.event_service.domain.EventData;
 import com.flashticket.event_service.web.EventProblem;
@@ -129,6 +130,10 @@ public class EventRepository {
   }
 
   public List<EventData> withChildren(List<EventData> events) {
+    return withChildren(events, true);
+  }
+
+  public List<EventData> withChildren(List<EventData> events, boolean includeSeatMap) {
     if (events.isEmpty()) return List.of();
     var ids = events.stream().map(EventData::id).toList();
     var params = Map.of("ids", ids);
@@ -159,7 +164,7 @@ public class EventRepository {
                 promotions
                     .computeIfAbsent(rs.getObject("event_id", UUID.class), k -> new ArrayList<>())
                     .add(promotion(rs)));
-    var layouts = maps.load(ids);
+    Map<UUID, SeatMap> layouts = includeSeatMap ? maps.load(ids) : Map.of();
     return events.stream()
         .map(
             e ->

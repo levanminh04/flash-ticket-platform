@@ -10,7 +10,7 @@ export interface Venue {
   id: string;
   name: string;
   slug: string;
-  description?: string;
+  description?: string | null;
   address: string;
   district?: string;
   city: string;
@@ -18,6 +18,8 @@ export interface Venue {
   longitude?: number;
   totalCapacity?: number;
   facilities?: string[];
+  imageUrl?: string | null;
+  googleMapsUrl?: string | null;
   imageUrls?: string[];
 }
 

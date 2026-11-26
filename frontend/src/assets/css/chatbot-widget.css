@@ -50,17 +50,17 @@
   display: grid;
   width: 56px;
   height: 56px;
+  padding: 0;
   place-items: center;
-  border: 1px solid var(--brand-ink);
-  border-radius: 50%;
-  background: var(--brand);
-  color: var(--on-brand);
-  box-shadow: var(--shadow-md);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
+  transition: transform 0.2s ease;
 }
 
-.floating-chatbot-trigger img { width: 42px; height: 42px; object-fit: contain; }
-.floating-chatbot-trigger:hover { background: var(--brand-hover); }
+.floating-chatbot-trigger img { width: 56px; height: 56px; object-fit: contain; display: block; }
+.floating-chatbot-trigger:hover { transform: scale(1.06); }
 
 :is(.floating-chatbot-panel, .chatbot-shell) {
   --assistant-paper: var(--bg-card);
@@ -114,7 +114,17 @@
 
 .assistant-identity { gap: 8px; font-size: 16px; }
 .assistant-identity h1 { margin: 0; font: inherit; font-weight: 700; }
-.assistant-identity img { width: 32px; height: 32px; object-fit: contain; }
+.assistant-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid rgba(204, 153, 0, 0.35);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
 .assistant-header-actions { margin-inline-start: auto; }
 .assistant-header-actions :is(button, a) {
   display: inline-flex;
@@ -141,8 +151,26 @@
   background: var(--assistant-canvas);
 }
 
-.assistant-gate p { margin: 0 0 12px; }
-.assistant-gate .assistant-primary { padding-inline: 16px; }
+.assistant-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+.assistant-gate-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid rgba(204, 153, 0, 0.35);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+.assistant-gate p { margin: 0; max-width: 32ch; color: var(--text-secondary); font-weight: 500; }
+.assistant-gate .assistant-primary { gap: 8px; padding-inline: 20px; }
 
 .assistant-welcome, .assistant-messages, .assistant-progress {
   width: 100%;

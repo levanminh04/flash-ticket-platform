@@ -1,18 +1,21 @@
-/* Ticket Orange: extend Keycloak's login theme without replacing its forms. */
+/* FlashTicket Gold: extend Keycloak's login theme to match frontend tokens.css. */
 :root {
-  --ft-background: #191918;
-  --ft-surface: #fffdf8;
+  --ft-background: #1d1e22;
+  --ft-surface: #ffffff;
   --ft-input: #ffffff;
-  --ft-text: #21180e;
-  --ft-muted: #6c6257;
-  --ft-primary: #ff8a43;
-  --ft-primary-hover: #ff9d62;
-  --ft-link: #9d440b;
-  --ft-border: #93887b;
-  --ft-divider: #d5cbbd;
+  --ft-text: #202126;
+  --ft-muted: #555b65;
+  --ft-primary: #cc9900;
+  --ft-primary-hover: #dfb329;
+  --ft-on-primary: #1b1d21;
+  --ft-brand-soft: #fff4cc;
+  --ft-link: #805c00;
+  --ft-border: #cbd5e1;
+  --ft-divider: #e2e6ed;
   --ft-error: #b42318;
-  --ft-error-surface: #fff1ee;
-  --ft-radius: 4px;
+  --ft-error-surface: #fef2f2;
+  --ft-radius: 8px;
+  --ft-card-radius: 16px;
 }
 
 .login-pf,
@@ -24,7 +27,7 @@
 .login-pf body {
   margin: 0;
   color: var(--ft-text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.5;
 }
@@ -64,10 +67,10 @@
   max-width: 440px;
   margin: 0 auto;
   padding: 36px;
-  border: 0;
-  border-radius: var(--ft-radius);
+  border: 1px solid var(--ft-divider);
+  border-radius: var(--ft-card-radius);
   background: var(--ft-surface);
-  box-shadow: 0 24px 64px rgb(0 0 0 / 24%);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 28%);
 }
 
 /* Paper-ticket notches remain decorative; the form retains its semantics. */
@@ -216,22 +219,41 @@
   border: 1px solid var(--ft-primary);
   border-radius: var(--ft-radius);
   background: var(--ft-primary);
-  color: var(--ft-text);
+  color: var(--ft-on-primary);
   font-family: inherit;
   font-size: 16px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.5;
   box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 #kc-login:hover { border-color: var(--ft-primary-hover); background: var(--ft-primary-hover); }
 #kc-login:disabled { opacity: 0.65; cursor: wait; }
 
+.login-pf-page .kc-social-item .pf-c-button,
+#kc-social-providers ul li a {
+  border: 1px solid var(--ft-divider);
+  border-radius: var(--ft-radius);
+  background: #f8fafc;
+  color: var(--ft-text);
+  font-weight: 600;
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.login-pf-page .kc-social-item .pf-c-button:hover,
+#kc-social-providers ul li a:hover {
+  border-color: rgba(204, 153, 0, 0.35);
+  background: var(--ft-brand-soft);
+  color: var(--ft-link);
+}
+
 #kc-info-wrapper {
   margin: 24px -36px -36px;
   padding: 24px 36px;
   border-top: 1px dashed var(--ft-divider);
-  border-radius: 0 0 var(--ft-radius) var(--ft-radius);
+  border-radius: 0 0 var(--ft-card-radius) var(--ft-card-radius);
   background: transparent;
   color: var(--ft-muted);
   font-size: 14px;

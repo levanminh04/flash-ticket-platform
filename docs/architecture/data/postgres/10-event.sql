@@ -117,6 +117,7 @@ CREATE INDEX events_category_idx ON events (category_id);
 CREATE INDEX events_venue_idx ON events (venue_id);
 CREATE INDEX layouts_event_idx ON event_layouts(event_id);
 CREATE INDEX sectors_layout_idx ON event_sectors(layout_id, event_id);
+CREATE INDEX seats_event_idx ON event_seats(event_id);
 CREATE INDEX ticket_types_event_idx ON ticket_types(event_id);
 CREATE INDEX promotions_event_idx ON promotions(event_id, starts_at, ends_at);
 CREATE INDEX cancellation_event_idx ON event_cancellation_requests(event_id, requested_at);
