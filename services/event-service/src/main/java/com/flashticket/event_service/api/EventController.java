@@ -1,5 +1,6 @@
 package com.flashticket.event_service.api;
 
+import com.flashticket.event_service.application.EventReadService;
 import com.flashticket.event_service.application.EventService;
 import com.flashticket.event_service.web.EventProblem;
 import jakarta.validation.Valid;
@@ -17,9 +18,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1")
 public class EventController {
   private final EventService service;
+  private final EventReadService reads;
 
-  public EventController(EventService service) {
+  public EventController(EventService service, EventReadService reads) {
     this.service = service;
+    this.reads = reads;
   }
 
   @PostMapping("/organizer/events")
@@ -48,7 +51,7 @@ public class EventController {
       @RequestParam(required = false) String status,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return service.listOwner(actor(jwt), status, size, cursor);
+    return reads.listOwner(actor(jwt), status, size, cursor);
   }
 
   @PostMapping("/organizer/events/{id}/submit")
@@ -72,7 +75,7 @@ public class EventController {
       @RequestParam(defaultValue = "PENDING_APPROVAL") String status,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return service.listAdmin(status, size, cursor);
+    return reads.listAdmin(status, size, cursor);
   }
 
   @GetMapping("/admin/events/{id}")
@@ -98,7 +101,7 @@ public class EventController {
 
   @GetMapping("/events/{id}")
   public EventViews.Public publicEvent(@PathVariable UUID id) {
-    return service.readPublic(id);
+    return reads.readPublic(id);
   }
 
   @GetMapping("/events")
@@ -114,7 +117,7 @@ public class EventController {
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "false") boolean compact,
       @RequestParam(defaultValue = "true") boolean includeSeatMap) {
-    return service.listPublic(
+    return reads.listPublic(
         q,
         categoryId,
         from,
@@ -130,12 +133,12 @@ public class EventController {
 
   @GetMapping("/categories")
   public List<EventViews.Lookup> categories() {
-    return service.categories();
+    return reads.categories();
   }
 
   @GetMapping("/venues")
   public List<EventViews.Venue> venues() {
-    return service.venues();
+    return reads.venues();
   }
 
   static String actor(Jwt jwt) {

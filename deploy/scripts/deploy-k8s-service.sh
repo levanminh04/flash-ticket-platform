@@ -123,6 +123,24 @@ if (pod.get('affinity', {}).get('nodeAffinity') or pod.get('nodeSelector') or po
     sys.exit('BOOKING_HA_NODE_PINNING_PRESENT')
 PY
   fi
+  if [[ $service == event-service && -f $revision/hpa.json ]]; then
+    kubectl -n "$namespace" get deployment "$service" -o json > "$revision/event-live-deployment.json" || return 1
+    kubectl -n "$namespace" get hpa "$service" -o json > "$revision/event-live-hpa.json" || return 1
+    python3 - "$revision" <<'PY' || return 1
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+expected = json.loads((root / 'hpa.json').read_text())['spec']
+# Legacy infra rollback HPA1/2 không được coi là recovery-1 baseline.
+if expected.get('minReplicas') == expected.get('maxReplicas') == 1:
+    live = json.loads((root / 'event-live-deployment.json').read_text())
+    pod = live['spec']['template']['spec']
+    hpa = json.loads((root / 'event-live-hpa.json').read_text())['spec']
+    if pod.get('nodeName') or pod.get('nodeSelector') or pod.get('affinity', {}).get('nodeAffinity'):
+        sys.exit('EVENT_NODE_PINNING_PRESENT')
+    if hpa.get('minReplicas') != 1 or hpa.get('maxReplicas') != 1 or live['spec'].get('replicas', 1) != 1:
+        sys.exit('EVENT_RECOVERY_REPLICA_COUNT_MISMATCH')
+PY
+  fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
   if [[ $service == booking-service && -f $revision/pdb.json ]]; then
     kubectl -n "$namespace" get pdb "$service" -o json > "$revision/pdb-live.json" || return 1
@@ -261,6 +279,8 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
                 'BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED',
                 'BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED') and value not in ('true', 'false'):
             sys.exit('INVALID_BOOKING_READER_FLAG')
+        if service == 'event-service' and key == 'EVENT_READ_REPLICA_ENABLED' and value not in ('true', 'false'):
+            sys.exit('INVALID_EVENT_READER_FLAG')
         if value:
             values[key] = value
 if service == 'payment-service':
@@ -432,6 +452,174 @@ except (OSError, ValueError, KeyError, TypeError, binascii.Error):
 PY
   if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
+if [[ $service == event-service ]]; then
+  # Chỉ quan sát drift trước apply; không tự xóa pinning/PDB ngoài quản lý.
+  kubectl -n "$namespace" get pdb "$service" --ignore-not-found -o json > "$target/event-pdb-live.json"
+  kubectl -n "$namespace" get deployment "$service" --ignore-not-found -o json > "$target/event-deployment-live.json"
+  python3 - "$target" "$previous" "$mode" <<'PY'
+import base64, binascii, json, pathlib, re, sys, urllib.parse
+
+target = pathlib.Path(sys.argv[1])
+current, mode = sys.argv[2:]
+prefix = 'EVENT_READ_REPLICA_'
+
+
+def event_load(revision, file):
+    return json.loads((revision / file).read_text(encoding='utf-8'))
+
+
+def event_enabled(secret):
+    setting = base64.b64decode(secret.get(prefix + 'ENABLED', 'ZmFsc2U='), validate=True)
+    if setting not in (b'true', b'false'):
+        sys.exit('INVALID_EVENT_READER_FLAG')
+    return setting == b'true'
+
+
+def event_writer_revision(revision, candidate):
+    try:
+        expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json', 'hpa.json')
+        if not all((r / file).is_file() for r in (revision, candidate) for file in expected):
+            return False
+        if any((r / 'pdb.json').exists() for r in (revision, candidate)):
+            return False
+        deployment = event_load(revision, 'deployment.json')
+        pilot = event_load(candidate, 'deployment.json')
+        template = deployment['spec']['template']
+        pod = template['spec']
+        pilot_pod = pilot['spec']['template']['spec']
+        image = (revision / 'image').read_text().strip()
+        config = event_load(revision, 'configmap.json')
+        alternate = [*config.get('data', {}), *(v.get('name', '') for v in pod['containers'][0].get('env', []))]
+        # Cùng image/profile/readiness và không nguồn flag thay thế trong baseline.
+        return (not event_enabled(event_load(revision, 'secret-env.json')['data'])
+                and not any(re.sub('[^a-z0-9]', '', key.lower()).startswith('eventreadreplica') for key in alternate)
+                and template['metadata']['annotations'].get('flash-ticket/release') == revision.name
+                and pod['containers'][0]['image'] == image == pilot_pod['containers'][0]['image']
+                and image == (candidate / 'image').read_text().strip()
+                and deployment['metadata'].get('name') == pilot['metadata'].get('name') == 'event-service'
+                and deployment['metadata'].get('namespace') == pilot['metadata'].get('namespace') == 'flash-ticket'
+                and all(deployment['spec'].get(key) == pilot['spec'].get(key) for key in ('selector', 'strategy', 'minReadySeconds'))
+                and all(pod.get(key) == pilot_pod.get(key) for key in ('affinity', 'nodeName', 'nodeSelector', 'terminationGracePeriodSeconds'))
+                and all(pod['containers'][0].get(key) == pilot_pod['containers'][0].get(key) for key in ('envFrom', 'env', 'command', 'args', 'startupProbe', 'readinessProbe', 'livenessProbe', 'lifecycle'))
+                and event_load(revision, 'hpa.json') == event_load(candidate, 'hpa.json')
+                and config == event_load(candidate, 'configmap.json')
+                and event_load(revision, 'service.json') == event_load(candidate, 'service.json'))
+    except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+        return False
+
+
+try:
+    secret = event_load(target, 'secret-env.json')['data']
+    use_reader = event_enabled(secret)
+    config = event_load(target, 'configmap.json')
+    deployment = event_load(target, 'deployment.json')
+    pod = deployment['spec']['template']['spec']
+    container = pod['containers'][0]
+    # Relaxed binding, JSON và JVM args không được ghi đè flag của Secret revision.
+    entries = [*config.get('data', {}).items(), *((v.get('name', ''), v.get('value', '')) for v in container.get('env', []))]
+    for key, value in entries:
+        normalized = re.sub('[^a-z0-9]', '', key.lower())
+        if normalized.startswith('eventreadreplica'):
+            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+        if normalized == 'springapplicationjson':
+            pending = [('', json.loads(value))]
+            while pending:
+                parent, node = pending.pop()
+                if isinstance(node, dict):
+                    for name, child in node.items():
+                        joined = parent + re.sub('[^a-z0-9]', '', name.lower())
+                        if joined.startswith('eventreadreplica'):
+                            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+                        pending.append((joined, child))
+        if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'EVENT_JAVA_OPTIONS') and 'eventreadreplica' in re.sub('[^a-z0-9]', '', value.lower()):
+            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+    if any('eventreadreplica' in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])]):
+        sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+    expected_sources = [{'configMapRef': {'name': 'event-service-config'}}, {'secretRef': {'name': 'event-service-secret'}}]
+    if container.get('envFrom') != expected_sources:
+        sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+    hpa_doc = event_load(target, 'hpa.json')
+    hpa = hpa_doc['spec']
+    affinity = pod.get('affinity', {})
+    legacy = mode == 'rollback' and not use_reader and hpa.get('minReplicas') == 1 and hpa.get('maxReplicas') == 2 and not affinity.get('podAntiAffinity')
+    if (target / 'pdb.json').exists() or (target / 'event-pdb-live.json').read_text().strip():
+        sys.exit('EVENT_UNMANAGED_PDB_PRESENT')
+    if not legacy:
+        selector = {'matchLabels': {'app.kubernetes.io/name': 'event-service'}}
+        rules = affinity.get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution', [])
+        application = json.loads(config.get('data', {}).get('SPRING_APPLICATION_JSON', '{}'))
+        groups = application.get('management', {}).get('endpoint', {}).get('health', {}).get('group', {})
+        if (deployment.get('kind') != 'Deployment' or deployment['metadata'].get('name') != 'event-service'
+                or deployment['metadata'].get('namespace') != 'flash-ticket' or deployment['spec'].get('selector') != selector
+                or deployment['spec']['template']['metadata'].get('labels', {}).get('app.kubernetes.io/name') != 'event-service'
+                or hpa.get('minReplicas') != 1 or hpa.get('maxReplicas') != 1
+                or hpa_doc['metadata'].get('name') != 'event-service' or hpa_doc['metadata'].get('namespace') != 'flash-ticket'
+                or hpa.get('scaleTargetRef') != {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'event-service'}
+                or pod.get('nodeName') or pod.get('nodeSelector') or 'nodeAffinity' in affinity
+                or deployment['spec'].get('strategy') != {'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}
+                or deployment['spec'].get('minReadySeconds') != 75 or pod.get('terminationGracePeriodSeconds') != 180
+                or groups.get('readiness', {}).get('include') != ['readinessState', 'db']
+                or groups.get('liveness', {}).get('include') != ['livenessState']
+                or not any(r.get('topologyKey') == 'kubernetes.io/hostname' and r.get('labelSelector') == selector and r.get('namespaces') == ['flash-ticket'] and not r.get('namespaceSelector') and not r.get('matchLabelKeys') for r in rules)):
+            sys.exit('INVALID_EVENT_RECOVERY_PROFILE')
+        live = (target / 'event-deployment-live.json').read_text().strip()
+        if live:
+            live_pod = json.loads(live)['spec']['template']['spec']
+            if live_pod.get('nodeName') or live_pod.get('nodeSelector') or live_pod.get('affinity', {}).get('nodeAffinity'):
+                sys.exit('EVENT_NODE_PINNING_PRESENT')
+    if mode == 'rollback' and use_reader:
+        sys.exit('EVENT_ROLLBACK_REQUIRES_WRITER_REVISION')
+    if use_reader:
+        keys = ('URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'MAX_SAMPLE_AGE', 'PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT')
+        if any(not secret.get(prefix + key) for key in keys):
+            sys.exit('MISSING_EVENT_READER_KEYS')
+        for key in ('PROBE_INTERVAL', 'MAX_SAMPLE_AGE'):
+            value = base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')
+            if not re.fullmatch(r'(?:[1-9][0-9]*(?:ms|s|m|h)|PT[1-9][0-9]*[SMH])', value):
+                sys.exit('INVALID_EVENT_READER_TIMING')
+        for key in ('PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT'):
+            value = base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')
+            if not re.fullmatch(r'[1-9][0-9]*', value):
+                sys.exit('INVALID_EVENT_READER_TIMING')
+        jdbc = base64.b64decode(secret[prefix + 'URL'], validate=True).decode('utf-8')
+        try:
+            url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
+            params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
+            required = {'sslmode': 'require', 'targetServerType': 'secondary', 'connectTimeout': '5', 'socketTimeout': '5'}
+            if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
+                    or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
+                    or url.path != '/event_db' or len(params) != len(required) or dict(params) != required):
+                raise ValueError
+        except ValueError:
+            sys.exit('INVALID_EVENT_READER_URL')
+        if not current:
+            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+        active = target.parent / current
+        baseline = current
+        if event_enabled(event_load(active, 'secret-env.json')['data']):
+            if not (active / 'writer-baseline').is_file():
+                sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+            baseline = (active / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
+            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+        (target / 'writer-baseline').write_text(baseline + '\n')
+    if current and not use_reader and event_enabled(event_load(target.parent / current, 'secret-env.json')['data']):
+        active = target.parent / current
+        if not event_writer_revision(target, active):
+            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+        baseline = target.name if mode == 'rollback' else (active / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
+            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+        (target / 'writer-baseline').write_text(baseline + '\n')
+    if (target / 'writer-baseline').is_file():
+        baseline = (target / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
+            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
+except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+    sys.exit('INVALID_EVENT_READER_CONFIG')
+PY
+  if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
+fi
 if apply_revision "$target" && check_revision "$target"; then
   if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" finish "$target" || die DISCOVERY_MIGRATION_FINALIZE_FAILED
@@ -458,7 +646,7 @@ else
   fi
   if [[ -n $previous && $revision_root/$previous != "$target" ]]; then
     if apply_revision "$revision_root/$previous" && check_revision "$revision_root/$previous"; then
-      if [[ $service == booking-service ]]; then
+      if [[ $service == booking-service || $service == event-service ]]; then
         printf '%s\n' "$previous" > "$revision_root/current.tmp"
         mv -f "$revision_root/current.tmp" "$revision_root/current"
         restored_image=$(cat "$revision_root/$previous/image")

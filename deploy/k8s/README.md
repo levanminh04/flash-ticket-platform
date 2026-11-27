@@ -77,6 +77,15 @@ query. Kiểm lại URI nếu dùng multi-host/SRV thay vì URI một host hiệ
 - **Baseline rồi từng nhóm:** Deploy writer-only trước, cả 3 flag off, cùng image với bản sẽ bật reader; kiểm 2 Pod khác hostname, HPA/PDB, readiness/Eureka và luồng writer. Sau khi budget 60s và điều kiện production đạt, bật Chart → Organizer → Event qua từng revision cùng image/placement/HPA/PDB. Script kiểm URL/snapshot, không tự xác minh host là `ft70` hay chứng minh freshness. Readiness chỉ kiểm app/writer.
 - **Rollback:** Revision active lưu `writer-baseline` đã kiểm; active→active kế thừa và xác minh lại, không đòi tắt reader xen kẽ. `previous` giữ writer-only tương thích, không trở thành pilot trước. Auto/manual rollback khôi phục Secret/ConfigMap/Deployment/Service/HPA/PDB và cập nhật pointer đúng baseline **2 Pod**, không chỉ đổi image hoặc `rollout undo`. Snapshot cũ absent PDB được xử lý khi rollback hạ tầng riêng; không dùng nó làm baseline bật reader. Kiểm revision, cả 3 flag và luồng writer sau hoàn tác. Chưa được phép vận hành thì chỉ chuẩn bị source, không tự rollout.
 
+### Event: recovery-1 và chín GET đọc phụ có điều kiện
+
+- **Một Pod thường trực:** HPA1/1, không `spec.replicas`, không PDB. Scheduler tự chọn node, required anti-affinity theo hostname tách Pod surge khỏi revision cũ. Giữ rollout0/1, minReady75s, drain75s, grace180s. Cần hai node đủ điều kiện cho rollout; crash sole Pod/node vẫn có gián đoạn, **không phải HA tầng Pod/đầu-cuối**.
+- **Mặc định tắt:** `EVENT_READ_REPLICA_ENABLED=false`; khi bật phải có URL, username/password và bốn timing key trong Secret example. Không đặt reader flag/property tương đương trong ConfigMap, container env/JVM args hoặc JSON để override Secret revision. Reader unavailable không làm readiness writer DOWN; readiness gồm `readinessState,db`, liveness chỉ `livenessState`.
+- **Whitelist:** public list/detail/categories/venues, Organizer/Admin event lists, ba cancellation lists/history. Giữ includeSeatMap/compact, role/owner/PUBLISHED/status/cursor. Detail quản trị, seat-map/images, cancellation precheck, image cleanup, mọi ghi và outbox vẫn writer. Một reader pool2/permit1 dùng chung, không9pool; writer giữ max5. Ambient transaction giữ nguồn caller; lag/sample hết hạn/bận chọn writer trước đọc; đã thử reader lỗi thì invalidate và trả lỗi, **không retry writer**.
+- **Freshness:** mục tiêu60s tại backend response cho9GET, không cache mới. Probe2s/sample5s/query2s/transaction5s/connection5s/socket5s là timing khởi điểm, phải đo effective timeout và tail latency, không coi cộng số cấu hình là nghiệm thu. List có thể trễ; POST kiểm version/state writer có thể conflict. Không bảo đảm browser cache hoặc tồn vé Booking.
+- **Reader:** một private host:5432/event_db với đúng `sslmode=require`, `targetServerType=secondary`, `connectTimeout=5`, `socketTimeout=5`; không multi-host/userinfo. TLS mã hóa nhưng không verify server identity. Login đọc riêng, không `SET ROLE event_owner`; SELECT cancellation và joins phải được preflight, không dùng event_admin để né ACL.
+- **Release/rollback:** writer-only baseline cùng image/HPA1-1/placement/readiness trước khi activation riêng. Active→active kế thừa và revalidate `writer-baseline`; `previous` giữ writer-only. Tắt reader/auto/manual restore phải giữ current/state/live khớp baseline, không chỉ `rollout undo`. Snapshot legacy HPA1/2 là rollback hạ tầng riêng, không baseline reader; PDB/pinning unmanaged là NO-GO, không tự xóa. Script không chứng minh capacity/network/role/ACL/TLS/freshness production. Reader vẫn off tới khi preflight và activation được giao, chưa deploy từ task local.
+
 Ticket giữ **key-ring thật hiện tại** ở
 `/opt/flash-ticket-app/secrets/ticket-qr/key-ring.json`. Template có dạng
 `{"keys":{"v1":""}}`; giá trị thật là Base64 của khóa AES 32 byte. Không sinh
@@ -356,7 +365,8 @@ Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads
 ## HPA cho năm service nghiệp vụ
 
 Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
-Eureka giữ hai peer. Booking cố định biên HPA min=max2; bốn service còn lại min1/max2.
+Eureka giữ hai peer. Booking cố định biên HPA min=max2; Event recovery-1 min=max1;
+Payment/Ticket/User giữ min1/max2 ở source hiện tại.
 Đây là cấu hình source, không khẳng định đã apply lên cluster. CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%

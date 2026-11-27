@@ -75,7 +75,7 @@ def fake_kubectl():
             resource['metadata'].setdefault('annotations', {})['kubectl.kubernetes.io/last-applied-configuration'] = last_applied
         if (root / 'frontend-only').exists():
             assert resource['kind'] in ('Deployment', 'Service'), 'FE must not apply backend config or Secret'
-        if (root.name == 'booking-fixture' and resource['kind'] == 'HorizontalPodAutoscaler'
+        if (root.name in ('booking-fixture', 'event-fixture') and resource['kind'] == 'HorizontalPodAutoscaler'
                 and 'minReplicas' in resource.get('spec', {})):
             desired_count = resource['spec']['minReplicas']
             (root / 'desired').write_text(str(desired_count))
@@ -107,6 +107,9 @@ def fake_kubectl():
     elif arguments[:3] == ['get', 'statefulset', 'discovery-server'] and root.name == 'assistant-fixture':
         print(json.dumps({'spec': {'replicas': 1}}))
     elif arguments[:2] == ['get', 'pods']:
+        if root.name == 'event-fixture' and not (api / 'Deployment.json').exists():
+            print(json.dumps({'items': []}))
+            return
         if 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' in arguments:
             peers = []
             missing = root / 'peer-missing-once'
@@ -144,7 +147,8 @@ class Registry(http.server.BaseHTTPRequestHandler):
             missing.unlink()
             count = 1
         service, port = {'assistant-fixture': ('assistant-service', 8089),
-                         'booking-fixture': ('booking-service', 8082)}.get(root.name, ('payment-service', 8083))
+                         'booking-fixture': ('booking-service', 8082),
+                         'event-fixture': ('event-service', 8086)}.get(root.name, ('payment-service', 8083))
         assert self.path == '/eureka/apps/' + service.upper()
         body = json.dumps({'application': {'instance': [{
             'instanceId': service + ':' + ('fixture-pod' if i == 0 else f'fixture-pod-{i+1}'), 'ipAddr': f'10.42.0.{9+i}',
@@ -474,6 +478,7 @@ def run_fixtures():
                 server.shutdown()
         print('Assistant fixtures passed: bootstrap, allowlist, Eureka and same-image standalone revision rollback.')
         booking_fixture(root / 'booking-fixture', bash, env, scripts, deployment, config)
+        event_fixture(root / 'event-fixture', bash, env, scripts, deployment, config)
 
 
 def booking_fixture(root, bash, env, scripts, deployment, config):
@@ -751,6 +756,172 @@ def booking_fixture(root, bash, env, scripts, deployment, config):
         finally:
             server.shutdown()
     print('Booking fixtures passed: 3 reader flags, dynamic 2-Pod placement, PDB presence/absence and writer-baseline rollback.')
+
+
+def event_fixture(root, bash, env, scripts, deployment, config):
+    env = dict(env, APP_ROOT=root.as_posix())
+    for name in ('state/k8s', 'api', 'env'):
+        (root / name).mkdir(parents=True)
+    (root / 'state/k8s/enabled').touch()
+    (root / 'desired').write_text('1')
+    deploy = root / 'releases' / SHA / 'deploy'
+    app = deploy / 'k8s/event-service'
+    app.mkdir(parents=True)
+    shutil.copytree(scripts, deploy / 'scripts')
+    # Chỉ bản migration trong temp fixture đọc memory giả; không kiểm capacity host Windows.
+    memory = root / 'meminfo'
+    memory.write_text('MemAvailable: 4096000 kB\n')
+    migration = deploy / 'scripts/migrate-k8s-discovery.py'
+    migration.write_text(migration.read_text(encoding='utf-8')
+                         .replace("Path('/proc/meminfo')", f'Path({memory.as_posix()!r})')
+                         .replace("['kubectl', '-n', NAMESPACE, *args]", f"[{sys.executable!r}, {Path(__file__).resolve().as_posix()!r}, '--kubectl', '-n', NAMESPACE, *args]"), encoding='utf-8')
+    examples = deploy / 'k8s/examples'
+    examples.mkdir()
+    shutil.copyfile(SCRIPT.parents[1] / 'k8s/examples/event-service.secret.env.example', examples / 'event-service.secret.env.example')
+    manifest = json.loads(json.dumps(deployment).replace('payment-service', 'event-service'))
+    manifest['metadata'].update(name='event-service', namespace='flash-ticket')
+    manifest['spec'].pop('replicas', None)
+    manifest['spec'].update(selector={'matchLabels': {'app.kubernetes.io/name': 'event-service'}},
+                            strategy={'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}, minReadySeconds=75)
+    manifest['spec']['template']['metadata']['labels'] = {'app.kubernetes.io/name': 'event-service'}
+    pod = manifest['spec']['template']['spec']
+    pod.pop('nodeName', None)
+    pod.pop('nodeSelector', None)
+    pod.update(terminationGracePeriodSeconds=180, affinity={'podAntiAffinity': {'requiredDuringSchedulingIgnoredDuringExecution': [{
+        'labelSelector': {'matchLabels': {'app.kubernetes.io/name': 'event-service'}},
+        'namespaces': ['flash-ticket'], 'topologyKey': 'kubernetes.io/hostname'}]}})
+    pod['containers'][0].update(name='event-service', ports=[{'containerPort': 8086}], envFrom=[
+        {'configMapRef': {'name': 'event-service-config'}}, {'secretRef': {'name': 'event-service-secret'}}])
+    hpa = {'apiVersion': 'autoscaling/v2', 'kind': 'HorizontalPodAutoscaler', 'metadata': {'name': 'event-service', 'namespace': 'flash-ticket'},
+           'spec': {'scaleTargetRef': {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'event-service'}, 'minReplicas': 1, 'maxReplicas': 1}}
+    settings = {'management': {'endpoint': {'health': {'group': {'readiness': {'include': ['readinessState', 'db']}, 'liveness': {'include': ['livenessState']}}}}}}
+    config = {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'event-service-config', 'namespace': 'flash-ticket'},
+              'data': {'SPRING_APPLICATION_JSON': json.dumps(settings)}}
+    service = {'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 'event-service', 'namespace': 'flash-ticket'}}
+    for name, doc in [('deployment', manifest), ('configmap', config), ('hpa', hpa), ('service', service)]:
+        (app / (name + '.yaml')).write_text(json.dumps(doc))
+    state = root / 'state/k8s/event-service'
+    env_file = root / 'env/event-service.env'
+    prefix = 'EVENT_READ_REPLICA_'
+    writer_env = 'EVENT_DB_PASSWORD=fixture-event-writer\nRABBITMQ_PASSWORD=fixture-event-broker\nINTERNAL_SERVICE_CLIENT_SECRET=fixture-event-client\n'
+    jdbc = 'jdbc:postgresql://reader.fixture:5432/event_db?sslmode=require&targetServerType=secondary&connectTimeout=5&socketTimeout=5'
+    pilot = {'ENABLED': 'true', 'URL': jdbc, 'USERNAME': 'fixture-event-reader', 'PASSWORD': 'fixture-event-reader-password',
+             'PROBE_INTERVAL': '2s', 'MAX_SAMPLE_AGE': '5s', 'PROBE_QUERY_TIMEOUT': '2', 'TRANSACTION_TIMEOUT': '5'}
+    command = [bash, SCRIPT.as_posix(), 'event-service', REPOSITORY.replace('payment-service', 'event-service') + 'e' * 64, SHA]
+
+    def run(values, mode='deploy'):
+        env_file.write_text(writer_env + ''.join(f'{prefix + k}={v}\n' for k, v in values.items()), encoding='utf-8')
+        result = subprocess.run([*command, mode], env=env, capture_output=True, text=True, timeout=90)
+        assert not any(v in result.stdout + result.stderr for v in (jdbc, 'fixture-event-reader-password', 'fixture-event-writer'))
+        return result
+
+    def live(kind):
+        return json.loads((root / 'api' / (kind + '.json')).read_text())
+
+    def reject(values, marker):
+        before = {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        pointers = {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()} if state.exists() else {}
+        result = run(values)
+        assert result.returncode and marker in result.stderr, result.stdout + result.stderr
+        assert before == {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        assert pointers == {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()}
+
+    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Registry) as server:
+        server.fixture_root = root
+        server.registry_requests = 0
+        (root / 'port').write_text(str(server.server_port))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            writer = (state / 'current').read_text().strip()
+            assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            assert not (root / 'api/PodDisruptionBudget.json').exists()
+            live_path = root / 'api/Deployment.json'
+            clean_live = live_path.read_bytes()
+            pinned = json.loads(clean_live)
+            pinned['spec']['template']['spec']['affinity']['nodeAffinity'] = {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': []}}
+            live_path.write_text(json.dumps(pinned))
+            try:
+                reject(pilot, 'EVENT_NODE_PINNING_PRESENT')
+            finally:
+                live_path.write_bytes(clean_live)
+            unmanaged = root / 'api/PodDisruptionBudget.json'
+            unmanaged.write_text('{"kind":"PodDisruptionBudget","metadata":{"name":"event-service"}}')
+            try:
+                reject(pilot, 'EVENT_UNMANAGED_PDB_PRESENT')
+            finally:
+                unmanaged.unlink()
+            for values, marker in [(dict(pilot, ENABLED='yes'), 'INVALID_EVENT_READER_FLAG'),
+                                   (dict(pilot, PASSWORD=''), 'MISSING_EVENT_READER_KEYS'),
+                                   (dict(pilot, TRANSACTION_TIMEOUT='0'), 'INVALID_EVENT_READER_TIMING')]:
+                reject(values, marker)
+            for url in [jdbc + '&sslmode=disable', jdbc.replace('/event_db', '/booking_db'),
+                        jdbc.replace('reader.fixture:5432', 'reader.fixture:5432,writer.fixture:5432'),
+                        jdbc + '&user=embedded', jdbc.replace('socketTimeout=5', 'socketTimeout=0')]:
+                reject(dict(pilot, URL=url), 'INVALID_EVENT_READER_URL')
+            for file, change, marker in [
+                ('hpa', lambda d: d['spec'].update(maxReplicas=2), 'INVALID_EVENT_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec'].update(nodeName='fixed'), 'INVALID_EVENT_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0]['labelSelector']['matchLabels'].update({'app.kubernetes.io/name': 'other'}), 'INVALID_EVENT_RECOVERY_PROFILE'),
+                ('configmap', lambda d: d['data'].update({prefix + 'ENABLED': 'false'}), 'INVALID_EVENT_READER_FLAG_SOURCE'),
+                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"event":{"read-replica":{"enabled":false}}}'), 'INVALID_EVENT_READER_FLAG_SOURCE'),
+                ('configmap', lambda d: d['data'].update({'spring.application.json': '{"event.read-replica.enabled":false}'}), 'INVALID_EVENT_READER_FLAG_SOURCE')]:
+                path = app / (file + '.yaml')
+                original = path.read_bytes()
+                document = json.loads(original)
+                change(document)
+                path.write_text(json.dumps(document))
+                try:
+                    reject(pilot, marker)
+                finally:
+                    path.write_bytes(original)
+            baseline = state / writer
+            original_hpa = (baseline / 'hpa.json').read_bytes()
+            (baseline / 'hpa.json').write_text('{}')
+            try:
+                reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
+            finally:
+                (baseline / 'hpa.json').write_bytes(original_hpa)
+            result = run(pilot)
+            assert result.returncode == 0, result.stdout + result.stderr
+            active = state / (state / 'current').read_text().strip()
+            assert (active / 'writer-baseline').read_text().strip() == writer
+            for broken in (None, '../invalid'):
+                pointer = active / 'writer-baseline'
+                original = pointer.read_bytes()
+                if broken is None:
+                    pointer.unlink()
+                else:
+                    pointer.write_text(broken)
+                try:
+                    reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
+                finally:
+                    pointer.write_bytes(original)
+            assert run(pilot).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            (root / 'fail-once').touch()
+            result = run(pilot)
+            assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr
+            assert (state / 'current').read_text().strip() == writer
+            assert (root / 'state/k8s/event-service.current').read_text().strip() == command[3]
+            assert prefix + 'ENABLED' not in live('Secret')['data']
+            assert run(pilot).returncode == 0
+            assert run({'ENABLED': 'false'}).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            # Lượt bật sau lấy writer-only hiện tại làm baseline mới, không quay về active cũ.
+            writer = (state / 'current').read_text().strip()
+            assert run(pilot).returncode == 0
+            env_file.unlink()
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == writer
+            assert live('Deployment')['spec']['replicas'] == 1
+            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == 1
+        finally:
+            server.shutdown()
+    print('Event fixtures passed: recovery-1, reader admission, writer baseline and restore pointers.')
 
 
 if __name__ == '__main__':

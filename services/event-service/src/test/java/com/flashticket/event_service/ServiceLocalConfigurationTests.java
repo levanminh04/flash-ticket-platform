@@ -49,6 +49,7 @@ class ServiceLocalConfigurationTests {
               .isEqualTo("http://127.0.0.1:1/token");
           assertThat(env.getProperty("event.outbox.enabled", Boolean.class)).isTrue();
           assertThat(env.getProperty("event.read-model.enabled", Boolean.class)).isFalse();
+          assertThat(env.getProperty("event.read-replica.enabled", Boolean.class)).isFalse();
           assertThat(env.getProperty("eureka.client.register-with-eureka", Boolean.class)).isTrue();
           assertThat(env.getProperty("management.endpoints.web.exposure.include"))
               .isEqualTo("health,info");
@@ -70,7 +71,15 @@ class ServiceLocalConfigurationTests {
             "EVENT_OUTBOX_ENABLED=false",
             "EVENT_READ_MODEL_ENABLED=true",
             "EVENT_IMAGES_MAX_BYTES=1234",
-            "EVENT_IMAGES_MAX_REQUEST_BYTES=2345")
+            "EVENT_IMAGES_MAX_REQUEST_BYTES=2345",
+            "EVENT_READ_REPLICA_ENABLED=true",
+            "EVENT_READ_REPLICA_URL=jdbc:postgresql://reader.fixture:5432/event_db",
+            "EVENT_READ_REPLICA_USERNAME=fixture-reader",
+            "EVENT_READ_REPLICA_PASSWORD=fixture-reader-password",
+            "EVENT_READ_REPLICA_PROBE_INTERVAL=2s",
+            "EVENT_READ_REPLICA_MAX_SAMPLE_AGE=5s",
+            "EVENT_READ_REPLICA_PROBE_QUERY_TIMEOUT=2",
+            "EVENT_READ_REPLICA_TRANSACTION_TIMEOUT=5")
         .run(
             context -> {
               assertThat(context).hasNotFailed();
@@ -84,6 +93,30 @@ class ServiceLocalConfigurationTests {
                   .isEqualTo("http://127.0.0.1:1/jwks");
               assertThat(env.getProperty("event.outbox.enabled", Boolean.class)).isFalse();
               assertThat(env.getProperty("event.read-model.enabled", Boolean.class)).isTrue();
+              assertThat(env.getProperty("event.read-replica.enabled", Boolean.class)).isTrue();
+              assertThat(env.getProperty("event.read-replica.datasource.jdbc-url"))
+                  .isEqualTo("jdbc:postgresql://reader.fixture:5432/event_db");
+              assertThat(env.getProperty("event.read-replica.datasource.username"))
+                  .isEqualTo("fixture-reader");
+              assertThat(env.getProperty("event.read-replica.datasource.read-only", Boolean.class))
+                  .isTrue();
+              assertThat(
+                      env.getProperty(
+                          "event.read-replica.datasource.maximum-pool-size", Integer.class))
+                  .isEqualTo(2);
+              assertThat(
+                      env.getProperty("event.read-replica.datasource.minimum-idle", Integer.class))
+                  .isZero();
+              assertThat(
+                      env.getProperty(
+                          "event.read-replica.datasource.connection-timeout", Integer.class))
+                  .isEqualTo(5000);
+              assertThat(env.getProperty("event.read-replica.probe-interval")).isEqualTo("2s");
+              assertThat(env.getProperty("event.read-replica.max-sample-age")).isEqualTo("5s");
+              assertThat(env.getProperty("event.read-replica.probe-query-timeout", Integer.class))
+                  .isEqualTo(2);
+              assertThat(env.getProperty("event.read-replica.transaction-timeout", Integer.class))
+                  .isEqualTo(5);
               assertThat(env.getProperty("event.images.max-bytes", Integer.class)).isEqualTo(1234);
               assertThat(env.getProperty("spring.servlet.multipart.max-file-size"))
                   .isEqualTo("1234B");
