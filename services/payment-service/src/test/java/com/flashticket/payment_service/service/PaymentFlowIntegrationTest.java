@@ -38,6 +38,13 @@ import tools.jackson.databind.node.ObjectNode;
 @SpringBootTest
 @ActiveProfiles("payment-flow-test")
 class PaymentFlowIntegrationTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void properties(org.springframework.test.context.DynamicPropertyRegistry registry)
+      throws Exception {
+    com.flashticket.payment_service.support.PaymentPostgresFixture.registerProperties(
+        registry, false);
+  }
+
   @MockitoBean BookingPurchaseClient bookingClient;
   @Autowired PaymentService payments;
   @Autowired PaymentSagaService sagas;

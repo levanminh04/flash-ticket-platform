@@ -14,6 +14,9 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
   @Query("select a from PaymentAttempt a where a.id = :id")
   Optional<PaymentAttempt> findForUpdateById(@Param("id") UUID id);
 
+  @Query("select a.orderId from PaymentAttempt a where a.id = :id")
+  Optional<UUID> findOrderIdById(@Param("id") UUID id);
+
   Optional<PaymentAttempt> findByOrderIdAndRequestKey(UUID orderId, UUID requestKey);
 
   boolean existsByOrderIdAndFinishedAtIsNull(UUID orderId);

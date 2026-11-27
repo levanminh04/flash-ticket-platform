@@ -14,8 +14,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 @Import(com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
-@SpringBootTest
+@SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class MapperBeansTest {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(
+      name = "paymentWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   @Test
   void rejectsMissingPurchaseBeforeCreatingSnapshot() {
     assertThatThrownBy(() -> snapshotMapper.toEntity(null, "supplied-hash", Instant.EPOCH))

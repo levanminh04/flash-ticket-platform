@@ -23,8 +23,12 @@ import org.springframework.context.annotation.Import;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
-@SpringBootTest
+@SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class PaymentMappersTest {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(
+      name = "paymentWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   @Autowired OrderPaymentSnapshotMapper snapshotMapper;
   @Autowired PaymentStartMapper startMapper;
   @Autowired RefundMapper refundMapper;

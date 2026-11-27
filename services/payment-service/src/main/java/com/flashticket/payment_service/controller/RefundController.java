@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Refund", description = "Theo dõi và xử lý yêu cầu hoàn")
 public class RefundController {
   RefundService refundService;
+  com.flashticket.payment_service.service.PaymentReportReadService reportReadService;
 
   @Operation(
       summary = "Danh sách yêu cầu hoàn",
@@ -43,7 +44,7 @@ public class RefundController {
       @Parameter(description = "Số yêu cầu trên mỗi trang") @RequestParam(defaultValue = "20")
           int size) {
     return ApiResponse.success(
-        refundService.getRefunds(state, page, size), "Lấy danh sách yêu cầu hoàn thành công");
+        reportReadService.getRefunds(state, page, size), "Lấy danh sách yêu cầu hoàn thành công");
   }
 
   @Operation(
@@ -83,6 +84,7 @@ public class RefundController {
   public ApiResponse<EventRefundProgressView> getEventRefundProgress(
       @Parameter(description = "Mã sự kiện bị hủy", required = true) @PathVariable UUID eventId) {
     return ApiResponse.success(
-        refundService.getEventRefundProgress(eventId), "Lấy tiến độ hoàn của sự kiện thành công");
+        reportReadService.getEventRefundProgress(eventId),
+        "Lấy tiến độ hoàn của sự kiện thành công");
   }
 }

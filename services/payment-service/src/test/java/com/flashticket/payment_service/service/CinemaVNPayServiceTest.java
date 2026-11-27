@@ -91,6 +91,7 @@ class CinemaVNPayServiceTest {
     when(snapshots.findForUpdateByOrderId(snapshot.getOrderId())).thenReturn(Optional.of(snapshot));
     when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
     when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+    when(attempts.findOrderIdById(attempt.getId())).thenReturn(Optional.of(snapshot.getOrderId()));
     when(snapshots.findById(snapshot.getOrderId())).thenReturn(Optional.of(snapshot));
     when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
     when(hashes.requestHash(any(), any(), any())).thenReturn("request-hash");

@@ -21,6 +21,9 @@ public interface EventRefundRunRepository extends JpaRepository<EventRefundRun, 
           + " r.id")
   List<UUID> findIdsToSelect(Pageable pageable);
 
+  @Query("select r.eventId from EventRefundRun r where r.id = :id")
+  Optional<UUID> findEventIdById(@Param("id") UUID id);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select r from EventRefundRun r where r.id = :id")
   Optional<EventRefundRun> findForUpdateById(@Param("id") UUID id);

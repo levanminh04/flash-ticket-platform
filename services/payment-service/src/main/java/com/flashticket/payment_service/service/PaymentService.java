@@ -155,11 +155,12 @@ public class PaymentService {
     } catch (IllegalArgumentException ex) {
       return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
     }
-    var observedAttempt = attempts.findById(attemptId).orElse(null);
-    if (observedAttempt == null) return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
+    // Chỉ lấy ID trước lúc chờ khóa; không giữ version attempt cũ trong persistence context.
+    var observedOrderId = attempts.findOrderIdById(attemptId).orElse(null);
+    if (observedOrderId == null) return "{\"RspCode\":\"01\",\"Message\":\"Order not found\"}";
     // Cùng thứ tự snapshot -> attempt -> Saga, tránh deadlock với start/decision.
     snapshots
-        .findForUpdateByOrderId(observedAttempt.getOrderId())
+        .findForUpdateByOrderId(observedOrderId)
         .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_READY));
     var payment = attempts.findForUpdateById(attemptId).orElse(null);
     if (payment == null || !"VNPAY".equals(payment.getProvider()))

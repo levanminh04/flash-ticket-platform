@@ -15,6 +15,9 @@ public interface OrderPaymentSnapshotRepository extends JpaRepository<OrderPayme
   @Query("select s from OrderPaymentSnapshot s where s.orderId = :orderId")
   Optional<OrderPaymentSnapshot> findForUpdateByOrderId(@Param("orderId") UUID orderId);
 
+  @Query("select s.eventId from OrderPaymentSnapshot s where s.orderId = :orderId")
+  Optional<UUID> findEventIdByOrderId(@Param("orderId") UUID orderId);
+
   interface OrderPaymentAccess {
     UUID getOrderId();
 

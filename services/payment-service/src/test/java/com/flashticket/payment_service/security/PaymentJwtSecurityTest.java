@@ -31,10 +31,14 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 @AutoConfigureMockMvc
 @Import(PaymentReadRepositoryTestConfiguration.class)
 class PaymentJwtSecurityTest {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(
+      name = "paymentWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   static final String ISSUER = "https://issuer.example.test";
   static final RSAKey KEY = key();
   static final HttpServer SERVER = startServer();
