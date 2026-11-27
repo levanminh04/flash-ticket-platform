@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Finance", description = "Tóm tắt tài chính, đối soát và chi trả sự kiện")
 public class FinanceController {
   FinanceService financeService;
+  com.flashticket.payment_service.service.PaymentReportReadService reportReadService;
 
   @Operation(
       summary = "Tóm tắt tài chính sự kiện",
@@ -53,7 +54,7 @@ public class FinanceController {
         authentication.getAuthorities().stream()
             .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     return ApiResponse.success(
-        financeService.getReconciliation(eventId, jwt.getSubject(), admin),
+        reportReadService.getReconciliation(eventId, jwt.getSubject(), admin),
         "Lấy báo cáo đối soát thành công");
   }
 

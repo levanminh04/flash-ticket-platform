@@ -61,6 +61,21 @@ spring:
         prefetch: 20
 
 payment:
+  report-replica:
+    enabled: ${PAYMENT_REPORT_REPLICA_ENABLED:false}
+    probe-interval: ${PAYMENT_REPORT_REPLICA_PROBE_INTERVAL:PT2S}
+    probe-query-timeout: ${PAYMENT_REPORT_REPLICA_PROBE_QUERY_TIMEOUT:2}
+    max-sample-age: ${PAYMENT_REPORT_REPLICA_MAX_SAMPLE_AGE:PT5S}
+    reader-transaction-timeout: ${PAYMENT_REPORT_REPLICA_READER_TRANSACTION_TIMEOUT:10}
+    datasource:
+      jdbc-url: ${PAYMENT_REPORT_REPLICA_JDBC_URL}
+      username: ${PAYMENT_REPORT_REPLICA_USERNAME}
+      password: ${PAYMENT_REPORT_REPLICA_PASSWORD}
+      schema: payment_schema
+      read-only: true
+      maximum-pool-size: 2
+      minimum-idle: 0
+      connection-timeout: 5000
   booking:
     discovery-enabled: ${PAYMENT_BOOKING_DISCOVERY_ENABLED:false}
     base-url: ${BOOKING_SERVICE_URL:http://localhost:8082}

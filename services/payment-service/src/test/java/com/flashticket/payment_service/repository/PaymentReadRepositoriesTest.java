@@ -28,6 +28,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest
 @ActiveProfiles({"mapping-test", "local-foundation"})
 class PaymentReadRepositoriesTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void properties(org.springframework.test.context.DynamicPropertyRegistry registry)
+      throws Exception {
+    com.flashticket.payment_service.support.PaymentPostgresFixture.registerProperties(
+        registry, false);
+  }
+
   @Autowired EntityManager em;
   @MockitoSpyBean OrderPaymentSnapshotRepository snapshots;
   @Autowired PaymentAttemptRepository attempts;

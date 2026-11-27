@@ -77,6 +77,14 @@ query. Kiểm lại URI nếu dùng multi-host/SRV thay vì URI một host hiệ
 - **Baseline rồi từng nhóm:** Deploy writer-only trước, cả 3 flag off, cùng image với bản sẽ bật reader; kiểm 2 Pod khác hostname, HPA/PDB, readiness/Eureka và luồng writer. Sau khi budget 60s và điều kiện production đạt, bật Chart → Organizer → Event qua từng revision cùng image/placement/HPA/PDB. Script kiểm URL/snapshot, không tự xác minh host là `ft70` hay chứng minh freshness. Readiness chỉ kiểm app/writer.
 - **Rollback:** Revision active lưu `writer-baseline` đã kiểm; active→active kế thừa và xác minh lại, không đòi tắt reader xen kẽ. `previous` giữ writer-only tương thích, không trở thành pilot trước. Auto/manual rollback khôi phục Secret/ConfigMap/Deployment/Service/HPA/PDB và cập nhật pointer đúng baseline **2 Pod**, không chỉ đổi image hoặc `rollout undo`. Snapshot cũ absent PDB được xử lý khi rollback hạ tầng riêng; không dùng nó làm baseline bật reader. Kiểm revision, cả 3 flag và luồng writer sau hoàn tác. Chưa được phép vận hành thì chỉ chuẩn bị source, không tự rollout.
 
+### Payment: hai Pod và ba GET report đọc phụ có điều kiện
+
+- **HA tầng Pod:** HPA2/2, PDB `policy/v1` minAvailable1, không `spec.replicas`; hard anti-affinity theo `app.kubernetes.io/name=payment-service`, namespace `flash-ticket`, hostname bao cả old/new revision. Không pin node. Giữ rolling0/1, minReady75s, drain75s, grace180s, probes và Eureka UID/IP. Hai Pod cần hai node đủ điều kiện; surge cần node thứ ba và tài nguyên tương ứng. Thiếu capacity là NO-GO, không tự hạ affinity/đổi port/resize. PostgreSQL/Redis/Rabbit standalone vẫn là điểm lỗi riêng, không cam kết HA đầu-cuối.
+- **Default-off và whitelist:** tám `PAYMENT_REPORT_REPLICA_*` keys chỉ từ env-file/Secret revision. Ba GET `/api/v1/admin/refunds`, `/api/v1/admin/events/{eventId}/refund-progress`, `/api/v1/events/{eventId}/reconciliation` xét reader; tạo thanh toán, buyer status, VNPay return/IPN, financial-summary nội bộ, POST/consumer/worker luôn writer. Organizer reconciliation kiểm owner hiện tại trên writer trước xét reader và kiểm lại ở snapshot reader; owner mới có thể fail closed khi standby trễ. Không mọi readOnly đều reader.
+- **Reader và freshness:** một private host:5432/payment_db khác writer, đúng `sslmode=require&targetServerType=secondary&connectTimeout=5&socketTimeout=5`; không userinfo/multi-host/tham số khác. TLS mã hóa nhưng không verify danh tính server; reuse Payment account là ngoại lệ thiết kế, không gọi least privilege hoặc quyền GRANT. Mỗi Pod writer5/min1, reader2/min0, một permit report dùng chung. Probe2s/query2s/sample5s/transaction10s/pool5s là timing khởi điểm; trần60s ở response backend cần đo effective timeout/queue/transport, không suy từ tổng cấu hình. Không cache mới. Lag/sample hết hạn/bận chọn writer trước attempt; lỗi sau reader attempt invalidate/throw/release sau transaction, không retry writer. Reader down không thay nguồn health DB writer; giữ probes hiện có.
+- **Baseline và rollback:** writer-only cùng image/HA2/placement/HPA/PDB, business config/secret và probe/hook trước khi activation riêng. Payment đăng ký Eureka, hiện không có Service YAML; baseline giữ cùng Service nếu có hoặc cùng absence, không dựng Service giả. Active→active kế thừa và revalidate writer-baseline; tắt reader vẫn giữ HA2. Auto/manual rollback khôi phục snapshot cùng current/previous/state image, không chỉ rollout undo. Legacy absent-PDB rollback xóa đúng Payment PDB và giữ snapshot pinning/HPA cũ, không được dùng làm baseline reader. Stale live-only nodeAffinity được null ở effective apply sau migration; canonical snapshot không có tombstone. Pinning còn sót phải fail trước rollout wait.
+- **Giới hạn local:** fixture kiểm guard/state semantics, không xác nhận capacity/network/cluster timeline/role/ACL/TLS hoặc freshness60s production. Không activation/deploy/fault drill từ việc source/test local đạt; reader giữ off tới khi preflight và activation được giao riêng. Không log URL/credential/payload hoặc bật shell tracing.
+
 ### Event: recovery-1 và chín GET đọc phụ có điều kiện
 
 - **Một Pod thường trực:** HPA1/1, không `spec.replicas`, không PDB. Scheduler tự chọn node, required anti-affinity theo hostname tách Pod surge khỏi revision cũ. Giữ rollout0/1, minReady75s, drain75s, grace180s. Cần hai node đủ điều kiện cho rollout; crash sole Pod/node vẫn có gián đoạn, **không phải HA tầng Pod/đầu-cuối**.
@@ -163,7 +171,7 @@ index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗ
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
 
-## Lịch Pod Booking
+## Lịch Pod Booking và Payment
 
 **Booking:** HPA giữ `min=2,max=2`; scheduler tự chọn mọi node đủ điều kiện,
 không pin hostname hoặc mặc định loại `ft70`. Hard pod anti-affinity theo hostname
@@ -173,6 +181,9 @@ tự nguyện; không bảo vệ node crash. Giữ RollingUpdate `maxUnavailable
 readiness/Eureka và drain hiện có: rollout cần **node thứ ba** schedulable đủ request.
 Thiếu capacity ⇒ NO-GO/Pending, không tự co-locate, hạ anti-affinity hoặc resize.
 Writer/Redis/RabbitMQ ở `ft84` vẫn là dependency SPOF; đây chỉ là HA tầng Pod.
+
+**Payment:** source mới dùng HPA2/2, hard anti-affinity/PDB và placement động như
+mục Payment riêng; không còn ghim `ft84`/`server-2`. Đây chưa là xác nhận rollout live.
 
 ## Frontend: bootstrap, cutover và rollback riêng
 
@@ -375,8 +386,8 @@ Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads
 ## HPA cho năm service nghiệp vụ
 
 Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
-Eureka giữ hai peer. Booking cố định biên HPA min=max2; Event/Ticket recovery-1 min=max1;
-Payment/User giữ min1/max2 ở source hiện tại.
+Eureka giữ hai peer. Booking/Payment cố định biên HPA min=max2;
+Event/Ticket recovery-1 min=max1; User giữ min1/max2 ở source hiện tại.
 Đây là cấu hình source, không khẳng định đã apply lên cluster. CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%

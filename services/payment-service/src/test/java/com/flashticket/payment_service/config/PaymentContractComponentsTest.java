@@ -18,8 +18,12 @@ import org.springframework.context.annotation.Import;
 import tools.jackson.core.type.TypeReference;
 
 @Import(com.flashticket.payment_service.config.PaymentReadRepositoryTestConfiguration.class)
-@SpringBootTest
+@SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class PaymentContractComponentsTest {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(
+      name = "paymentWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   @Autowired ContractCodec codec;
   @Autowired PurchaseSnapshotValidator purchases;
   @Autowired CanonicalContractSerializer serializer;

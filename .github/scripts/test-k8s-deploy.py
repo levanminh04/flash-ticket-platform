@@ -62,7 +62,7 @@ def fake_kubectl():
         if resource['kind'] == 'Deployment':
             last_applied = json.dumps(resource)
             deployment_path = api / 'Deployment.json'
-            if root.name in ('booking-fixture', 'ticket-fixture') and deployment_path.exists():
+            if root.name in ('booking-fixture', 'ticket-fixture', 'payment-ha-fixture') and deployment_path.exists():
                 live = json.loads(deployment_path.read_text())
                 previous = json.loads(live['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'])
                 old_affinity = live['spec']['template']['spec'].get('affinity', {})
@@ -75,7 +75,8 @@ def fake_kubectl():
                         del affinity['nodeAffinity']
                 elif 'nodeAffinity' in old_affinity and 'nodeAffinity' not in old_applied_affinity:
                     pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
-                drift = root / ('keep-ticket-pinning-once' if root.name == 'ticket-fixture' else 'keep-booking-pinning-once')
+                drift = root / {'ticket-fixture': 'keep-ticket-pinning-once',
+                                'payment-ha-fixture': 'keep-payment-pinning-once'}.get(root.name, 'keep-booking-pinning-once')
                 if drift.exists():
                     drift.unlink()
                     pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
@@ -86,7 +87,7 @@ def fake_kubectl():
             resource['metadata'].setdefault('annotations', {})['kubectl.kubernetes.io/last-applied-configuration'] = last_applied
         if (root / 'frontend-only').exists():
             assert resource['kind'] in ('Deployment', 'Service'), 'FE must not apply backend config or Secret'
-        if (root.name in ('booking-fixture', 'event-fixture', 'ticket-fixture') and resource['kind'] == 'HorizontalPodAutoscaler'
+        if (root.name in ('booking-fixture', 'event-fixture', 'ticket-fixture', 'payment-ha-fixture') and resource['kind'] == 'HorizontalPodAutoscaler'
                 and 'minReplicas' in resource.get('spec', {})):
             desired_count = resource['spec']['minReplicas']
             (root / 'desired').write_text(str(desired_count))
@@ -100,7 +101,7 @@ def fake_kubectl():
             filename += '-' + resource['metadata']['name']
         (api / (filename + '.json')).write_text(json.dumps(resource))
     elif arguments[0] == 'rollout':
-        if root.name in ('booking-fixture', 'ticket-fixture'):
+        if root.name in ('booking-fixture', 'ticket-fixture', 'payment-ha-fixture'):
             live = json.loads((api / 'Deployment.json').read_text())
             affinity = live['spec']['template']['spec'].get('affinity', {})
             if affinity.get('podAntiAffinity') and affinity.get('nodeAffinity'):
@@ -129,7 +130,7 @@ def fake_kubectl():
     elif arguments[:3] == ['get', 'statefulset', 'discovery-server'] and root.name == 'assistant-fixture':
         print(json.dumps({'spec': {'replicas': 1}}))
     elif arguments[:2] == ['get', 'pods']:
-        if root.name in ('event-fixture', 'ticket-fixture') and not (api / 'Deployment.json').exists():
+        if root.name in ('event-fixture', 'ticket-fixture', 'payment-ha-fixture') and not (api / 'Deployment.json').exists():
             print(json.dumps({'items': []}))
             return
         if 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' in arguments:
@@ -225,6 +226,9 @@ def run_fixtures():
         (app / 'deployment.yaml').write_text(json.dumps(deployment))
         config = {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'payment-service-config'}, 'data': {'revision': 'first'}}
         (app / 'configmap.yaml').write_text(json.dumps(config))
+        if '--payment-only' in sys.argv:
+            payment_ha_fixture(root / 'payment-ha-fixture', bash, env, scripts, deployment, config)
+            return
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Registry)
         server.fixture_root = root
         server.registry_requests = 0
@@ -506,6 +510,257 @@ def run_fixtures():
         booking_fixture(root / 'booking-fixture', bash, env, scripts, deployment, config)
         event_fixture(root / 'event-fixture', bash, env, scripts, deployment, config)
         ticket_fixture(root / 'ticket-fixture', bash, env, scripts)
+        payment_ha_fixture(root / 'payment-ha-fixture', bash, env, scripts, deployment, config)
+
+
+def payment_ha_fixture(root, bash, env, scripts, deployment, config):
+    env = dict(env, APP_ROOT=root.as_posix())
+    for name in ('state/k8s', 'api', 'env'):
+        (root / name).mkdir(parents=True)
+    (root / 'state/k8s/enabled').touch()
+    deploy = root / 'releases' / SHA / 'deploy'
+    app = deploy / 'k8s/payment-service'
+    app.mkdir(parents=True)
+    shutil.copytree(scripts, deploy / 'scripts')
+    # Chỉ fixture cấp memory snapshot; không suy capacity Windows hoặc cluster thật.
+    memory = root / 'meminfo'
+    memory.write_text('MemAvailable: 4194304 kB\n')
+    migration = deploy / 'scripts/migrate-k8s-discovery.py'
+    migration.write_text(migration.read_text(encoding='utf-8')
+                         .replace("Path('/proc/meminfo')", f'Path({memory.as_posix()!r})')
+                         .replace("['kubectl', '-n', NAMESPACE, *args]", f"[{sys.executable!r}, {Path(__file__).resolve().as_posix()!r}, '--kubectl', '-n', NAMESPACE, *args]"), encoding='utf-8')
+    examples = deploy / 'k8s/examples'
+    examples.mkdir()
+    template = 'payment-service.secret.env.example'
+    shutil.copyfile(SCRIPT.parents[1] / 'k8s/examples' / template, examples / template)
+    manifest = json.loads(json.dumps(deployment))
+    manifest['metadata'].update(name='payment-service', namespace='flash-ticket')
+    manifest['spec'].pop('replicas', None)
+    selector = {'matchLabels': {'app.kubernetes.io/name': 'payment-service'}}
+    manifest['spec'].update(selector=selector, minReadySeconds=75,
+                            strategy={'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}})
+    manifest['spec']['template']['metadata'] = {'labels': selector['matchLabels']}
+    pod = manifest['spec']['template']['spec']
+    pod['terminationGracePeriodSeconds'] = 180
+    pod['containers'][0].update(name='payment-service', ports=[{'containerPort': 8083}], envFrom=[
+        {'configMapRef': {'name': 'payment-service-config'}}, {'secretRef': {'name': 'payment-service-secret'}},
+    ])
+    pod['affinity'] = {'podAntiAffinity': {'requiredDuringSchedulingIgnoredDuringExecution': [{
+        'labelSelector': selector, 'namespaces': ['flash-ticket'], 'topologyKey': 'kubernetes.io/hostname',
+    }]}}
+    hpa = {'apiVersion': 'autoscaling/v2', 'kind': 'HorizontalPodAutoscaler',
+           'metadata': {'name': 'payment-service', 'namespace': 'flash-ticket'},
+           'spec': {'scaleTargetRef': {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'payment-service'},
+                    'minReplicas': 2, 'maxReplicas': 2}}
+    pdb = {'apiVersion': 'policy/v1', 'kind': 'PodDisruptionBudget',
+           'metadata': {'name': 'payment-service', 'namespace': 'flash-ticket'},
+           'spec': {'minAvailable': 1, 'selector': selector}}
+    config = json.loads(json.dumps(config))
+    config['metadata'].update(name='payment-service-config', namespace='flash-ticket')
+    config['data']['PAYMENT_DB_URL'] = 'jdbc:postgresql://writer.fixture:5432/payment_db'
+    service = {'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 'payment-service', 'namespace': 'flash-ticket'}}
+    for name, document in [('deployment', manifest), ('configmap', config), ('service', service), ('hpa', hpa), ('pdb', pdb)]:
+        (app / (name + '.yaml')).write_text(json.dumps(document))
+    (root / 'desired').write_text('2')
+    env_file = root / 'env/payment-service.env'
+    state = root / 'state/k8s/payment-service'
+    writer_env = ('PAYMENT_DB_PASSWORD=fixture-payment-writer\nRABBITMQ_PASSWORD=fixture-payment-broker\n'
+                  'PAYMENT_SERVICE_CLIENT_SECRET=fixture-payment-client\nVNPAY_HASH_SECRET=fixture-payment-hash\nVNPAY_TMN_CODE=fixture-payment-merchant\n')
+    prefix = 'PAYMENT_REPORT_REPLICA_'
+    jdbc = 'jdbc:postgresql://reader.fixture:5432/payment_db?sslmode=require&targetServerType=secondary&connectTimeout=5&socketTimeout=5'
+    pilot = {'ENABLED': 'true', 'JDBC_URL': jdbc, 'USERNAME': 'fixture-payment-reader', 'PASSWORD': 'fixture-reader-value',
+             'PROBE_INTERVAL': 'PT2S', 'PROBE_QUERY_TIMEOUT': '2', 'MAX_SAMPLE_AGE': 'PT5S', 'READER_TRANSACTION_TIMEOUT': '10'}
+    command = [bash, SCRIPT.as_posix(), 'payment-service', REPOSITORY + 'd' * 64, SHA]
+
+    def run(values, mode='deploy'):
+        env_file.write_text(writer_env + ''.join(f'{prefix + k}={v}\n' for k, v in values.items()), encoding='utf-8')
+        result = subprocess.run([*command, mode], env=env, capture_output=True, text=True, timeout=90)
+        assert not any(v in result.stdout + result.stderr for v in (jdbc, 'fixture-reader-value', 'fixture-payment-writer'))
+        return result
+
+    def live(kind):
+        return json.loads((root / 'api' / (kind + '.json')).read_text())
+
+    def reject(values, marker):
+        before = {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        pointers = {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()}
+        result = run(values)
+        assert result.returncode and marker in result.stderr, result.stdout + result.stderr
+        assert before == {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        assert pointers == {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()}
+
+    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Registry) as server:
+        server.fixture_root = root
+        server.registry_requests = 0
+        (root / 'port').write_text(str(server.server_port))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            writer = (state / 'current').read_text().strip()
+            snapshot = state / writer
+            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 2
+            assert live('PodDisruptionBudget')['spec'] == pdb['spec']
+            assert not any(k.startswith(prefix) for k in live('Secret')['data'])
+            pinning = {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': [{'matchExpressions': [
+                {'key': 'kubernetes.io/hostname', 'operator': 'In', 'values': ['ft84', 'server-2']},
+            ]}]}}
+            drift = live('Deployment')
+            drift['spec']['template']['spec']['affinity']['nodeAffinity'] = pinning
+            (root / 'api/Deployment.json').write_text(json.dumps(drift))
+            assert run({'ENABLED': 'false'}).returncode == 0
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == pod['affinity']
+            writer = (state / 'current').read_text().strip()
+            snapshot = state / writer
+            assert json.loads((snapshot / 'deployment.json').read_text())['spec']['template']['spec']['affinity'] == pod['affinity']
+            before_config, before_secret = live('ConfigMap'), live('Secret')
+            drift = live('Deployment')
+            drift['spec']['template']['spec']['affinity']['nodeAffinity'] = pinning
+            (root / 'api/Deployment.json').write_text(json.dumps(drift))
+            (root / 'keep-payment-pinning-once').touch()
+            result = run(pilot)
+            assert result.returncode and 'PAYMENT_HA_NODE_PINNING_PRESENT' in result.stderr and 'RESTORED_PREVIOUS' in result.stderr, result.stdout + result.stderr
+            assert not (root / 'rollout-waited-with-pinning').exists()
+            assert (state / 'current').read_text().strip() == writer
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == pod['affinity']
+            for values, marker in [(dict(pilot, ENABLED='yes'), 'INVALID_PAYMENT_READER_FLAG'),
+                                   (dict(pilot, ENABLED=''), 'INVALID_PAYMENT_READER_FLAG'),
+                                   (dict(pilot, PASSWORD=''), 'MISSING_PAYMENT_READER_KEYS')]:
+                reject(values, marker)
+            for key in ('PROBE_INTERVAL', 'MAX_SAMPLE_AGE', 'PROBE_QUERY_TIMEOUT', 'READER_TRANSACTION_TIMEOUT'):
+                for value in ('0', '-1', 'garbage'):
+                    reject(dict(pilot, **{key: value}), 'INVALID_PAYMENT_READER_TIMING')
+            for value in (jdbc.replace('/payment_db', '/booking_db'), jdbc + '&user=embedded',
+                          jdbc.replace('reader.fixture', 'writer.fixture'), jdbc.replace('reader.fixture:5432', 'reader.fixture:5432,writer.fixture:5432'),
+                          jdbc.replace('sslmode=require', 'sslmode=disable'), jdbc.replace('connectTimeout=5', 'connectTimeout=0'),
+                          jdbc + '&sslmode=require', jdbc.replace('reader.fixture', 'user:pass@reader.fixture')):
+                reject(dict(pilot, JDBC_URL=value), 'INVALID_PAYMENT_READER_URL')
+            for name, document in [('configmap', dict(config, data=dict(config['data'], PAYMENT_REPORT_REPLICA_ENABLED='false'))),
+                                   ('configmap', dict(config, data=dict(config['data'], SPRING_APPLICATION_JSON='{"payment":{"report-replica":{"enabled":false}}}'))),
+                                   ('configmap', dict(config, data=dict(config['data'], JAVA_TOOL_OPTIONS='-Dpayment.report-replica.enabled=false'))),
+                                   ('deployment', json.loads(json.dumps(manifest)))]:
+                if name == 'deployment':
+                    document['spec']['template']['spec']['containers'][0]['env'] = [{'name': prefix + 'ENABLED', 'value': 'false'}]
+                path = app / (name + '.yaml')
+                original = path.read_bytes()
+                path.write_text(json.dumps(document))
+                try:
+                    reject(pilot, 'INVALID_PAYMENT_READER_FLAG_SOURCE')
+                finally:
+                    path.write_bytes(original)
+            for file in ('service.json', 'hpa.json', 'pdb.json'):
+                path = snapshot / file
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+                finally:
+                    path.write_bytes(original)
+            for file, wrong in [('secret-env.json', {'data': {prefix + 'ENABLED': base64.b64encode(b'true').decode()}}),
+                                ('hpa.json', dict(hpa, spec=dict(hpa['spec'], minReplicas=1))),
+                                ('pdb.json', dict(pdb, metadata={'name': 'booking-service', 'namespace': 'flash-ticket'})),
+                                ('deployment.json', dict(manifest, metadata={'name': 'other-service', 'namespace': 'flash-ticket'}))]:
+                path = snapshot / file
+                original = path.read_bytes()
+                path.write_text(json.dumps(wrong))
+                try:
+                    reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+                finally:
+                    path.write_bytes(original)
+            original_image = command[3]
+            command[3] = REPOSITORY + 'e' * 64
+            try:
+                reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+            finally:
+                command[3] = original_image
+            (root / 'fail-once').touch()
+            result = run(pilot)
+            assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr
+            assert live('ConfigMap') == before_config and live('Secret') == before_secret
+            assert run(pilot).returncode == 0
+            active = state / (state / 'current').read_text().strip()
+            assert (active / 'writer-baseline').read_text().strip() == writer
+            for broken in (None, '../not-a-revision'):
+                pointer = active / 'writer-baseline'
+                original = pointer.read_bytes()
+                if broken is None:
+                    pointer.unlink()
+                else:
+                    pointer.write_text(broken)
+                try:
+                    reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+                finally:
+                    pointer.write_bytes(original)
+            assert run(pilot).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            (root / 'fail-once').touch()
+            result = run(pilot)
+            assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr
+            assert (state / 'current').read_text().strip() == (state / 'previous').read_text().strip() == writer
+            assert (root / 'state/k8s/payment-service.current').read_text().strip() == original_image
+            assert run(pilot).returncode == 0
+            assert run({'ENABLED': 'false'}).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            # Activation mới lấy revision writer vừa tắt reader làm baseline mới nhất.
+            writer = (state / 'current').read_text().strip()
+            snapshot = state / writer
+            assert run(pilot).returncode == 0
+            env_file.unlink()
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == (state / 'previous').read_text().strip() == writer
+            # Chạy final validator thực với snapshot live sai node/HPA/PDB, không copy guard vào test.
+            check_source = SCRIPT.read_text(encoding='utf-8').split(
+                '    if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<\'PY\'\n', 1)[1].split('\nPY\n', 1)[0]
+            for file, changes, marker in [('live-pods.json', 'same', 'PAYMENT_HA_NODE_PLACEMENT_MISMATCH'),
+                                          ('live-pods.json', 'missing', 'PAYMENT_HA_NODE_PLACEMENT_MISMATCH'),
+                                          ('hpa-live.json', 'hpa', 'PAYMENT_HA_REPLICA_COUNT_MISMATCH'),
+                                          ('pdb-live.json', 'pdb', 'PAYMENT_HA_PDB_MISMATCH'),
+                                          ('live-deployment.json', 'affinity', 'PAYMENT_HA_AFFINITY_MISMATCH')]:
+                path = snapshot / file
+                original = path.read_bytes()
+                document = json.loads(original)
+                if file == 'live-pods.json':
+                    for item in document['items']:
+                        if changes == 'same':
+                            item['spec']['nodeName'] = 'same-node'
+                        else:
+                            item['spec'].pop('nodeName', None)
+                elif changes == 'hpa':
+                    document['spec']['maxReplicas'] = 3
+                elif changes == 'affinity':
+                    document['spec']['template']['spec']['affinity'] = {}
+                else:
+                    document['spec']['selector'] = {'matchLabels': {'app.kubernetes.io/name': 'booking-service'}}
+                path.write_text(json.dumps(document))
+                try:
+                    result = subprocess.run([sys.executable, '-I', '-c', check_source, str(snapshot), 'payment-service'], capture_output=True, text=True, timeout=15)
+                    assert result.returncode and marker in result.stderr, result.stdout + result.stderr
+                finally:
+                    path.write_bytes(original)
+            legacy = state / ('1700000000-' + SHA[:12] + '-778')
+            shutil.copytree(snapshot, legacy)
+            (legacy / 'pdb.json').unlink()
+            (legacy / 'writer-baseline').unlink(missing_ok=True)
+            old = json.loads((legacy / 'deployment.json').read_text())
+            old['spec']['template']['metadata']['annotations']['flash-ticket/release'] = legacy.name
+            old['spec']['template']['spec']['affinity'] = {'nodeAffinity': pinning}
+            (legacy / 'deployment.json').write_text(json.dumps(old))
+            old = json.loads((legacy / 'hpa.json').read_text())
+            old['spec'].update(minReplicas=1, maxReplicas=2)
+            (legacy / 'hpa.json').write_text(json.dumps(old))
+            (state / 'previous').write_text(legacy.name + '\n')
+            # Audit chính lệnh delete để chắc legacy rollback chỉ xóa đúng Payment PDB.
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert not (root / 'api/PodDisruptionBudget.json').exists()
+            assert (state / 'current').read_text().strip() == legacy.name
+            assert live('Deployment')['spec']['template']['spec']['affinity'] == {'nodeAffinity': pinning}
+            assert live('Deployment')['spec']['replicas'] == 1
+        finally:
+            server.shutdown()
+    print('Payment HA fixtures passed: reader guards, two-node placement/PDB, baseline revalidation and legacy restore.')
 
 
 def booking_fixture(root, bash, env, scripts, deployment, config):

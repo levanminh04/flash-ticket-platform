@@ -31,6 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest
 @ActiveProfiles({"mapping-test", "local-foundation"})
 class EntityMappingTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void properties(org.springframework.test.context.DynamicPropertyRegistry registry)
+      throws Exception {
+    com.flashticket.payment_service.support.PaymentPostgresFixture.registerProperties(
+        registry, false);
+  }
+
   @Autowired EntityManager em;
   @Autowired javax.sql.DataSource datasource;
   @Autowired org.springframework.core.env.Environment environment;

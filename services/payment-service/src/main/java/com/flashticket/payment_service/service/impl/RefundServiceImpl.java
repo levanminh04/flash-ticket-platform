@@ -94,9 +94,10 @@ public class RefundServiceImpl implements RefundService {
   @Override
   @Transactional
   public void selectEventRefundOrders(UUID runId, int limit) {
-    var observedRun = eventRefundRunRepository.findById(runId).orElseThrow();
+    // Chỉ lấy eventId trước khi chờ marker, tránh giữ version run cũ trong persistence context.
+    var observedEventId = eventRefundRunRepository.findEventIdById(runId).orElseThrow();
     // Khóa marker trước run; mọi xử lý đơn trong lô cùng giữ marker này.
-    finance.findForUpdateByEventId(observedRun.getEventId());
+    finance.findForUpdateByEventId(observedEventId);
     var run = eventRefundRunRepository.findForUpdateById(runId).orElseThrow();
     if (run.getSelectionComplete()) return;
     UUID cursor =
@@ -276,15 +277,16 @@ public class RefundServiceImpl implements RefundService {
   }
 
   private Refund lockRefund(UUID refundId) {
-    var observed =
+    // Chỉ lấy ID trước marker, tránh hydrate Refund/Saga với version cũ khi chờ worker khác.
+    var observedOrderId =
         refundRepository
-            .findById(refundId)
+            .findOrderIdById(refundId)
             .orElseThrow(() -> new PaymentException(PaymentErrorCode.RESOURCE_NOT_FOUND));
-    var observedSnapshot = snapshots.findById(observed.getOrderId()).orElseThrow();
+    var observedEventId = snapshots.findEventIdByOrderId(observedOrderId).orElseThrow();
     // Khóa đúng thứ tự: marker → snapshot → saga → refund.
-    finance.findForUpdateByEventId(observedSnapshot.getEventId());
-    snapshots.findForUpdateByOrderId(observed.getOrderId());
-    paymentSagaRepository.findForUpdateByOrderId(observed.getOrderId());
+    finance.findForUpdateByEventId(observedEventId);
+    snapshots.findForUpdateByOrderId(observedOrderId);
+    paymentSagaRepository.findForUpdateByOrderId(observedOrderId);
     return refundRepository.findForUpdateById(refundId).orElseThrow();
   }
 

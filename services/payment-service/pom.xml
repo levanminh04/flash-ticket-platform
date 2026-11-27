@@ -127,6 +127,10 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency><groupId>com.github.spotbugs</groupId><artifactId>spotbugs-annotations</artifactId><version>4.10.4</version><scope>provided</scope></dependency>
+		<dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers-junit-jupiter</artifactId><scope>test</scope></dependency>
+		<dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers-postgresql</artifactId><scope>test</scope></dependency>
+		<dependency><groupId>org.awaitility</groupId><artifactId>awaitility</artifactId><scope>test</scope></dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -167,6 +171,15 @@
 					<excludes><exclude>**/EntityMappingTest.java</exclude><exclude>**/PaymentReadRepositoriesTest.java</exclude><exclude>**/PaymentFlowIntegrationTest.java</exclude><exclude>**/RefundFlowIntegrationTest.java</exclude><exclude>**/FinanceFlowIntegrationTest.java</exclude></excludes>
 					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<includes><include>**/*IT.java</include><include>**/EntityMappingTest.java</include><include>**/PaymentReadRepositoriesTest.java</include><include>**/PaymentFlowIntegrationTest.java</include><include>**/RefundFlowIntegrationTest.java</include><include>**/FinanceFlowIntegrationTest.java</include></includes>
+					<systemPropertyVariables><user.timezone>UTC</user.timezone></systemPropertyVariables>
+				</configuration>
+				<executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

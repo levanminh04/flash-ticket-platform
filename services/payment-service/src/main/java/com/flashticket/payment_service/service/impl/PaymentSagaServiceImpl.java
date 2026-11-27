@@ -319,8 +319,10 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
   @Override
   @Transactional
   public void recoverSaga(UUID orderId) {
-    var observedSnapshot = snapshots.findById(orderId).orElseThrow();
-    var eventMarker = finance.findForUpdateByEventId(observedSnapshot.getEventId());
+    // Entity snapshot có inverse one-to-one Saga; chỉ lấy scalar trước finance/snapshot lock
+    // để không hydrate Saga với version cũ trong lúc worker khác đang commit.
+    var observedEventId = snapshots.findEventIdByOrderId(orderId).orElseThrow();
+    var eventMarker = finance.findForUpdateByEventId(observedEventId);
     var snapshot = snapshots.findForUpdateByOrderId(orderId).orElseThrow();
     var saga = paymentSagaRepository.findForUpdateByOrderId(orderId).orElseThrow();
     if ((saga.getState() != PaymentSagaState.WAITING_BOOKING
