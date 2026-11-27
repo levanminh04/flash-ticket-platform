@@ -71,6 +71,23 @@ spring:
             - ${TICKET_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 ticket:
+  list-replica:
+    enabled: ${TICKET_LIST_REPLICA_ENABLED:false}
+    probe-interval: ${TICKET_LIST_REPLICA_PROBE_INTERVAL:PT1S}
+    probe-query-timeout: ${TICKET_LIST_REPLICA_PROBE_QUERY_TIMEOUT:1}
+    max-sample-age: ${TICKET_LIST_REPLICA_MAX_SAMPLE_AGE:PT2S}
+    reader-transaction-timeout: ${TICKET_LIST_REPLICA_READER_TRANSACTION_TIMEOUT:5}
+    datasource:
+      jdbc-url: ${TICKET_LIST_REPLICA_JDBC_URL:}
+      username: ${TICKET_LIST_REPLICA_USERNAME:}
+      password: ${TICKET_LIST_REPLICA_PASSWORD:}
+      maximum-pool-size: 2
+      minimum-idle: 0
+      read-only: true
+      connection-timeout: 5000
+      data-source-properties:
+        connectTimeout: 5
+        socketTimeout: 5
   features:
     business-enabled: ${TICKET_BUSINESS_ENABLED:false}
     listeners-enabled: ${TICKET_LISTENERS_ENABLED:false}

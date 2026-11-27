@@ -86,6 +86,16 @@ query. Kiểm lại URI nếu dùng multi-host/SRV thay vì URI một host hiệ
 - **Reader:** một private host:5432/event_db với đúng `sslmode=require`, `targetServerType=secondary`, `connectTimeout=5`, `socketTimeout=5`; không multi-host/userinfo. TLS mã hóa nhưng không verify server identity. Login đọc riêng, không `SET ROLE event_owner`; SELECT cancellation và joins phải được preflight, không dùng event_admin để né ACL.
 - **Release/rollback:** writer-only baseline cùng image/HPA1-1/placement/readiness trước khi activation riêng. Active→active kế thừa và revalidate `writer-baseline`; `previous` giữ writer-only. Tắt reader/auto/manual restore phải giữ current/state/live khớp baseline, không chỉ `rollout undo`. Snapshot legacy HPA1/2 là rollback hạ tầng riêng, không baseline reader; PDB/pinning unmanaged là NO-GO, không tự xóa. Script không chứng minh capacity/network/role/ACL/TLS/freshness production. Reader vẫn off tới khi preflight và activation được giao, chưa deploy từ task local.
 
+### Ticket: một Pod ổn định, surge CD và list đọc phụ
+
+- **Recovery-1, không PDB:** HPA `min=max=1`, Deployment không sở hữu replicas. Required hostname anti-affinity đúng Ticket/namespace `flash-ticket` bao old/new revision; không pin node. Giữ rolling0/1, minReady75s, drain75s và grace180s. Rollout cần **hai node schedulable** đủ request; surge Pending là NO-GO, giữ/restore Pod cũ, không hạ anti-affinity hoặc tự resize. Một Pod/node crash vẫn có thể gián đoạn; đây không phải HA tầng Pod/đầu-cuối. No-PDB không bảo vệ eviction sole Pod; không tự xóa PDB unmanaged.
+- **Default-off:** chỉ `GET /api/v1/orders/{orderId}/tickets` được xét reader. QR JSON/PNG, check-in, gửi lại vé, issuance probe, consumer và worker vẫn writer. Readiness gồm `readinessState,db` (writer), liveness chỉ `livenessState`; reader down không là lý do restart/liveness fail.
+- **Nguồn duy nhất:** tám `TICKET_LIST_REPLICA_*` keys trong Secret revision; không ConfigMap/container env/JSON/JVM/CLI override. Bật reader cần business=true, login `ticket_reader`, URL một host:5432/ticket_db khác writer với đúng `sslmode=require&targetServerType=secondary`. Script không xác minh hostname thực là ft70 hoặc tự GRANT. TLS require mã hóa nhưng không verify server identity. Reader không `SET ROLE ticket_owner`; SELECT hai bảng issuance/ticket có snapshot/ciphertext nên không coi là dữ liệu public.
+- **Budget15s chưa nghiệm thu runtime:** probe1s/query1s/sample2s/acquire5s/transaction5s, pgJDBC connect/socket5s trong datasource properties. Deploy guard chặn timing lớn hơn allocation; cộng cấu hình không chứng minh horizon15s hoặc timeout hard. Lag/sample hết hạn/bận chọn writer trước đọc; sau bắt đầu reader thì lỗi đi ra, invalidate và release sau transaction, **không retry writer**. Ambient transaction giữ nguồn caller; không đổi business SQL/owner/count guards.
+- **Pool/capacity:** mỗi process writer max5/min1 và reader max2/min0, slot request reader1; probe có scheduler riêng. Overlap old/new là tối đa10+4 connection, cộng Pod đang terminate và dependencies; không chỉ tính7 connection steady-state. Redis/RabbitMQ/discovery/writer vẫn có giới hạn riêng.
+- **Baseline/rollback:** writer-only cùng image/profile1/HPA/placement/probes và mọi business config/secret ngoài tám reader keys, **cùng QR ring**, trước activation riêng. Snapshot bắt buộc image/Deployment/ConfigMap/HPA/env Secret/QR Secret; Service optional, không dựng PDB/Service giả. Active→active kế thừa/revalidate baseline; `previous` giữ writer-compatible. Thay QR/business config cần writer baseline mới, không nới semantic compare. Auto/manual restore cập nhật current/image/previous bằng temp+mv; legacy HPA1/2/pinning là rollback hạ tầng riêng. Live-only stale nodeAffinity được null trong đúng effective apply recovery-1, canonical snapshot giữ sạch; nếu còn pinning thì fail trước rollout wait. Không đụng rule service khác.
+- **Trước activation production:** cần quyền riêng để kiểm capacity/network/role/ACL/TLS/LSN, horizon15s, traffic/Eureka/drain và overlap worker. Giữ cơ chế bridge legacy thiếu preStop trong migration helper; không bỏ drain gate. Fixture local chỉ kiểm script/state semantics, chưa chứng minh continuity hoặc freshness live. Không log credential, QR/key-ring, snapshot, URL có thông tin đăng nhập; không bật shell tracing.
+
 Ticket giữ **key-ring thật hiện tại** ở
 `/opt/flash-ticket-app/secrets/ticket-qr/key-ring.json`. Template có dạng
 `{"keys":{"v1":""}}`; giá trị thật là Base64 của khóa AES 32 byte. Không sinh
@@ -365,8 +375,8 @@ Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads
 ## HPA cho năm service nghiệp vụ
 
 Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
-Eureka giữ hai peer. Booking cố định biên HPA min=max2; Event recovery-1 min=max1;
-Payment/Ticket/User giữ min1/max2 ở source hiện tại.
+Eureka giữ hai peer. Booking cố định biên HPA min=max2; Event/Ticket recovery-1 min=max1;
+Payment/User giữ min1/max2 ở source hiện tại.
 Đây là cấu hình source, không khẳng định đã apply lên cluster. CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%

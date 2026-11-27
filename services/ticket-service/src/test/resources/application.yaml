@@ -1,6 +1,18 @@
 spring:
   application:
     name: ticket-service
+  # Bean datasource vẫn được scan khi loại Boot JDBC auto-config.
+  # Pool lazy chưa mở; fixture không được gọi DB triển khai.
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:1/isolated_ticket_context
+  sql:
+    init:
+      mode: never
+  # Có datasource sẽ bật repository auto-config trong khi fixture đã loại Hibernate.
+  data:
+    jpa:
+      repositories:
+        enabled: false
   security:
     oauth2:
       resourceserver:

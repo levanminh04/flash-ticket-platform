@@ -115,6 +115,37 @@ def container_fixtures():
             server.server_close()
 
 
+def ticket_manifest_fixtures():
+    """Check Ticket's recovery-1 profile without running a container or touching a cluster."""
+    import yaml
+    root = Path(__file__).resolve().parents[2]
+    app = root / 'deploy/k8s/ticket-service'
+    deployment = yaml.safe_load((app / 'deployment.yaml').read_text(encoding='utf-8'))
+    hpa = yaml.safe_load((app / 'hpa.yaml').read_text(encoding='utf-8'))
+    config = yaml.safe_load((app / 'configmap.yaml').read_text(encoding='utf-8'))
+    assert hpa['spec']['minReplicas'] == hpa['spec']['maxReplicas'] == 1, 'TICKET_HPA_MUST_BE_ONE'
+    spec = deployment['spec']
+    assert 'replicas' not in spec, 'HPA owns Ticket replicas'
+    assert spec['strategy'] == {'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}
+    assert spec['minReadySeconds'] == 75
+    pod = spec['template']['spec']
+    assert not pod.get('nodeName') and not pod.get('nodeSelector') and not pod.get('affinity', {}).get('nodeAffinity'), 'TICKET_PINNING_PRESENT'
+    rules = pod['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution']
+    assert rules == [{'labelSelector': {'matchLabels': {'app.kubernetes.io/name': 'ticket-service'}},
+                      'namespaces': ['flash-ticket'], 'topologyKey': 'kubernetes.io/hostname'}], 'Ticket anti-affinity must span old/new revisions'
+    assert not (app / 'pdb.yaml').exists() and not (app / 'service.yaml').exists(), 'No new managed PDB/Service'
+    assert pod['terminationGracePeriodSeconds'] == 180
+    container = pod['containers'][0]
+    assert container['resources'] == {'requests': {'cpu': '100m', 'memory': '384Mi'}, 'limits': {'memory': '768Mi'}}
+    settings = json.loads(config['data']['SPRING_APPLICATION_JSON'])
+    groups = settings['management']['endpoint']['health']['group']
+    assert groups['readiness']['include'] == ['readinessState', 'db'], 'Readiness must check writer DB only'
+    assert groups['liveness']['include'] == ['livenessState'], 'Liveness must not depend on DB/reader'
+    assert container['readinessProbe']['httpGet']['path'] == '/actuator/health/readiness'
+    assert container['livenessProbe']['httpGet']['path'] == '/actuator/health/liveness'
+    print('MANIFEST_PASSED ticket-service: recovery-1, surge, dynamic placement and writer readiness')
+
+
 def run_docker():
     import yaml
     root = Path(__file__).resolve().parents[2]
@@ -192,5 +223,8 @@ def run_docker():
 if __name__ == '__main__':
     if '--container' in sys.argv:
         container_fixtures()
+    elif '--manifests-only' in sys.argv:
+        ticket_manifest_fixtures()
     else:
+        ticket_manifest_fixtures()
         run_docker()

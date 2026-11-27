@@ -96,6 +96,21 @@ if affinity.get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDurin
     path.write_text(json.dumps(deployment))
 PY
   fi
+  if [[ $service == ticket-service && -f $revision/hpa.json ]]; then
+    # Cùng nguyên tắc b9acaf7, nhưng Ticket recovery-1 không dùng marker PDB Booking.
+    python3 - "$revision" <<'PY' || return 1
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+hpa = json.loads((root / 'hpa.json').read_text())['spec']
+if hpa.get('minReplicas') == hpa.get('maxReplicas') == 1:
+    path = root / 'deployment-effective.json'
+    deployment = json.loads(path.read_text())
+    affinity = deployment['spec']['template']['spec'].get('affinity', {})
+    if affinity.get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution') and 'nodeAffinity' not in affinity:
+        affinity['nodeAffinity'] = None
+        path.write_text(json.dumps(deployment))
+PY
+  fi
   for resource in configmap peer-service service ingress deployment statefulset hpa pdb; do
     [[ -f $revision/$resource.json ]] || continue
     manifest="$revision/$resource.json"
@@ -141,6 +156,23 @@ if expected.get('minReplicas') == expected.get('maxReplicas') == 1:
         sys.exit('EVENT_RECOVERY_REPLICA_COUNT_MISMATCH')
 PY
   fi
+  if [[ $service == ticket-service && -f $revision/hpa.json ]]; then
+    kubectl -n "$namespace" get deployment "$service" -o json > "$revision/ticket-live-deployment.json" || return 1
+    kubectl -n "$namespace" get hpa "$service" -o json > "$revision/ticket-live-hpa.json" || return 1
+    python3 - "$revision" <<'PY' || return 1
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+expected = json.loads((root / 'hpa.json').read_text())['spec']
+if expected.get('minReplicas') == expected.get('maxReplicas') == 1:
+    live = json.loads((root / 'ticket-live-deployment.json').read_text())
+    pod = live['spec']['template']['spec']
+    hpa = json.loads((root / 'ticket-live-hpa.json').read_text())['spec']
+    if pod.get('nodeName') or pod.get('nodeSelector') or pod.get('affinity', {}).get('nodeAffinity'):
+        sys.exit('TICKET_NODE_PINNING_PRESENT')
+    if hpa.get('minReplicas') != 1 or hpa.get('maxReplicas') != 1 or live['spec'].get('replicas', 1) != 1:
+        sys.exit('TICKET_RECOVERY_REPLICA_COUNT_MISMATCH')
+PY
+  fi
   kubectl -n "$namespace" rollout status "$kind/$service" --timeout=600s || return 1
   if [[ $service == booking-service && -f $revision/pdb.json ]]; then
     kubectl -n "$namespace" get pdb "$service" -o json > "$revision/pdb-live.json" || return 1
@@ -158,6 +190,10 @@ PY
         kubectl -n "$namespace" get statefulset discovery-server -o json > "$revision/discovery-workload.json" || return 1
       fi
       kubectl -n "$namespace" get pods -l 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' -o json > "$revision/discovery-pods.json" || return 1
+    fi
+    if [[ $service == ticket-service && -f $revision/hpa.json ]]; then
+      # HPA có thể đổi trong lúc rollout; final gate không dùng snapshot live cũ.
+      kubectl -n "$namespace" get hpa "$service" -o json > "$revision/ticket-live-hpa.json" || return 1
     fi
     if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<'PY'
 import json, pathlib, sys, urllib.request
@@ -179,6 +215,13 @@ if service == 'booking-service' and (root / 'pdb.json').is_file():
     nodes = [p['spec'].get('nodeName') for p in pods]
     assert all(nodes) and len(set(nodes)) == 2, 'BOOKING_HA_NODE_PLACEMENT_MISMATCH'
     assert pdb.get('minAvailable') == 1 and pdb.get('selector') == selector and 'maxUnavailable' not in pdb, 'BOOKING_HA_PDB_MISMATCH'
+if service == 'ticket-service' and (root / 'hpa.json').is_file():
+    profile = json.loads((root / 'hpa.json').read_text())['spec']
+    if profile.get('minReplicas') == profile.get('maxReplicas') == 1:
+        hpa = json.loads((root / 'ticket-live-hpa.json').read_text())['spec']
+        pod_spec = deployment['spec']['template']['spec']
+        assert desired == hpa.get('minReplicas') == hpa.get('maxReplicas') == 1, 'TICKET_RECOVERY_REPLICA_COUNT_MISMATCH'
+        assert not (pod_spec.get('nodeName') or pod_spec.get('nodeSelector') or pod_spec.get('affinity', {}).get('nodeAffinity')), 'TICKET_NODE_PINNING_PRESENT'
 if service in ('frontend', 'keycloak'):
     assert desired == 1, 'FIXED_REPLICA_COUNT_MISMATCH'
 if service == 'assistant-service':
@@ -281,6 +324,8 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
             sys.exit('INVALID_BOOKING_READER_FLAG')
         if service == 'event-service' and key == 'EVENT_READ_REPLICA_ENABLED' and value not in ('true', 'false'):
             sys.exit('INVALID_EVENT_READER_FLAG')
+        if service == 'ticket-service' and key == 'TICKET_LIST_REPLICA_ENABLED' and value not in ('true', 'false'):
+            sys.exit('INVALID_TICKET_READER_FLAG')
         if value:
             values[key] = value
 if service == 'payment-service':
@@ -620,6 +665,205 @@ except (OSError, ValueError, KeyError, TypeError, binascii.Error):
 PY
   if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
+if [[ $service == ticket-service ]]; then
+  # Snapshot QR/business phải còn đủ để rollback; không dùng profile/PDB của Booking.
+  kubectl -n "$namespace" get pdb "$service" --ignore-not-found -o json > "$target/ticket-pdb-live.json"
+  python3 - "$target" "$previous" "$mode" <<'PY'
+import base64, binascii, copy, json, pathlib, re, sys, urllib.parse
+from decimal import Decimal
+
+target = pathlib.Path(sys.argv[1])
+current, mode = sys.argv[2:]
+prefix = 'TICKET_LIST_REPLICA_'
+reader_keys = {prefix + k for k in ('ENABLED', 'JDBC_URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'PROBE_QUERY_TIMEOUT', 'MAX_SAMPLE_AGE', 'READER_TRANSACTION_TIMEOUT')}
+
+
+def ticket_load(revision, file):
+    return json.loads((revision / file).read_text(encoding='utf-8'))
+
+
+def ticket_enabled(secret):
+    setting = base64.b64decode(secret.get(prefix + 'ENABLED', 'ZmFsc2U='), validate=True)
+    if setting not in (b'true', b'false'):
+        sys.exit('INVALID_TICKET_READER_FLAG')
+    return setting == b'true'
+
+
+def ticket_semantic(document, kind):
+    result = copy.deepcopy(document)
+    result.pop('status', None)
+    metadata = result.get('metadata', {})
+    for key in ('uid', 'resourceVersion', 'creationTimestamp', 'generation', 'managedFields', 'selfLink'):
+        metadata.pop(key, None)
+    metadata.get('annotations', {}).pop('kubectl.kubernetes.io/last-applied-configuration', None)
+    if not metadata.get('annotations'):
+        metadata.pop('annotations', None)
+    if kind == 'deployment.json':
+        result['spec']['template']['metadata'].get('annotations', {}).pop('flash-ticket/release', None)
+        if not result['spec']['template']['metadata'].get('annotations'):
+            result['spec']['template']['metadata'].pop('annotations', None)
+    if kind == 'secret-env.json':
+        result['data'] = {k: v for k, v in result['data'].items() if k not in reader_keys}
+    return result
+
+
+def ticket_profile(revision):
+    deployment = ticket_load(revision, 'deployment.json')
+    pod = deployment['spec']['template']['spec']
+    container = pod['containers'][0]
+    hpa_doc = ticket_load(revision, 'hpa.json')
+    hpa = hpa_doc['spec']
+    config = ticket_load(revision, 'configmap.json')['data']
+    groups = json.loads(config.get('SPRING_APPLICATION_JSON', '{}')).get('management', {}).get('endpoint', {}).get('health', {}).get('group', {})
+    selector = {'matchLabels': {'app.kubernetes.io/name': 'ticket-service'}}
+    rule = {'labelSelector': selector, 'namespaces': ['flash-ticket'], 'topologyKey': 'kubernetes.io/hostname'}
+    return (deployment.get('kind') == 'Deployment' and deployment['metadata'].get('name') == 'ticket-service'
+            and deployment['metadata'].get('namespace') == 'flash-ticket' and deployment['spec'].get('selector') == selector
+            and deployment['spec']['template']['metadata'].get('labels', {}).get('app.kubernetes.io/name') == 'ticket-service'
+            and deployment['spec'].get('strategy') == {'type': 'RollingUpdate', 'rollingUpdate': {'maxUnavailable': 0, 'maxSurge': 1}}
+            and deployment['spec'].get('minReadySeconds') == 75 and pod.get('terminationGracePeriodSeconds') == 180
+            and not pod.get('nodeName') and not pod.get('nodeSelector') and 'nodeAffinity' not in pod.get('affinity', {})
+            and pod.get('affinity', {}).get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution') == [rule]
+            and hpa_doc.get('kind') == 'HorizontalPodAutoscaler' and hpa_doc['metadata'].get('name') == 'ticket-service'
+            and hpa_doc['metadata'].get('namespace') == 'flash-ticket' and hpa.get('minReplicas') == hpa.get('maxReplicas') == 1
+            and hpa.get('scaleTargetRef') == {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'ticket-service'}
+            and groups.get('readiness', {}).get('include') == ['readinessState', 'db']
+            and groups.get('liveness', {}).get('include') == ['livenessState']
+            and container.get('readinessProbe', {}).get('httpGet', {}).get('path') == '/actuator/health/readiness'
+            and container.get('livenessProbe', {}).get('httpGet', {}).get('path') == '/actuator/health/liveness'
+            and not (revision / 'pdb.json').exists())
+
+
+def ticket_writer_revision(revision, candidate):
+    try:
+        files = ('image', 'deployment.json', 'configmap.json', 'hpa.json', 'secret-env.json', 'secret-qr.json')
+        if not all((r / file).is_file() for r in (revision, candidate) for file in files):
+            return False
+        if ticket_enabled(ticket_load(revision, 'secret-env.json')['data']) or not ticket_profile(revision) or not ticket_profile(candidate):
+            return False
+        image = (revision / 'image').read_text().strip()
+        if image != (candidate / 'image').read_text().strip():
+            return False
+        for r in (revision, candidate):
+            deployment = ticket_load(r, 'deployment.json')
+            if deployment['spec']['template']['metadata']['annotations'].get('flash-ticket/release') != r.name or deployment['spec']['template']['spec']['containers'][0]['image'] != image:
+                return False
+        for file in (*files[1:], 'service.json'):
+            if (revision / file).exists() != (candidate / file).exists():
+                return False
+            if (revision / file).exists() and ticket_semantic(ticket_load(revision, file), file) != ticket_semantic(ticket_load(candidate, file), file):
+                return False
+        return True
+    except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+        return False
+
+
+def ticket_seconds(value):
+    match = re.fullmatch(r'(?:PT([0-9]+(?:\.[0-9]+)?)([SMH])|([0-9]+(?:\.[0-9]+)?)(ms|s|m|h))', value)
+    if not match:
+        return Decimal(0)
+    number, unit = (match[1], match[2]) if match[1] is not None else (match[3], match[4])
+    return Decimal(number) * {'ms': Decimal('.001'), 's': 1, 'S': 1, 'm': 60, 'M': 60, 'h': 3600, 'H': 3600}[unit]
+
+
+try:
+    secret = ticket_load(target, 'secret-env.json')['data']
+    use_reader = ticket_enabled(secret)
+    config = ticket_load(target, 'configmap.json')['data']
+    deployment = ticket_load(target, 'deployment.json')
+    pod = deployment['spec']['template']['spec']
+    container = pod['containers'][0]
+    # Relaxed Spring binding/JSON/JVM không được mở nguồn reader thứ hai.
+    entries = [*config.items(), *((v.get('name', ''), v.get('value', '')) for v in container.get('env', [])), *secret.items()]
+    for key, value in entries:
+        normalized = re.sub('[^a-z0-9]', '', key.lower())
+        if normalized in ('springconfiglocation', 'springconfigadditionallocation', 'springconfigimport', 'springprofilesactive', 'springprofilesinclude', 'springprofilesdefault'):
+            sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+        if use_reader and normalized in ('ticketbusinessenabled', 'ticketfeaturesbusinessenabled') and value != 'true':
+            sys.exit('TICKET_READER_REQUIRES_BUSINESS')
+        if normalized.startswith('ticketlistreplica'):
+            if key not in secret or key not in reader_keys or key in config or any(v.get('name') == key for v in container.get('env', [])):
+                sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+        if normalized == 'springapplicationjson':
+            pending = [('', json.loads(value))]
+            while pending:
+                parent, node = pending.pop()
+                if isinstance(node, dict):
+                    for name, child in node.items():
+                        joined = parent + re.sub('[^a-z0-9]', '', name.lower())
+                        if joined.startswith('ticketlistreplica') or joined.startswith('springconfig') or joined.startswith('springprofiles'):
+                            sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+                        if use_reader and joined == 'ticketfeaturesbusinessenabled' and child not in (True, 'true'):
+                            sys.exit('TICKET_READER_REQUIRES_BUSINESS')
+                        pending.append((joined, child))
+        if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'TICKET_JAVA_OPTIONS') and any(token in re.sub('[^a-z0-9]', '', value.lower()) for token in ('ticketlistreplica', 'springconfig', 'springprofiles')):
+            sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+    if any(token in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])] for token in ('ticketlistreplica', 'springconfig', 'springprofiles')):
+        sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+    if container.get('envFrom') != [{'configMapRef': {'name': 'ticket-service-config'}}, {'secretRef': {'name': 'ticket-service-secret'}}]:
+        sys.exit('INVALID_TICKET_READER_FLAG_SOURCE')
+    hpa = ticket_load(target, 'hpa.json')['spec']
+    legacy = (mode == 'rollback' and not use_reader and hpa.get('minReplicas') == 1 and hpa.get('maxReplicas') == 2
+              and not pod.get('affinity', {}).get('podAntiAffinity'))
+    if (target / 'pdb.json').exists() or (target / 'ticket-pdb-live.json').read_text().strip():
+        sys.exit('TICKET_UNMANAGED_PDB_PRESENT')
+    if not legacy and not ticket_profile(target):
+        sys.exit('INVALID_TICKET_RECOVERY_PROFILE')
+    if mode == 'rollback' and use_reader:
+        sys.exit('TICKET_ROLLBACK_REQUIRES_WRITER_REVISION')
+    if use_reader:
+        if any(not secret.get(key) for key in reader_keys):
+            sys.exit('MISSING_TICKET_READER_KEYS')
+        values = {k.removeprefix(prefix): base64.b64decode(secret[k], validate=True).decode('utf-8') for k in reader_keys}
+        if values['USERNAME'] != 'ticket_reader':
+            sys.exit('INVALID_TICKET_READER_ROLE')
+        if config.get('TICKET_BUSINESS_ENABLED') != 'true':
+            sys.exit('TICKET_READER_REQUIRES_BUSINESS')
+        for name, ceiling in (('PROBE_INTERVAL', 1), ('MAX_SAMPLE_AGE', 2)):
+            if not 0 < ticket_seconds(values[name]) <= ceiling:
+                sys.exit('INVALID_TICKET_READER_TIMING')
+        for name, ceiling in (('PROBE_QUERY_TIMEOUT', 1), ('READER_TRANSACTION_TIMEOUT', 5)):
+            if not re.fullmatch('[1-9][0-9]*', values[name]) or int(values[name]) > ceiling:
+                sys.exit('INVALID_TICKET_READER_TIMING')
+        jdbc = values['JDBC_URL']
+        url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
+        params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
+        writer = urllib.parse.urlsplit(config.get('TICKET_DB_URL', '').removeprefix('jdbc:'))
+        if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
+                or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
+                or url.path != '/ticket_db' or url.hostname == writer.hostname
+                or len(params) != 2 or dict(params) != {'sslmode': 'require', 'targetServerType': 'secondary'}):
+            sys.exit('INVALID_TICKET_READER_URL')
+        if not current:
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+        active = target.parent / current
+        baseline = current
+        if not (active / 'secret-env.json').is_file():
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+        if ticket_enabled(ticket_load(active, 'secret-env.json')['data']):
+            if not (active / 'writer-baseline').is_file():
+                sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+            baseline = (active / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not ticket_writer_revision(target.parent / baseline, target):
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+        (target / 'writer-baseline').write_text(baseline + '\n')
+    if current and not use_reader and not legacy and ticket_enabled(ticket_load(target.parent / current, 'secret-env.json')['data']):
+        active = target.parent / current
+        if not ticket_writer_revision(target, active):
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+        baseline = target.name if mode == 'rollback' else (active / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not ticket_writer_revision(target.parent / baseline, target):
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+        (target / 'writer-baseline').write_text(baseline + '\n')
+    if not legacy and (target / 'writer-baseline').is_file():
+        baseline = (target / 'writer-baseline').read_text().strip()
+        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not ticket_writer_revision(target.parent / baseline, target):
+            sys.exit('TICKET_WRITER_REVISION_REQUIRED')
+except (OSError, ValueError, KeyError, TypeError, binascii.Error):
+    sys.exit('INVALID_TICKET_READER_CONFIG')
+PY
+  if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
+fi
 if apply_revision "$target" && check_revision "$target"; then
   if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then
     python3 "$source_root/deploy/scripts/migrate-k8s-discovery.py" finish "$target" || die DISCOVERY_MIGRATION_FINALIZE_FAILED
@@ -627,7 +871,12 @@ if apply_revision "$target" && check_revision "$target"; then
   fi
   printf '%s\n' "$revision" > "$revision_root/current.tmp"
   mv -f "$revision_root/current.tmp" "$revision_root/current"
-  if [[ -n $previous && $previous != "$revision" ]]; then printf '%s\n' "$previous" > "$revision_root/previous"; fi
+  if [[ $service == ticket-service && -n $previous ]]; then
+    printf '%s\n' "$previous" > "$revision_root/previous.tmp"
+    mv -f "$revision_root/previous.tmp" "$revision_root/previous"
+  elif [[ -n $previous && $previous != "$revision" ]]; then
+    printf '%s\n' "$previous" > "$revision_root/previous"
+  fi
   printf '%s\n' "$image" > "$state/$service.current.tmp"
   mv -f "$state/$service.current.tmp" "$state/$service.current"
   echo "DEPLOY_OK $service $revision"
@@ -646,13 +895,18 @@ else
   fi
   if [[ -n $previous && $revision_root/$previous != "$target" ]]; then
     if apply_revision "$revision_root/$previous" && check_revision "$revision_root/$previous"; then
-      if [[ $service == booking-service || $service == event-service ]]; then
+      if [[ $service == booking-service || $service == event-service || $service == ticket-service ]]; then
         printf '%s\n' "$previous" > "$revision_root/current.tmp"
         mv -f "$revision_root/current.tmp" "$revision_root/current"
         restored_image=$(cat "$revision_root/$previous/image")
         printf '%s\n' "$restored_image" > "$state/$service.current.tmp"
         mv -f "$state/$service.current.tmp" "$state/$service.current"
-        printf '%s\n' "$previous" > "$revision_root/previous"
+        if [[ $service == ticket-service ]]; then
+          printf '%s\n' "$previous" > "$revision_root/previous.tmp"
+          mv -f "$revision_root/previous.tmp" "$revision_root/previous"
+        else
+          printf '%s\n' "$previous" > "$revision_root/previous"
+        fi
       fi
       echo "RESTORED_PREVIOUS $service $previous" >&2
     else

@@ -29,7 +29,12 @@ def fake_kubectl():
         sys.exit('Frontend must not query discovery')
     if arguments[:2] == ['get', 'namespace']:
         return
-    if arguments[0] == 'create':
+    if arguments[:3] == ['create', 'secret', 'generic'] and root.name == 'ticket-fixture':
+        source = next(a.split('=', 2)[2] for a in arguments if a.startswith('--from-file='))
+        print(json.dumps({'apiVersion': 'v1', 'kind': 'Secret',
+                          'metadata': {'name': 'ticket-qr-key-ring', 'namespace': 'flash-ticket'},
+                          'type': 'Opaque', 'data': {'key-ring.json': base64.b64encode(Path(source).read_bytes()).decode()}}))
+    elif arguments[0] == 'create':
         print(Path(arguments[arguments.index('-f') + 1]).read_text())
     elif arguments[:2] in (['delete', 'hpa'], ['delete', 'pdb']):
         kind = 'HorizontalPodAutoscaler' if arguments[1] == 'hpa' else 'PodDisruptionBudget'
@@ -39,6 +44,12 @@ def fake_kubectl():
         path = api / (kind + '.json')
         if path.exists():
             print(path.read_text())
+            reset = root / 'ticket-hpa-reset-after-read'
+            if root.name == 'ticket-fixture' and arguments[1] == 'hpa' and reset.exists():
+                reset.unlink()
+                document = json.loads(path.read_text())
+                document['spec']['maxReplicas'] = 1
+                path.write_text(json.dumps(document))
         elif '--ignore-not-found' not in arguments:
             sys.exit('Resource not found')
     elif arguments[:2] == ['apply', 'set-last-applied']:
@@ -51,7 +62,7 @@ def fake_kubectl():
         if resource['kind'] == 'Deployment':
             last_applied = json.dumps(resource)
             deployment_path = api / 'Deployment.json'
-            if root.name == 'booking-fixture' and deployment_path.exists():
+            if root.name in ('booking-fixture', 'ticket-fixture') and deployment_path.exists():
                 live = json.loads(deployment_path.read_text())
                 previous = json.loads(live['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'])
                 old_affinity = live['spec']['template']['spec'].get('affinity', {})
@@ -64,7 +75,7 @@ def fake_kubectl():
                         del affinity['nodeAffinity']
                 elif 'nodeAffinity' in old_affinity and 'nodeAffinity' not in old_applied_affinity:
                     pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
-                drift = root / 'keep-booking-pinning-once'
+                drift = root / ('keep-ticket-pinning-once' if root.name == 'ticket-fixture' else 'keep-booking-pinning-once')
                 if drift.exists():
                     drift.unlink()
                     pod.setdefault('affinity', {})['nodeAffinity'] = old_affinity['nodeAffinity']
@@ -75,7 +86,7 @@ def fake_kubectl():
             resource['metadata'].setdefault('annotations', {})['kubectl.kubernetes.io/last-applied-configuration'] = last_applied
         if (root / 'frontend-only').exists():
             assert resource['kind'] in ('Deployment', 'Service'), 'FE must not apply backend config or Secret'
-        if (root.name in ('booking-fixture', 'event-fixture') and resource['kind'] == 'HorizontalPodAutoscaler'
+        if (root.name in ('booking-fixture', 'event-fixture', 'ticket-fixture') and resource['kind'] == 'HorizontalPodAutoscaler'
                 and 'minReplicas' in resource.get('spec', {})):
             desired_count = resource['spec']['minReplicas']
             (root / 'desired').write_text(str(desired_count))
@@ -84,13 +95,24 @@ def fake_kubectl():
                 workload = json.loads(workload_path.read_text())
                 workload['spec']['replicas'] = desired_count
                 workload_path.write_text(json.dumps(workload))
-        (api / (resource['kind'] + '.json')).write_text(json.dumps(resource))
+        filename = resource['kind']
+        if root.name == 'ticket-fixture' and resource['kind'] == 'Secret':
+            filename += '-' + resource['metadata']['name']
+        (api / (filename + '.json')).write_text(json.dumps(resource))
     elif arguments[0] == 'rollout':
-        if root.name == 'booking-fixture':
+        if root.name in ('booking-fixture', 'ticket-fixture'):
             live = json.loads((api / 'Deployment.json').read_text())
             affinity = live['spec']['template']['spec'].get('affinity', {})
             if affinity.get('podAntiAffinity') and affinity.get('nodeAffinity'):
                 (root / 'rollout-waited-with-pinning').touch()
+        drift = root / 'ticket-hpa-drift-after-rollout'
+        if root.name == 'ticket-fixture' and drift.exists():
+            drift.unlink()
+            path = api / 'HorizontalPodAutoscaler.json'
+            document = json.loads(path.read_text())
+            document['spec']['maxReplicas'] = 2
+            path.write_text(json.dumps(document))
+            (root / 'ticket-hpa-reset-after-read').touch()
         fail = root / 'fail-once'
         if fail.exists():
             fail.unlink()
@@ -107,7 +129,7 @@ def fake_kubectl():
     elif arguments[:3] == ['get', 'statefulset', 'discovery-server'] and root.name == 'assistant-fixture':
         print(json.dumps({'spec': {'replicas': 1}}))
     elif arguments[:2] == ['get', 'pods']:
-        if root.name == 'event-fixture' and not (api / 'Deployment.json').exists():
+        if root.name in ('event-fixture', 'ticket-fixture') and not (api / 'Deployment.json').exists():
             print(json.dumps({'items': []}))
             return
         if 'app.kubernetes.io/name=discovery-server,flash-ticket/discovery-generation=peers' in arguments:
@@ -148,7 +170,8 @@ class Registry(http.server.BaseHTTPRequestHandler):
             count = 1
         service, port = {'assistant-fixture': ('assistant-service', 8089),
                          'booking-fixture': ('booking-service', 8082),
-                         'event-fixture': ('event-service', 8086)}.get(root.name, ('payment-service', 8083))
+                         'event-fixture': ('event-service', 8086),
+                         'ticket-fixture': ('ticket-service', 8084)}.get(root.name, ('payment-service', 8083))
         assert self.path == '/eureka/apps/' + service.upper()
         body = json.dumps({'application': {'instance': [{
             'instanceId': service + ':' + ('fixture-pod' if i == 0 else f'fixture-pod-{i+1}'), 'ipAddr': f'10.42.0.{9+i}',
@@ -188,6 +211,9 @@ def run_fixtures():
         scripts = source.parent / 'scripts'
         scripts.mkdir(parents=True)
         shutil.copyfile(SCRIPT.parent / 'migrate-k8s-discovery.py', scripts / 'migrate-k8s-discovery.py')
+        if '--ticket-only' in sys.argv:
+            ticket_fixture(root / 'ticket-fixture', bash, env, scripts)
+            return
         app = source / 'payment-service'
         app.mkdir(parents=True)
         examples = source / 'examples'
@@ -479,6 +505,7 @@ def run_fixtures():
         print('Assistant fixtures passed: bootstrap, allowlist, Eureka and same-image standalone revision rollback.')
         booking_fixture(root / 'booking-fixture', bash, env, scripts, deployment, config)
         event_fixture(root / 'event-fixture', bash, env, scripts, deployment, config)
+        ticket_fixture(root / 'ticket-fixture', bash, env, scripts)
 
 
 def booking_fixture(root, bash, env, scripts, deployment, config):
@@ -922,6 +949,220 @@ def event_fixture(root, bash, env, scripts, deployment, config):
         finally:
             server.shutdown()
     print('Event fixtures passed: recovery-1, reader admission, writer baseline and restore pointers.')
+
+
+def ticket_fixture(root, bash, env, scripts):
+    """Use the real Ticket manifests and embedded deploy validators, never a second validator."""
+    import yaml
+    env = dict(env, APP_ROOT=root.as_posix())
+    for name in ('state/k8s', 'api', 'env', 'secrets/ticket-qr'):
+        (root / name).mkdir(parents=True)
+    (root / 'state/k8s/enabled').touch()
+    (root / 'desired').write_text('1')
+    deploy = root / 'releases' / SHA / 'deploy'
+    app = deploy / 'k8s/ticket-service'
+    app.mkdir(parents=True)
+    shutil.copytree(scripts, deploy / 'scripts')
+    memory = root / 'meminfo'
+    memory.write_text('MemAvailable: 4096000 kB\n')
+    migration = deploy / 'scripts/migrate-k8s-discovery.py'
+    migration.write_text(migration.read_text(encoding='utf-8')
+                         .replace("Path('/proc/meminfo')", f'Path({memory.as_posix()!r})')
+                         .replace("['kubectl', '-n', NAMESPACE, *args]", f"[{sys.executable!r}, {Path(__file__).resolve().as_posix()!r}, '--kubectl', '-n', NAMESPACE, *args]"), encoding='utf-8')
+    examples = deploy / 'k8s/examples'
+    examples.mkdir()
+    shutil.copyfile(SCRIPT.parents[1] / 'k8s/examples/ticket-service.secret.env.example', examples / 'ticket-service.secret.env.example')
+    for name in ('deployment', 'configmap', 'hpa'):
+        doc = yaml.safe_load((SCRIPT.parents[1] / 'k8s/ticket-service' / (name + '.yaml')).read_text(encoding='utf-8'))
+        (app / (name + '.yaml')).write_text(json.dumps(doc))
+    ring = root / 'secrets/ticket-qr/key-ring.json'
+    ring.write_text(json.dumps({'keys': {'v1': base64.b64encode(bytes(32)).decode()}}))
+    state = root / 'state/k8s/ticket-service'
+    env_file = root / 'env/ticket-service.env'
+    prefix = 'TICKET_LIST_REPLICA_'
+    writer_env = 'TICKET_DB_PASSWORD=fixture-ticket-writer\nRABBITMQ_PASSWORD=fixture-ticket-broker\nMAIL_USERNAME=fixture@example.test\nMAIL_PASSWORD=fixture-ticket-mail\nTICKET_MAIL_FROM=fixture@example.test\n'
+    jdbc = 'jdbc:postgresql://reader.fixture:5432/ticket_db?sslmode=require&targetServerType=secondary'
+    pilot = {'ENABLED': 'true', 'JDBC_URL': jdbc, 'USERNAME': 'ticket_reader', 'PASSWORD': 'fixture-ticket-reader',
+             'PROBE_INTERVAL': 'PT1S', 'MAX_SAMPLE_AGE': 'PT2S', 'PROBE_QUERY_TIMEOUT': '1', 'READER_TRANSACTION_TIMEOUT': '5'}
+    command = [bash, SCRIPT.as_posix(), 'ticket-service', REPOSITORY.replace('payment-service', 'ticket-service') + 'c' * 64, SHA]
+
+    def run(values, mode='deploy'):
+        env_file.write_text(writer_env + ''.join(f'{prefix + k}={v}\n' for k, v in values.items()), encoding='utf-8')
+        result = subprocess.run([*command, mode], env=env, capture_output=True, text=True, timeout=90)
+        assert not any(v in result.stdout + result.stderr for v in (jdbc, 'fixture-ticket-reader', 'fixture-ticket-writer', 'fixture-ticket-mail'))
+        return result
+
+    def live(kind):
+        return json.loads((root / 'api' / (kind + '.json')).read_text())
+
+    def reject(values, marker):
+        before = {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        pointers = {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()} if state.exists() else {}
+        result = run(values)
+        assert result.returncode and marker in result.stderr, result.stdout + result.stderr
+        assert before == {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
+        assert pointers == {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()}
+
+    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Registry) as server:
+        server.fixture_root = root
+        server.registry_requests = 0
+        (root / 'port').write_text(str(server.server_port))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            reject(pilot, 'TICKET_WRITER_REVISION_REQUIRED')
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            writer = (state / 'current').read_text().strip()
+            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            assert not (root / 'api/PodDisruptionBudget.json').exists()
+            assert not (state / writer / 'service.json').exists(), 'Ticket Service must remain optional'
+            original_qr = live('Secret-ticket-qr-key-ring')['data']
+            # HPA có thể drift sau precheck; final gate phải đọc lại trước DEPLOY_OK.
+            (root / 'ticket-hpa-drift-after-rollout').touch()
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1, 'TICKET_FINAL_HPA_NOT_RECHECKED'
+            writer = (state / 'current').read_text().strip()
+            mutations = [
+                ('hpa', lambda d: d['spec'].update(minReplicas=2, maxReplicas=2), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('hpa', lambda d: d['spec'].update(maxReplicas=2), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec'].update(strategy={'type': 'Recreate'}), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['strategy']['rollingUpdate'].update(maxUnavailable=1), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec'].update(nodeName='fixed'), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0]['labelSelector']['matchLabels'].update({'app.kubernetes.io/name': 'other'}), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0].update(namespaces=['other']), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0].update(matchLabelKeys=['pod-template-hash']), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"management":{"endpoint":{"health":{"group":{"readiness":{"include":["readinessState","reader"]},"liveness":{"include":["livenessState"]}}}}}}'), 'INVALID_TICKET_RECOVERY_PROFILE'),
+                ('configmap', lambda d: d['data'].update({prefix + 'ENABLED': 'false'}), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('configmap', lambda d: d['data'].update(SPRING_CONFIG_IMPORT='file:/fixture-only.yaml'), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].setdefault('env', []).append({'name': 'JAVA_TOOL_OPTIONS', 'value': '-Dspring.config.location=file:/fixture-only.yaml'}), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"ticket":{"features":{"business-enabled":false}}}'), 'TICKET_READER_REQUIRES_BUSINESS'),
+                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"ticket":{"list-replica":{"enabled":false}}}'), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('configmap', lambda d: d['data'].update({'spring.application.json': '{"ticket.list-replica.enabled":false}'}), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].setdefault('env', []).append({'name': prefix + 'ENABLED', 'value': 'true'}), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].update(args=['--ticket.list-replica.enabled=true']), 'INVALID_TICKET_READER_FLAG_SOURCE'),
+            ]
+            for name, change, marker in mutations:
+                path = app / (name + '.yaml')
+                original = path.read_bytes()
+                doc = json.loads(original)
+                change(doc)
+                path.write_text(json.dumps(doc))
+                try:
+                    reject(pilot, marker)
+                finally:
+                    path.write_bytes(original)
+            for values, marker in [(dict(pilot, ENABLED='yes'), 'INVALID_TICKET_READER_FLAG'),
+                                   (dict(pilot, PASSWORD=''), 'MISSING_TICKET_READER_KEYS'),
+                                   (dict(pilot, USERNAME='ticket_owner'), 'INVALID_TICKET_READER_ROLE'),
+                                   (dict(pilot, PROBE_INTERVAL='PT0S'), 'INVALID_TICKET_READER_TIMING'),
+                                   (dict(pilot, PROBE_QUERY_TIMEOUT='0'), 'INVALID_TICKET_READER_TIMING'),
+                                   (dict(pilot, MAX_SAMPLE_AGE='PT3S'), 'INVALID_TICKET_READER_TIMING'),
+                                   (dict(pilot, READER_TRANSACTION_TIMEOUT='6'), 'INVALID_TICKET_READER_TIMING')]:
+                reject(values, marker)
+            for url in [jdbc + '&sslmode=disable', jdbc.replace('/ticket_db', '/booking_db'),
+                        jdbc.replace('reader.fixture:5432', 'reader.fixture:5432,writer.fixture:5432'),
+                        jdbc.replace('reader.fixture:5432', '172.31.41.236:5432'),
+                        jdbc + '&user=ticket_owner', jdbc + '&options=-c%20role=ticket_owner']:
+                reject(dict(pilot, JDBC_URL=url), 'INVALID_TICKET_READER_URL')
+            pdb = app / 'pdb.yaml'
+            pdb.write_text('{"apiVersion":"policy/v1","kind":"PodDisruptionBudget","metadata":{"name":"ticket-service"}}')
+            try:
+                reject(pilot, 'TICKET_UNMANAGED_PDB_PRESENT')
+            finally:
+                pdb.unlink()
+            unmanaged = root / 'api/PodDisruptionBudget.json'
+            unmanaged.write_text('{"kind":"PodDisruptionBudget","metadata":{"name":"ticket-service"}}')
+            try:
+                reject(pilot, 'TICKET_UNMANAGED_PDB_PRESENT')
+            finally:
+                unmanaged.unlink()
+            # Full semantic baseline: QR, business secrets, readiness and resource limits must match.
+            baseline = state / writer
+            for name in ('secret-qr.json', 'secret-env.json', 'hpa.json', 'deployment.json', 'configmap.json', 'image'):
+                path = baseline / name
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    reject(pilot, 'TICKET_WRITER_REVISION_REQUIRED')
+                finally:
+                    path.write_bytes(original)
+            for name, change in [
+                ('secret-qr.json', lambda d: d['data'].update({'key-ring.json': base64.b64encode(b'{"keys":{}}').decode()})),
+                ('secret-env.json', lambda d: d['data'].update(MAIL_PASSWORD=base64.b64encode(b'changed').decode())),
+                ('deployment.json', lambda d: d['spec']['template']['spec']['containers'][0]['resources']['limits'].update(memory='1Gi')),
+                ('configmap.json', lambda d: d['data'].update(TICKET_WORKERS_ENABLED='false')),
+            ]:
+                path = baseline / name
+                original = path.read_bytes()
+                doc = json.loads(original)
+                change(doc)
+                path.write_text(json.dumps(doc))
+                try:
+                    reject(pilot, 'TICKET_WRITER_REVISION_REQUIRED')
+                finally:
+                    path.write_bytes(original)
+            # Live-only stale pinning must be explicitly cleared in the effective apply, not canonical snapshot.
+            live_path = root / 'api/Deployment.json'
+            doc = live('Deployment')
+            doc['spec']['template']['spec']['affinity']['nodeAffinity'] = {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': []}}
+            live_path.write_text(json.dumps(doc))
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            writer = (state / 'current').read_text().strip()
+            assert not live('Deployment')['spec']['template']['spec']['affinity'].get('nodeAffinity')
+            assert 'nodeAffinity' not in json.loads((state / writer / 'deployment.json').read_text())['spec']['template']['spec']['affinity']
+            result = run(pilot)
+            assert result.returncode == 0, result.stdout + result.stderr
+            active = state / (state / 'current').read_text().strip()
+            assert (active / 'writer-baseline').read_text().strip() == writer
+            for broken in (None, '../invalid'):
+                pointer = active / 'writer-baseline'
+                original = pointer.read_bytes()
+                if broken is None:
+                    pointer.unlink()
+                else:
+                    pointer.write_text(broken)
+                try:
+                    reject(pilot, 'TICKET_WRITER_REVISION_REQUIRED')
+                finally:
+                    pointer.write_bytes(original)
+            assert run(pilot).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            (root / 'fail-once').touch()  # Simulated Pending/rollout failure retains/restores old writer profile.
+            result = run(pilot)
+            assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr
+            assert (state / 'current').read_text().strip() == writer
+            assert (state / 'previous').read_text().strip() == writer
+            assert (root / 'state/k8s/ticket-service.current').read_text().strip() == command[3]
+            assert prefix + 'ENABLED' not in live('Secret-ticket-service-secret')['data']
+            assert live('Secret-ticket-qr-key-ring')['data'] == original_qr
+            assert run(pilot).returncode == 0
+            assert run({'ENABLED': 'false'}).returncode == 0
+            assert (state / 'previous').read_text().strip() == writer
+            writer = (state / 'current').read_text().strip()
+            assert run(pilot).returncode == 0
+            env_file.unlink()
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == writer
+            assert live('Deployment')['spec']['replicas'] == 1
+            # Legacy infra rollback is separate and keeps its explicitly pinned HPA1/2 snapshot.
+            legacy = state / writer
+            doc = json.loads((legacy / 'hpa.json').read_text())
+            doc['spec']['maxReplicas'] = 2
+            (legacy / 'hpa.json').write_text(json.dumps(doc))
+            doc = json.loads((legacy / 'deployment.json').read_text())
+            doc['spec']['template']['spec']['affinity'] = {'nodeAffinity': {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': []}}}
+            (legacy / 'deployment.json').write_text(json.dumps(doc))
+            (legacy / 'writer-baseline').unlink(missing_ok=True)
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 2
+            assert 'nodeAffinity' in live('Deployment')['spec']['template']['spec']['affinity']
+        finally:
+            server.shutdown()
+    print('Ticket fixtures passed: recovery-1/no-PDB, strict reader guards, semantic QR baseline and restore pointers.')
 
 
 if __name__ == '__main__':
