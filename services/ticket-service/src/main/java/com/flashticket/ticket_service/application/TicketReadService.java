@@ -3,7 +3,6 @@ package com.flashticket.ticket_service.application;
 import com.flashticket.ticket_service.config.TicketListReplicaHealth;
 import com.flashticket.ticket_service.web.TicketOperations;
 import com.flashticket.ticket_service.web.TicketViews;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
@@ -24,9 +23,6 @@ public class TicketReadService {
   private final Counter readerReads;
   private final Counter readerErrors;
 
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      justification = "Shares Spring-managed metrics without exposing them.")
   public TicketReadService(
       TicketOperations operations,
       @Qualifier("ticketListReadTransactionTemplate")

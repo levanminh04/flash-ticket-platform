@@ -96,6 +96,20 @@ cho phép commit/push scoped Ticket dev/son và CD chỉ Ticket; không merge ma
 không publish phần Event/Payment mới. Shared script/fixture export riêng index
 khớp đúng checkpoint local đã kiểm, không ghi đè working tree Payment.
 
+## CI/CD Ticket exact commit1e1fde9 — gate chưa đạt
+
+Sau user duyệt Git/CD,21Ticketfiles đã commit/push tại1e1fde9d6a52eae163888f9876c7979b8b07f43a.
+Run [45938524908](https://github.com/levanminh04/flash-ticket-platform/actions/runs/45938524908)
+chỉ service=ticket-service, không merge main. CI22existing PostgreSQL IT và227fast
+tests đều đạt0failure/error/skip; Spotless120filesclean. Verify FAIL vì1SpotBugs
+`US_USELESS_SUPPRESSION_ON_METHOD`: suppression EI_EXPOSE_REP2 trên constructor
+TicketReadService/M24 không cần thiết. Publish/deploy skipped, production giữ
+image/revision cũ,1Ready/Available đã xác minh lại quaSSH. Không rerun/bypassgate.
+User “Duyệt delta M24” ngày27/11/2026: đã bỏ đúng annotation/import, giữ nguyên
+constructor/logic, không chạy testlocal. Sau Event nhả Gitlock tại42fb651, chuẩn bị
+commit/push riêng delta rồi CD chỉTicket trênSHA mới; không bỏCIgate hoặc merge main.
+22PGtests không chứng minh physical routing/Saga hoặc15s.
+
 ## Fixture selective reader Ticket — lịch sử triển khai local đã dừng
 
 Harness tại [test-ticket-replica.sh](../../.github/scripts/test-ticket-replica.sh),
