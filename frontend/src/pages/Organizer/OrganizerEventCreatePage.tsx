@@ -125,6 +125,7 @@ type DraftTicket = {
 };
 
 type OwnerDraft = EventWithImages & {
+  shortDescription?: string | null;
   description: string;
   categoryId: string | null;
   venueId: string | null;
@@ -526,6 +527,15 @@ function EventDraftForm({
       return;
     }
 
+    const shortDescription = read("shortDescription");
+    if (shortDescription.length > 300) {
+      failValidation(
+        "info",
+        t("organizerEventCreate.shortDescriptionMaxLength", "Mô tả ngắn tối đa 300 ký tự.")
+      );
+      return;
+    }
+
     const description = read("description");
     if (!description) {
       failValidation(
@@ -690,6 +700,7 @@ function EventDraftForm({
     setError("");
     const draft = {
       title,
+      shortDescription,
       description,
       categoryId: read("categoryId") || null,
       venueId,
@@ -1116,6 +1127,30 @@ function EventDraftForm({
                   )}
                   disabled={busy}
                   required
+                />
+              </div>
+
+              <div className="tix-field-wrap tix-form-span-2">
+                <label className="tix-field-label" htmlFor="event-short-description">
+                  {t("organizerEventCreate.fieldShortDescription", "Mô tả ngắn")}{" "}
+                  <span className="tix-field-hint" style={{ fontWeight: 400, opacity: 0.75 }}>
+                    ({t("organizerEventCreate.shortDescriptionHint", "tối đa 300 ký tự, bắt buộc khi gửi duyệt")})
+                  </span>
+                </label>
+                <textarea
+                  id="event-short-description"
+                  name="shortDescription"
+                  className="tix-input"
+                  rows={2}
+                  maxLength={300}
+                  defaultValue={event?.shortDescription ?? ""}
+                  onChange={() => setDirty(true)}
+                  placeholder={t(
+                    "organizerEventCreate.shortDescriptionPlaceholder",
+                    "Tóm tắt ngắn gọn điểm nhấn của sự kiện (hiển thị trên trang chủ và kết quả tìm kiếm)..."
+                  )}
+                  disabled={busy}
+                  style={{ resize: "vertical", minHeight: "64px" }}
                 />
               </div>
 
@@ -2401,6 +2436,20 @@ function EventDraftForm({
                   <section className="tix-review-panel">
                     <div className="tix-review-panel-head">
                       <FileText size={16} />
+                      <h4>{t("organizerEventCreate.fieldShortDescription", "Mô tả ngắn")}</h4>
+                    </div>
+                    {event?.shortDescription?.trim() ? (
+                      <p className="tix-review-description">{event.shortDescription}</p>
+                    ) : (
+                      <p className="tix-review-empty-text">
+                        {t("organizerStepper.noShortDescription", "Chưa nhập mô tả ngắn (cần bổ sung trước khi gửi duyệt).")}
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="tix-review-panel">
+                    <div className="tix-review-panel-head">
+                      <FileText size={16} />
                       <h4>{t("organizerEventCreate.fieldDescription", "Mô tả sự kiện")}</h4>
                     </div>
                     {event?.description?.trim() ? (
@@ -2698,6 +2747,7 @@ function EventDraftForm({
                   busy ||
                   dirty ||
                   promotionsDirty ||
+                  !event.shortDescription?.trim() ||
                   (mode === "QUANTITY" && (!event.ticketTypes || event.ticketTypes.length === 0)) ||
                   (mode === "SEAT_MAP" && !seatMapConfigured)
                 }

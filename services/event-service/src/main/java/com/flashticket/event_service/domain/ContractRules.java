@@ -49,9 +49,19 @@ public final class ContractRules {
     return text(value, "code").toUpperCase(Locale.ROOT);
   }
 
+  public static final int MAX_SHORT_DESCRIPTION_LENGTH = 300;
+
   public static String text(String value, String field) {
     if (value == null || value.isBlank()) throw EventProblem.invalid(field);
     return value.trim();
+  }
+
+  public static String shortDescription(String value) {
+    if (value == null) return "";
+    String trimmed = value.trim();
+    if (trimmed.length() > MAX_SHORT_DESCRIPTION_LENGTH)
+      throw EventProblem.invalid("shortDescription");
+    return trimmed;
   }
 
   public static DraftConfiguration draft(EventCommands.Draft input, EventData existing) {
@@ -179,6 +189,7 @@ public final class ContractRules {
             .toList();
     return new DraftConfiguration(
         text(input.title(), "title"),
+        shortDescription(input.shortDescription()),
         input.description(),
         input.categoryId(),
         input.venueId(),

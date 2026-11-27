@@ -86,7 +86,8 @@ public class EventRepository {
       params.addValue("now", utc(Instant.now()));
     }
     if (query != null && !query.isBlank()) {
-      sql.append(" AND e.title ILIKE :query ESCAPE '!'");
+      sql.append(
+          " AND (e.title ILIKE :query ESCAPE '!' OR e.short_description ILIKE :query ESCAPE '!')");
       params.addValue(
           "query",
           "%" + query.trim().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
@@ -203,7 +204,7 @@ public class EventRepository {
   public void insert(UUID id, String organizer, DraftConfiguration draft) {
     var p = parameters(id, draft).addValue("organizer", organizer);
     jdbc.update(
-        "INSERT INTO event_schema.tbl_events(id,organizer_subject,category_id,venue_id,title,description,sales_mode,status,starts_at,ends_at,sale_starts_at,sale_ends_at,checkin_starts_at,checkin_ends_at,purchase_limit) VALUES(:id,:organizer,:category,:venue,:title,:description,:mode,'DRAFT',:start,:end,:saleStart,:saleEnd,:start,:end,:limit)",
+        "INSERT INTO event_schema.tbl_events(id,organizer_subject,category_id,venue_id,title,short_description,description,sales_mode,status,starts_at,ends_at,sale_starts_at,sale_ends_at,checkin_starts_at,checkin_ends_at,purchase_limit) VALUES(:id,:organizer,:category,:venue,:title,:shortDescription,:description,:mode,'DRAFT',:start,:end,:saleStart,:saleEnd,:start,:end,:limit)",
         p);
     replaceChildren(id, draft);
   }
@@ -212,7 +213,7 @@ public class EventRepository {
     var p = parameters(existing.id(), draft).addValue("version", existing.rowVersion());
     int changed =
         jdbc.update(
-            "UPDATE event_schema.tbl_events SET category_id=:category,venue_id=:venue,title=:title,description=:description,starts_at=:start,ends_at=:end,sale_starts_at=:saleStart,sale_ends_at=:saleEnd,checkin_starts_at=:start,checkin_ends_at=:end,purchase_limit=:limit,row_version=row_version+1,source_config_version=source_config_version+1,updated_at=clock_timestamp() WHERE id=:id AND row_version=:version AND status='DRAFT'",
+            "UPDATE event_schema.tbl_events SET category_id=:category,venue_id=:venue,title=:title,short_description=:shortDescription,description=:description,starts_at=:start,ends_at=:end,sale_starts_at=:saleStart,sale_ends_at=:saleEnd,checkin_starts_at=:start,checkin_ends_at=:end,purchase_limit=:limit,row_version=row_version+1,source_config_version=source_config_version+1,updated_at=clock_timestamp() WHERE id=:id AND row_version=:version AND status='DRAFT'",
             p);
     if (changed != 1) throw EventProblem.conflict("STALE_EVENT_VERSION");
     replaceChildren(existing.id(), draft);
@@ -398,6 +399,7 @@ public class EventRepository {
         .addValue("venue", d.venueId())
         .addValue("mode", d.mode())
         .addValue("title", d.title())
+        .addValue("shortDescription", d.shortDescription())
         .addValue("description", d.description())
         .addValue("start", utc(d.startsAt()))
         .addValue("end", utc(d.endsAt()))
@@ -414,6 +416,7 @@ public class EventRepository {
         r.getObject("venue_id", UUID.class),
         r.getString("venue_name"),
         r.getString("title"),
+        r.getString("short_description"),
         r.getString("description"),
         r.getString("sales_mode"),
         r.getString("status"),
@@ -448,6 +451,7 @@ public class EventRepository {
         e.venueId(),
         e.venueName(),
         e.title(),
+        e.shortDescription(),
         e.description(),
         e.mode(),
         e.status(),

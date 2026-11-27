@@ -11,6 +11,7 @@ export interface PublicEventContract {
   eventId: string;
   organizerSubject?: string;
   title: string;
+  shortDescription?: string | null;
   description: string;
   categoryId?: string | null;
   startsAt: string;

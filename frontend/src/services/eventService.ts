@@ -31,7 +31,9 @@ function toEventSummary(event: PublicEventContract): EventSummary {
     })),
   } : null;
   return {
-    id: event.eventId, slug: event.eventId, title: event.title, description: event.description,
+    id: event.eventId, slug: event.eventId, title: event.title,
+    shortDescription: event.shortDescription?.trim() || undefined,
+    description: event.description,
     startDatetime: event.startsAt, endDatetime: event.endsAt, venueName: event.venueName,
     organizer: event.organizerSubject
       ? { id: event.organizerSubject, userId: event.organizerSubject, name: "", slug: event.organizerSubject }

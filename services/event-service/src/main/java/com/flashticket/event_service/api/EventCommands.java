@@ -12,6 +12,7 @@ public final class EventCommands {
 
   public record Draft(
       @NotBlank String title,
+      String shortDescription,
       @NotNull String description,
       UUID categoryId,
       UUID venueId,
@@ -28,6 +29,37 @@ public final class EventCommands {
       images = images == null ? null : List.copyOf(images);
       ticketTypes = ticketTypes == null ? null : List.copyOf(ticketTypes);
       promotions = promotions == null ? null : List.copyOf(promotions);
+    }
+
+    public Draft(
+        String title,
+        String description,
+        UUID categoryId,
+        UUID venueId,
+        String mode,
+        String startsAt,
+        String endsAt,
+        String saleStartsAt,
+        String saleEndsAt,
+        Integer purchaseLimit,
+        List<Image> images,
+        List<TicketType> ticketTypes,
+        List<Promotion> promotions) {
+      this(
+          title,
+          "",
+          description,
+          categoryId,
+          venueId,
+          mode,
+          startsAt,
+          endsAt,
+          saleStartsAt,
+          saleEndsAt,
+          purchaseLimit,
+          images,
+          ticketTypes,
+          promotions);
     }
   }
 

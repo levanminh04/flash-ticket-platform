@@ -38,6 +38,7 @@ class SeatMapOptimizationTests {
         UUID.randomUUID(),
         "Venue A",
         "Mega Concert",
+        "Short concert summary",
         "Desc",
         "SEAT_MAP",
         "PUBLISHED",

@@ -66,6 +66,8 @@ public class EventService {
     version(event, expected);
     if (event.ticketTypes().isEmpty()) throw EventProblem.invalid("ticketTypes");
     if (event.venueId() == null) throw EventProblem.invalid("venueId");
+    if (event.shortDescription() == null || event.shortDescription().isBlank())
+      throw EventProblem.invalid("shortDescription");
     if ("SEAT_MAP".equals(event.mode()))
       com.flashticket.event_service.domain.SeatMapRules.submittable(event);
     repository.transition(event, "PENDING_APPROVAL", null, null);

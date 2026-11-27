@@ -13,6 +13,7 @@ public record EventData(
     UUID venueId,
     String venueName,
     String title,
+    String shortDescription,
     String description,
     String mode,
     String status,
@@ -36,6 +37,61 @@ public record EventData(
     images = List.copyOf(images);
     ticketTypes = List.copyOf(ticketTypes);
     promotions = List.copyOf(promotions);
+  }
+
+  public EventData(
+      UUID id,
+      String organizer,
+      UUID categoryId,
+      UUID venueId,
+      String venueName,
+      String title,
+      String description,
+      String mode,
+      String status,
+      Instant startsAt,
+      Instant endsAt,
+      Instant saleStartsAt,
+      Instant saleEndsAt,
+      int purchaseLimit,
+      BigDecimal feeRate,
+      String approvedBy,
+      Instant approvedAt,
+      long configVersion,
+      long rowVersion,
+      Instant createdAt,
+      Instant updatedAt,
+      List<Image> images,
+      List<TicketType> ticketTypes,
+      List<Promotion> promotions,
+      SeatMap seatMap) {
+    this(
+        id,
+        organizer,
+        categoryId,
+        venueId,
+        venueName,
+        title,
+        "",
+        description,
+        mode,
+        status,
+        startsAt,
+        endsAt,
+        saleStartsAt,
+        saleEndsAt,
+        purchaseLimit,
+        feeRate,
+        approvedBy,
+        approvedAt,
+        configVersion,
+        rowVersion,
+        createdAt,
+        updatedAt,
+        images,
+        ticketTypes,
+        promotions,
+        seatMap);
   }
 
   public enum ImageRole {
