@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.security.core.Authentication;
@@ -27,6 +29,15 @@ public class RcaFaultsWebConfig implements WebMvcConfigurer {
   private final String variable;
   private final boolean subject;
 
+  /**
+   * Spring dùng constructor này. Test slice (@WebMvcTest) nạp WebMvcConfigurer nhưng không nạp bean
+   * RcaFaults: khi đó không đăng ký interceptor. Ứng dụng đầy đủ luôn có RcaFaults.
+   */
+  @Autowired
+  public RcaFaultsWebConfig(ObjectProvider<RcaFaults> faults, Environment env) {
+    this(faults.getIfAvailable(), env);
+  }
+
   public RcaFaultsWebConfig(RcaFaults faults, Environment env) {
     this.faults = faults;
     this.method = env.getProperty("ft.rca.http.method", "GET");
@@ -37,6 +48,7 @@ public class RcaFaultsWebConfig implements WebMvcConfigurer {
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
+    if (faults == null) return;
     registry.addInterceptor(
         new HandlerInterceptor() {
           @Override

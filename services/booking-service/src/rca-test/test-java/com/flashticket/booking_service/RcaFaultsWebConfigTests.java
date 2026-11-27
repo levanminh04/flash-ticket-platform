@@ -68,8 +68,26 @@ class RcaFaultsWebConfigTests {
     verifyNoInteractions(faults);
   }
 
+  @Test
+  void missingFaultsBeanRegistersNoInterceptor() {
+    InterceptorRegistry registry = new InterceptorRegistry();
+    new RcaFaultsWebConfig((RcaFaults) null, new MockEnvironment()).addInterceptors(registry);
+    if (new InterceptorRegistryAccess(registry).size() != 0)
+      throw new AssertionError("interceptor registered without RcaFaults bean");
+  }
+
   /** Reads the registered interceptor through the public registry API used by Spring MVC. */
   private record InterceptorRegistryAccess(InterceptorRegistry registry) {
+    int size() {
+      try {
+        var method = InterceptorRegistry.class.getDeclaredMethod("getInterceptors");
+        method.setAccessible(true);
+        return ((List<?>) method.invoke(registry)).size();
+      } catch (ReflectiveOperationException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+
     HandlerInterceptor first() {
       try {
         var method = InterceptorRegistry.class.getDeclaredMethod("getInterceptors");
