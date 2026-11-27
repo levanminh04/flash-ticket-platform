@@ -456,16 +456,49 @@ class EventReplicaReadTests {
                       ((org.springframework.jdbc.datasource.ConnectionHolder) resource)
                           .hasTimeout())
                   .isTrue();
-              jdbc.queryForObject("SELECT pg_sleep(10)", Object.class);
-              return invocation.callRealMethod();
+              // Tách timeout khỏi recovery conflict; chỉ pause fixture sau reader admission.
+              try (var connection =
+                      DriverManager.getConnection(
+                          standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+                  var statement = connection.createStatement()) {
+                statement.setQueryTimeout(2);
+                statement.execute("SELECT pg_wal_replay_pause()");
+                try {
+                  long deadline = System.nanoTime() + java.time.Duration.ofSeconds(2).toNanos();
+                  while (true) {
+                    try (var row =
+                        statement.executeQuery("SELECT pg_get_wal_replay_pause_state()")) {
+                      assertThat(row.next()).isTrue();
+                      if ("paused".equals(row.getString(1))) break;
+                    }
+                    assertThat(System.nanoTime())
+                        .as("fixture replay pause deadline")
+                        .isLessThan(deadline);
+                    Thread.sleep(10);
+                  }
+                  assertThat(jdbc.queryForObject("SELECT pg_is_in_recovery()", Boolean.class))
+                      .isTrue();
+                  jdbc.queryForObject("SELECT pg_sleep(10)", Object.class);
+                  return invocation.callRealMethod();
+                } finally {
+                  statement.execute("SELECT pg_wal_replay_resume()");
+                }
+              }
             })
         .when(events)
         .find(id, false);
     long start = System.nanoTime();
     try {
-      mvc.perform(get("/api/v1/events/" + id))
-          .andExpect(status().isServiceUnavailable())
-          .andExpect(jsonPath("$.code").value("STORAGE_UNAVAILABLE"));
+      var timedOut =
+          mvc.perform(get("/api/v1/events/" + id))
+              .andExpect(status().isServiceUnavailable())
+              .andExpect(jsonPath("$.code").value("STORAGE_UNAVAILABLE"))
+              .andReturn();
+      var cause =
+          org.springframework.core.NestedExceptionUtils.getMostSpecificCause(
+              timedOut.getResolvedException());
+      assertThat(cause).isInstanceOf(java.sql.SQLException.class);
+      assertThat(((java.sql.SQLException) cause).getSQLState()).isEqualTo("57014");
       verify(events, times(1)).find(id, false);
       assertThat(java.time.Duration.ofNanos(System.nanoTime() - start))
           .isLessThan(java.time.Duration.ofSeconds(9));
@@ -473,7 +506,7 @@ class EventReplicaReadTests {
     } finally {
       reset(events);
     }
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
+    awaitReplay();
     assertThat(health.tryBeginRead()).as("permit released after failure").isTrue();
     health.finishRead();
     // Thiếu ACL reader không được che bằng retry writer.
