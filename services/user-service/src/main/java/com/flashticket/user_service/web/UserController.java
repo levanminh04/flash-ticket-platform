@@ -182,6 +182,23 @@ public class UserController {
     return ApplicationView.of(a);
   }
 
+  @GetMapping("/api/v1/organizers/batch")
+  public List<PublicOrganizer> organizersBatch(
+      @RequestParam(required = false) List<String> subjects) {
+    return store.publicOrganizers(subjects);
+  }
+
+  @GetMapping("/api/v1/organizers/featured")
+  public List<PublicOrganizer> featuredOrganizers(@RequestParam(defaultValue = "3") int limit) {
+    return store.featuredOrganizers(Math.max(1, Math.min(limit, 20)));
+  }
+
+  @GetMapping("/api/v1/organizers/following-status")
+  public Map<String, Boolean> followingStatus(
+      @AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) List<String> ids) {
+    return store.followStates(subject(jwt), ids);
+  }
+
   @GetMapping("/api/v1/organizers/{organizerSubject}")
   public PublicOrganizer organizer(@PathVariable String organizerSubject) {
     return store.publicOrganizer(pathSubject(organizerSubject));

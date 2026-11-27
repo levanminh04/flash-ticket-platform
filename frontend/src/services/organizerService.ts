@@ -177,13 +177,27 @@ export const organizerService = {
 
   isFollowingOrganizer: async (
     organizerProfileId: string,
+    signal?: AbortSignal,
   ): Promise<boolean> => {
     const response = await axiosClient.get<{
       organizerSubject: string;
       following: boolean;
       followerCount: number;
-    }>(`/api/v1/organizers/${encodeURIComponent(organizerProfileId)}/follow`);
+    }>(`/api/v1/organizers/${encodeURIComponent(organizerProfileId)}/follow`, { signal });
     return response.data.following;
+  },
+
+  getFollowingStatuses: async (
+    organizerIds: string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, boolean>> => {
+    const cleanIds = organizerIds.filter(Boolean);
+    if (!cleanIds.length) return {};
+    const response = await axiosClient.get<Record<string, boolean>>(
+      "/api/v1/organizers/following-status",
+      { params: { ids: cleanIds.join(",") }, signal },
+    );
+    return response.data;
   },
 
   getAdminApplications: async (
@@ -236,6 +250,35 @@ export const organizerService = {
       bannerUrl: data.bannerUrl ?? null,
       isVerified: true,
     };
+  },
+
+  getPublicOrganizersBatch: async (
+    subjects: string[],
+    signal?: AbortSignal,
+  ): Promise<OrganizerProfile[]> => {
+    const cleanSubjects = subjects.filter(Boolean);
+    if (!cleanSubjects.length) return [];
+    const response = await axiosClient.get<
+      {
+        organizerSubject: string;
+        organizationName: string;
+        shortDescription: string;
+        followerCount: number;
+        logoUrl?: string | null;
+        bannerUrl?: string | null;
+      }[]
+    >("/api/v1/organizers/batch", { params: { subjects: cleanSubjects.join(",") }, signal });
+    return response.data.map(data => ({
+      id: data.organizerSubject,
+      userId: data.organizerSubject,
+      name: data.organizationName,
+      slug: data.organizerSubject,
+      description: data.shortDescription,
+      followerCount: data.followerCount,
+      logoUrl: data.logoUrl ?? null,
+      bannerUrl: data.bannerUrl ?? null,
+      isVerified: true,
+    }));
   },
 
   getMyOrganizerProfile: async (): Promise<OrganizerProfile> => {

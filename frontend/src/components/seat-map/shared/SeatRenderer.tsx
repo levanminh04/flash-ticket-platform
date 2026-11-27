@@ -13,6 +13,7 @@ interface SeatRendererProps {
   color?: string;
   variant?: "circle" | "icon";
   editable?: boolean;
+  listening?: boolean;
   draggable?: boolean;
   onClick?: (event: any) => void;
   onTap?: (event: any) => void;
@@ -80,6 +81,7 @@ function SeatRendererBase({
   color,
   variant = "circle",
   editable = true,
+  listening = true,
   draggable = false,
   onClick,
   onTap,
@@ -97,14 +99,17 @@ function SeatRendererBase({
   const fill = getSeatFill(status, selected, hidden, seatColor);
   const stroke = getSeatStroke(status, selected, seatColor);
 
+  const isListening = editable && listening;
+
   return (
     <Group
       key={id}
+      id={id}
       name="seat-node"
       x={x}
       y={y}
       opacity={hidden || disabled ? (variant === "icon" ? 0.58 : 0.5) : 1}
-      listening={editable}
+      listening={isListening}
       draggable={draggable && !hidden}
       onClick={onClick}
       onTap={onTap}
@@ -207,6 +212,7 @@ export const SeatRenderer = memo(SeatRendererBase, (previous, next) =>
   previous.color === next.color &&
   previous.variant === next.variant &&
   previous.editable === next.editable &&
+  previous.listening === next.listening &&
   previous.draggable === next.draggable &&
   previous.memoizeEventHandlers === next.memoizeEventHandlers &&
   (previous.memoizeEventHandlers ||

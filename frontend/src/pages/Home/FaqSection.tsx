@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Plus, X } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 
 type FaqItem = {
@@ -7,38 +7,26 @@ type FaqItem = {
   answer: string;
 };
 
-type FaqCategory = {
-  id: string;
-  label: string;
-  items: FaqItem[];
-};
-
-const FAQ_CATEGORY_KEYS = [
-  "booking",
-  "tickets",
-  "refunds",
-  "account",
-  "organizer",
-] as const;
+const FEATURED_FAQ_PICKS: ReadonlyArray<{
+  category: "booking" | "tickets" | "refunds" | "organizer";
+  index: number;
+}> = [
+  { category: "booking", index: 0 },
+  { category: "booking", index: 1 },
+  { category: "booking", index: 2 },
+  { category: "tickets", index: 0 },
+  { category: "refunds", index: 1 },
+  { category: "organizer", index: 0 },
+];
 
 export default function FaqSection() {
   const { t } = useTranslation();
-  const [activeCategoryId, setActiveCategoryId] = useState<string>(FAQ_CATEGORY_KEYS[0]);
   const [openQuestionIndex, setOpenQuestionIndex] = useState<number | null>(0);
 
-  const categories: FaqCategory[] = FAQ_CATEGORY_KEYS.map((key) => ({
-    id: key,
-    label: t(`faq.categories.${key}.label`),
-    items: t(`faq.categories.${key}.items`, { returnObjects: true }) as FaqItem[],
-  }));
-
-  const currentCategory =
-    categories.find((cat) => cat.id === activeCategoryId) ?? categories[0];
-
-  const handleSelectCategory = (categoryId: string) => {
-    setActiveCategoryId(categoryId);
-    setOpenQuestionIndex(0);
-  };
+  const featuredItems: FaqItem[] = FEATURED_FAQ_PICKS.map(({ category, index }) => {
+    const items = t(`faq.categories.${category}.items`, { returnObjects: true }) as FaqItem[];
+    return Array.isArray(items) ? items[index] : undefined;
+  }).filter((item): item is FaqItem => Boolean(item?.question && item?.answer));
 
   const handleToggleQuestion = (index: number) => {
     setOpenQuestionIndex((prev) => (prev === index ? null : index));
@@ -46,83 +34,56 @@ export default function FaqSection() {
 
   return (
     <section className="discovery-faq" aria-labelledby="discovery-faq-title">
-      <header className="discovery-faq-header">
-        <h2 id="discovery-faq-title">
-          <Trans
-            i18nKey="faq.title"
-            components={{ accent: <span className="discovery-heading-accent" /> }}
-          />
-        </h2>
-        <p>{t("faq.subtitle")}</p>
-      </header>
+      <div className="discovery-faq-layout">
+        <aside className="discovery-faq-aside">
+          <h2 id="discovery-faq-title">
+            <Trans
+              i18nKey="faq.title"
+              components={{ accent: <span className="discovery-heading-accent" /> }}
+            />
+          </h2>
+          <p>{t("faq.subtitle")}</p>
 
-      <div className="discovery-faq-grid">
-        <div
-          className="discovery-faq-categories"
-          role="tablist"
-          aria-label={t("faq.categoryListLabel")}
-        >
-          {categories.map((category) => {
-            const isActive = category.id === currentCategory.id;
+          <div className="discovery-faq-illustration" aria-hidden="true">
+            <img src="/promo/faq-illustration.webp" alt="" loading="lazy" />
+          </div>
+        </aside>
+
+        <div className="discovery-faq-list">
+          {featuredItems.map((item, index) => {
+            const isOpen = openQuestionIndex === index;
+            const panelId = `faq-answer-${index}`;
             return (
-              <button
-                key={category.id}
-                type="button"
-                role="tab"
-                id={`faq-tab-${category.id}`}
-                aria-selected={isActive}
-                aria-controls={`faq-panel-${category.id}`}
-                className={`discovery-faq-category${isActive ? " is-active" : ""}`}
-                onClick={() => handleSelectCategory(category.id)}
+              <article
+                key={item.question}
+                className={`discovery-faq-item${isOpen ? " is-open" : ""}`}
               >
-                <span>{category.label}</span>
-                <ChevronRight size={17} strokeWidth={2} aria-hidden="true" />
-              </button>
+                <h3 className="discovery-faq-question-heading">
+                  <button
+                    type="button"
+                    className="discovery-faq-trigger"
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    onClick={() => handleToggleQuestion(index)}
+                  >
+                    <span>{item.question}</span>
+                    <span className="discovery-faq-icon" aria-hidden="true">
+                      {isOpen ? (
+                        <Minus size={18} strokeWidth={2} />
+                      ) : (
+                        <Plus size={18} strokeWidth={2} />
+                      )}
+                    </span>
+                  </button>
+                </h3>
+                {isOpen && (
+                  <div id={panelId} className="discovery-faq-answer">
+                    <p>{item.answer}</p>
+                  </div>
+                )}
+              </article>
             );
           })}
-        </div>
-
-        <div
-          className="discovery-faq-list"
-          role="tabpanel"
-          id={`faq-panel-${currentCategory.id}`}
-          aria-labelledby={`faq-tab-${currentCategory.id}`}
-        >
-          {Array.isArray(currentCategory.items) &&
-            currentCategory.items.map((item, index) => {
-              const isOpen = openQuestionIndex === index;
-              const panelId = `faq-answer-${currentCategory.id}-${index}`;
-              return (
-                <article
-                  key={`${currentCategory.id}-${index}`}
-                  className={`discovery-faq-item${isOpen ? " is-open" : ""}`}
-                >
-                  <h3 className="discovery-faq-question-heading">
-                    <button
-                      type="button"
-                      className="discovery-faq-trigger"
-                      aria-expanded={isOpen}
-                      aria-controls={panelId}
-                      onClick={() => handleToggleQuestion(index)}
-                    >
-                      <span>{item.question}</span>
-                      <span className="discovery-faq-icon" aria-hidden="true">
-                        {isOpen ? (
-                          <X size={18} strokeWidth={2} />
-                        ) : (
-                          <Plus size={18} strokeWidth={2} />
-                        )}
-                      </span>
-                    </button>
-                  </h3>
-                  {isOpen && (
-                    <div id={panelId} className="discovery-faq-answer">
-                      <p>{item.answer}</p>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
         </div>
       </div>
     </section>

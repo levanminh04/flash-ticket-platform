@@ -99,6 +99,11 @@ public class EventController {
     return service.returnToDraft(id, actor(jwt), input.rowVersion());
   }
 
+  @GetMapping("/events/home-discovery")
+  public EventViews.HomeDiscovery homeDiscovery() {
+    return service.homeDiscovery();
+  }
+
   @GetMapping("/events/{id}")
   public EventViews.Public publicEvent(@PathVariable UUID id) {
     return reads.readPublic(id);

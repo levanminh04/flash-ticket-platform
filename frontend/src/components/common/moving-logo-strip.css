@@ -7,9 +7,10 @@
   position: relative;
   width: 100%;
   overflow: hidden;
-  padding-block: clamp(20px, 2.5vw, 32px);
-  margin-bottom: clamp(32px, 4vw, 48px);
-  background: transparent;
+  padding-block: clamp(28px, 3.2vw, 42px);
+  margin-bottom: 0;
+  background: linear-gradient(180deg, #fffdf7 0%, #fef7e2 52%, #ffffff 100%);
+  border-top: 1px solid rgba(217, 155, 0, 0.14);
   user-select: none;
   -webkit-user-select: none;
   mask-image: linear-gradient(
@@ -26,6 +27,49 @@
     black 92%,
     transparent 100%
   );
+}
+
+.moving-logo-header {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding-inline: 16px;
+  margin-bottom: 24px;
+}
+
+.moving-logo-heading {
+  margin: 0;
+  color: var(--text-strong, #15171a);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+}
+
+.moving-logo-heading-accent {
+  color: #b47800;
+  background: var(--brand-gradient-text, linear-gradient(135deg, #8c5d00 0%, #b47800 45%, #d99b00 100%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
+.moving-logo-subheading {
+  margin: 0;
+  max-width: 100%;
+  color: var(--text-subtle, #525866);
+  font-size: clamp(1rem, 1.25vw, 1.125rem);
+  font-weight: 450;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .moving-logo-subheading {
+    white-space: normal;
+  }
 }
 
 .moving-logo-sr-control {
@@ -93,9 +137,9 @@
   align-items: center;
   justify-content: center;
   height: 36px;
-  filter: grayscale(1);
-  opacity: 0.65;
-  transition: filter 200ms ease, opacity 200ms ease;
+  filter: none;
+  opacity: 0.92;
+  transition: transform 200ms ease, opacity 200ms ease;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -106,8 +150,8 @@
 
 .moving-logo-item:hover,
 .moving-logo-item:focus-visible {
-  filter: grayscale(0);
   opacity: 1;
+  transform: scale(1.04);
 }
 
 .moving-logo-item:focus-visible {

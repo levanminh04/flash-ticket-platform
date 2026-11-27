@@ -58,11 +58,12 @@ export default function EventDetailPage() {
     queryKey: ["public-event-availability", eventId],
     queryFn: ({ signal }) => bookingService.getAvailability(eventId!, signal),
     enabled: Boolean(eventId),
+    staleTime: 0,
   });
 
   const categoriesQuery = useQuery({
     queryKey: ["public-categories"],
-    queryFn: categoryService.getCategories,
+    queryFn: ({ signal }) => categoryService.getCategories(signal),
     staleTime: 5 * 60 * 1000,
   });
 

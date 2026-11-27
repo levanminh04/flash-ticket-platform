@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import { useTranslation } from "react-i18next";
@@ -76,13 +77,6 @@ export default function SelectTicketPage() {
   const { keycloak } = useKeycloak();
   const language = i18n.resolvedLanguage || "vi";
 
-  const [event, setEvent] = useState<EventSummary | null>(null);
-  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
-  const [seatMap, setSeatMap] = useState<PublicSeatMap | null>(null);
-  const [availability, setAvailability] = useState<Availability | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [quantities, setQuantities] = useState<TicketSelection>({});
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
   const [selectedStandingSectorId, setSelectedStandingSectorId] = useState<string | null>(null);
@@ -95,6 +89,7 @@ export default function SelectTicketPage() {
   const [modalErrors, setModalErrors] = useState<Record<string, string>>({});
   const [isBookingInProgress, setIsBookingInProgress] = useState(false);
   const submittingRef = useRef(false);
+  const initializedSlugRef = useRef<string | null>(null);
   const recipientDialogRef = useRef<HTMLDialogElement>(null);
   const standingDialogRef = useRef<HTMLDialogElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
@@ -111,82 +106,156 @@ export default function SelectTicketPage() {
     }
   }, [keycloak?.authenticated, keycloak?.tokenParsed]);
 
-  const loadSelection = useCallback(async () => {
-    if (!slug) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-        const [data, currentAvailability] = await Promise.all([eventService.getEventDetails(slug), bookingService.getAvailability(slug)]);
-        if (currentAvailability.eventId !== data.id) throw new Error("AVAILABILITY_SCOPE_MISMATCH");
-        setAvailability(currentAvailability);
-        setEvent(data);
-        const types: TicketType[] = (data.ticketTypes || []).map(type => ({
-          ...type,
-          quantityAvailable: Math.min(Number(currentAvailability.ticketTypes.find(item => item.ticketTypeId === type.id)?.available ?? 0), Number.MAX_SAFE_INTEGER),
-        }));
-        const statesBySeat = new Map(currentAvailability.seats.map(seat => [seat.seatId, seat.state]));
-        const nextSeatMap = data.seatMap ? {
-          ...data.seatMap,
-          sectors: data.seatMap.sectors?.map(sector => ({ ...sector, seatsData: sector.seatsData?.map(seat => ({ ...seat, inventoryStatus: statesBySeat.get(seat.id) ?? "UNAVAILABLE" })) })),
-        } : null;
-        setTicketTypes(types);
-        setSeatMap(nextSeatMap);
+  const eventQuery = useQuery({
+    queryKey: ["public-event-detail", slug],
+    queryFn: ({ signal }) => eventService.getEventDetails(slug!, signal),
+    enabled: Boolean(slug),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
 
-        let nextQuantities: TicketSelection = Object.fromEntries(types.map(type => [type.id, 0]));
-        let nextSeats: SelectedSeat[] = [];
-        let nextStanding: string | null = null;
-        if (sessionStorage.getItem("transient_slug") === slug) {
-          try {
-            const previous: TicketSelection = JSON.parse(sessionStorage.getItem("transient_quantities") || "{}");
-            const previousSeats: SelectedSeat[] = JSON.parse(sessionStorage.getItem("transient_selectedSeats") || "[]");
-            if (data.mode === "QUANTITY") {
-              nextQuantities = Object.fromEntries(types.map(type => [type.id, Number.isSafeInteger(previous[type.id]) && previous[type.id] > 0 ? Math.min(previous[type.id], type.quantityAvailable) : 0]));
-            } else if (previousSeats.length) {
-              for (const sector of nextSeatMap?.sectors || []) {
-                if (sector.sectorType !== "SEATED") continue;
-                for (const seat of sector.seatsData || []) {
-                  const type = types.find(type => type.id === seat.ticketTypeId);
-                  if (!type || !previousSeats.some(previous => previous.seatId === seat.id) || seat.inventoryStatus !== "AVAILABLE" || (nextSeats.length && nextSeats[0].sectorId !== sector.id) || nextQuantities[type.id] >= type.quantityAvailable) continue;
-                  nextSeats.push({ seatId: seat.id, ticketTypeId: type.id, sectorId: sector.id, seatLabel: seat.seatLabel || `${seat.rowName || ""}${seat.seatNumber || ""}` });
-                  nextQuantities[type.id] += 1;
-                }
+  const availabilityQuery = useQuery({
+    queryKey: ["select-ticket-availability", slug],
+    queryFn: ({ signal }) => bookingService.getAvailability(slug!, signal),
+    enabled: Boolean(slug),
+    staleTime: 0,
+    retry: 1,
+  });
+
+  const scopeMismatch = Boolean(
+    eventQuery.data &&
+    availabilityQuery.data &&
+    availabilityQuery.data.eventId !== eventQuery.data.id,
+  );
+  const event: EventSummary | null = eventQuery.data ?? null;
+  const availability: Availability | null =
+    availabilityQuery.data && !scopeMismatch ? availabilityQuery.data : null;
+  const isLoading =
+    Boolean(slug) &&
+    ((eventQuery.isLoading && !event) || (availabilityQuery.isLoading && !availability));
+  const error =
+    !slug
+      ? "selectTicket.eventNotFound"
+      : eventQuery.isError || availabilityQuery.isError || scopeMismatch
+        ? "selectTicket.ticketLoadFailed"
+        : null;
+
+  const ticketTypes = useMemo<TicketType[]>(() => {
+    if (!event) return [];
+    const availByType = new Map(
+      (availability?.ticketTypes ?? []).map((item) => [item.ticketTypeId, Number(item.available ?? 0)]),
+    );
+    return (event.ticketTypes || []).map((type) => ({
+      ...type,
+      quantityAvailable: Math.min(availByType.get(type.id) ?? 0, Number.MAX_SAFE_INTEGER),
+    }));
+  }, [event, availability]);
+
+  const seatMap = useMemo<PublicSeatMap | null>(() => {
+    if (!event?.seatMap) return null;
+    const statesBySeat = new Map((availability?.seats ?? []).map((seat) => [seat.seatId, seat.state]));
+    return {
+      ...event.seatMap,
+      sectors: event.seatMap.sectors?.map((sector) => ({
+        ...sector,
+        seatsData: sector.seatsData?.map((seat) => ({
+          ...seat,
+          inventoryStatus: statesBySeat.get(seat.id) ?? "UNAVAILABLE",
+        })),
+      })),
+    };
+  }, [event, availability]);
+
+  const retryLoad = useCallback(() => {
+    void eventQuery.refetch();
+    void availabilityQuery.refetch();
+  }, [eventQuery, availabilityQuery]);
+
+  useEffect(() => {
+    if (!slug || !event || !availability || initializedSlugRef.current === slug) return;
+    initializedSlugRef.current = slug;
+
+    let nextQuantities: TicketSelection = Object.fromEntries(ticketTypes.map((type) => [type.id, 0]));
+    let nextSeats: SelectedSeat[] = [];
+    let nextStanding: string | null = null;
+    if (sessionStorage.getItem("transient_slug") === slug) {
+      try {
+        const previous: TicketSelection = JSON.parse(sessionStorage.getItem("transient_quantities") || "{}");
+        const previousSeats: SelectedSeat[] = JSON.parse(sessionStorage.getItem("transient_selectedSeats") || "[]");
+        if (event.mode === "QUANTITY") {
+          nextQuantities = Object.fromEntries(
+            ticketTypes.map((type) => [
+              type.id,
+              Number.isSafeInteger(previous[type.id]) && previous[type.id] > 0
+                ? Math.min(previous[type.id], type.quantityAvailable)
+                : 0,
+            ]),
+          );
+        } else if (previousSeats.length) {
+          for (const sector of seatMap?.sectors || []) {
+            if (sector.sectorType !== "SEATED") continue;
+            for (const seat of sector.seatsData || []) {
+              const type = ticketTypes.find((item) => item.id === seat.ticketTypeId);
+              if (
+                !type ||
+                !previousSeats.some((prev) => prev.seatId === seat.id) ||
+                seat.inventoryStatus !== "AVAILABLE" ||
+                (nextSeats.length && nextSeats[0].sectorId !== sector.id) ||
+                nextQuantities[type.id] >= type.quantityAvailable
+              ) {
+                continue;
               }
-            } else {
-              const savedStanding = sessionStorage.getItem("transient_selectedStandingSectorId");
-              if (nextSeatMap?.sectors?.some(sector => sector.id === savedStanding && sector.sectorType === "STANDING")) {
-                nextStanding = savedStanding;
-                let available = Number(currentAvailability.sectors.find(sector => sector.sectorId === savedStanding)?.available || 0);
-                for (const type of types.filter(type => getTicketTypeSectorId(type) === savedStanding)) {
-                  const quantity = Number.isSafeInteger(previous[type.id]) && previous[type.id] > 0 ? Math.min(previous[type.id], type.quantityAvailable, available) : 0;
-                  nextQuantities[type.id] = quantity;
-                  available -= quantity;
-                }
-              }
+              nextSeats.push({
+                seatId: seat.id,
+                ticketTypeId: type.id,
+                sectorId: sector.id,
+                seatLabel: seat.seatLabel || `${seat.rowName || ""}${seat.seatNumber || ""}`,
+              });
+              nextQuantities[type.id] += 1;
             }
-          } catch {
-            // Ignore an incomplete browser draft; never submit it as a new order.
-            nextQuantities = Object.fromEntries(types.map(type => [type.id, 0]));
-            nextSeats = []; nextStanding = null;
-          } finally {
-            for (const key of ["transient_slug", "transient_quantities", "transient_selectedSeats", "transient_selectedStandingSectorId"]) sessionStorage.removeItem(key);
+          }
+        } else {
+          const savedStanding = sessionStorage.getItem("transient_selectedStandingSectorId");
+          if (seatMap?.sectors?.some((sector) => sector.id === savedStanding && sector.sectorType === "STANDING")) {
+            nextStanding = savedStanding;
+            let available = Number(
+              availability.sectors.find((sector) => sector.sectorId === savedStanding)?.available || 0,
+            );
+            for (const type of ticketTypes.filter((item) => getTicketTypeSectorId(item) === savedStanding)) {
+              const quantity =
+                Number.isSafeInteger(previous[type.id]) && previous[type.id] > 0
+                  ? Math.min(previous[type.id], type.quantityAvailable, available)
+                  : 0;
+              nextQuantities[type.id] = quantity;
+              available -= quantity;
+            }
           }
         }
-        if (data.mode === "QUANTITY" && preferredTicketType && !Object.values(nextQuantities).some(Boolean)) {
-          const preferred = types.find(type => type.id === preferredTicketType);
-          if (preferred && preferred.quantityAvailable > 0 && preferred.maxPerOrder > 0) nextQuantities[preferred.id] = 1;
+      } catch {
+        nextQuantities = Object.fromEntries(ticketTypes.map((type) => [type.id, 0]));
+        nextSeats = [];
+        nextStanding = null;
+      } finally {
+        for (const key of [
+          "transient_slug",
+          "transient_quantities",
+          "transient_selectedSeats",
+          "transient_selectedStandingSectorId",
+        ]) {
+          sessionStorage.removeItem(key);
         }
-        setQuantities(nextQuantities);
-        setSelectedSeats(nextSeats);
-        setSelectedStandingSectorId(nextStanding);
-        setError(null);
-    } catch {
-        setError("selectTicket.ticketLoadFailed");
-    } finally {
-      setIsLoading(false);
+      }
     }
-  }, [slug, preferredTicketType]);
-
-  useEffect(() => { void loadSelection(); }, [loadSelection]);
+    if (event.mode === "QUANTITY" && preferredTicketType && !Object.values(nextQuantities).some(Boolean)) {
+      const preferred = ticketTypes.find((type) => type.id === preferredTicketType);
+      if (preferred && preferred.quantityAvailable > 0 && preferred.maxPerOrder > 0) {
+        nextQuantities[preferred.id] = 1;
+      }
+    }
+    setQuantities(nextQuantities);
+    setSelectedSeats(nextSeats);
+    setSelectedStandingSectorId(nextStanding);
+  }, [slug, event, availability, ticketTypes, seatMap, preferredTicketType]);
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -536,7 +605,35 @@ export default function SelectTicketPage() {
       setSubmitError(problem.response?.data?.message || t("selectTicket.retrySameOrder"));
       if (["SEAT_UNAVAILABLE", "INSUFFICIENT_QUANTITY"].includes(problem.response?.data?.code || "")) {
         setIsModalOpen(false);
-        void loadSelection();
+        const refreshed = await availabilityQuery.refetch();
+        const nextAvail = refreshed.data;
+        if (nextAvail && nextAvail.eventId === event.id) {
+          const nextSeatStates = new Map(nextAvail.seats.map((s) => [s.seatId, s.state]));
+          const nextTypeAvail = new Map(
+            nextAvail.ticketTypes.map((item) => [item.ticketTypeId, Number(item.available ?? 0)]),
+          );
+          if (event.mode === "SEAT_MAP" && selectedSeats.length > 0) {
+            const stillAvailable = selectedSeats.filter(
+              (seat) => nextSeatStates.get(seat.seatId) === "AVAILABLE",
+            );
+            if (stillAvailable.length !== selectedSeats.length) {
+              setSelectedSeats(stillAvailable);
+              const recalculated: TicketSelection = {};
+              for (const seat of stillAvailable) {
+                recalculated[seat.ticketTypeId] = (recalculated[seat.ticketTypeId] || 0) + 1;
+              }
+              setQuantities(recalculated);
+            }
+          } else {
+            setQuantities((prev) => {
+              const clamped: TicketSelection = {};
+              for (const [id, qty] of Object.entries(prev)) {
+                clamped[id] = Math.min(qty, Math.max(0, nextTypeAvail.get(id) ?? 0));
+              }
+              return clamped;
+            });
+          }
+        }
       }
     } finally {
       submittingRef.current = false;
@@ -623,7 +720,7 @@ export default function SelectTicketPage() {
       <div className="select-ticket-page">
         <div className="booking-load-error">
           <p role="alert">{t(error || "selectTicket.eventNotFound")}</p>
-          <button className="btn btn-primary" onClick={() => void loadSelection()}>{t("home.events.retry")}</button>
+          <button className="btn btn-primary" onClick={retryLoad}>{t("home.events.retry")}</button>
           <Link
             to="/"
             style={{ textDecoration: "underline", color: "var(--brand-scale-600)" }}

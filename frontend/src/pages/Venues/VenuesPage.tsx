@@ -18,8 +18,9 @@ const fallbackImage =
 export default function VenuesPage() {
   const { i18n, t } = useTranslation();
   const { data, isLoading, isError, error } = useQuery<Venue[], Error>({
-    queryKey: ["venues"],
-    queryFn: venueService.getVenues,
+    queryKey: ["public-venues"],
+    queryFn: ({ signal }) => venueService.getVenues(signal),
+    staleTime: 5 * 60 * 1000,
   });
   const language = i18n.resolvedLanguage || "vi";
 
