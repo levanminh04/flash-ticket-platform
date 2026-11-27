@@ -1,38 +1,39 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import HomePage from "./pages/Home/HomePage";
-import AuthRedirectPage from "./pages/Auth/AuthRedirectPage";
-import EventSearchPage from "./pages/Search/EventSearchPage";
-import EventDetailPage from "./pages/EventDetail/EventDetailPage";
-import SelectTicketPage from "./pages/SelectTicket/SelectTicketPage";
-import CheckoutPage from "./pages/Checkout/CheckoutPage";
-import PaymentResultPage from "./pages/Payment/PaymentResultPage";
-import ProfilePage from "./pages/Profile/ProfilePage";
-import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
-import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
-import ChatbotPage from "./pages/Chatbot/ChatbotPage";
-import VenuesPage from "./pages/Venues/VenuesPage";
-import AdminEventReviewPage from "./pages/Admin/AdminEventReviewPage";
-import AdminOrganizerReviewPage from "./pages/Admin/AdminOrganizerReviewPage";
-import AdminReconciliationPage from "./pages/Admin/AdminReconciliationPage";
-import AdminRefundsPage from "./pages/Admin/AdminRefundsPage";
-import AdminSalesPage from "./pages/Admin/AdminSalesPage";
-import AdminVenuesPage from "./pages/Admin/AdminVenuesPage";
-import OrganizerApplyPage from "./pages/Organizer/OrganizerApplyPage";
-import PublicOrganizerPage from "./pages/Organizer/PublicOrganizerPage";
-import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
-import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
-import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
-import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
-import OrganizerEventsPage from "./pages/Organizer/OrganizerEventsPage";
-import OrganizerEventSeatingPage from "./pages/Organizer/OrganizerEventSeatingPage";
-import OrganizerEventCreatePage from "./pages/Organizer/OrganizerEventCreatePage";
-import OrganizerTicketTypesPage from "./pages/Organizer/OrganizerTicketTypesPage";
-import OrganizerLayoutPage from "./pages/Organizer/OrganizerLayoutPage";
-import OrganizerSeatMapPage from "./pages/Organizer/OrganizerSeatMapPage";
+const AuthRedirectPage = lazy(() => import("./pages/Auth/AuthRedirectPage"));
+const EventSearchPage = lazy(() => import("./pages/Search/EventSearchPage"));
+const EventDetailPage = lazy(() => import("./pages/EventDetail/EventDetailPage"));
+const SelectTicketPage = lazy(() => import("./pages/SelectTicket/SelectTicketPage"));
+const CheckoutPage = lazy(() => import("./pages/Checkout/CheckoutPage"));
+const PaymentResultPage = lazy(() => import("./pages/Payment/PaymentResultPage"));
+const ProfilePage = lazy(() => import("./pages/Profile/ProfilePage"));
+const MyTicketsPage = lazy(() => import("./pages/MyTickets/MyTicketsPage"));
+const MyOrdersPage = lazy(() => import("./pages/MyOrders/MyOrdersPage"));
+const ChatbotPage = lazy(() => import("./pages/Chatbot/ChatbotPage"));
+const VenuesPage = lazy(() => import("./pages/Venues/VenuesPage"));
+const AdminEventReviewPage = lazy(() => import("./pages/Admin/AdminEventReviewPage"));
+const AdminOrganizerReviewPage = lazy(() => import("./pages/Admin/AdminOrganizerReviewPage"));
+const AdminReconciliationPage = lazy(() => import("./pages/Admin/AdminReconciliationPage"));
+const AdminRefundsPage = lazy(() => import("./pages/Admin/AdminRefundsPage"));
+const AdminSalesPage = lazy(() => import("./pages/Admin/AdminSalesPage"));
+const AdminVenuesPage = lazy(() => import("./pages/Admin/AdminVenuesPage"));
+const OrganizerApplyPage = lazy(() => import("./pages/Organizer/OrganizerApplyPage"));
+const PublicOrganizerPage = lazy(() => import("./pages/Organizer/PublicOrganizerPage"));
+const OrganizerHubPage = lazy(() => import("./pages/Organizer/OrganizerHubPage"));
+const OrganizerMediaPage = lazy(() => import("./pages/Organizer/OrganizerMediaPage"));
+const OrganizerCheckInPage = lazy(() => import("./pages/Organizer/OrganizerCheckInPage"));
+const OrganizerProfilePage = lazy(() => import("./pages/Organizer/OrganizerProfilePage"));
+const OrganizerEventsPage = lazy(() => import("./pages/Organizer/OrganizerEventsPage"));
+const OrganizerEventSeatingPage = lazy(() => import("./pages/Organizer/OrganizerEventSeatingPage"));
+const OrganizerEventCreatePage = lazy(() => import("./pages/Organizer/OrganizerEventCreatePage"));
+const OrganizerTicketTypesPage = lazy(() => import("./pages/Organizer/OrganizerTicketTypesPage"));
+const OrganizerLayoutPage = lazy(() => import("./pages/Organizer/OrganizerLayoutPage"));
+const OrganizerSeatMapPage = lazy(() => import("./pages/Organizer/OrganizerSeatMapPage"));
 
 import { ReactKeycloakProvider, useKeycloak } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
@@ -46,6 +47,7 @@ const KEYCLOAK_SESSION_HINT = "flashTicket:keycloakSession";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 60 * 1000,
       refetchOnWindowFocus: false,
       retry: 1,
     },
@@ -97,6 +99,7 @@ function AppRoutes() {
         theme="light"
       />
       <div>
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthRedirectPage />} />
@@ -162,6 +165,7 @@ function AppRoutes() {
             element={<OrganizerCheckInPage />}
           />
         </Routes>
+        </Suspense>
       </div>
       {!usesStandaloneShell && !["/chatbot", "/checkout", "/payment-result", "/payment/result"].includes(location.pathname) ? <FloatingChatbot /> : null}
     </>

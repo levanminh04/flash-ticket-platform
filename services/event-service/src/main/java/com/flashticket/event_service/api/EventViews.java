@@ -34,6 +34,43 @@ public final class EventViews {
       String rowVersion,
       String sourceConfigVersion) {}
 
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+  public record HomeCard(
+      UUID eventId,
+      String organizerSubject,
+      String title,
+      UUID categoryId,
+      Instant startsAt,
+      Instant endsAt,
+      String venueName,
+      String bannerUrl,
+      String minPriceAmount,
+      String currency) {}
+
+  public record HomeCategorySection(
+      UUID categoryId, String categoryName, long eventCount, List<HomeCard> events) {
+    public HomeCategorySection {
+      events = List.copyOf(events);
+    }
+  }
+
+  public record HomeOrganizerCount(String organizerSubject, long eventCount) {}
+
+  public record HomeDiscovery(
+      long totalLiveEvents,
+      List<HomeCard> featured,
+      List<HomeCard> upcoming,
+      List<HomeCategorySection> topCategories,
+      List<HomeOrganizerCount> topOrganizers) {
+    public HomeDiscovery {
+      featured = List.copyOf(featured);
+      upcoming = List.copyOf(upcoming);
+      topCategories = List.copyOf(topCategories);
+      topOrganizers = List.copyOf(topOrganizers);
+    }
+  }
+
   public record Owner(
       UUID eventId,
       String organizerSubject,

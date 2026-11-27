@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.function.Function;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -284,6 +285,155 @@ public class EventRepository {
         "SELECT " + VENUE_COLUMNS + " FROM event_schema.tbl_venues ORDER BY name,id",
         Map.of(),
         EventRepository::mapVenue);
+  }
+
+  public EventViews.HomeDiscovery homeDiscovery() {
+    var now = utc(Instant.now());
+    var liveWhere =
+        "FROM event_schema.tbl_events e WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' AND COALESCE(e.ends_at,e.starts_at)>=:now";
+    var nowParam = Map.of("now", now);
+
+    Long totalCount =
+        jdbc.queryForObject("SELECT COUNT(*) " + liveWhere, nowParam, Long.class);
+    long totalLiveEvents = totalCount == null ? 0L : totalCount;
+
+    var rowSelect =
+        "SELECT e.id,e.organizer_subject,e.title,e.category_id,e.starts_at,e.ends_at,v.name AS venue_name "
+            + "FROM event_schema.tbl_events e LEFT JOIN event_schema.tbl_venues v ON v.id=e.venue_id "
+            + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' AND COALESCE(e.ends_at,e.starts_at)>=:now ";
+
+    List<HomeEventRow> upcomingRows =
+        jdbc.query(
+            rowSelect + "ORDER BY e.starts_at ASC,e.id ASC LIMIT 4",
+            nowParam,
+            EventRepository::mapHomeRow);
+
+    List<HomeEventRow> featuredRows =
+        jdbc.query(
+            rowSelect
+                + "ORDER BY EXISTS (SELECT 1 FROM event_schema.tbl_event_images i WHERE i.event_id=e.id AND i.image_role='BANNER') DESC, e.starts_at ASC, e.id ASC LIMIT 4",
+            nowParam,
+            EventRepository::mapHomeRow);
+
+    record CatAgg(UUID id, String name, long count) {}
+    List<CatAgg> topCats =
+        jdbc.query(
+            "SELECT c.id, c.name, COUNT(e.id) AS cnt "
+                + "FROM event_schema.tbl_events e "
+                + "JOIN event_schema.tbl_categories c ON c.id=e.category_id "
+                + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' AND COALESCE(e.ends_at,e.starts_at)>=:now "
+                + "GROUP BY c.id, c.name ORDER BY cnt DESC, c.name ASC LIMIT 4",
+            nowParam,
+            (rs, n) ->
+                new CatAgg(
+                    rs.getObject("id", UUID.class), rs.getString("name"), rs.getLong("cnt")));
+
+    Map<UUID, List<HomeEventRow>> rowsByCategory = new HashMap<>();
+    if (!topCats.isEmpty()) {
+      var catParams =
+          new MapSqlParameterSource("now", now)
+              .addValue("catIds", topCats.stream().map(CatAgg::id).toList());
+      jdbc.query(
+          "SELECT id,organizer_subject,title,category_id,starts_at,ends_at,venue_name FROM ("
+              + "SELECT e.id,e.organizer_subject,e.title,e.category_id,e.starts_at,e.ends_at,v.name AS venue_name,"
+              + "ROW_NUMBER() OVER (PARTITION BY e.category_id ORDER BY e.starts_at ASC,e.id ASC) AS rn "
+              + "FROM event_schema.tbl_events e LEFT JOIN event_schema.tbl_venues v ON v.id=e.venue_id "
+              + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' "
+              + "AND COALESCE(e.ends_at,e.starts_at)>=:now AND e.category_id IN (:catIds)"
+              + ") ranked WHERE rn <= 5 ORDER BY starts_at ASC, id ASC",
+          catParams,
+          (org.springframework.jdbc.core.RowCallbackHandler)
+              rs -> {
+                var item = mapHomeRow(rs, 0);
+                rowsByCategory.computeIfAbsent(item.categoryId(), k -> new ArrayList<>()).add(item);
+              });
+    }
+
+    List<EventViews.HomeOrganizerCount> topOrganizers =
+        jdbc.query(
+            "SELECT e.organizer_subject, COUNT(*) AS cnt FROM event_schema.tbl_events e "
+                + "WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' AND e.organizer_subject IS NOT NULL "
+                + "GROUP BY e.organizer_subject ORDER BY cnt DESC, e.organizer_subject ASC LIMIT 10",
+            Map.of(),
+            (rs, n) ->
+                new EventViews.HomeOrganizerCount(
+                    rs.getString("organizer_subject"), rs.getLong("cnt")));
+
+    Set<UUID> eventIds = new LinkedHashSet<>();
+    upcomingRows.forEach(r -> eventIds.add(r.id()));
+    featuredRows.forEach(r -> eventIds.add(r.id()));
+    rowsByCategory.values().forEach(list -> list.forEach(r -> eventIds.add(r.id())));
+
+    Map<UUID, String> banners = new HashMap<>();
+    Map<UUID, BigDecimal> minPrices = new HashMap<>();
+    if (!eventIds.isEmpty()) {
+      var idParams = Map.of("ids", List.copyOf(eventIds));
+      jdbc.query(
+          "SELECT event_id, object_reference FROM ("
+              + "SELECT event_id, object_reference, ROW_NUMBER() OVER (PARTITION BY event_id ORDER BY display_order ASC, id ASC) AS rn "
+              + "FROM event_schema.tbl_event_images WHERE event_id IN (:ids) AND image_role='BANNER'"
+              + ") b WHERE rn = 1",
+          idParams,
+          (org.springframework.jdbc.core.RowCallbackHandler)
+              rs -> banners.put(rs.getObject("event_id", UUID.class), rs.getString("object_reference")));
+      jdbc.query(
+          "SELECT event_id, MIN(unit_price) AS min_price FROM event_schema.tbl_ticket_types WHERE event_id IN (:ids) GROUP BY event_id",
+          idParams,
+          (org.springframework.jdbc.core.RowCallbackHandler)
+              rs -> minPrices.put(rs.getObject("event_id", UUID.class), rs.getBigDecimal("min_price")));
+    }
+
+    Function<HomeEventRow, EventViews.HomeCard> toCard =
+        r -> {
+          BigDecimal min = minPrices.get(r.id());
+          return new EventViews.HomeCard(
+              r.id(),
+              r.organizerSubject(),
+              r.title(),
+              r.categoryId(),
+              r.startsAt(),
+              r.endsAt(),
+              r.venueName(),
+              banners.get(r.id()),
+              min == null ? null : min.toPlainString(),
+              min == null ? null : "VND");
+        };
+
+    var featured = featuredRows.stream().map(toCard).toList();
+    var upcoming = upcomingRows.stream().map(toCard).toList();
+    var categories =
+        topCats.stream()
+            .map(
+                c ->
+                    new EventViews.HomeCategorySection(
+                        c.id(),
+                        c.name(),
+                        c.count(),
+                        rowsByCategory.getOrDefault(c.id(), List.of()).stream().map(toCard).toList()))
+            .toList();
+
+    return new EventViews.HomeDiscovery(
+        totalLiveEvents, featured, upcoming, categories, topOrganizers);
+  }
+
+  private record HomeEventRow(
+      UUID id,
+      String organizerSubject,
+      String title,
+      UUID categoryId,
+      Instant startsAt,
+      Instant endsAt,
+      String venueName) {}
+
+  private static HomeEventRow mapHomeRow(ResultSet rs, int rowNum) throws SQLException {
+    return new HomeEventRow(
+        rs.getObject("id", UUID.class),
+        rs.getString("organizer_subject"),
+        rs.getString("title"),
+        rs.getObject("category_id", UUID.class),
+        time(rs, "starts_at"),
+        time(rs, "ends_at"),
+        rs.getString("venue_name"));
   }
 
   public EventViews.Venue createVenue(

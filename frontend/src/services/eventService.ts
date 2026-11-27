@@ -2,6 +2,76 @@ import axiosClient from "../lib/axiosClient";
 import { EventSummary, PublicSeatMap } from "../types/api";
 import { EventPage, PublicEventContract } from "../types/eventContract";
 
+export interface HomeCardContract {
+  eventId: string;
+  organizerSubject?: string | null;
+  title: string;
+  categoryId?: string | null;
+  startsAt: string;
+  endsAt: string;
+  venueName?: string | null;
+  bannerUrl?: string | null;
+  minPriceAmount?: string | null;
+  currency?: string | null;
+}
+
+export interface HomeDiscoveryData {
+  totalLiveEvents: number;
+  featured: EventSummary[];
+  upcoming: EventSummary[];
+  topCategories: {
+    categoryId: string;
+    categoryName: string;
+    eventCount: number;
+    events: EventSummary[];
+  }[];
+  topOrganizers: {
+    organizerSubject: string;
+    eventCount: number;
+  }[];
+}
+
+function toHomeEventSummary(card: HomeCardContract): EventSummary {
+  const banner = card.bannerUrl || "/event-placeholder.svg";
+  const hasPrice = Boolean(card.minPriceAmount && card.currency);
+  return {
+    id: card.eventId,
+    slug: card.eventId,
+    title: card.title,
+    startDatetime: card.startsAt,
+    endDatetime: card.endsAt,
+    venueName: card.venueName || undefined,
+    organizer: card.organizerSubject
+      ? { id: card.organizerSubject, userId: card.organizerSubject, name: "", slug: card.organizerSubject }
+      : undefined,
+    categoryId: card.categoryId ?? null,
+    status: "PUBLISHED",
+    isFeatured: false,
+    bannerUrl: banner,
+    thumbnailUrl: card.bannerUrl || undefined,
+    minPrice: hasPrice ? Number(card.minPriceAmount) : undefined,
+    minPriceAmount: card.minPriceAmount ?? undefined,
+    ticketTypes: hasPrice
+      ? [{
+          id: `${card.eventId}-min`,
+          eventId: card.eventId,
+          name: "",
+          unitPrice: card.minPriceAmount!,
+          price: Number(card.minPriceAmount),
+          currency: card.currency!,
+          quantityTotal: 0,
+          quantityAvailable: 0,
+          quantityReserved: 0,
+          maxPerOrder: 0,
+          seatSelectionEnabled: false,
+          displayOrder: 0,
+          status: "ACTIVE",
+          isVisible: true,
+        }]
+      : [],
+  };
+}
+
 function toEventSummary(event: PublicEventContract): EventSummary {
   const images = [...event.images].sort((a, b) => a.displayOrder - b.displayOrder);
   const banner = images.find(image => image.role === "BANNER")?.objectReference;
@@ -90,5 +160,35 @@ export const eventService = {
   },
   getSeatMap: async (eventId: string): Promise<PublicSeatMap | null> => {
     return (await eventService.getEventDetails(eventId)).seatMap ?? null;
+  },
+  getHomeDiscovery: async (signal?: AbortSignal): Promise<HomeDiscoveryData> => {
+    const response = await axiosClient.get<{
+      totalLiveEvents: number;
+      featured: HomeCardContract[];
+      upcoming: HomeCardContract[];
+      topCategories: {
+        categoryId: string;
+        categoryName: string;
+        eventCount: number;
+        events: HomeCardContract[];
+      }[];
+      topOrganizers: {
+        organizerSubject: string;
+        eventCount: number;
+      }[];
+    }>("/api/v1/events/home-discovery", { signal });
+    const data = response.data;
+    return {
+      totalLiveEvents: data.totalLiveEvents,
+      featured: data.featured.map(toHomeEventSummary),
+      upcoming: data.upcoming.map(toHomeEventSummary),
+      topCategories: data.topCategories.map(section => ({
+        categoryId: section.categoryId,
+        categoryName: section.categoryName,
+        eventCount: section.eventCount,
+        events: section.events.map(toHomeEventSummary),
+      })),
+      topOrganizers: data.topOrganizers,
+    };
   },
 };

@@ -35,6 +35,8 @@ public class SecurityConfig {
             a ->
                 a.dispatcherTypeMatchers(DispatcherType.ERROR)
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/organizers/following-status")
+                    .hasRole("BUYER")
                     .requestMatchers(HttpMethod.GET, "/api/v1/organizers/*")
                     .permitAll()
                     .requestMatchers(

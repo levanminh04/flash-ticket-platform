@@ -396,6 +396,65 @@ export default function BuyerSeatMapCanvas({
     }
   };
 
+  const seatLookup = useMemo(() => {
+    const map = new Map<string, { sector: PublicSeatSector; seat: PublicSeat }>();
+    for (const sector of seatMap.sectors ?? []) {
+      for (const seat of sector.seatsData ?? []) {
+        map.set(seat.id, { sector, seat });
+      }
+    }
+    return map;
+  }, [seatMap.sectors]);
+
+  const seatColorById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const { sector, colorCode } of sectorEntries) {
+      for (const seat of sector.seatsData ?? []) {
+        map.set(seat.id, getSeatColor?.(sector, seat) ?? seat.colorCode ?? colorCode);
+      }
+    }
+    return map;
+  }, [sectorEntries, getSeatColor]);
+
+  const handleSeatPointerActivate = useCallback(
+    (event: any) => {
+      const seatNode = event.target?.findAncestor?.(
+        (node: any) => node?.name?.() === "seat-node",
+        true,
+      );
+      const seatId = seatNode?.id?.();
+      if (!seatId) return;
+      const match = seatLookup.get(seatId);
+      if (!match) return;
+      event.cancelBubble = true;
+      onSeatClickRef.current(match.sector, match.seat);
+    },
+    [seatLookup],
+  );
+
+  const handleSeatLayerMouseMove = useCallback((event: any) => {
+    const container = event.target?.getStage?.()?.container?.();
+    if (!container) return;
+    const seatNode = event.target?.findAncestor?.(
+      (node: any) => node?.name?.() === "seat-node",
+      true,
+    );
+    if (seatNode) {
+      container.style.cursor = "pointer";
+      return;
+    }
+    if (container.style.cursor === "pointer") {
+      container.style.cursor = "";
+    }
+  }, []);
+
+  const handleSeatLayerMouseLeave = useCallback((event: any) => {
+    const container = event.target?.getStage?.()?.container?.();
+    if (container) {
+      container.style.cursor = "";
+    }
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -437,8 +496,8 @@ export default function BuyerSeatMapCanvas({
           });
         }}
       >
-        <Layer>
-          <Group>
+        <Layer listening={false}>
+          <Group listening={false}>
             {decorationSectors.map((decorationSector) => (
               <SectorRenderer
                 key={decorationSector.id}
@@ -448,7 +507,15 @@ export default function BuyerSeatMapCanvas({
                 showGuides={false}
               />
             ))}
-
+          </Group>
+        </Layer>
+        <Layer
+          onClick={handleSeatPointerActivate}
+          onTap={handleSeatPointerActivate}
+          onMouseMove={handleSeatLayerMouseMove}
+          onMouseLeave={handleSeatLayerMouseLeave}
+        >
+          <Group>
             {sectorEntries.map(({ sector, sharedSector, seatRadius, colorCode, isStandingSector, hasSeats }) => {
               const canSelectSector = Boolean(onSectorClick) && isStandingSector;
 
@@ -519,23 +586,10 @@ export default function BuyerSeatMapCanvas({
                         status={normalizeSeatStatus(seat.inventoryStatus)}
                         selected={isSelected}
                         disabled={disabled}
-                        color={getSeatColor?.(sector, seat) ?? seat.colorCode ?? colorCode}
+                        listening={!disabled}
+                        color={seatColorById.get(seat.id) ?? colorCode}
                         variant="icon"
                         memoizeEventHandlers
-                        onClick={() => onSeatClickRef.current(sector, seat)}
-                        onTap={() => onSeatClickRef.current(sector, seat)}
-                        onMouseEnter={(e) => {
-                          const container = e.target.getStage()?.container();
-                          if (container) {
-                            container.style.cursor = disabled ? "not-allowed" : "pointer";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const container = e.target.getStage()?.container();
-                          if (container) {
-                            container.style.cursor = "";
-                          }
-                        }}
                       />
                     );
                   })}

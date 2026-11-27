@@ -11,6 +11,7 @@ import com.flashticket.event_service.persistence.EventRepository;
 import com.flashticket.event_service.web.EventProblem;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
@@ -21,9 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EventService {
+  private static final Duration HOME_DISCOVERY_TTL = Duration.ofSeconds(30);
+
+  private record CachedHomeDiscovery(EventViews.HomeDiscovery data, Instant expiresAt) {}
+
   private final EventRepository repository;
   private final OutboxStore outbox;
   private final EventAudit audit;
+  private volatile CachedHomeDiscovery homeDiscoveryCache;
 
   @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
@@ -113,7 +119,26 @@ public class EventService {
     outbox.append(next, EventSnapshots.SALES, EventSnapshots.sales(next));
     outbox.append(next, EventSnapshots.ACCESS, EventSnapshots.access(next));
     audit.committed("publish", event.status(), next, actor);
+    homeDiscoveryCache = null;
     return EventViews.owner(next);
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public EventViews.HomeDiscovery homeDiscovery() {
+    Instant now = Instant.now();
+    CachedHomeDiscovery cached = homeDiscoveryCache;
+    if (cached != null && now.isBefore(cached.expiresAt())) {
+      return cached.data();
+    }
+    synchronized (this) {
+      cached = homeDiscoveryCache;
+      if (cached != null && now.isBefore(cached.expiresAt())) {
+        return cached.data();
+      }
+      EventViews.HomeDiscovery fresh = repository.homeDiscovery();
+      homeDiscoveryCache = new CachedHomeDiscovery(fresh, now.plus(HOME_DISCOVERY_TTL));
+      return fresh;
+    }
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

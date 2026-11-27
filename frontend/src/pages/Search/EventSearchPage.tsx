@@ -33,11 +33,15 @@ export default function EventSearchPage() {
   const toolbar = useRef<HTMLDivElement>(null);
   const categoryMenu = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  const categories = useQuery({ queryKey: ["search-categories"], queryFn: () => categoryService.getCategories() });
+  const categories = useQuery({
+    queryKey: ["public-categories"],
+    queryFn: ({ signal }) => categoryService.getCategories(signal),
+    staleTime: 5 * 60 * 1000,
+  });
   const results = useInfiniteQuery({
     queryKey: ["editorial-events", search, category, filters.from, filters.to, filters.price, filters.venue, cursor],
     initialPageParam: cursor,
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       eventService.getEvents({
         search,
         category,
@@ -47,7 +51,7 @@ export default function EventSearchPage() {
         venue: filters.venue || undefined,
         cursor: pageParam,
         size: 12,
-      }),
+      }, signal),
     getNextPageParam: (last, _, __, cursors) => last.nextCursor && !cursors.includes(last.nextCursor) ? last.nextCursor : undefined,
   });
 
@@ -116,7 +120,11 @@ export default function EventSearchPage() {
   }
 
   const events = Array.from(new Map(results.data?.pages.flatMap(page => page.content).map(event => [event.id, event])).values());
-  const venueQuery = useQuery({ queryKey: ["venues"], queryFn: venueService.getVenues });
+  const venueQuery = useQuery({
+    queryKey: ["public-venues"],
+    queryFn: ({ signal }) => venueService.getVenues(signal),
+    staleTime: 5 * 60 * 1000,
+  });
   const venues = [...new Set(venueQuery.data?.map(venue => venue.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale));
   const now = Date.now();
   const hasDateFilter = Boolean(filters.from || filters.to);
