@@ -54,8 +54,8 @@ function buildVenueFormData(payload: AdminVenuePayload, includeEmptyOptional: bo
 }
 
 export const venueService = {
-  getVenues: async (): Promise<Venue[]> => {
-    const response = await axiosClient.get<RawVenueResponse[]>("/api/v1/venues");
+  getVenues: async (signal?: AbortSignal): Promise<Venue[]> => {
+    const response = await axiosClient.get<RawVenueResponse[]>("/api/v1/venues", { signal });
     return response.data.map(mapRawVenue);
   },
 

@@ -8,6 +8,8 @@ import com.flashticket.user_service.web.UserException;
 import com.mongodb.MongoException;
 import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.Sorts;
@@ -17,8 +19,14 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.bson.Document;
@@ -284,6 +292,101 @@ public final class UserStore {
         followerCount(subject),
         p.getString("logoUrl"),
         p.getString("bannerUrl"));
+  }
+
+  public List<PublicOrganizer> publicOrganizers(List<String> subjects) {
+    List<String> clean = sanitizeIds(subjects);
+    if (clean.isEmpty()) return List.of();
+    Map<String, Document> docsBySubject = new HashMap<>();
+    collection("organizer_profiles")
+        .find(and(in("identitySubject", clean), eq("status", "ACTIVE")))
+        .forEach(d -> docsBySubject.put(d.getString("identitySubject"), d));
+    if (docsBySubject.isEmpty()) return List.of();
+    Map<String, Long> counts = followerCounts(new ArrayList<>(docsBySubject.keySet()));
+    List<PublicOrganizer> out = new ArrayList<>();
+    for (String subject : clean) {
+      Document p = docsBySubject.get(subject);
+      if (p == null) continue;
+      out.add(toPublicOrganizer(subject, p, counts.getOrDefault(subject, 0L)));
+    }
+    return List.copyOf(out);
+  }
+
+  public List<PublicOrganizer> featuredOrganizers(int limit) {
+    if (limit <= 0) return List.of();
+    List<Document> profiles = new ArrayList<>();
+    collection("organizer_profiles").find(eq("status", "ACTIVE")).limit(50).forEach(profiles::add);
+    if (profiles.isEmpty()) return List.of();
+    List<String> subjects = profiles.stream().map(d -> d.getString("identitySubject")).toList();
+    Map<String, Long> counts = followerCounts(subjects);
+    return profiles.stream()
+        .map(
+            p -> {
+              String subject = p.getString("identitySubject");
+              return toPublicOrganizer(subject, p, counts.getOrDefault(subject, 0L));
+            })
+        .sorted(
+            Comparator.comparingLong(PublicOrganizer::followerCount)
+                .reversed()
+                .thenComparing(
+                    p -> p.organizationName() == null ? "" : p.organizationName(),
+                    String.CASE_INSENSITIVE_ORDER))
+        .limit(limit)
+        .toList();
+  }
+
+  public Map<String, Boolean> followStates(String buyer, List<String> organizerSubjects) {
+    List<String> clean = sanitizeIds(organizerSubjects);
+    if (clean.isEmpty()) return Map.of();
+    Set<String> followed = new HashSet<>();
+    collection("user_follows")
+        .find(and(eq("buyerSubject", buyer), in("organizerSubject", clean)))
+        .forEach(d -> followed.add(d.getString("organizerSubject")));
+    Map<String, Boolean> result = new LinkedHashMap<>();
+    for (String id : clean) {
+      result.put(id, followed.contains(id));
+    }
+    return Map.copyOf(result);
+  }
+
+  private Map<String, Long> followerCounts(List<String> organizerSubjects) {
+    if (organizerSubjects.isEmpty()) return Map.of();
+    Map<String, Long> counts = new HashMap<>();
+    collection("user_follows")
+        .aggregate(
+            List.of(
+                Aggregates.match(in("organizerSubject", organizerSubjects)),
+                Aggregates.group("$organizerSubject", Accumulators.sum("count", 1L))))
+        .forEach(
+            d -> {
+              Number n = d.get("count", Number.class);
+              counts.put(d.getString("_id"), n == null ? 0L : n.longValue());
+            });
+    return counts;
+  }
+
+  private static PublicOrganizer toPublicOrganizer(String subject, Document p, long followers) {
+    return new PublicOrganizer(
+        subject,
+        p.getString("organizationName"),
+        p.getString("shortDescription"),
+        followers,
+        p.getString("logoUrl"),
+        p.getString("bannerUrl"));
+  }
+
+  private static List<String> sanitizeIds(List<String> raw) {
+    if (raw == null || raw.isEmpty()) return List.of();
+    List<String> clean = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (String item : raw) {
+      if (item == null) continue;
+      String trimmed = item.strip();
+      if (trimmed.isEmpty() || !seen.add(trimmed)) continue;
+      clean.add(trimmed);
+      if (clean.size() >= 20) break;
+    }
+    return clean;
   }
 
   public PublicOrganizer updateBranding(String subject, boolean logo, String url) {

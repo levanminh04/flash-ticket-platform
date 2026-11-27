@@ -115,7 +115,7 @@ function VenueManagementWorkspace() {
 
   const venuesQuery = useQuery<Venue[], Error>({
     queryKey: ["venues"],
-    queryFn: venueService.getVenues,
+    queryFn: ({ signal }) => venueService.getVenues(signal),
   });
 
   const venues = venuesQuery.data ?? [];
