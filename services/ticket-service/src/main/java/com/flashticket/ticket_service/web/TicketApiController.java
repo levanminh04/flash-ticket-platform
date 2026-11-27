@@ -1,5 +1,6 @@
 package com.flashticket.ticket_service.web;
 
+import com.flashticket.ticket_service.application.TicketReadService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.security.Principal;
@@ -16,9 +17,11 @@ import tools.jackson.databind.JsonNode;
 @ConditionalOnProperty(prefix = "ticket.features", name = "business-enabled", havingValue = "true")
 public class TicketApiController {
   private final TicketOperations operations;
+  private final TicketReadService reads;
 
-  public TicketApiController(TicketOperations operations) {
+  public TicketApiController(TicketOperations operations, TicketReadService reads) {
     this.operations = operations;
+    this.reads = reads;
   }
 
   @GetMapping(
@@ -30,7 +33,7 @@ public class TicketApiController {
       HttpServletRequest request,
       HttpServletResponse response) {
     TicketRequestContext.correlation(request, response);
-    return operations.listTickets(TicketRequestContext.uuid(orderId), actor(principal));
+    return reads.listTickets(TicketRequestContext.uuid(orderId), actor(principal));
   }
 
   @GetMapping(value = "/api/v1/tickets/{ticketId}/qr", produces = MediaType.APPLICATION_JSON_VALUE)

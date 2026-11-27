@@ -293,8 +293,7 @@ public class EventRepository {
         "FROM event_schema.tbl_events e WHERE e.sales_mode IN ('QUANTITY','SEAT_MAP') AND e.status='PUBLISHED' AND COALESCE(e.ends_at,e.starts_at)>=:now";
     var nowParam = Map.of("now", now);
 
-    Long totalCount =
-        jdbc.queryForObject("SELECT COUNT(*) " + liveWhere, nowParam, Long.class);
+    Long totalCount = jdbc.queryForObject("SELECT COUNT(*) " + liveWhere, nowParam, Long.class);
     long totalLiveEvents = totalCount == null ? 0L : totalCount;
 
     var rowSelect =
@@ -375,12 +374,16 @@ public class EventRepository {
               + ") b WHERE rn = 1",
           idParams,
           (org.springframework.jdbc.core.RowCallbackHandler)
-              rs -> banners.put(rs.getObject("event_id", UUID.class), rs.getString("object_reference")));
+              rs ->
+                  banners.put(
+                      rs.getObject("event_id", UUID.class), rs.getString("object_reference")));
       jdbc.query(
           "SELECT event_id, MIN(unit_price) AS min_price FROM event_schema.tbl_ticket_types WHERE event_id IN (:ids) GROUP BY event_id",
           idParams,
           (org.springframework.jdbc.core.RowCallbackHandler)
-              rs -> minPrices.put(rs.getObject("event_id", UUID.class), rs.getBigDecimal("min_price")));
+              rs ->
+                  minPrices.put(
+                      rs.getObject("event_id", UUID.class), rs.getBigDecimal("min_price")));
     }
 
     Function<HomeEventRow, EventViews.HomeCard> toCard =
@@ -409,7 +412,9 @@ public class EventRepository {
                         c.id(),
                         c.name(),
                         c.count(),
-                        rowsByCategory.getOrDefault(c.id(), List.of()).stream().map(toCard).toList()))
+                        rowsByCategory.getOrDefault(c.id(), List.of()).stream()
+                            .map(toCard)
+                            .toList()))
             .toList();
 
     return new EventViews.HomeDiscovery(

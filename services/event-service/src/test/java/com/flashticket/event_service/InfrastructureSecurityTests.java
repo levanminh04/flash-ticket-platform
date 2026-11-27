@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(
     properties = {
+      "spring.data.jpa.repositories.enabled=false",
+      "management.health.db.enabled=false",
       "management.endpoint.health.probes.enabled=true",
       "spring.security.oauth2.client.registration.internal.provider=keycloak",
       "spring.security.oauth2.client.registration.internal.client-id=internal-service",
@@ -30,6 +32,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @org.springframework.context.annotation.Import(IsolatedInfrastructure.class)
 class InfrastructureSecurityTests {
+  @MockitoBean(name = "eventWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   @Autowired MockMvc mvc;
   @MockitoBean JwtDecoder decoder;
 

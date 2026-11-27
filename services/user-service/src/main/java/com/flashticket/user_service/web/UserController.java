@@ -189,8 +189,7 @@ public class UserController {
   }
 
   @GetMapping("/api/v1/organizers/featured")
-  public List<PublicOrganizer> featuredOrganizers(
-      @RequestParam(defaultValue = "3") int limit) {
+  public List<PublicOrganizer> featuredOrganizers(@RequestParam(defaultValue = "3") int limit) {
     return store.featuredOrganizers(Math.max(1, Math.min(limit, 20)));
   }
 

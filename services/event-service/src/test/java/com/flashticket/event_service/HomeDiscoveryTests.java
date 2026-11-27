@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.flashticket.event_service.api.EventController;
 import com.flashticket.event_service.api.EventViews;
+import com.flashticket.event_service.application.EventReadService;
 import com.flashticket.event_service.application.EventService;
 import com.flashticket.event_service.domain.EventData;
 import com.flashticket.event_service.messaging.OutboxStore;
@@ -85,7 +86,7 @@ class HomeDiscoveryTests {
     when(repo.homeDiscovery()).thenReturn(first, second);
 
     var service = new EventService(repo, outbox, audit);
-    var controller = new EventController(service);
+    var controller = new EventController(service, mock(EventReadService.class));
 
     assertThat(controller.homeDiscovery()).isEqualTo(first);
     assertThat(controller.homeDiscovery()).isEqualTo(first);

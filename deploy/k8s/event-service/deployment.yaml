@@ -21,6 +21,15 @@ spec:
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 180
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: event-service
+            namespaces:
+            - flash-ticket
+            topologyKey: kubernetes.io/hostname
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

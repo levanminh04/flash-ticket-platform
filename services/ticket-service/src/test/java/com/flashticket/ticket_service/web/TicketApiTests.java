@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.flashticket.ticket_service.application.TicketReadService;
 import com.flashticket.ticket_service.exception.GlobalExceptionHandler;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +39,17 @@ class TicketApiTests {
   @BeforeEach
   void setup() {
     operations = new FakeOperations();
+    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+    var reads =
+        new TicketReadService(
+            operations,
+            beans.getBeanProvider(
+                org.springframework.transaction.support.TransactionTemplate.class),
+            beans.getBeanProvider(
+                com.flashticket.ticket_service.config.TicketListReplicaHealth.class),
+            new SimpleMeterRegistry());
     mvc =
-        MockMvcBuilders.standaloneSetup(new TicketApiController(operations))
+        MockMvcBuilders.standaloneSetup(new TicketApiController(operations, reads))
             .setControllerAdvice(new GlobalExceptionHandler(), new TicketApiExceptionHandler())
             .build();
     Jwt jwt = Jwt.withTokenValue("test-only").header("alg", "RS256").subject(ACTOR).build();
