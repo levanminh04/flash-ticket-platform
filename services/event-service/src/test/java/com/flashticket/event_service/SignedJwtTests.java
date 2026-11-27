@@ -22,10 +22,18 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(
+    properties = {
+      "spring.data.jpa.repositories.enabled=false",
+      "management.health.db.enabled=false"
+    })
 @AutoConfigureMockMvc
 @Import(IsolatedInfrastructure.class)
 class SignedJwtTests {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(
+      name = "eventWriterDataSource")
+  com.zaxxer.hikari.HikariDataSource writer;
+
   static final RSAKey KEY;
   static final HttpServer SERVER;
 

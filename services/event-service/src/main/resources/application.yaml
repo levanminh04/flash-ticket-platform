@@ -65,6 +65,20 @@ spring:
             - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
 event:
+  read-replica:
+    enabled: ${EVENT_READ_REPLICA_ENABLED:false}
+    probe-interval: ${EVENT_READ_REPLICA_PROBE_INTERVAL}
+    max-sample-age: ${EVENT_READ_REPLICA_MAX_SAMPLE_AGE}
+    probe-query-timeout: ${EVENT_READ_REPLICA_PROBE_QUERY_TIMEOUT}
+    transaction-timeout: ${EVENT_READ_REPLICA_TRANSACTION_TIMEOUT}
+    datasource:
+      jdbc-url: ${EVENT_READ_REPLICA_URL}
+      username: ${EVENT_READ_REPLICA_USERNAME}
+      password: ${EVENT_READ_REPLICA_PASSWORD}
+      read-only: true
+      maximum-pool-size: 2
+      minimum-idle: 0
+      connection-timeout: 5000
   images:
     cloud-name: ${EVENT_IMAGES_CLOUD_NAME:}
     api-key: ${EVENT_IMAGES_API_KEY:}

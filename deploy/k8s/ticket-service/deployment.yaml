@@ -19,6 +19,15 @@ spec:
     metadata:
       labels: *id001
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: ticket-service
+            namespaces:
+            - flash-ticket
+            topologyKey: kubernetes.io/hostname
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 180
       securityContext:
