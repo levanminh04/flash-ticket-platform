@@ -9,7 +9,6 @@ import com.flashticket.payment_service.service.PaymentSagaService;
 import com.flashticket.payment_service.service.RefundService;
 import com.flashticket.payment_service.validation.MessageInvariantValidator;
 import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ShutdownSignalException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
@@ -32,18 +31,14 @@ public class PaymentMessageListener {
   public void onPaymentDecisionDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
       try {
-        onPaymentDecision(message, channel);
+        onPaymentDecision(message, telemetry.track(channel));
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException | ShutdownSignalException ex) {
-        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
-        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
-        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
-        throw ex;
-      } catch (RuntimeException ex) {
-        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
-        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+      } catch (IOException | RuntimeException ex) {
+        // Kết cục theo bước đã làm trên kênh (T-076 REVIEW-8 R1): ACK/NACK lỗi -> UNKNOWN; NACK
+        // requeue xong -> RETRY; còn lại giữ FAILED.
+        telemetry.failed();
         throw ex;
       }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
@@ -76,18 +71,14 @@ public class PaymentMessageListener {
   public void onIssuanceResultDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
       try {
-        onIssuanceResult(message, channel);
+        onIssuanceResult(message, telemetry.track(channel));
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException | ShutdownSignalException ex) {
-        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
-        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
-        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
-        throw ex;
-      } catch (RuntimeException ex) {
-        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
-        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+      } catch (IOException | RuntimeException ex) {
+        // Kết cục theo bước đã làm trên kênh (T-076 REVIEW-8 R1): ACK/NACK lỗi -> UNKNOWN; NACK
+        // requeue xong -> RETRY; còn lại giữ FAILED.
+        telemetry.failed();
         throw ex;
       }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
@@ -119,18 +110,14 @@ public class PaymentMessageListener {
   public void onOrderCompletedDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
       try {
-        onOrderCompleted(message, channel);
+        onOrderCompleted(message, telemetry.track(channel));
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException | ShutdownSignalException ex) {
-        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
-        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
-        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
-        throw ex;
-      } catch (RuntimeException ex) {
-        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
-        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+      } catch (IOException | RuntimeException ex) {
+        // Kết cục theo bước đã làm trên kênh (T-076 REVIEW-8 R1): ACK/NACK lỗi -> UNKNOWN; NACK
+        // requeue xong -> RETRY; còn lại giữ FAILED.
+        telemetry.failed();
         throw ex;
       }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
@@ -162,18 +149,14 @@ public class PaymentMessageListener {
   public void onEventCancelledDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
       try {
-        onEventCancelled(message, channel);
+        onEventCancelled(message, telemetry.track(channel));
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException | ShutdownSignalException ex) {
-        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
-        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
-        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
-        throw ex;
-      } catch (RuntimeException ex) {
-        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
-        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+      } catch (IOException | RuntimeException ex) {
+        // Kết cục theo bước đã làm trên kênh (T-076 REVIEW-8 R1): ACK/NACK lỗi -> UNKNOWN; NACK
+        // requeue xong -> RETRY; còn lại giữ FAILED.
+        telemetry.failed();
         throw ex;
       }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
@@ -206,18 +189,14 @@ public class PaymentMessageListener {
   public void onFinanceConfiguredDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
       try {
-        onFinanceConfigured(message, channel);
+        onFinanceConfigured(message, telemetry.track(channel));
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException | ShutdownSignalException ex) {
-        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
-        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
-        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
-        throw ex;
-      } catch (RuntimeException ex) {
-        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
-        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+      } catch (IOException | RuntimeException ex) {
+        // Kết cục theo bước đã làm trên kênh (T-076 REVIEW-8 R1): ACK/NACK lỗi -> UNKNOWN; NACK
+        // requeue xong -> RETRY; còn lại giữ FAILED.
+        telemetry.failed();
         throw ex;
       }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");

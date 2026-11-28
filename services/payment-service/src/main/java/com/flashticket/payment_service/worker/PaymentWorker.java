@@ -6,6 +6,7 @@ import com.flashticket.payment_service.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -82,6 +83,7 @@ public class PaymentWorker {
             .addKeyValue("outcome", "SUCCESS")
             .addKeyValue("reasonCode", "BROKER_CONFIRMED")
             .addKeyValue("messageId", storedMessage.getMessageId().toString())
+            .addKeyValue("correlationId", Objects.toString(storedMessage.getCorrelationId(), null))
             .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .log("Broker confirmed message");
       } catch (Exception ex) {
@@ -105,6 +107,7 @@ public class PaymentWorker {
                     ? "LEASE_CHANGED"
                     : confirmed ? "PUBLISH_FAILED" : "BROKER_DELIVERY_UNCONFIRMED")
             .addKeyValue("messageId", storedMessage.getMessageId().toString())
+            .addKeyValue("correlationId", Objects.toString(storedMessage.getCorrelationId(), null))
             .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .addKeyValue("errorType", ex.getClass().getSimpleName())
             .log(

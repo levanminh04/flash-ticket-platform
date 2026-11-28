@@ -27,6 +27,8 @@ import tools.jackson.databind.JsonNode;
 
 /** Kết cục log outbox theo việc dời lịch có thực sự tác động hay không (REVIEW-6 R5). */
 class PaymentWorkerTelemetryTests {
+  private static final UUID MESSAGE = UUID.randomUUID();
+  private static final UUID CORRELATION = UUID.randomUUID();
   private final MessagingService messaging = mock(MessagingService.class);
   private final RabbitTemplate rabbit = mock(RabbitTemplate.class);
   private final PaymentWorker worker =
@@ -39,7 +41,8 @@ class PaymentWorkerTelemetryTests {
     ReflectionTestUtils.setField(worker, "lease", Duration.ofMinutes(2));
     ReflectionTestUtils.setField(worker, "confirmTimeout", Duration.ofSeconds(1));
     var stored = mock(OutboxMessage.class);
-    when(stored.getMessageId()).thenReturn(UUID.randomUUID());
+    when(stored.getMessageId()).thenReturn(MESSAGE);
+    when(stored.getCorrelationId()).thenReturn(CORRELATION);
     when(stored.getMessageType()).thenReturn("payment.succeeded");
     when(stored.getPayload()).thenReturn(mock(JsonNode.class));
     when(stored.getAttempts()).thenReturn(1);
@@ -76,6 +79,9 @@ class PaymentWorkerTelemetryTests {
             f -> {
               assertThat(f).containsEntry("outcome", "RETRY");
               assertThat(f).containsEntry("reasonCode", "BROKER_DELIVERY_UNCONFIRMED");
+              // REVIEW-8 R4: hai mã giữ đúng vai trò.
+              assertThat(f).containsEntry("messageId", MESSAGE.toString());
+              assertThat(f).containsEntry("correlationId", CORRELATION.toString());
             });
   }
 
@@ -87,6 +93,7 @@ class PaymentWorkerTelemetryTests {
             f -> {
               assertThat(f).containsEntry("outcome", "UNKNOWN");
               assertThat(f).containsEntry("reasonCode", "LEASE_CHANGED");
+              assertThat(f).containsEntry("correlationId", CORRELATION.toString());
             });
   }
 }

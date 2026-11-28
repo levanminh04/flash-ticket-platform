@@ -1,6 +1,9 @@
 package com.flashticket.payment_service.observability;
 
+import com.rabbitmq.client.Channel;
 import io.opentelemetry.api.trace.Span;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.*;
@@ -31,6 +34,43 @@ public final class RabbitTelemetry implements AutoCloseable {
   public void result(String outcome, String reason) {
     this.outcome = outcome;
     this.reason = reason;
+  }
+
+  private boolean brokerCommandFailed;
+  private boolean redeliveryRequested;
+
+  /**
+   * Bọc kênh để biết bước ACK/NACK thật sự đã làm (T-076 REVIEW-8 R1): lệnh basicAck/basicNack ném
+   * lỗi (client RabbitMQ hoặc proxy Spring, vd. IllegalStateException khi kênh đã đóng) thì không
+   * biết broker đã nhận lệnh hay chưa; chỉ NACK requeue trả về bình thường mới là yêu cầu giao lại.
+   * Không đổi lệnh, tham số hay thứ tự gọi.
+   */
+  public Channel track(Channel channel) {
+    return (Channel)
+        Proxy.newProxyInstance(
+            Channel.class.getClassLoader(),
+            new Class<?>[] {Channel.class},
+            (proxy, method, args) -> {
+              boolean command =
+                  method.getName().equals("basicAck") || method.getName().equals("basicNack");
+              try {
+                Object value = method.invoke(channel, args);
+                if (method.getName().equals("basicNack")
+                    && args != null
+                    && args.length == 3
+                    && Boolean.TRUE.equals(args[2])) redeliveryRequested = true;
+                return value;
+              } catch (InvocationTargetException ex) {
+                if (command) brokerCommandFailed = true;
+                throw ex.getTargetException();
+              }
+            });
+  }
+
+  /** Kết cục khi xử lý ném lỗi, theo bước đã làm trên kênh `track`. */
+  public void failed() {
+    if (brokerCommandFailed) result("UNKNOWN", "BROKER_COMMAND_FAILED");
+    else if (redeliveryRequested) result("RETRY", "TRANSACTION_UNAVAILABLE");
   }
 
   @Override

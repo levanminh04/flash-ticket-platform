@@ -158,6 +158,57 @@ class ListenerTelemetryTests {
   }
 
   @Test
+  void springProxyClosedChannelOnAckAfterCommitIsLoggedAsUnknown() throws IOException {
+    // CachingConnectionFactory proxy ném IllegalStateException khi kênh đích đã đóng (REVIEW-8 R1).
+    @SuppressWarnings("unchecked")
+    Envelope<PaymentDecision> envelope = mock(Envelope.class);
+    when(envelope.correlationId()).thenReturn(UUID.randomUUID());
+    when(envelope.messageId()).thenReturn(UUID.randomUUID());
+    when(codec.readEnvelope(anyString(), eq(PaymentDecision.class))).thenReturn(envelope);
+    doThrow(new IllegalStateException("Channel closed; cannot ack/nack"))
+        .when(channel)
+        .basicAck(7L, false);
+    var logs =
+        run(
+            RabbitTelemetry.class,
+            () ->
+                assertThatThrownBy(() -> listener.onPaymentDecisionDelivery(message(), channel))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Channel closed; cannot ack/nack"));
+    verify(saga).recordPaymentDecision(envelope);
+    verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+    assertThat(logs)
+        .singleElement()
+        .satisfies(
+            f -> {
+              assertThat(f).containsEntry("outcome", "UNKNOWN");
+              assertThat(f).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+            });
+  }
+
+  @Test
+  void springProxyClosedChannelOnNackIsLoggedAsUnknown() throws IOException {
+    when(codec.readEnvelope(anyString(), any())).thenThrow(new IllegalStateException("db down"));
+    doThrow(new IllegalStateException("Channel closed; cannot ack/nack"))
+        .when(channel)
+        .basicNack(7L, false, true);
+    var logs =
+        run(
+            RabbitTelemetry.class,
+            () ->
+                assertThatThrownBy(() -> listener.onPaymentDecisionDelivery(message(), channel))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Channel closed; cannot ack/nack"));
+    assertThat(logs)
+        .singleElement()
+        .satisfies(
+            f -> {
+              assertThat(f).containsEntry("outcome", "UNKNOWN");
+              assertThat(f).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+            });
+  }
+
+  @Test
   void closedChannelOnNackIsLoggedAsUnknown() throws IOException {
     when(codec.readEnvelope(anyString(), any())).thenThrow(new IllegalStateException("db down"));
     doThrow(channelClosed()).when(channel).basicNack(7L, false, true);
