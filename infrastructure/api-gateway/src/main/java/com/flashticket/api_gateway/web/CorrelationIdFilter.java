@@ -1,5 +1,7 @@
 package com.flashticket.api_gateway.web;
 
+import static org.slf4j.event.Level.ERROR;
+import static org.slf4j.event.Level.INFO;
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR;
 
 import java.util.List;
@@ -17,9 +19,10 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 
 /**
- * Chạy trước security: gắn X-Correlation-Id / X-Request-Id, log request lỗi, và viết lại body 429
+ * Chạy trước security: gắn X-Correlation-Id / X-Request-Id, log mọi request, và viết lại body 429
  * của rate limiter. Status và body lỗi của service phía sau được giữ nguyên.
  */
 @Component
@@ -53,10 +56,6 @@ public final class CorrelationIdFilter implements WebFilter {
               List<String> requests = headers.getOrEmpty(REQUEST);
               String downstreamRequest = requests.isEmpty() ? null : requests.getLast();
               headers.set(REQUEST, validId(downstreamRequest) ? downstreamRequest : requestId);
-              HttpStatusCode status = exchange.getResponse().getStatusCode();
-              if (status != null && status.isError()) {
-                logFailure(exchange, status, headers.getFirst(CORRELATION), requestId, started);
-              }
               return Mono.empty();
             });
     var response =
@@ -69,43 +68,62 @@ public final class CorrelationIdFilter implements WebFilter {
             return super.setComplete();
           }
         };
-    return chain.filter(
-        exchange
-            .mutate()
-            .request(request -> request.headers(headers -> headers.set(CORRELATION, correlation)))
-            .response(response)
-            .build());
+    return chain
+        .filter(
+            exchange
+                .mutate()
+                .request(
+                    request -> request.headers(headers -> headers.set(CORRELATION, correlation)))
+                .response(response)
+                .build())
+        .doFinally(signal -> logCompletion(exchange, signal, correlation, requestId, started));
   }
 
-  private static void logFailure(
+  private static void logCompletion(
       ServerWebExchange exchange,
-      HttpStatusCode status,
+      SignalType signal,
       String correlation,
       String requestId,
       long started) {
     Route route = exchange.getAttribute(GATEWAY_ROUTE_ATTR);
-    LoggerFactory.getLogger(CorrelationIdFilter.class)
-        .atWarn()
-        .addKeyValue("schemaVersion", 1)
-        .addKeyValue("serviceName", "api-gateway")
-        .addKeyValue(
-            "eventName",
-            status.is4xxClientError() ? "gateway.request.rejected" : "gateway.request.failed")
-        .addKeyValue("operation", "http.proxy")
-        .addKeyValue("outcome", status.is4xxClientError() ? "REJECTED" : "FAILED")
-        .addKeyValue("correlationId", correlation)
-        .addKeyValue("requestId", requestId)
-        .addKeyValue("routeId", route == null ? "unmatched" : route.getId())
-        .addKeyValue("dependencyService", route == null ? "none" : route.getUri().getHost())
-        .addKeyValue("httpMethod", exchange.getRequest().getMethod().name())
-        .addKeyValue("httpStatus", status.value())
-        .addKeyValue(
-            "reasonCode",
-            exchange.getAttributeOrDefault(GatewayErrorWriter.CODE, "DOWNSTREAM_HTTP_ERROR"))
-        .addKeyValue(
-            "errorType", exchange.getAttributeOrDefault(GatewayErrorWriter.ERROR_TYPE, "none"))
-        .addKeyValue("durationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
-        .log("Gateway HTTP request failed.");
+    HttpStatusCode status = exchange.getResponse().getStatusCode();
+    int code = status != null ? status.value() : signal == SignalType.ON_ERROR ? 500 : 200;
+    boolean cancelled = signal == SignalType.CANCEL;
+    String outcome =
+        cancelled ? "UNKNOWN" : code >= 500 ? "FAILED" : code >= 400 ? "REJECTED" : "SUCCESS";
+    String event =
+        cancelled
+            ? "gateway.request.cancelled"
+            : code >= 500
+                ? "gateway.request.failed"
+                : code >= 400 ? "gateway.request.rejected" : "gateway.request.completed";
+    String effectiveCorrelation = exchange.getResponse().getHeaders().getFirst(CORRELATION);
+    var entry =
+        LoggerFactory.getLogger(CorrelationIdFilter.class)
+            .atLevel(code >= 500 ? ERROR : INFO)
+            .addKeyValue("schemaVersion", 1)
+            .addKeyValue("serviceName", "api-gateway")
+            .addKeyValue("eventName", event)
+            .addKeyValue("operation", "http.proxy")
+            .addKeyValue("outcome", outcome)
+            .addKeyValue(
+                "correlationId", validId(effectiveCorrelation) ? effectiveCorrelation : correlation)
+            .addKeyValue("requestId", requestId)
+            .addKeyValue("routeId", route == null ? "unmatched" : route.getId())
+            .addKeyValue("dependencyService", route == null ? "none" : route.getUri().getHost())
+            .addKeyValue("httpMethod", exchange.getRequest().getMethod().name())
+            .addKeyValue(
+                "reasonCode",
+                exchange.getAttributeOrDefault(
+                    GatewayErrorWriter.CODE,
+                    cancelled
+                        ? "CLIENT_CANCELLED"
+                        : code >= 400 ? "DOWNSTREAM_HTTP_ERROR" : "HTTP_COMPLETED"))
+            .addKeyValue(
+                "errorType", exchange.getAttributeOrDefault(GatewayErrorWriter.ERROR_TYPE, "none"))
+            .addKeyValue("durationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+    if (!cancelled || status != null) entry = entry.addKeyValue("httpStatus", code);
+    entry.log("Gateway HTTP request completed.");
   }
 
   private static String canonicalId(List<String> values) {

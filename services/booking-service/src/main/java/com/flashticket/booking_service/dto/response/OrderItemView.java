@@ -28,5 +28,5 @@ public final class OrderItemView {
   private final String lineSubtotal;
 
   private final UUID sectorId;
-  @NotNull @Valid private final List<@NotNull @Valid SeatSelectionSnapshot> seats;
+  @NotNull private final List<@NotNull @Valid SeatSelectionSnapshot> seats;
 }

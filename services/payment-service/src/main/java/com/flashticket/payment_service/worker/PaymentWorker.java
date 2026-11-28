@@ -6,8 +6,11 @@ import com.flashticket.payment_service.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
@@ -26,8 +29,7 @@ import org.springframework.stereotype.Component;
     havingValue = "true",
     matchIfMissing = true)
 public class PaymentWorker {
-  private static final org.slf4j.Logger log =
-      org.slf4j.LoggerFactory.getLogger(PaymentWorker.class);
+  private static final Logger log = LoggerFactory.getLogger(PaymentWorker.class);
   private final MessagingService messaging;
   private final PaymentSagaService sagaService;
   private final RefundService refundService;
@@ -55,6 +57,7 @@ public class PaymentWorker {
     Instant now = Instant.now();
     var claimedMessages = messaging.claimOutbox(now, now.plus(lease), batchSize);
     for (var storedMessage : claimedMessages) {
+      boolean confirmed = false;
       try {
         var properties = new MessageProperties();
         properties.setMessageId(storedMessage.getMessageId().toString());
@@ -71,15 +74,46 @@ public class PaymentWorker {
         var confirm = correlation.getFuture().get(confirmTimeout.toMillis(), TimeUnit.MILLISECONDS);
         if (!confirm.isAck() || correlation.getReturned() != null)
           throw new IllegalStateException("Message not routed");
+        confirmed = true;
         messaging.markPublished(
             storedMessage.getMessageId(), storedMessage.getAttempts(), Instant.now());
+        log.atInfo()
+            .addKeyValue("eventName", "payment.outbox.result")
+            .addKeyValue("operation", "outbox-publish")
+            .addKeyValue("outcome", "SUCCESS")
+            .addKeyValue("reasonCode", "BROKER_CONFIRMED")
+            .addKeyValue("messageId", storedMessage.getMessageId().toString())
+            .addKeyValue("correlationId", Objects.toString(storedMessage.getCorrelationId(), null))
+            .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
+            .log("Broker confirmed message");
       } catch (Exception ex) {
-        messaging.rescheduleOutbox(
-            storedMessage.getMessageId(),
-            storedMessage.getAttempts(),
-            Instant.now()
-                .plusSeconds(Math.min(300, 1L << Math.min(8, storedMessage.getAttempts()))),
-            "BROKER_DELIVERY_UNCONFIRMED");
+        boolean rescheduled =
+            messaging.rescheduleOutbox(
+                storedMessage.getMessageId(),
+                storedMessage.getAttempts(),
+                Instant.now()
+                    .plusSeconds(Math.min(300, 1L << Math.min(8, storedMessage.getAttempts()))),
+                "BROKER_DELIVERY_UNCONFIRMED");
+        log.atWarn()
+            .addKeyValue("eventName", "payment.outbox.result")
+            .addKeyValue("operation", "outbox-publish")
+            // Lease đã đổi: worker này không dời lịch được, không biết bản tin sẽ được gửi lại.
+            .addKeyValue("outcome", rescheduled ? "RETRY" : "UNKNOWN")
+            // Lỗi sau khi broker đã xác nhận (vd. markPublished) không phải lỗi giao nhận của
+            // broker.
+            .addKeyValue(
+                "reasonCode",
+                !rescheduled
+                    ? "LEASE_CHANGED"
+                    : confirmed ? "PUBLISH_FAILED" : "BROKER_DELIVERY_UNCONFIRMED")
+            .addKeyValue("messageId", storedMessage.getMessageId().toString())
+            .addKeyValue("correlationId", Objects.toString(storedMessage.getCorrelationId(), null))
+            .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
+            .addKeyValue("errorType", ex.getClass().getSimpleName())
+            .log(
+                confirmed
+                    ? "Outbox state update failed after broker confirm"
+                    : "Outbox delivery unconfirmed");
         if (ex instanceof InterruptedException) {
           Thread.currentThread().interrupt();
           return;

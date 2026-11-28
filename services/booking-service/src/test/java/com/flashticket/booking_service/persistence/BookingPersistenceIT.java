@@ -888,7 +888,9 @@ class BookingPersistenceIT {
           var converter = new JacksonJsonMessageConverter(context.getBean(JsonMapper.class));
           var method =
               SalesConfigurationListener.class.getMethod(
-                  "handleSalesConfiguredEvent", Envelope.class);
+                  "handleSalesConfiguredEventDelivery",
+                  Envelope.class,
+                  org.springframework.amqp.core.Message.class);
           var methods =
               new org.springframework.messaging.handler.annotation.support
                   .DefaultMessageHandlerMethodFactory();
@@ -4746,7 +4748,9 @@ class BookingPersistenceIT {
                   dlq)));
       var method =
           com.flashticket.booking_service.messaging.AcceptPaymentListener.class.getMethod(
-              "handleAcceptPayment", Envelope.class);
+              "handleAcceptPaymentDelivery",
+              Envelope.class,
+              org.springframework.amqp.core.Message.class);
       var methods =
           new org.springframework.messaging.handler.annotation.support
               .DefaultMessageHandlerMethodFactory();
@@ -5185,7 +5189,9 @@ class BookingPersistenceIT {
                   dlq)));
       var method =
           com.flashticket.booking_service.messaging.AcceptPaymentListener.class.getMethod(
-              "handleAcceptPayment", Envelope.class);
+              "handleAcceptPaymentDelivery",
+              Envelope.class,
+              org.springframework.amqp.core.Message.class);
       var methods =
           new org.springframework.messaging.handler.annotation.support
               .DefaultMessageHandlerMethodFactory();
@@ -6719,7 +6725,9 @@ class BookingPersistenceIT {
                 orderService));
         endpoint.setMethod(
             com.flashticket.booking_service.messaging.BookingIssuanceResultListener.class.getMethod(
-                completed ? "handleTicketsIssued" : "handleIssuanceFailed", Envelope.class));
+                completed ? "handleTicketsIssuedDelivery" : "handleIssuanceFailedDelivery",
+                Envelope.class,
+                org.springframework.amqp.core.Message.class));
         endpoint.setQueueNames(queue);
         endpoint.setMessageHandlerMethodFactory(methods);
         var factory = new SimpleRabbitListenerContainerFactory();
@@ -8804,7 +8812,9 @@ class BookingPersistenceIT {
         new com.flashticket.booking_service.messaging.EventCancellationListener(salesService));
     endpoint.setMethod(
         com.flashticket.booking_service.messaging.EventCancellationListener.class.getMethod(
-            "handleEventCancelled", Envelope.class));
+            "handleEventCancelledDelivery",
+            Envelope.class,
+            org.springframework.amqp.core.Message.class));
     endpoint.setQueueNames(queue);
     endpoint.setMessageHandlerMethodFactory(methods);
     var factory = new SimpleRabbitListenerContainerFactory();

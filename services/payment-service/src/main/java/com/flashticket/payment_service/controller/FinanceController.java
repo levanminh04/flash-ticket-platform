@@ -69,7 +69,6 @@ public class FinanceController {
       @Valid @RequestBody ReconciliationRequest request,
       @AuthenticationPrincipal Jwt jwt) {
     var response = financeService.confirmReconciliation(eventId, request, jwt.getSubject());
-    log.info("[FinanceController] confirmReconciliation eventId={}", eventId);
     return ApiResponse.success(response, "Xác nhận đối soát thành công");
   }
 
@@ -83,7 +82,6 @@ public class FinanceController {
       @Parameter(description = "Mã sự kiện", required = true) @PathVariable UUID eventId,
       @AuthenticationPrincipal Jwt jwt) {
     var response = financeService.markEventPaid(eventId, jwt.getSubject());
-    log.info("[FinanceController] markEventPaid eventId={}", eventId);
     return ApiResponse.success(response, "Đánh dấu đã chi trả thành công");
   }
 }

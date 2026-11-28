@@ -1,5 +1,6 @@
 package com.flashticket.booking_service.order.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -436,6 +437,15 @@ class OrderControllerTests {
             "1",
             List.of());
     when(orderService.createOrder(eq("buyer-subject"), eq(key), any())).thenReturn(response);
+    var temporary = UUID.randomUUID();
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(
+                com.flashticket.booking_service.observability.BusinessTelemetry.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
 
     mvc.perform(
             post("/api/v1/orders")
@@ -444,6 +454,7 @@ class OrderControllerTests {
                         .jwt(token -> token.subject("buyer-subject"))
                         .authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
                 .header("Idempotency-Key", key.toString())
+                .header("X-Correlation-Id", temporary.toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -454,9 +465,29 @@ class OrderControllerTests {
                 """))
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/api/v1/orders/" + orderId))
+        .andExpect(header().string("X-Correlation-Id", orderId.toString()))
         .andExpect(jsonPath("$.orderId").value(orderId.toString()))
         .andExpect(jsonPath("$.state").value("PENDING_PAYMENT"));
     verify(orderService).createOrder(eq("buyer-subject"), eq(key), any());
+    logger.detachAppender(appender);
+    appender.stop();
+    // B16 §3: dòng nối correlation tạm (header vào) với orderId.
+    assertThat(appender.list)
+        .filteredOn(
+            event ->
+                event.getKeyValuePairs().stream()
+                    .anyMatch(
+                        pair ->
+                            pair.key.equals("eventName")
+                                && pair.value.equals("order.correlation-linked")))
+        .singleElement()
+        .satisfies(
+            event -> {
+              var fields = new java.util.HashMap<String, Object>();
+              event.getKeyValuePairs().forEach(pair -> fields.put(pair.key, pair.value));
+              assertThat(fields).containsEntry("correlationId", temporary.toString());
+              assertThat(fields).containsEntry("orderId", orderId.toString());
+            });
   }
 
   @Test

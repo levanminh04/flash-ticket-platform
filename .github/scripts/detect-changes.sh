@@ -23,6 +23,8 @@ while IFS= read -r f; do
   if [[ -z $f || $f == *.md || $f == .env.example || $f == */.env.example ]]; then continue; fi
   while IFS=$'\t' read -r name path runtime; do
     if [[ $f == "$path"/* ]]; then build[$name]=1; fi
+    # Shared log contract/checks affect only services listed in deploy/observability/b16-services.txt.
+    if [[ $f == deploy/observability/* ]] && grep -qxF "$name" "$root/deploy/observability/b16-services.txt"; then build[$name]=1; fi
     if [[ $runtime == k8s ]]; then
       if [[ $f == "deploy/k8s/$name/"*.yaml || $f == deploy/k8s/namespace.yaml || $f == deploy/scripts/deploy-k8s-service.sh || $f == deploy/scripts/migrate-k8s-discovery.py ]]; then recreate[$name]=1; fi
     else

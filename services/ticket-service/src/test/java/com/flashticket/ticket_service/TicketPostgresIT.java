@@ -682,6 +682,53 @@ class TicketPostgresIT {
   }
 
   @Test
+  void outboxFailureAfterLeaseChangeIsNotLoggedAsRetry() {
+    service.issue(issue());
+    var rabbit = new RecordingRabbit();
+    var publisher =
+        new com.flashticket.ticket_service.worker.TicketOutboxPublisher(
+            jdbc,
+            JSON,
+            new JdbcTransactionManager(jdbc.getDataSource()),
+            rabbit,
+            java.time.Duration.ofSeconds(1),
+            java.time.Duration.ofSeconds(30),
+            saga());
+    rabbit.ack = false;
+    // Worker khác claim lại trong lúc chờ confirm: lệnh dời lịch của worker này không tác động.
+    rabbit.onSend =
+        () -> jdbc.update("UPDATE ticket_schema.tbl_outbox_messages SET attempts=attempts+1");
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(
+                com.flashticket.ticket_service.worker.TicketOutboxPublisher.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(publisher.publishBatch(1)).isZero();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM ticket_schema.tbl_outbox_messages WHERE last_error_code IS NOT NULL",
+                Integer.class))
+        .isZero();
+    assertThat(appender.list)
+        .singleElement()
+        .satisfies(
+            event -> {
+              var fields = new HashMap<String, Object>();
+              event.getKeyValuePairs().forEach(pair -> fields.put(pair.key, pair.value));
+              assertThat(fields).containsEntry("outcome", "UNKNOWN");
+              assertThat(fields).containsEntry("reasonCode", "LEASE_CHANGED");
+            });
+  }
+
+  @Test
   void outboxConfirmsAndReturnsControlPublicationAndRetryKeepsMessageId() {
     service.issue(issue());
     var rabbit = new RecordingRabbit();
@@ -951,6 +998,7 @@ class TicketPostgresIT {
 
   static final class RecordingRabbit extends org.springframework.amqp.rabbit.core.RabbitTemplate {
     boolean ack = true, returned = false;
+    Runnable onSend = () -> {};
     final List<org.springframework.amqp.core.Message> sent = new ArrayList<>();
     final List<String> routes = new ArrayList<>();
 
@@ -970,6 +1018,7 @@ class TicketPostgresIT {
         correlation.setReturned(
             new org.springframework.amqp.core.ReturnedMessage(
                 message, 312, "NO_ROUTE", exchange, routing));
+      onSend.run();
       correlation
           .getFuture()
           .complete(

@@ -11,12 +11,14 @@ import com.flashticket.payment_service.entity.EventPayout;
 import com.flashticket.payment_service.exception.PaymentErrorCode;
 import com.flashticket.payment_service.exception.PaymentException;
 import com.flashticket.payment_service.mapper.MoneyMapper;
+import com.flashticket.payment_service.observability.BusinessTelemetry;
 import com.flashticket.payment_service.repository.*;
 import com.flashticket.payment_service.service.FinanceService;
 import com.flashticket.payment_service.service.MessagingService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -136,7 +138,12 @@ public class FinanceServiceImpl implements FinanceService {
     payout.setReconciledAt(Instant.now());
     payout.setReconciliationEvidence(request.evidence());
     var saved = payouts.save(payout);
-    log.info("Event reconciled: eventId={}, adminSubject={}", eventId, adminSubject);
+    BusinessTelemetry.committed(
+        "reconciliation",
+        Map.of("eventId", eventId.toString(), "actorSubject", adminSubject),
+        null,
+        "RECONCILED",
+        "RECONCILIATION_RECORDED");
     return buildReconciliation(stored, saved);
   }
 
@@ -161,7 +168,12 @@ public class FinanceServiceImpl implements FinanceService {
       throw new PaymentException(PaymentErrorCode.RECONCILIATION_STALE);
     payout.setPaidBy(adminSubject);
     payout.setPaidAt(Instant.now());
-    log.info("Event payout marked paid: eventId={}, adminSubject={}", eventId, adminSubject);
+    BusinessTelemetry.committed(
+        "payout",
+        Map.of("eventId", eventId.toString(), "actorSubject", adminSubject),
+        "RECONCILED",
+        "PAID",
+        "PAYOUT_RECORDED");
     return buildReconciliation(stored, payout);
   }
 

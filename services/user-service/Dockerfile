@@ -14,6 +14,13 @@ COPY --from=extract --chown=10001:10001 /builder/extracted/dependencies/ ./
 COPY --from=extract --chown=10001:10001 /builder/extracted/spring-boot-loader/ ./
 COPY --from=extract --chown=10001:10001 /builder/extracted/snapshot-dependencies/ ./
 COPY --from=extract --chown=10001:10001 /builder/extracted/application/ ./
+# Pinned upstream release asset, verified by BuildKit before use.
+ADD --checksum=sha256:e43a270df53c6f423e0ab157be9c27ccc01d5dc3232e162fe54777573db2f149 --chmod=0444 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.33.1/opentelemetry-javaagent.jar /otel/opentelemetry-javaagent.jar
+RUN chmod 0755 /otel
+COPY --chmod=0555 docker-entrypoint.sh /app/docker-entrypoint.sh
+ARG SERVICE_VERSION=local-dev
+ENV SERVICE_VERSION=$SERVICE_VERSION
+ENV SERVICE_NAME=user-service
 USER 10001:10001
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50.0 -Duser.timezone=UTC"
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

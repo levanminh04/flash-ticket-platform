@@ -52,6 +52,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.uid
+        - name: HOST_ID  # host.id của OpenTelemetry/B16: node chạy pod
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: OTEL_AGENT_ENABLED  # tắt cứng: env thắng ConfigMap/Secret; bật bằng "true" khi có otel-collector
+          value: "false"
         envFrom:
         - configMapRef:
             name: user-service-config

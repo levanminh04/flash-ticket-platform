@@ -7,7 +7,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -74,6 +78,8 @@ public final class TicketOutboxPublisher {
       Pending message = claim();
       if (message == null) break;
       String failure = null;
+      String logReason = null; // mã lý do riêng của log khi lỗi không đến từ broker
+      int previouslyPublished = published;
       try {
         if (message.schema() != 1) throw new IllegalArgumentException("Invalid stored message");
         var data = json.readTree(message.data());
@@ -118,18 +124,44 @@ public final class TicketOutboxPublisher {
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
         failure = "INTERRUPTED";
-      } catch (java.util.concurrent.ExecutionException
-          | java.util.concurrent.TimeoutException
-          | RuntimeException unavailable) {
+      } catch (ExecutionException | TimeoutException | AmqpException unavailable) {
         failure = "BROKER_UNAVAILABLE";
+      } catch (RuntimeException other) {
+        // Dữ liệu đã lưu sai hoặc lỗi DB (kể cả sau khi broker xác nhận): giữ mã DB cũ, log ghi mã
+        // trung tính.
+        failure = "BROKER_UNAVAILABLE";
+        logReason = "PUBLISH_FAILED";
       }
-      if (failure != null)
-        jdbc.update(
-            "UPDATE ticket_schema.tbl_outbox_messages SET last_error_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE message_id=? AND attempts=? AND published_at IS NULL",
-            failure,
-            retryMillis(message.attempt()),
-            message.id(),
-            message.attempt());
+      // 0 hàng: lease đã đổi (worker khác claim hoặc đã published), lần này không dời lịch.
+      boolean rescheduled =
+          failure != null
+              && jdbc.update(
+                      "UPDATE ticket_schema.tbl_outbox_messages SET last_error_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE message_id=? AND attempts=? AND published_at IS NULL",
+                      failure,
+                      retryMillis(message.attempt()),
+                      message.id(),
+                      message.attempt())
+                  > 0;
+      LoggerFactory.getLogger(TicketOutboxPublisher.class)
+          .atInfo()
+          .addKeyValue("eventName", "ticket.outbox.result")
+          .addKeyValue("operation", "outbox-publish")
+          .addKeyValue(
+              "outcome",
+              rescheduled
+                  ? "RETRY"
+                  : failure == null && published > previouslyPublished ? "SUCCESS" : "UNKNOWN")
+          .addKeyValue(
+              "reasonCode",
+              rescheduled
+                  ? (logReason != null ? logReason : failure)
+                  : failure == null && published > previouslyPublished
+                      ? "BROKER_CONFIRMED"
+                      : "LEASE_CHANGED")
+          .addKeyValue("messageId", message.id().toString())
+          .addKeyValue("correlationId", message.correlation().toString())
+          .addKeyValue("retryCount", Math.max(0, message.attempt() - 1))
+          .log("Outbox delivery result");
       if (Thread.currentThread().isInterrupted()) break;
     }
     return published;

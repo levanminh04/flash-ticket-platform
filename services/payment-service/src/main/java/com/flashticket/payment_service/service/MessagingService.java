@@ -16,5 +16,6 @@ public interface MessagingService {
 
   void markPublished(UUID messageId, int claimedAttempt, Instant publishedAt);
 
-  void rescheduleOutbox(UUID messageId, int claimedAttempt, Instant retryAt, String errorCode);
+  /** Trả false khi lease đã đổi (đã published hoặc worker khác claim): không dời lịch được. */
+  boolean rescheduleOutbox(UUID messageId, int claimedAttempt, Instant retryAt, String errorCode);
 }
