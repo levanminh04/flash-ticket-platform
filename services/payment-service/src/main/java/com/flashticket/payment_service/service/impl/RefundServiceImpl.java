@@ -85,7 +85,7 @@ public class RefundServiceImpl implements RefundService {
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public List<UUID> findEventRefundRunsToSelect(int limit) {
     return eventRefundRunRepository.findIdsToSelect(
         PageRequest.of(0, Math.min(Math.max(limit, 1), 100)));
@@ -141,14 +141,14 @@ public class RefundServiceImpl implements RefundService {
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public List<UUID> findRefundsToSend(int limit) {
     return refundRepository.findIdsByState(
         RefundState.PENDING, PageRequest.of(0, Math.min(Math.max(limit, 1), 100)));
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public List<UUID> findRefundsToPoll(Instant startedBefore, int limit) {
     return refundRepository.findIdsToPoll(
         startedBefore, PageRequest.of(0, Math.min(Math.max(limit, 1), 100)));

@@ -26,8 +26,12 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class PaymentMappersTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "paymentWriterDataSource")
+      name = "writeDs",
+      answers = org.mockito.Answers.RETURNS_MOCKS)
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource reader;
 
   @Autowired OrderPaymentSnapshotMapper snapshotMapper;
   @Autowired PaymentStartMapper startMapper;

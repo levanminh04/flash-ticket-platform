@@ -72,12 +72,8 @@ class PaymentTwoInstanceIT {
     second = PaymentPostgresFixture.openServiceContext(true);
     assertThat(first.getBean(EntityManagerFactory.class))
         .isNotSameAs(second.getBean(EntityManagerFactory.class));
-    assertThat(first.getBean("paymentWriterDataSource"))
-        .isNotSameAs(second.getBean("paymentWriterDataSource"));
-    assertThat(first.getBean("paymentReportReaderDataSource"))
-        .isNotSameAs(second.getBean("paymentReportReaderDataSource"));
-    assertThat(first.getBean("paymentReportReplicaScheduler"))
-        .isNotSameAs(second.getBean("paymentReportReplicaScheduler"));
+    assertThat(first.getBean("writeDs")).isNotSameAs(second.getBean("writeDs"));
+    assertThat(first.getBean("readDs")).isNotSameAs(second.getBean("readDs"));
   }
 
   @AfterEach
@@ -91,6 +87,9 @@ class PaymentTwoInstanceIT {
 
   @Test
   void twoContextsSerializePaymentStartsAndDuplicateIpn() throws Exception {
+    var primaryRead =
+        new org.springframework.transaction.support.TransactionTemplate(
+            first.getBean(org.springframework.transaction.PlatformTransactionManager.class));
     var purchase = PaymentPostgresFixture.purchase(first, UUID.randomUUID(), "buyer-1");
     for (var context : List.of(first, second))
       when(context
@@ -156,15 +155,28 @@ class PaymentTwoInstanceIT {
     } finally {
       go.countDown();
     }
-    assertThat(first.getBean(PaymentAttemptRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(ChargeRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(PaymentSagaRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(OutboxMessageRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(RefundRepository.class).count()).isZero();
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(PaymentAttemptRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(primaryRead.<Long>execute(status -> first.getBean(ChargeRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            primaryRead.<Long>execute(status -> first.getBean(PaymentSagaRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(OutboxMessageRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(primaryRead.<Long>execute(status -> first.getBean(RefundRepository.class).count()))
+        .isZero();
   }
 
   @Test
   void twoWorkersFenceClaimsAndAllowStableIdRedelivery() throws Exception {
+    var primaryRead =
+        new org.springframework.transaction.support.TransactionTemplate(
+            first.getBean(org.springframework.transaction.PlatformTransactionManager.class));
     var purchase = PaymentPostgresFixture.purchase(first, UUID.randomUUID(), "buyer-1");
     when(first
             .getBean(BookingPurchaseClient.class)
@@ -253,9 +265,10 @@ class PaymentTwoInstanceIT {
           .getBean(MessagingService.class)
           .rescheduleOutbox(claimed.getMessageId(), claimed.getAttempts(), now, "STALE");
       var stored =
-          first
-              .getBean(OutboxMessageRepository.class)
-              .findById(claimed.getMessageId())
+          primaryRead
+              .execute(
+                  status ->
+                      first.getBean(OutboxMessageRepository.class).findById(claimed.getMessageId()))
               .orElseThrow();
       assertThat(stored.getPublishedAt()).isNull();
       assertThat(stored.getLastErrorCode()).isNull();
@@ -286,9 +299,12 @@ class PaymentTwoInstanceIT {
         publishGo.countDown();
       }
       assertThat(
-              first
-                  .getBean(OutboxMessageRepository.class)
-                  .findById(claimed.getMessageId())
+              primaryRead
+                  .execute(
+                      status ->
+                          first
+                              .getBean(OutboxMessageRepository.class)
+                              .findById(claimed.getMessageId()))
                   .orElseThrow()
                   .getPublishedAt())
           .isNotNull();
@@ -308,6 +324,9 @@ class PaymentTwoInstanceIT {
 
   @Test
   void twoContextsRecoverTheSameSagaAndRefundRunOnce() throws Exception {
+    var primaryRead =
+        new org.springframework.transaction.support.TransactionTemplate(
+            first.getBean(org.springframework.transaction.PlatformTransactionManager.class));
     UUID eventId = UUID.randomUUID();
     var purchase = PaymentPostgresFixture.purchase(first, eventId, "buyer-1");
     when(first
@@ -348,7 +367,10 @@ class PaymentTwoInstanceIT {
     } finally {
       go.countDown();
     }
-    assertThat(first.getBean(OutboxMessageRepository.class).count()).isEqualTo(2);
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(OutboxMessageRepository.class).count()))
+        .isEqualTo(2);
     UUID refundEvent = UUID.randomUUID();
     PaymentPostgresFixture.seedConfirmedOrder(first, refundEvent, "organizer-1");
     PaymentPostgresFixture.seedConfirmedOrder(first, refundEvent, "organizer-1");
@@ -379,7 +401,10 @@ class PaymentTwoInstanceIT {
             codec.fromTree(node, EventCancellation.class));
     first.getBean(RefundService.class).recordEventCancellation(cancellation);
     second.getBean(RefundService.class).recordEventCancellation(cancellation);
-    var run = first.getBean(EventRefundRunRepository.class).findAll().getFirst();
+    var run =
+        primaryRead
+            .execute(status -> first.getBean(EventRefundRunRepository.class).findAll())
+            .getFirst();
     var selectGo = new CountDownLatch(1);
     try (var pool = Executors.newFixedThreadPool(2)) {
       var a =
@@ -403,12 +428,22 @@ class PaymentTwoInstanceIT {
       selectGo.countDown();
     }
     var selected =
-        first.getBean(EventRefundRunRepository.class).findById(run.getId()).orElseThrow();
+        primaryRead
+            .execute(status -> first.getBean(EventRefundRunRepository.class).findById(run.getId()))
+            .orElseThrow();
     assertThat(selected.getSelectedOrderCount()).isEqualTo(2);
     assertThat(selected.getSelectionComplete()).isTrue();
-    assertThat(first.getBean(EventRefundItemRepository.class).count()).isEqualTo(2);
-    assertThat(first.getBean(RefundRepository.class).count()).isEqualTo(2);
-    var refundId = first.getBean(RefundRepository.class).findAll().getFirst().getId();
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(EventRefundItemRepository.class).count()))
+        .isEqualTo(2);
+    assertThat(primaryRead.<Long>execute(status -> first.getBean(RefundRepository.class).count()))
+        .isEqualTo(2);
+    var refundId =
+        primaryRead
+            .execute(status -> first.getBean(RefundRepository.class).findAll())
+            .getFirst()
+            .getId();
     var sendGo = new CountDownLatch(1);
     try (var pool = Executors.newFixedThreadPool(2)) {
       var a =
@@ -431,15 +466,23 @@ class PaymentTwoInstanceIT {
     } finally {
       sendGo.countDown();
     }
-    assertThat(first.getBean(RefundAttemptRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(RefundRepository.class).findById(refundId).orElseThrow().getState())
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(RefundAttemptRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            primaryRead
+                .execute(status -> first.getBean(RefundRepository.class).findById(refundId))
+                .orElseThrow()
+                .getState())
         .isEqualTo(RefundState.SUCCEEDED);
-    for (var refund : first.getBean(RefundRepository.class).findAll())
+    for (var refund :
+        primaryRead.execute(status -> first.getBean(RefundRepository.class).findAll()))
       first.getBean(RefundService.class).sendRefund(refund.getId());
     assertThat(
-            first
-                .getBean(EventRefundRunRepository.class)
-                .findById(run.getId())
+            primaryRead
+                .execute(
+                    status -> first.getBean(EventRefundRunRepository.class).findById(run.getId()))
                 .orElseThrow()
                 .getCompletedAt())
         .isNotNull();
@@ -449,6 +492,9 @@ class PaymentTwoInstanceIT {
 
   @Test
   void redeliveredConsumerMessagesCommitBeforeManualAck() throws Exception {
+    var primaryRead =
+        new org.springframework.transaction.support.TransactionTemplate(
+            first.getBean(org.springframework.transaction.PlatformTransactionManager.class));
     var purchase = PaymentPostgresFixture.purchase(first, UUID.randomUUID(), "buyer-1");
     when(first
             .getBean(BookingPurchaseClient.class)
@@ -463,7 +509,8 @@ class PaymentTwoInstanceIT {
                 "buyer-1",
                 UUID.randomUUID());
     first.getBean(PaymentService.class).handleIPN(PaymentPostgresFixture.signedIpn(start));
-    var charge = first.getBean(ChargeRepository.class).findAll().getFirst();
+    var charge =
+        primaryRead.execute(status -> first.getBean(ChargeRepository.class).findAll()).getFirst();
     var decision =
         new Envelope<>(
             UUID.randomUUID(),
@@ -494,7 +541,10 @@ class PaymentTwoInstanceIT {
           .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
       verify(channel).basicNack(17, false, true);
       verify(channel, never()).basicAck(anyLong(), anyBoolean());
-      assertThat(first.getBean(PaymentConfirmationRepository.class).count()).isZero();
+      assertThat(
+              primaryRead.<Long>execute(
+                  status -> first.getBean(PaymentConfirmationRepository.class).count()))
+          .isZero();
     } finally {
       jdbc.execute(
           "alter table payment_schema.tbl_payment_confirmations drop constraint ha_reject_confirmation");
@@ -503,7 +553,10 @@ class PaymentTwoInstanceIT {
     doAnswer(
             invocation -> {
               assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-              assertThat(first.getBean(PaymentConfirmationRepository.class).count()).isEqualTo(1);
+              assertThat(
+                      primaryRead.<Long>execute(
+                          status -> first.getBean(PaymentConfirmationRepository.class).count()))
+                  .isEqualTo(1);
               return null;
             })
         .when(channel)
@@ -608,23 +661,43 @@ class PaymentTwoInstanceIT {
                               envelope.messageId()))
                       .isEqualTo(1));
     }
-    assertThat(first.getBean(PaymentConfirmationRepository.class).count()).isEqualTo(1);
-    assertThat(first.getBean(EventRefundRunRepository.class).count()).isEqualTo(1);
     assertThat(
-            first
-                .getBean(PaymentSagaRepository.class)
-                .findById(purchase.orderId())
+            primaryRead.<Long>execute(
+                status -> first.getBean(PaymentConfirmationRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            primaryRead.<Long>execute(
+                status -> first.getBean(EventRefundRunRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            primaryRead
+                .execute(
+                    status ->
+                        first.getBean(PaymentSagaRepository.class).findById(purchase.orderId()))
                 .orElseThrow()
                 .getState())
         .isEqualTo(PaymentSagaState.COMPLETED);
     second.getBean(RabbitListenerEndpointRegistry.class).stop();
     second.close();
     second = PaymentPostgresFixture.openServiceContext(true);
-    assertThat(second.getBean(EventRefundRunRepository.class).count()).isEqualTo(1);
+    var secondPrimaryRead =
+        new org.springframework.transaction.support.TransactionTemplate(
+            second.getBean(org.springframework.transaction.PlatformTransactionManager.class));
+    assertThat(
+            secondPrimaryRead.<Long>execute(
+                status -> second.getBean(EventRefundRunRepository.class).count()))
+        .isEqualTo(1);
     second.getBean(PaymentWorker.class).selectEventRefundOrders();
     second.getBean(PaymentWorker.class).sendRefunds();
-    assertThat(second.getBean(RefundRepository.class).count()).isEqualTo(1);
-    assertThat(second.getBean(RefundRepository.class).findAll().getFirst().getState())
+    assertThat(
+            secondPrimaryRead.<Long>execute(
+                status -> second.getBean(RefundRepository.class).count()))
+        .isEqualTo(1);
+    assertThat(
+            secondPrimaryRead
+                .execute(status -> second.getBean(RefundRepository.class).findAll())
+                .getFirst()
+                .getState())
         .isEqualTo(RefundState.SUCCEEDED);
   }
 }

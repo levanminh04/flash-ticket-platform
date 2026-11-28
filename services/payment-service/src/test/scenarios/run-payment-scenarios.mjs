@@ -206,7 +206,11 @@ try {
     '--spring.security.oauth2.client.registration.booking.client-secret=scenario-only',
     '--spring.security.oauth2.client.registration.booking.authorization-grant-type=client_credentials',
     `--spring.security.oauth2.client.provider.booking.token-uri=${issuer}/oauth/token`,
-    '--spring.datasource.url=jdbc:postgresql://127.0.0.1:25432/payment_db','--spring.datasource.username=postgres','--spring.datasource.password=payment-flow-test',
+    // Hai pool cùng primary chỉ trong bộ kịch bản disposable cũ; không chứng minh replica routing.
+    '--app.db.write.jdbc-url=jdbc:postgresql://127.0.0.1:25432/payment_db','--app.db.write.username=postgres','--app.db.write.password=payment-flow-test',
+    '--app.db.write.schema=payment_schema','--app.db.write.connection-init-sql=SET ROLE payment_owner',
+    '--app.db.read.jdbc-url=jdbc:postgresql://127.0.0.1:25432/payment_db','--app.db.read.username=postgres','--app.db.read.password=payment-flow-test',
+    '--app.db.read.schema=payment_schema','--app.db.read.read-only=true',
     '--spring.jpa.hibernate.ddl-auto=validate','--spring.jpa.open-in-view=false','--spring.jpa.properties.hibernate.default_schema=payment_schema',
     '--spring.jpa.properties.hibernate.type.json_format_mapper=org.hibernate.type.format.jackson.Jackson3JsonFormatMapper',
     '--spring.rabbitmq.host=127.0.0.1','--spring.rabbitmq.port=25672','--spring.rabbitmq.username=payment_test','--spring.rabbitmq.password=payment-flow-test',

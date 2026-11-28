@@ -21,8 +21,12 @@ import tools.jackson.core.type.TypeReference;
 @SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class PaymentContractComponentsTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "paymentWriterDataSource")
+      name = "writeDs",
+      answers = org.mockito.Answers.RETURNS_MOCKS)
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource reader;
 
   @Autowired ContractCodec codec;
   @Autowired PurchaseSnapshotValidator purchases;

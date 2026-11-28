@@ -78,7 +78,7 @@ public class FinanceServiceImpl implements FinanceService {
   }
 
   @Override
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public EventFinancialSummary getFinancialSummary(UUID eventId) {
     var stored = finance.findById(eventId).orElse(null);
     if (stored == null || stored.getFeeRate() == null)
@@ -98,7 +98,7 @@ public class FinanceServiceImpl implements FinanceService {
   }
 
   @Override
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public EventReconciliationView getReconciliation(
       UUID eventId, String actorSubject, boolean admin) {
     var stored = finance.findById(eventId).orElse(null);

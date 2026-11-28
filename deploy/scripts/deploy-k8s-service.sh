@@ -342,6 +342,8 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
         continue
     key, separator, value = line.removeprefix('export ').partition('=')
     key = key.strip()
+    if separator and service == 'payment-service' and (key.startswith('PAYMENT_REPORT_REPLICA_') or key in ('PAYMENT_DB_URL', 'PAYMENT_DB_USERNAME', 'PAYMENT_DB_PASSWORD', 'PAYMENT_DOCKER_DB_URL', 'SPRING_DATASOURCE_URL')):
+        sys.exit('RETIRED_PAYMENT_DB_KEYS')
     if separator and key in allowed:
         value = value.strip()
         if value[:1] in ('"', "'") and value[-1:] == value[:1]:
@@ -353,8 +355,6 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
             sys.exit('INVALID_BOOKING_READER_FLAG')
         if service == 'event-service' and key == 'EVENT_READ_REPLICA_ENABLED' and value not in ('true', 'false'):
             sys.exit('INVALID_EVENT_READER_FLAG')
-        if service == 'payment-service' and key == 'PAYMENT_REPORT_REPLICA_ENABLED' and value not in ('true', 'false'):
-            sys.exit('INVALID_PAYMENT_READER_FLAG')
         if service == 'ticket-service' and key == 'TICKET_LIST_REPLICA_ENABLED' and value not in ('true', 'false'):
             sys.exit('INVALID_TICKET_READER_FLAG')
         if value:
@@ -901,47 +901,20 @@ PY
   if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
 if [[ $service == payment-service ]]; then
-  python3 - "$target" "$previous" "$mode" <<'PY'
-import base64, binascii, copy, json, pathlib, re, sys, urllib.parse
-from decimal import Decimal
+  python3 - "$target" "$mode" <<'PY'
+import base64, binascii, json, pathlib, re, sys
 
 target = pathlib.Path(sys.argv[1])
-current, mode = sys.argv[2:]
-prefix = 'PAYMENT_REPORT_REPLICA_'
-reader_keys = {prefix + key for key in ('ENABLED', 'JDBC_URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'PROBE_QUERY_TIMEOUT', 'MAX_SAMPLE_AGE', 'READER_TRANSACTION_TIMEOUT')}
+mode = sys.argv[2]
 
 
 def payment_load(revision, file):
     return json.loads((revision / file).read_text(encoding='utf-8'))
 
 
-def payment_enabled(secret):
-    setting = base64.b64decode(secret.get(prefix + 'ENABLED', 'ZmFsc2U='), validate=True)
-    if setting not in (b'true', b'false'):
-        sys.exit('INVALID_PAYMENT_READER_FLAG')
-    return setting == b'true'
-
-
-def payment_semantic(document, kind):
-    result = copy.deepcopy(document)
-    result.pop('status', None)
-    metadata = result.get('metadata', {})
-    for key in ('uid', 'resourceVersion', 'creationTimestamp', 'generation', 'managedFields', 'selfLink'):
-        metadata.pop(key, None)
-    metadata.get('annotations', {}).pop('kubectl.kubernetes.io/last-applied-configuration', None)
-    if not metadata.get('annotations'):
-        metadata.pop('annotations', None)
-    if kind == 'deployment.json':
-        template = result['spec']['template']['metadata']
-        template.get('annotations', {}).pop('flash-ticket/release', None)
-        if not template.get('annotations'):
-            template.pop('annotations', None)
-    if kind == 'secret-env.json':
-        result['data'] = {key: value for key, value in result['data'].items() if key not in reader_keys}
-    return result
-
-
 def payment_profile(revision):
+    if not all((revision / file).is_file() for file in ('deployment.json', 'hpa.json', 'pdb.json')):
+        return False
     deployment = payment_load(revision, 'deployment.json')
     pod = deployment['spec']['template']['spec']
     hpa_doc = payment_load(revision, 'hpa.json')
@@ -965,127 +938,66 @@ def payment_profile(revision):
             and pdb.get('spec') == {'minAvailable': 1, 'selector': selector})
 
 
-def payment_writer_revision(revision, candidate):
-    try:
-        files = ('image', 'deployment.json', 'configmap.json', 'hpa.json', 'pdb.json', 'secret-env.json')
-        if not all((r / file).is_file() for r in (revision, candidate) for file in files):
-            return False
-        if payment_enabled(payment_load(revision, 'secret-env.json')['data']) or not payment_profile(revision) or not payment_profile(candidate):
-            return False
-        if any(payment_load(r, 'hpa.json')['spec'].get('minReplicas') != 2 for r in (revision, candidate)):
-            return False
-        image = (revision / 'image').read_text().strip()
-        if image != (candidate / 'image').read_text().strip():
-            return False
-        for r in (revision, candidate):
-            deployment = payment_load(r, 'deployment.json')
-            if deployment['spec']['template']['metadata']['annotations'].get('flash-ticket/release') != r.name or deployment['spec']['template']['spec']['containers'][0]['image'] != image:
-                return False
-        # Payment hiện đăng ký Eureka, không có Service YAML: giữ absence hoặc cùng Service.
-        for file in (*files[1:], 'service.json'):
-            if (revision / file).exists() != (candidate / file).exists():
-                return False
-            if (revision / file).exists() and payment_semantic(payment_load(revision, file), file) != payment_semantic(payment_load(candidate, file), file):
-                return False
-        return True
-    except (OSError, ValueError, KeyError, TypeError, binascii.Error):
-        return False
-
-
-def payment_seconds(value):
-    match = re.fullmatch(r'(?:PT([0-9]+(?:\.[0-9]+)?)([SMH])|([0-9]+(?:\.[0-9]+)?)(ms|s|m|h))', value)
-    if not match:
-        return Decimal(0)
-    number, unit = (match[1], match[2]) if match[1] is not None else (match[3], match[4])
-    return Decimal(number) * {'ms': Decimal('.001'), 's': 1, 'S': 1, 'm': 60, 'M': 60, 'h': 3600, 'H': 3600}[unit]
-
-
 try:
     secret = payment_load(target, 'secret-env.json')['data']
-    use_reader = payment_enabled(secret)
     config = payment_load(target, 'configmap.json')['data']
     deployment = payment_load(target, 'deployment.json')
     pod = deployment['spec']['template']['spec']
     container = pod['containers'][0]
     hpa = payment_load(target, 'hpa.json')['spec'] if (target / 'hpa.json').is_file() else {}
-    modern = ((target / 'pdb.json').exists() or pod.get('affinity', {}).get('podAntiAffinity')
-              or hpa.get('minReplicas') == 2 or use_reader)
-    # Flag/reader settings chỉ từ env Secret; không nguồn relaxed-binding/JSON/JVM khác.
-    entries = [*config.items(), *((v.get('name', ''), v.get('value', '')) for v in container.get('env', []))]
-    for key, value in entries:
-        normalized = re.sub('[^a-z0-9]', '', key.lower())
-        if normalized.startswith('paymentreportreplica') or (modern and normalized in ('springconfiglocation', 'springconfigadditionallocation', 'springconfigimport', 'springprofilesactive', 'springprofilesinclude', 'springprofilesdefault')):
-            sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-        if normalized == 'springapplicationjson':
-            pending = [('', json.loads(value))]
-            while pending:
-                parent, node = pending.pop()
-                if isinstance(node, dict):
-                    for name, child in node.items():
-                        joined = parent + re.sub('[^a-z0-9]', '', name.lower())
-                        if joined.startswith('paymentreportreplica') or (modern and (joined.startswith('springconfig') or joined.startswith('springprofiles'))):
-                            sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-                        pending.append((joined, child))
-        if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'PAYMENT_JAVA_OPTIONS') and any(token in re.sub('[^a-z0-9]', '', value.lower()) for token in ('paymentreportreplica', 'springconfig', 'springprofiles')):
-            sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-    if any(token in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])] for token in ('paymentreportreplica', 'springconfig', 'springprofiles')):
-        sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-    if modern:
+    pg_keys = {'PG_RW_HOST', 'PG_RO_HOST', 'PG_DB', 'PG_USER', 'PG_PASSWORD', 'PG_WRITE_POOL_SIZE', 'PG_READ_POOL_SIZE'}
+    new_format = mode != 'rollback' or bool(pg_keys.intersection(secret))
+    modern = (target / 'pdb.json').is_file() or pod.get('affinity', {}).get('podAntiAffinity') or hpa.get('minReplicas') == 2
+    if (new_format or modern) and not payment_profile(target):
+        sys.exit('INVALID_PAYMENT_POD_HA')
+    if new_format:
+        if any(key.startswith('PAYMENT_REPORT_REPLICA_') or key in ('PAYMENT_DB_URL', 'PAYMENT_DB_USERNAME', 'PAYMENT_DB_PASSWORD') for key in secret):
+            sys.exit('RETIRED_PAYMENT_DB_KEYS')
+        if any(not secret.get(key) for key in ('PG_RW_HOST', 'PG_RO_HOST', 'PG_DB', 'PG_USER', 'PG_PASSWORD')):
+            sys.exit('MISSING_SECRET_KEYS PAYMENT_DATABASE')
+        values = {key: base64.b64decode(secret[key], validate=True).decode('utf-8') for key in pg_keys if key in secret}
+        for key in ('PG_WRITE_POOL_SIZE', 'PG_READ_POOL_SIZE'):
+            if not re.fullmatch('[1-9][0-9]*', values.get(key, '10')):
+                sys.exit('INVALID_PAYMENT_DB_POOL')
+        if (any(not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?', values[key]) for key in ('PG_RW_HOST', 'PG_RO_HOST'))
+                or values['PG_RW_HOST'].lower() == values['PG_RO_HOST'].lower()
+                or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', values['PG_DB'])):
+            sys.exit('INVALID_PAYMENT_DB_ENDPOINT')
         if container.get('envFrom') != [{'configMapRef': {'name': 'payment-service-config'}}, {'secretRef': {'name': 'payment-service-secret'}}]:
-            sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-        # Không dùng profile một Pod để bật reader hoặc làm baseline HA2.
-        if not payment_profile(target) or (use_reader and hpa.get('minReplicas') != 2):
-            sys.exit('INVALID_PAYMENT_POD_HA')
-    if mode == 'rollback' and use_reader:
-        sys.exit('PAYMENT_ROLLBACK_REQUIRES_WRITER_REVISION')
-    if use_reader:
-        if any(not secret.get(key) for key in reader_keys):
-            sys.exit('MISSING_PAYMENT_READER_KEYS')
-        values = {key.removeprefix(prefix): base64.b64decode(secret[key], validate=True).decode('utf-8') for key in reader_keys}
-        for name in ('PROBE_INTERVAL', 'MAX_SAMPLE_AGE'):
-            if payment_seconds(values[name]) <= 0:
-                sys.exit('INVALID_PAYMENT_READER_TIMING')
-        for name in ('PROBE_QUERY_TIMEOUT', 'READER_TRANSACTION_TIMEOUT'):
-            if not re.fullmatch('[1-9][0-9]*', values[name]):
-                sys.exit('INVALID_PAYMENT_READER_TIMING')
-        jdbc = values['JDBC_URL']
-        url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
-        params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
-        writer = urllib.parse.urlsplit(config.get('PAYMENT_DB_URL', '').removeprefix('jdbc:'))
-        required = {'sslmode': 'require', 'targetServerType': 'secondary', 'connectTimeout': '5', 'socketTimeout': '5'}
-        if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
-                or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
-                or url.path != '/payment_db' or url.hostname == writer.hostname
-                or len(params) != len(required) or dict(params) != required):
-            sys.exit('INVALID_PAYMENT_READER_URL')
-        if not current or not (target.parent / current / 'secret-env.json').is_file():
-            sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
-        active = target.parent / current
-        baseline = current
-        if payment_enabled(payment_load(active, 'secret-env.json')['data']):
-            if not (active / 'writer-baseline').is_file():
-                sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
-            baseline = (active / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not payment_writer_revision(target.parent / baseline, target):
-            sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
-        (target / 'writer-baseline').write_text(baseline + '\n')
-    # Legacy absent-PDB rollback là phục hồi hạ tầng riêng, không phải reader baseline.
-    if modern and current and not use_reader and payment_enabled(payment_load(target.parent / current, 'secret-env.json')['data']):
-        active = target.parent / current
-        if not payment_writer_revision(target, active):
-            sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
-        baseline = target.name if mode == 'rollback' else (active / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not payment_writer_revision(target.parent / baseline, target):
-            sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
-        (target / 'writer-baseline').write_text(baseline + '\n')
-    if modern and (target / 'writer-baseline').is_file():
-        baseline = (target / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not payment_writer_revision(target.parent / baseline, target):
-            sys.exit('PAYMENT_WRITER_REVISION_REQUIRED')
+            sys.exit('INVALID_PAYMENT_DB_SOURCE')
+        forbidden = ('appdb', 'springdatasource', 'paymentreportreplica', 'paymentdb', 'springconfig', 'springprofiles')
+        normalized_pg = {re.sub('[^a-z0-9]', '', key.lower()) for key in pg_keys}
+        entries = [*config.items(), *((entry.get('name', ''), entry.get('value', '')) for entry in container.get('env', []))]
+        for key, value in entries:
+            normalized = re.sub('[^a-z0-9]', '', key.lower())
+            if normalized in normalized_pg or normalized.startswith(forbidden):
+                sys.exit('INVALID_PAYMENT_DB_SOURCE')
+            if normalized == 'springapplicationjson':
+                pending = [('', json.loads(value))]
+                while pending:
+                    parent, node = pending.pop()
+                    if isinstance(node, dict):
+                        for name, child in node.items():
+                            joined = parent + re.sub('[^a-z0-9]', '', name.lower())
+                            if joined in normalized_pg or joined.startswith(forbidden):
+                                sys.exit('INVALID_PAYMENT_DB_SOURCE')
+                            pending.append((joined, child))
+            if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'PAYMENT_JAVA_OPTIONS'):
+                setting = re.sub('[^a-z0-9]', '', value.lower())
+                if any(token in setting for token in (*forbidden, *normalized_pg)):
+                    sys.exit('INVALID_PAYMENT_DB_SOURCE')
+        if any(token in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])] for token in (*forbidden, *normalized_pg)):
+            sys.exit('INVALID_PAYMENT_DB_SOURCE')
+    else:
+        # Snapshot cũ chỉ được restore cùng image/config gốc, không migrate Secret tại chỗ.
+        flag = base64.b64decode(secret.get('PAYMENT_REPORT_REPLICA_ENABLED', 'ZmFsc2U='), validate=True)
+        if flag != b'false':
+            sys.exit('PAYMENT_ROLLBACK_REQUIRES_WRITER_REVISION')
+        if not secret.get('PAYMENT_DB_PASSWORD') or not config.get('PAYMENT_DB_URL'):
+            sys.exit('INVALID_PAYMENT_LEGACY_SNAPSHOT')
 except (OSError, ValueError, KeyError, TypeError, binascii.Error):
-    sys.exit('INVALID_PAYMENT_READER_CONFIG')
+    sys.exit('INVALID_PAYMENT_DB_CONFIG')
 PY
-  if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
 if apply_revision "$target" && check_revision "$target"; then
   if [[ -f $target/legacy-deployment.json && ! -f $target/migration-finished ]]; then

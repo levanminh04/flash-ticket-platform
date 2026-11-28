@@ -36,8 +36,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import(PaymentReadRepositoryTestConfiguration.class)
 class PaymentJwtSecurityTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "paymentWriterDataSource")
+      name = "writeDs",
+      answers = org.mockito.Answers.RETURNS_MOCKS)
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource reader;
 
   static final String ISSUER = "https://issuer.example.test";
   static final RSAKey KEY = key();
