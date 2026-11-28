@@ -161,4 +161,112 @@ class IdentityConsumerTests {
       verify(channel, never()).basicAck(anyLong(), anyBoolean());
     }
   }
+
+  /** Quyết định `user.identity-consume` phát ra trong `action` (T-076 REVIEW-10 N1). */
+  private static java.util.List<java.util.Map<String, Object>> decisions(ThrowingAction action) {
+    var logger =
+        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(UserTelemetry.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      try {
+        action.run();
+      } catch (Exception ignored) {
+        // ném lỗi lại là hành vi mong đợi ở các ca lệnh kênh lỗi
+      }
+      return appender.list.stream()
+          .map(
+              e -> {
+                java.util.Map<String, Object> f = new java.util.HashMap<>();
+                e.getKeyValuePairs().forEach(p -> f.put(p.key, p.value));
+                return f;
+              })
+          .toList();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @FunctionalInterface
+  private interface ThrowingAction {
+    void run() throws Exception;
+  }
+
+  private IdentityConsumer consumer(UserStore store, jakarta.validation.Validator validator) {
+    return new IdentityConsumer(
+        JsonMapper.builder().build(),
+        validator,
+        store,
+        new UserTelemetry(new SimpleMeterRegistry(), Clock.systemUTC()),
+        65536);
+  }
+
+  @Test
+  void failedAckAfterStorageIsLoggedAsUnknownNotSuccess() throws Exception {
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var c = consumer(mock(UserStore.class), validation.getValidator());
+      Channel channel = mock(Channel.class);
+      doThrow(new java.io.IOException("connection lost")).when(channel).basicAck(7, false);
+      var d = decisions(() -> c.receive(message(ENVELOPE), channel));
+      assertThat(d)
+          .singleElement()
+          .satisfies(
+              f -> {
+                assertThat(f).containsEntry("outcome", "UNKNOWN");
+                assertThat(f).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+                assertThat(f).containsEntry("stateAfter", "PRESENT");
+              });
+    }
+  }
+
+  @Test
+  void failedNackIsLoggedAsUnknownNotRetry() throws Exception {
+    var unavailable = mock(UserStore.class);
+    when(unavailable.ensureUser(anyString(), anyString()))
+        .thenThrow(new MongoException("unavailable"));
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var c = consumer(unavailable, validation.getValidator());
+      Channel channel = mock(Channel.class);
+      doThrow(new IllegalStateException("Channel closed; cannot ack/nack"))
+          .when(channel)
+          .basicNack(7, false, true);
+      var d = decisions(() -> c.receive(message(ENVELOPE), channel));
+      assertThat(d)
+          .singleElement()
+          .satisfies(f -> assertThat(f).containsEntry("outcome", "UNKNOWN"));
+    }
+  }
+
+  @Test
+  void failedRejectIsLoggedAsUnknownNotRejected() throws Exception {
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var c = consumer(mock(UserStore.class), validation.getValidator());
+      Channel channel = mock(Channel.class);
+      doThrow(new java.io.IOException("connection lost")).when(channel).basicReject(7, false);
+      var d =
+          decisions(
+              () ->
+                  c.receive(
+                      message(ENVELOPE.replace("\"schemaVersion\":1", "\"schemaVersion\":2")),
+                      channel));
+      assertThat(d)
+          .singleElement()
+          .satisfies(f -> assertThat(f).containsEntry("outcome", "UNKNOWN"));
+    }
+  }
+
+  @Test
+  void successfulCommandsLogTheirOwnOutcome() throws Exception {
+    try (var validation = Validation.buildDefaultValidatorFactory()) {
+      var c = consumer(mock(UserStore.class), validation.getValidator());
+      Channel channel = mock(Channel.class);
+      var d = decisions(() -> c.receive(message(ENVELOPE), channel));
+      assertThat(d)
+          .singleElement()
+          .satisfies(f -> assertThat(f).containsEntry("outcome", "SUCCESS"));
+    }
+  }
 }

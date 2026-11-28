@@ -12,7 +12,9 @@ import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
@@ -25,6 +27,42 @@ class TicketListenerTests {
   private final TicketService tickets = mock(TicketService.class);
   private final Channel channel = mock(Channel.class);
   private final TicketBusinessListeners listener = new TicketBusinessListeners(json, tickets);
+
+  /** Bản ghi `ticket.message.processed` phát ra trong `action` (T-076 REVIEW-10 R1). */
+  private static List<Map<String, Object>> logs(ThrowingAction action) {
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(
+                com.flashticket.ticket_service.observability.RabbitTelemetry.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      try {
+        action.run();
+      } catch (Exception ignored) {
+        // kết quả ném lỗi được kiểm riêng ở từng ca
+      }
+      return appender.list.stream()
+          .map(
+              e -> {
+                Map<String, Object> f = new HashMap<>();
+                e.getKeyValuePairs().forEach(p -> f.put(p.key, p.value));
+                return f;
+              })
+          .toList();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @FunctionalInterface
+  private interface ThrowingAction {
+    void run() throws Exception;
+  }
+
   private static final UUID EVENT = UUID.fromString("20000000-0000-0000-0000-000000000001");
   private static final UUID ORDER = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
@@ -96,19 +134,79 @@ class TicketListenerTests {
   @Test
   void permanentServiceContractConflictIsRejectedWithoutRequeue() throws IOException {
     doThrow(new InvalidContractException("INBOX_HASH_CONFLICT")).when(tickets).issue(any());
-    listener.issue(message(envelope(TicketContracts.ISSUE, ORDER, issue())), channel);
+    var f =
+        logs(
+            () ->
+                listener.issue(message(envelope(TicketContracts.ISSUE, ORDER, issue())), channel));
     verify(tickets).issue(any());
     verify(channel).basicReject(17L, false);
     verifyNoMoreInteractions(tickets, channel);
+    assertThat(f)
+        .singleElement()
+        .satisfies(
+            x -> {
+              assertThat(x).containsEntry("outcome", "REJECTED");
+              assertThat(x).containsEntry("reasonCode", "INVALID_CONTRACT");
+            });
   }
 
   @Test
   void transientServiceFailureIsRequeuedWithoutAcknowledgement() throws IOException {
     doThrow(new IllegalStateException("private database details")).when(tickets).access(any());
-    listener.access(message(envelope(TicketContracts.ACCESS, EVENT, access("PUBLISHED"))), channel);
+    var f =
+        logs(
+            () ->
+                listener.access(
+                    message(envelope(TicketContracts.ACCESS, EVENT, access("PUBLISHED"))),
+                    channel));
     verify(tickets).access(any());
     verify(channel).basicNack(17L, false, true);
     verifyNoMoreInteractions(tickets, channel);
+    assertThat(f)
+        .singleElement()
+        .satisfies(
+            x -> {
+              assertThat(x).containsEntry("outcome", "RETRY");
+              assertThat(x).containsEntry("reasonCode", "TRANSACTION_UNAVAILABLE");
+            });
+  }
+
+  @Test
+  void failedRejectCommandIsLoggedAsUnknown() throws IOException {
+    doThrow(new InvalidContractException("INBOX_HASH_CONFLICT")).when(tickets).issue(any());
+    doThrow(new IOException("connection lost")).when(channel).basicReject(17L, false);
+    var f =
+        logs(
+            () ->
+                listener.issue(message(envelope(TicketContracts.ISSUE, ORDER, issue())), channel));
+    assertThat(f)
+        .singleElement()
+        .satisfies(
+            x -> {
+              assertThat(x).containsEntry("outcome", "UNKNOWN");
+              assertThat(x).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+            });
+  }
+
+  @Test
+  void failedNackCommandIsLoggedAsUnknown() throws IOException {
+    doThrow(new IllegalStateException("private database details")).when(tickets).access(any());
+    doThrow(new IllegalStateException("Channel closed; cannot ack/nack"))
+        .when(channel)
+        .basicNack(17L, false, true);
+    var f =
+        logs(
+            () ->
+                listener.access(
+                    message(envelope(TicketContracts.ACCESS, EVENT, access("PUBLISHED"))),
+                    channel));
+    assertThat(f)
+        .singleElement()
+        .satisfies(
+            x -> {
+              assertThat(x).containsEntry("outcome", "UNKNOWN");
+              assertThat(x).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+            });
   }
 
   @Test
@@ -121,6 +219,15 @@ class TicketListenerTests {
     order.verify(tickets).access(envelope);
     order.verify(channel).basicAck(17L, false);
     verifyNoMoreInteractions(tickets, channel);
+    // REVIEW-10 R1: dòng log của chính ca này.
+    var f = logs(() -> listener.access(message(envelope), channel));
+    assertThat(f)
+        .singleElement()
+        .satisfies(
+            x -> {
+              assertThat(x).containsEntry("outcome", "UNKNOWN");
+              assertThat(x).containsEntry("reasonCode", "BROKER_COMMAND_FAILED");
+            });
   }
 
   @Test

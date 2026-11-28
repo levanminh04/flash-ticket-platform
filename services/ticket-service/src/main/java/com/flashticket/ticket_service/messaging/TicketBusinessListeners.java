@@ -73,16 +73,20 @@ public class TicketBusinessListeners {
         // Fixed diagnostic code: payload, broker headers and exception text stay inside the
         // boundary.
         LOG.warn("Ticket business message rejected; code=INVALID_CONTRACT");
+        // Lệnh kênh ném lỗi thì không biết broker đã nhận hay chưa (T-076 REVIEW-10 R1).
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         channel.basicReject(tag, false);
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         return;
       } catch (RuntimeException ex) {
         LOG.warn("Ticket business message deferred; failureType={}", ex.getClass().getSimpleName());
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         channel.basicNack(tag, false, true);
         telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
         return;
       }
       // Keep ACK outside the business catch: a transport failure after commit must not send a NACK.
+      telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
       channel.basicAck(tag, false);
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }

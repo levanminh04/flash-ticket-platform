@@ -82,9 +82,10 @@ public final class IdentityConsumer {
               || event.traceparent().substring(36, 52).equals("0".repeat(16))))
         throw new IllegalArgumentException("Invalid traceparent");
     } catch (RuntimeException ex) {
+      // Ghi quyết định sau khi lệnh kênh trả về (T-076 REVIEW-10 N1).
+      brokerCommand(() -> channel.basicReject(tag, false), "UNKNOWN");
       telemetry.decision(
           "identity-consume", "REJECTED", "UNKNOWN", "UNKNOWN", "INVALID_IDENTITY_MESSAGE");
-      channel.basicReject(tag, false);
       return;
     }
     var previous = MDC.getCopyOfContextMap();
@@ -95,18 +96,33 @@ public final class IdentityConsumer {
       try {
         store.ensureUser(event.data().identitySubject(), event.data().displayName());
       } catch (RuntimeException ex) {
-        telemetry.decision(
-            "identity-consume", "RETRY", "UNKNOWN", "UNKNOWN", "IDENTITY_STORAGE_UNAVAILABLE");
         // Existing quorum delivery-limit/DLX policy bounds requeues; ACK only after durable
         // storage.
-        channel.basicNack(tag, false, true);
+        brokerCommand(() -> channel.basicNack(tag, false, true), "UNKNOWN");
+        telemetry.decision(
+            "identity-consume", "RETRY", "UNKNOWN", "UNKNOWN", "IDENTITY_STORAGE_UNAVAILABLE");
         return;
       }
-      channel.basicAck(tag, false);
+      brokerCommand(() -> channel.basicAck(tag, false), "PRESENT");
       telemetry.decision("identity-consume", "SUCCESS", "UNKNOWN", "PRESENT", "IDENTITY_STORED");
     } finally {
       if (previous == null) MDC.clear();
       else MDC.setContextMap(previous);
+    }
+  }
+
+  @FunctionalInterface
+  private interface BrokerCall {
+    void run() throws IOException;
+  }
+
+  /** Lệnh ACK/NACK/reject ném lỗi: không biết broker đã nhận hay chưa; ghi UNKNOWN rồi ném lại. */
+  private void brokerCommand(BrokerCall call, String after) throws IOException {
+    try {
+      call.run();
+    } catch (IOException | RuntimeException ex) {
+      telemetry.decision("identity-consume", "UNKNOWN", "UNKNOWN", after, "BROKER_COMMAND_FAILED");
+      throw ex;
     }
   }
 }
