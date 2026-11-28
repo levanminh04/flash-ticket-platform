@@ -132,25 +132,32 @@ public final class TicketOutboxPublisher {
         failure = "BROKER_UNAVAILABLE";
         logReason = "PUBLISH_FAILED";
       }
-      if (failure != null)
-        jdbc.update(
-            "UPDATE ticket_schema.tbl_outbox_messages SET last_error_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE message_id=? AND attempts=? AND published_at IS NULL",
-            failure,
-            retryMillis(message.attempt()),
-            message.id(),
-            message.attempt());
+      // 0 hàng: lease đã đổi (worker khác claim hoặc đã published), lần này không dời lịch.
+      boolean rescheduled =
+          failure != null
+              && jdbc.update(
+                      "UPDATE ticket_schema.tbl_outbox_messages SET last_error_code=?,next_attempt_at=clock_timestamp()+(? * interval '1 millisecond') WHERE message_id=? AND attempts=? AND published_at IS NULL",
+                      failure,
+                      retryMillis(message.attempt()),
+                      message.id(),
+                      message.attempt())
+                  > 0;
       LoggerFactory.getLogger(TicketOutboxPublisher.class)
           .atInfo()
           .addKeyValue("eventName", "ticket.outbox.result")
           .addKeyValue("operation", "outbox-publish")
           .addKeyValue(
               "outcome",
-              failure != null ? "RETRY" : published > previouslyPublished ? "SUCCESS" : "UNKNOWN")
+              rescheduled
+                  ? "RETRY"
+                  : failure == null && published > previouslyPublished ? "SUCCESS" : "UNKNOWN")
           .addKeyValue(
               "reasonCode",
-              failure != null
+              rescheduled
                   ? (logReason != null ? logReason : failure)
-                  : published > previouslyPublished ? "BROKER_CONFIRMED" : "LEASE_CHANGED")
+                  : failure == null && published > previouslyPublished
+                      ? "BROKER_CONFIRMED"
+                      : "LEASE_CHANGED")
           .addKeyValue("messageId", message.id().toString())
           .addKeyValue("correlationId", message.correlation().toString())
           .addKeyValue("retryCount", Math.max(0, message.attempt() - 1))

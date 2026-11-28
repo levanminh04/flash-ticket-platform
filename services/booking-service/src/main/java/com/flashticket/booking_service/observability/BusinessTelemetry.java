@@ -10,6 +10,23 @@ public final class BusinessTelemetry {
 
   private BusinessTelemetry() {}
 
+  /**
+   * B16 §3: request trước khi có đơn mang correlation tạm; khi tạo đơn thành công ghi một dòng nối
+   * correlation tạm với orderId (correlation bền từ đây).
+   */
+  public static void correlationLinked(UUID order) {
+    String temporary = MDC.get("correlationId");
+    if (order == null || temporary == null || temporary.equals(order.toString())) return;
+    LOG.atInfo()
+        .addKeyValue("eventName", "order.correlation-linked")
+        .addKeyValue("operation", "correlation-linked")
+        .addKeyValue("outcome", "SUCCESS")
+        .addKeyValue("reasonCode", "ORDER_CORRELATION_ASSIGNED")
+        .addKeyValue("correlationId", temporary)
+        .addKeyValue("orderId", order.toString())
+        .log("Request correlation linked to order");
+  }
+
   public static void committed(
       String operation, UUID order, Object before, Object after, String reason) {
     Map<String, Object> fields = new LinkedHashMap<>();

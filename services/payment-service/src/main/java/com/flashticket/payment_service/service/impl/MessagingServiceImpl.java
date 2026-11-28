@@ -76,12 +76,13 @@ public class MessagingServiceImpl implements MessagingService {
 
   @Override
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void rescheduleOutbox(
+  public boolean rescheduleOutbox(
       UUID messageId, int claimedAttempt, Instant retryAt, String errorCode) {
     var message = outboxMessageRepository.findForUpdateByMessageId(messageId).orElseThrow();
-    if (message.getPublishedAt() != null || message.getAttempts() != claimedAttempt) return;
+    if (message.getPublishedAt() != null || message.getAttempts() != claimedAttempt) return false;
     message.setNextAttemptAt(retryAt);
     message.setLastErrorCode(errorCode);
     outboxMessageRepository.save(message);
+    return true;
   }
 }

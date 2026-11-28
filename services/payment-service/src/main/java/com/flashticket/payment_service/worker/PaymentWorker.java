@@ -85,23 +85,32 @@ public class PaymentWorker {
             .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .log("Broker confirmed message");
       } catch (Exception ex) {
-        messaging.rescheduleOutbox(
-            storedMessage.getMessageId(),
-            storedMessage.getAttempts(),
-            Instant.now()
-                .plusSeconds(Math.min(300, 1L << Math.min(8, storedMessage.getAttempts()))),
-            "BROKER_DELIVERY_UNCONFIRMED");
+        boolean rescheduled =
+            messaging.rescheduleOutbox(
+                storedMessage.getMessageId(),
+                storedMessage.getAttempts(),
+                Instant.now()
+                    .plusSeconds(Math.min(300, 1L << Math.min(8, storedMessage.getAttempts()))),
+                "BROKER_DELIVERY_UNCONFIRMED");
         log.atWarn()
             .addKeyValue("eventName", "payment.outbox.result")
             .addKeyValue("operation", "outbox-publish")
-            .addKeyValue("outcome", "RETRY")
+            // Lease đã đổi: worker này không dời lịch được, không biết bản tin sẽ được gửi lại.
+            .addKeyValue("outcome", rescheduled ? "RETRY" : "UNKNOWN")
             // Lỗi sau khi broker đã xác nhận (vd. markPublished) không phải lỗi giao nhận của
             // broker.
-            .addKeyValue("reasonCode", confirmed ? "PUBLISH_FAILED" : "BROKER_DELIVERY_UNCONFIRMED")
+            .addKeyValue(
+                "reasonCode",
+                !rescheduled
+                    ? "LEASE_CHANGED"
+                    : confirmed ? "PUBLISH_FAILED" : "BROKER_DELIVERY_UNCONFIRMED")
             .addKeyValue("messageId", storedMessage.getMessageId().toString())
             .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .addKeyValue("errorType", ex.getClass().getSimpleName())
-            .log("Outbox delivery unconfirmed");
+            .log(
+                confirmed
+                    ? "Outbox state update failed after broker confirm"
+                    : "Outbox delivery unconfirmed");
         if (ex instanceof InterruptedException) {
           Thread.currentThread().interrupt();
           return;

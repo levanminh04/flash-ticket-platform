@@ -9,6 +9,7 @@ import com.flashticket.payment_service.service.PaymentSagaService;
 import com.flashticket.payment_service.service.RefundService;
 import com.flashticket.payment_service.validation.MessageInvariantValidator;
 import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ShutdownSignalException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +36,9 @@ public class PaymentMessageListener {
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException ex) {
-        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+      } catch (IOException | ShutdownSignalException ex) {
+        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
+        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
         telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         throw ex;
       } catch (RuntimeException ex) {
@@ -78,8 +80,9 @@ public class PaymentMessageListener {
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException ex) {
-        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+      } catch (IOException | ShutdownSignalException ex) {
+        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
+        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
         telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         throw ex;
       } catch (RuntimeException ex) {
@@ -120,8 +123,9 @@ public class PaymentMessageListener {
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException ex) {
-        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+      } catch (IOException | ShutdownSignalException ex) {
+        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
+        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
         telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         throw ex;
       } catch (RuntimeException ex) {
@@ -162,8 +166,9 @@ public class PaymentMessageListener {
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException ex) {
-        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+      } catch (IOException | ShutdownSignalException ex) {
+        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
+        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
         telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         throw ex;
       } catch (RuntimeException ex) {
@@ -205,8 +210,9 @@ public class PaymentMessageListener {
       } catch (MessageConversionException ex) {
         telemetry.result("REJECTED", "INVALID_CONTRACT");
         throw ex;
-      } catch (IOException ex) {
-        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+      } catch (IOException | ShutdownSignalException ex) {
+        // basicAck/basicNack lỗi (kể cả kênh đã đóng, ném AlreadyClosedException): không biết
+        // broker đã nhận lệnh hay chưa. Phải bắt trước RuntimeException.
         telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
         throw ex;
       } catch (RuntimeException ex) {
