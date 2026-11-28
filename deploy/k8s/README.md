@@ -68,6 +68,19 @@ host localhost cũ vào Secret. Key thiếu được báo bằng **tên**, khôn
 Với User, host Mongo loopback được đổi thành private IP, giữ credential/database/
 query. Kiểm lại URI nếu dùng multi-host/SRV thay vì URI một host hiện tại.
 
+## Policy tạm một Pod/service — 28/11/2026
+
+- **Trạng thái live 28/11/2026, kiểm lúc 04:06 UTC:** đã khóa HPA User1/1, giảm Payment2→1 rồi Booking2→1 dưới global deploy lock; script exit0. Audit riêng exit0: đủ10 Deployment/StatefulSet desired/Ready1, năm HPA1/1, không Pod dư/Terminating. Payment giữ Pod ởft26, Booking/User ởft84; hai Pod Booking/Payment tạift70 đã kết thúc. Các app vốn1 không rollout lại.
+- **Bảo toàn và kiểm sau scale:** UID survivor, template hash/current revision giữ nguyên; readerOFF, PDBmin1 và anti-affinity không đổi, annotation deletion-cost tạm đã khôi phục. Ba service readiness/livenessUP, bảy app Eureka mỗi app1UP; public root200, orders không token401. Node Ready/không MemoryPressure ở mẫu, không phải capacity/load proof. Queue Booking/Payment ready/unacked/DLQ đều0 ở mẫu; không gửi giao dịch hoặc message test.
+- **Rollback/live override:** metadata gốc nằm trênft84 tại `/opt/flash-ticket-app/state/k8s/one-pod-20261128T040221Z-2297807` (dir700/file600); không có Secret. Chưa cần rollback. Chỉ phục hồi đúng HPA/replica đã snapshot khi revision/template chưa đổi và đủ capacity, không `rollout undo` hoặc ghi đè revision mới. Snapshot revisionHA2 cũ giữ nguyên; source một Pod **chưa push/publish**, CD/rollback bản cũ có thể đưa về2.
+- **RAM:** ft84 lúc04:07:21UTC available4246MiB/total7776MiB, swapused265MiB. SSH đọcft70/ft26 bị công cụ từ chối nên chưa có số MemAvailable sau scale ở hai node đó; không suy RAM tiết kiệm từ số Pod đã thu. Snapshotft70~65MiB trước đây chỉ là lịch sử, không đo cùng cửa sổ.
+- **Kiểm chứng local:** full 7 nhóm deploy fixture exit0, gồm các nhánh one-Pod mới trong Booking/Payment; targeted writer-only1, reader rejection, live drift giả lập và restore2→1 đều đạt. Routing, 17 discovery tests, runtime hooks, YAML invariants và shell syntax đã đạt. Các fixture không chứng minh continuity/capacity/freshness production.
+- Booking, Payment và User dùng HPA `minReplicas=maxReplicas=1`; Event/Ticket đã 1/1. Gateway, Assistant, Frontend, Keycloak và Eureka đã một Pod thì không rollout lại chỉ để đổi số lượng. Không thay datastore, K3s control plane hoặc DaemonSet.
+- Booking/Payment giữ PDB `minAvailable=1`, hard anti-affinity, image, reader flags, probes/drain và rolling0/1. Một Pod thường trực **không là HA** khi Pod/node lỗi; PDB có thể chặn eviction/drain sole Pod. Surge tạm khi rollout vẫn được phép, phải đủ capacity.
+- Script nhận hai profile rõ ràng: writer-only1/PDB1 và HA2/PDB1. Reader Booking/Payment ON vẫn cần HA2 cùng baseline tương thích; không dùng snapshot1 làm baseline reader2 hoặc tự scale lên2 để vượt gate. Phần HA2/reader bên dưới mô tả profile đã có, không phải policy replica thường trực hiện tại.
+- Scale-down vận hành cần khóa deploy chung, snapshot HPA/scale metadata, recheck image/revision, theo dõi preStop và một survivor Ready/Eureka. Có thể gợi ý `pod-deletion-cost` tạm trên Pod để ưu tiên thu Pod ở node thiếu RAM; đây là best-effort, không pin node hoặc quyền force-delete. Không thay Pod template/image/Secret.
+- Live override1 sẽ khác snapshot HA2 cũ đến khi release source mới được publish. Giữ nguyên revision lịch sử; không dispatch CD/shared recreate hoặc gọi rollback HA2 là vẫn một Pod. Ghi baseline/override để CD không âm thầm nâng lại2. Lượt scale-down không tự cấp quyền commit/push/merge/CD.
+
 ### Booking: đọc phụ Admin Chart và 5 báo cáo Organizer/event
 
 - **Mặc định tắt:** Ba flag `BOOKING_SALES_CHART_REPLICA_ENABLED`, `BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED`, `BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED` chỉ từ env-file/Secret revision, mặc định false; không đặt trùng ConfigMap/Deployment. Hai group flag cần base flag bật. Writer-only không cần credential/timing reader.
@@ -171,9 +184,11 @@ index với imageID platform như hai giá trị buộc phải bằng nhau. Lỗ
 trả job failure, thử khôi phục toàn bộ revision trước rồi kiểm lại; lần đầu chưa
 có revision tốt cần runbook rollback Compose bên dưới.
 
-## Lịch Pod Booking và Payment
+## Lịch Pod Booking và các service khác
 
-**Booking:** HPA giữ `min=2,max=2`; scheduler tự chọn mọi node đủ điều kiện,
+**Booking/Payment hiện hành:** writer-only một Pod, HPA1/1 theo policy tạm ở trên; User khóa1/1. Đoạn HA2 sau chỉ là profile rollback/reader lịch sử, không ghi đè policy tạm.
+
+**Profile Booking HA2:** HPA giữ `min=2,max=2`; scheduler tự chọn mọi node đủ điều kiện,
 không pin hostname hoặc mặc định loại `ft70`. Hard pod anti-affinity theo hostname
 và selector Booking trong namespace `flash-ticket` đặt hai Pod khác node, bao phủ
 cả old/new revision. PDB `booking-service` có `minAvailable=1`, chỉ giới hạn eviction
@@ -182,7 +197,7 @@ readiness/Eureka và drain hiện có: rollout cần **node thứ ba** schedulab
 Thiếu capacity ⇒ NO-GO/Pending, không tự co-locate, hạ anti-affinity hoặc resize.
 Writer/Redis/RabbitMQ ở `ft84` vẫn là dependency SPOF; đây chỉ là HA tầng Pod.
 
-**Payment:** source mới dùng HPA2/2, hard anti-affinity/PDB và placement động như
+**Profile Payment HA2:** khi được chọn rõ ràng dùng HPA2/2, hard anti-affinity/PDB và placement động như
 mục Payment riêng; không còn ghim `ft84`/`server-2`. Đây chưa là xác nhận rollout live.
 
 ## Frontend: bootstrap, cutover và rollback riêng
@@ -316,8 +331,8 @@ Dùng lại `apply_revision`/`check_revision` và fixtures, không thêm framewo
 ## Rollout giữ ứng dụng phục vụ trên node 84
 
 Gateway và năm core dùng `RollingUpdate`, `maxUnavailable: 0`, `maxSurge: 1`,
-`minReadySeconds: 75`. Gateway có 1 Pod; Booking giữ HPA min=max2, core khác 1–2;
-chỉ thêm Pod khi thay phiên bản. Pod mới phải đăng ký Eureka trước khi Ready.
+`minReadySeconds: 75`. Policy tạm giữ một Pod/service, HPA core1/1;
+chỉ thêm Pod surge tạm khi thay phiên bản. Pod mới phải đăng ký Eureka trước khi Ready.
 Pod cũ chạy preStop: PUT status OUT_OF_SERVICE, chờ 75 giây để client bỏ địa chỉ,
 rồi mới graceful shutdown. Không bật retry request ghi để che lỗi chuyển Pod.
 
@@ -386,8 +401,8 @@ Tham khảo: [Deployment strategy](https://kubernetes.io/docs/concepts/workloads
 ## HPA cho năm service nghiệp vụ
 
 Booking, Payment, Ticket, Event và User có HPA riêng; Gateway giữ một replica,
-Eureka giữ hai peer. Booking/Payment cố định biên HPA min=max2;
-Event/Ticket recovery-1 min=max1; User giữ min1/max2 ở source hiện tại.
+Eureka source hiện standalone một Pod. Cả năm HPA nghiệp vụ tạm min=max1;
+Booking/Payment giữ PDBmin1, Event/Ticket giữ recovery-1/no-PDB.
 Đây là cấu hình source, không khẳng định đã apply lên cluster. CPU trung bình mục tiêu
 70% **CPU request**, tăng tối đa một Pod/60s, giảm tối đa một Pod/60s và giữ
 khuyến nghị scale-down trong 300s. Ví dụ Booking request 200m nên mục tiêu 70%
@@ -398,14 +413,14 @@ heap JVM có thể giữ memory sau khi tải giảm nên không dùng memory l�
 scale-down. CPU HPA không đo được trực tiếp backlog RabbitMQ; đây chưa phải
 queue autoscaling. HPA thêm Pod trên các node hiện có, không tự tạo thêm EC2.
 
-Deployment core bỏ `spec.replicas` để CD không kéo về 1. Script deploy bỏ cả
+Deployment core bỏ `spec.replicas` để HPA làm chủ số Pod; policy tạm dùng HPA1/1. Script deploy bỏ cả
 giá trị replicas mà kubectl có thể default khi render, chuyển last-applied
 ownership trước apply và snapshot HPA cùng revision. Rollback về revision có
 HPA khôi phục policy cũ; rollback về revision **chưa có HPA** xóa HPA của service
 đó và khôi phục số replica cố định trong revision. Đây là thao tác có chủ đích,
 không dùng `kubectl scale` một lần để giữ số Pod khi HPA còn hoạt động.
 
-HPA các service khác hỗ trợ scale 1↔2; Booking giữ 2 Pod. RollingUpdate giữ Pod phục vụ như phần trên.
+Policy tạm không autoscale lên2: cả năm HPA1/1. RollingUpdate vẫn có surge tạm như phần trên.
 Hai cơ chế độc lập, không làm hệ thống chịu được lỗi máy 84.
 
 Nếu cả năm core đạt max 2, tổng request K8s ở cấu hình hiện tại khoảng 1700m CPU,
