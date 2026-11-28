@@ -96,4 +96,50 @@ class ObservabilityTests {
     Files.createDirectories(Path.of("target"));
     Files.write(Path.of("target/b16-log-samples.jsonl"), lines, StandardCharsets.UTF_8);
   }
+
+  @Test
+  void propagatedParentSpanIsNotExportedAsCurrentSpan(CapturedOutput output) throws Exception {
+    var source =
+        (EnumerablePropertySource<?>)
+            new YamlPropertySourceLoader()
+                .load("production", new FileSystemResource("src/main/resources/application.yaml"))
+                .getFirst();
+    Map<String, Object> props = new HashMap<>();
+    for (String name : source.getPropertyNames())
+      if (name.startsWith("logging.")) props.put(name, source.getProperty(name));
+    var application = new SpringApplication(Probe.class);
+    application.setWebApplicationType(WebApplicationType.NONE);
+    application.setDefaultProperties(props);
+    var previous = MDC.getCopyOfContextMap();
+    try (var context =
+        application.run(
+            "--spring.config.location=optional:file:target/b16-probe-isolated.yaml",
+            "--spring.main.banner-mode=off",
+            "--spring.cloud.config.enabled=false")) {
+      // Như CorrelationFilter khi agent tắt: chỉ có trace context của bên gọi.
+      MDC.put("traceparent", "00-33333333333333333333333333333333-3333333333333333-01");
+      MDC.put("traceId", "33333333333333333333333333333333");
+      MDC.put("spanId", "3333333333333333");
+      LoggerFactory.getLogger("com.flashticket.b16.probe")
+          .atInfo()
+          .addKeyValue("eventName", "probe.parent")
+          .addKeyValue("operation", "probe")
+          .addKeyValue("outcome", "SUCCESS")
+          .log("Probe parent");
+    } finally {
+      if (previous == null) MDC.clear();
+      else MDC.setContextMap(previous);
+    }
+    var line =
+        output
+            .getOut()
+            .lines()
+            .filter(s -> s.startsWith("{") && s.contains("probe.parent"))
+            .toList();
+    assertThat(line).hasSize(1);
+    var node = JsonMapper.builder().build().readTree(line.getFirst());
+    assertThat(node.path("traceId").asString()).isEqualTo("33333333333333333333333333333333");
+    assertThat(node.has("spanId")).isFalse();
+    assertThat(node.has("traceparent")).isFalse();
+  }
 }

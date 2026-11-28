@@ -33,6 +33,14 @@ public final class RabbitTelemetry implements AutoCloseable {
     this.reason = reason;
   }
 
+  /**
+   * Bản tin bị loại không giao lại (DLQ). Mã lỗi lấy từ ErrorCode cố định; text khác thay bằng mã
+   * chung.
+   */
+  public void rejected(String code) {
+    result("REJECTED", code != null && code.matches("[A-Z_]{1,64}") ? code : "MESSAGE_REJECTED");
+  }
+
   @Override
   public void close() {
     try {

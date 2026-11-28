@@ -56,6 +56,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: HOST_ID  # host.id của OpenTelemetry/B16: node chạy pod
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: OTEL_AGENT_ENABLED  # tắt cứng: env thắng ConfigMap; chưa có cấu hình agent cho Discovery
+          value: "false"
         envFrom:
         - configMapRef:
             name: discovery-server-config

@@ -80,6 +80,14 @@ public final class EventLogCustomizer
     var mdc = event.getMDCPropertyMap();
     for (String kind : List.of("trace", "span")) {
       String value = mdc.getOrDefault(kind + "_id", Objects.toString(values.get(kind + "Id"), ""));
+      // CorrelationFilter chép span của bên gọi (traceparent) vào MDC spanId để truyền tiếp; đó
+      // không phải
+      // span đang chạy ở Event, nên không xuất khi agent không cung cấp span_id.
+      String parent = mdc.getOrDefault("traceparent", "");
+      if (kind.equals("span")
+          && !mdc.containsKey("span_id")
+          && parent.length() >= 52
+          && value.equals(parent.substring(36, 52))) value = "";
       if (value.matches(kind.equals("trace") ? "[0-9a-f]{32}" : "[0-9a-f]{16}")
           && !value.chars().allMatch(c -> c == '0')) values.put(kind + "Id", value);
       else values.remove(kind + "Id");

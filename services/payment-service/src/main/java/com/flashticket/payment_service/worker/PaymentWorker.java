@@ -56,6 +56,7 @@ public class PaymentWorker {
     Instant now = Instant.now();
     var claimedMessages = messaging.claimOutbox(now, now.plus(lease), batchSize);
     for (var storedMessage : claimedMessages) {
+      boolean confirmed = false;
       try {
         var properties = new MessageProperties();
         properties.setMessageId(storedMessage.getMessageId().toString());
@@ -72,6 +73,7 @@ public class PaymentWorker {
         var confirm = correlation.getFuture().get(confirmTimeout.toMillis(), TimeUnit.MILLISECONDS);
         if (!confirm.isAck() || correlation.getReturned() != null)
           throw new IllegalStateException("Message not routed");
+        confirmed = true;
         messaging.markPublished(
             storedMessage.getMessageId(), storedMessage.getAttempts(), Instant.now());
         log.atInfo()
@@ -80,7 +82,7 @@ public class PaymentWorker {
             .addKeyValue("outcome", "SUCCESS")
             .addKeyValue("reasonCode", "BROKER_CONFIRMED")
             .addKeyValue("messageId", storedMessage.getMessageId().toString())
-            .addKeyValue("retryCount", storedMessage.getAttempts())
+            .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .log("Broker confirmed message");
       } catch (Exception ex) {
         messaging.rescheduleOutbox(
@@ -93,9 +95,11 @@ public class PaymentWorker {
             .addKeyValue("eventName", "payment.outbox.result")
             .addKeyValue("operation", "outbox-publish")
             .addKeyValue("outcome", "RETRY")
-            .addKeyValue("reasonCode", "BROKER_DELIVERY_UNCONFIRMED")
+            // Lỗi sau khi broker đã xác nhận (vd. markPublished) không phải lỗi giao nhận của
+            // broker.
+            .addKeyValue("reasonCode", confirmed ? "PUBLISH_FAILED" : "BROKER_DELIVERY_UNCONFIRMED")
             .addKeyValue("messageId", storedMessage.getMessageId().toString())
-            .addKeyValue("retryCount", storedMessage.getAttempts())
+            .addKeyValue("retryCount", Math.max(0, storedMessage.getAttempts() - 1))
             .addKeyValue("errorType", ex.getClass().getSimpleName())
             .log("Outbox delivery unconfirmed");
         if (ex instanceof InterruptedException) {

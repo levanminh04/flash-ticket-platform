@@ -21,7 +21,16 @@ public class BookingIssuanceResultListener {
   public void handleTicketsIssuedDelivery(Envelope<BookingIssuanceResult> message, Message raw) {
     try (var telemetry = new RabbitTelemetry(raw)) {
       if (message != null) telemetry.context(message.messageId(), message.correlationId());
-      handleTicketsIssued(message);
+      try {
+        handleTicketsIssued(message);
+      } catch (AmqpRejectAndDontRequeueException ex) {
+        telemetry.rejected(ex.getMessage());
+        throw ex;
+      } catch (RuntimeException ex) {
+        // AUTO ACK: container trả bản tin về hàng đợi để giao lại (quorum, x-delivery-limit).
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
     }
   }
@@ -50,7 +59,16 @@ public class BookingIssuanceResultListener {
   public void handleIssuanceFailedDelivery(Envelope<BookingIssuanceResult> message, Message raw) {
     try (var telemetry = new RabbitTelemetry(raw)) {
       if (message != null) telemetry.context(message.messageId(), message.correlationId());
-      handleIssuanceFailed(message);
+      try {
+        handleIssuanceFailed(message);
+      } catch (AmqpRejectAndDontRequeueException ex) {
+        telemetry.rejected(ex.getMessage());
+        throw ex;
+      } catch (RuntimeException ex) {
+        // AUTO ACK: container trả bản tin về hàng đợi để giao lại (quorum, x-delivery-limit).
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
     }
   }

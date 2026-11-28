@@ -75,6 +75,10 @@ public class OrderController {
       @RequestHeader("Idempotency-Key") UUID idempotencyKey,
       @Valid @RequestBody CreateOrderRequest request) {
     OrderView order = orderService.createOrder(jwt.getSubject(), idempotencyKey, request);
-    return ResponseEntity.created(URI.create("/api/v1/orders/" + order.getOrderId())).body(order);
+    // B16 §3: từ khi đơn tồn tại, correlationId = orderId; gateway giữ header này khi trả cho
+    // client.
+    return ResponseEntity.created(URI.create("/api/v1/orders/" + order.getOrderId()))
+        .header("X-Correlation-Id", order.getOrderId().toString())
+        .body(order);
   }
 }

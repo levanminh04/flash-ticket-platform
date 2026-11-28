@@ -28,7 +28,12 @@ public final class BusinessTelemetry {
     String outcome =
         Objects.toString(
             snapshot.remove("outcome"),
-            Objects.equals(Objects.toString(after, ""), "FAILED") ? "FAILED" : "SUCCESS");
+            switch (Objects.toString(after, "")) {
+              case "FAILED" -> "FAILED";
+              // Kết cục chưa phân xử (vd. callback VNPay mã 07): không ghi SUCCESS.
+              case "UNKNOWN" -> "UNKNOWN";
+              default -> "SUCCESS";
+            });
     Map<String, String> context = MDC.getCopyOfContextMap();
     Runnable emit =
         () -> {

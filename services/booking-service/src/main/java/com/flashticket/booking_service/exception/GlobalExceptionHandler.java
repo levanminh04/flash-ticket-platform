@@ -90,14 +90,23 @@ public final class GlobalExceptionHandler {
       Throwable exception,
       List<Problem.Violation> violations) {
     UUID correlation = UUID.randomUUID();
+    // CorrelationFilter đã chuẩn hóa mã của request vào MDC: log, header và body dùng cùng mã đó.
+    String filtered = MDC.get("correlationId");
     try {
-      String supplied = request.getHeader("X-Correlation-Id");
-      if (supplied != null
-          && supplied.matches("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")
-          && Collections.list(request.getHeaders("X-Correlation-Id")).size() == 1)
-        correlation = UUID.fromString(supplied);
-    } catch (RequestRejectedException ignored) {
-      // Header truy vết sai không được làm mất response của lỗi đang xử lý.
+      if (filtered != null) correlation = UUID.fromString(filtered);
+    } catch (IllegalArgumentException ignored) {
+      filtered = null;
+    }
+    if (filtered == null) {
+      try {
+        String supplied = request.getHeader("X-Correlation-Id");
+        if (supplied != null
+            && supplied.matches("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+            && Collections.list(request.getHeaders("X-Correlation-Id")).size() == 1)
+          correlation = UUID.fromString(supplied);
+      } catch (RequestRejectedException ignored) {
+        // Header truy vết sai không được làm mất response của lỗi đang xử lý.
+      }
     }
     boolean rejected = status.is4xxClientError() || code == ErrorCode.CONFIG_NOT_READY;
     String operation =
@@ -122,8 +131,7 @@ public final class GlobalExceptionHandler {
             .addKeyValue("httpStatus", status.value())
             .addKeyValue("errorCode", code.name())
             .addKeyValue("errorType", exception.getClass().getName());
-    if (MDC.get("correlationId") == null)
-      entry = entry.addKeyValue("correlationId", correlation.toString());
+    entry = entry.addKeyValue("correlationId", correlation.toString());
     if (!rejected) entry = entry.setCause(exception);
     entry.log(rejected ? "HTTP request rejected: {}" : "HTTP request failed: {}", code.message());
     return ResponseEntity.status(status)

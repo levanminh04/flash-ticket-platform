@@ -56,6 +56,36 @@ class HttpErrorHandlingTests {
   }
 
   @Test
+  void errorResponseAndLogReuseTheCorrelationNormalizedByTheFilter() throws Exception {
+    // Như CorrelationFilter khi request không có header: mã đã nằm trong MDC trước khi lỗi xảy ra.
+    String filtered = UUID.randomUUID().toString();
+    MDC.put("correlationId", filtered);
+    try (var logs = new LogCapture()) {
+      var result =
+          mvc.perform(get("/error-probe/business/ORDER_EXPIRED"))
+              .andExpect(status().isConflict())
+              .andReturn();
+      assertThat(result.getResponse().getHeader("X-Correlation-Id")).isEqualTo(filtered);
+      assertThat(
+              mapper
+                  .readTree(result.getResponse().getContentAsString())
+                  .get("correlationId")
+                  .asString())
+          .isEqualTo(filtered);
+      var logged =
+          logs.events().stream()
+              .filter(event -> event.getKeyValuePairs() != null)
+              .flatMap(event -> event.getKeyValuePairs().stream())
+              .filter(pair -> pair.key.equals("correlationId"))
+              .map(pair -> String.valueOf(pair.value))
+              .toList();
+      assertThat(logged).isNotEmpty().allMatch(filtered::equals);
+    } finally {
+      MDC.remove("correlationId");
+    }
+  }
+
+  @Test
   void rejectionLogExplainsTheFailureAndCarriesRcaContext() throws Exception {
     String correlation = UUID.randomUUID().toString();
     try (var logs = new LogCapture()) {

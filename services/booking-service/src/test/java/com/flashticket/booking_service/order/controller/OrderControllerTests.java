@@ -454,6 +454,7 @@ class OrderControllerTests {
                 """))
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/api/v1/orders/" + orderId))
+        .andExpect(header().string("X-Correlation-Id", orderId.toString()))
         .andExpect(jsonPath("$.orderId").value(orderId.toString()))
         .andExpect(jsonPath("$.state").value("PENDING_PAYMENT"));
     verify(orderService).createOrder(eq("buyer-subject"), eq(key), any());

@@ -35,6 +35,4 @@ data:
   OTEL_METRICS_EXPORTER: otlp
   OTEL_METRICS_EXEMPLAR_FILTER: always_off
   OTEL_LOGS_EXPORTER: none
-  OTEL_INSTRUMENTATION_COMMON_LOGGING_TRACE_ID_KEY: traceId
-  OTEL_INSTRUMENTATION_COMMON_LOGGING_SPAN_ID_KEY: spanId
   OTEL_INSTRUMENTATION_SANITIZATION_URL_EXPERIMENTAL_SENSITIVE_QUERY_PARAMETERS: q,vnp_Amount,vnp_BankCode,vnp_Command,vnp_CreateBy,vnp_CreateDate,vnp_CurrCode,vnp_ExpireDate,vnp_IpAddr,vnp_Locale,vnp_Message,vnp_OrderInfo,vnp_OrderType,vnp_PayDate,vnp_PromotionAmount,vnp_PromotionCode,vnp_RequestId,vnp_ResponseCode,vnp_ResponseId,vnp_ReturnUrl,vnp_SecureHash,vnp_SecureHashType,vnp_TmnCode,vnp_TransactionDate,vnp_TransactionNo,vnp_TransactionStatus,vnp_TransactionType,vnp_TxnRef,vnp_Version

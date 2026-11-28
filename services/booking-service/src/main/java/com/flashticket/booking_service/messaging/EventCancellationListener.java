@@ -21,7 +21,16 @@ public class EventCancellationListener {
   public void handleEventCancelledDelivery(Envelope<EventCancellation> message, Message raw) {
     try (var telemetry = new RabbitTelemetry(raw)) {
       if (message != null) telemetry.context(message.messageId(), message.correlationId());
-      handleEventCancelled(message);
+      try {
+        handleEventCancelled(message);
+      } catch (AmqpRejectAndDontRequeueException ex) {
+        telemetry.rejected(ex.getMessage());
+        throw ex;
+      } catch (RuntimeException ex) {
+        // AUTO ACK: container trả bản tin về hàng đợi để giao lại (quorum, x-delivery-limit).
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "TRANSACTION_COMMITTED");
     }
   }

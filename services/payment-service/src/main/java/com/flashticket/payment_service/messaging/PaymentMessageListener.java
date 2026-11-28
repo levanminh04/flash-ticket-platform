@@ -30,7 +30,20 @@ public class PaymentMessageListener {
   @RabbitListener(queues = "${payment.queues.decision:payment.decision.q}", ackMode = "MANUAL")
   public void onPaymentDecisionDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
-      onPaymentDecision(message, channel);
+      try {
+        onPaymentDecision(message, channel);
+      } catch (MessageConversionException ex) {
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        throw ex;
+      } catch (IOException ex) {
+        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
+        throw ex;
+      } catch (RuntimeException ex) {
+        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
   }
@@ -60,7 +73,20 @@ public class PaymentMessageListener {
       ackMode = "MANUAL")
   public void onIssuanceResultDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
-      onIssuanceResult(message, channel);
+      try {
+        onIssuanceResult(message, channel);
+      } catch (MessageConversionException ex) {
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        throw ex;
+      } catch (IOException ex) {
+        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
+        throw ex;
+      } catch (RuntimeException ex) {
+        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
   }
@@ -89,7 +115,20 @@ public class PaymentMessageListener {
       ackMode = "MANUAL")
   public void onOrderCompletedDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
-      onOrderCompleted(message, channel);
+      try {
+        onOrderCompleted(message, channel);
+      } catch (MessageConversionException ex) {
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        throw ex;
+      } catch (IOException ex) {
+        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
+        throw ex;
+      } catch (RuntimeException ex) {
+        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
   }
@@ -118,7 +157,20 @@ public class PaymentMessageListener {
       ackMode = "MANUAL")
   public void onEventCancelledDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
-      onEventCancelled(message, channel);
+      try {
+        onEventCancelled(message, channel);
+      } catch (MessageConversionException ex) {
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        throw ex;
+      } catch (IOException ex) {
+        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
+        throw ex;
+      } catch (RuntimeException ex) {
+        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
   }
@@ -148,7 +200,20 @@ public class PaymentMessageListener {
       ackMode = "MANUAL")
   public void onFinanceConfiguredDelivery(Message message, Channel channel) throws IOException {
     try (var telemetry = new RabbitTelemetry(message)) {
-      onFinanceConfigured(message, channel);
+      try {
+        onFinanceConfigured(message, channel);
+      } catch (MessageConversionException ex) {
+        telemetry.result("REJECTED", "INVALID_CONTRACT");
+        throw ex;
+      } catch (IOException ex) {
+        // basicAck/basicNack lỗi: không biết broker đã nhận lệnh hay chưa.
+        telemetry.result("UNKNOWN", "BROKER_COMMAND_FAILED");
+        throw ex;
+      } catch (RuntimeException ex) {
+        // Hàm trong đã basicNack(requeue=true) xong rồi mới ném lại: bản tin được giao lại.
+        telemetry.result("RETRY", "TRANSACTION_UNAVAILABLE");
+        throw ex;
+      }
       telemetry.result("SUCCESS", "MESSAGE_ACKNOWLEDGED");
     }
   }
