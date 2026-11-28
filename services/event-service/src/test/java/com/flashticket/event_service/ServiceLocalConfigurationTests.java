@@ -13,8 +13,11 @@ class ServiceLocalConfigurationTests {
           .withPropertyValues(
               "spring.config.location=classpath:service-config/application.yaml",
               "CONFIG_SERVER_URL=http://127.0.0.1:1/config-server-must-not-be-used",
-              "EVENT_DB_URL=jdbc:postgresql://127.0.0.1:1/event_db",
-              "EVENT_DB_PASSWORD=fixture-db",
+              "PG_RW_HOST=writer.fixture",
+              "PG_RO_HOST=reader.fixture",
+              "PG_DB=event_db",
+              "PG_USER=fixture",
+              "PG_PASSWORD=fixture-db",
               "EVENT_RABBITMQ_HOST=127.0.0.1",
               "EVENT_RABBITMQ_PASSWORD=fixture-broker",
               "EVENT_KEYCLOAK_TOKEN_URI=http://127.0.0.1:1/token",
@@ -28,9 +31,9 @@ class ServiceLocalConfigurationTests {
         context -> {
           assertThat(context).hasNotFailed();
           var env = context.getEnvironment();
-          assertThat(env.getProperty("spring.datasource.url"))
-              .isEqualTo("jdbc:postgresql://127.0.0.1:1/event_db");
-          assertThat(env.getProperty("spring.datasource.hikari.connection-init-sql"))
+          assertThat(env.getProperty("app.db.write.jdbc-url"))
+              .isEqualTo("jdbc:postgresql://writer.fixture:5432/event_db");
+          assertThat(env.getProperty("app.db.write.connection-init-sql"))
               .isEqualTo("SET ROLE event_owner");
           assertThat(env.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("none");
           assertThat(env.getProperty("spring.jpa.properties.hibernate.default_schema"))
@@ -49,7 +52,14 @@ class ServiceLocalConfigurationTests {
               .isEqualTo("http://127.0.0.1:1/token");
           assertThat(env.getProperty("event.outbox.enabled", Boolean.class)).isTrue();
           assertThat(env.getProperty("event.read-model.enabled", Boolean.class)).isFalse();
-          assertThat(env.getProperty("event.read-replica.enabled", Boolean.class)).isFalse();
+          assertThat(env.containsProperty("event.read-replica.enabled")).isFalse();
+          assertThat(env.containsProperty("spring.datasource.url")).isFalse();
+          assertThat(env.getProperty("app.db.write.maximum-pool-size", Integer.class)).isEqualTo(5);
+          assertThat(env.getProperty("app.db.read.maximum-pool-size", Integer.class)).isEqualTo(2);
+          assertThat(env.getProperty("app.db.write.data-source-properties.sslmode"))
+              .isEqualTo("require");
+          assertThat(env.getProperty("app.db.read.data-source-properties.targetServerType"))
+              .isEqualTo("secondary");
           assertThat(env.getProperty("eureka.client.register-with-eureka", Boolean.class)).isTrue();
           assertThat(env.getProperty("management.endpoints.web.exposure.include"))
               .isEqualTo("health,info");
@@ -72,14 +82,12 @@ class ServiceLocalConfigurationTests {
             "EVENT_READ_MODEL_ENABLED=true",
             "EVENT_IMAGES_MAX_BYTES=1234",
             "EVENT_IMAGES_MAX_REQUEST_BYTES=2345",
-            "EVENT_READ_REPLICA_ENABLED=true",
-            "EVENT_READ_REPLICA_URL=jdbc:postgresql://reader.fixture:5432/event_db",
-            "EVENT_READ_REPLICA_USERNAME=fixture-reader",
-            "EVENT_READ_REPLICA_PASSWORD=fixture-reader-password",
-            "EVENT_READ_REPLICA_PROBE_INTERVAL=2s",
-            "EVENT_READ_REPLICA_MAX_SAMPLE_AGE=5s",
-            "EVENT_READ_REPLICA_PROBE_QUERY_TIMEOUT=2",
-            "EVENT_READ_REPLICA_TRANSACTION_TIMEOUT=5")
+            "PG_RW_HOST=writer.override",
+            "PG_RO_HOST=reader.override",
+            "PG_USER=override-user",
+            "PG_PASSWORD=override-password",
+            "PG_WRITE_POOL_SIZE=3",
+            "PG_READ_POOL_SIZE=1")
         .run(
             context -> {
               assertThat(context).hasNotFailed();
@@ -93,30 +101,22 @@ class ServiceLocalConfigurationTests {
                   .isEqualTo("http://127.0.0.1:1/jwks");
               assertThat(env.getProperty("event.outbox.enabled", Boolean.class)).isFalse();
               assertThat(env.getProperty("event.read-model.enabled", Boolean.class)).isTrue();
-              assertThat(env.getProperty("event.read-replica.enabled", Boolean.class)).isTrue();
-              assertThat(env.getProperty("event.read-replica.datasource.jdbc-url"))
-                  .isEqualTo("jdbc:postgresql://reader.fixture:5432/event_db");
-              assertThat(env.getProperty("event.read-replica.datasource.username"))
-                  .isEqualTo("fixture-reader");
-              assertThat(env.getProperty("event.read-replica.datasource.read-only", Boolean.class))
-                  .isTrue();
-              assertThat(
-                      env.getProperty(
-                          "event.read-replica.datasource.maximum-pool-size", Integer.class))
-                  .isEqualTo(2);
-              assertThat(
-                      env.getProperty("event.read-replica.datasource.minimum-idle", Integer.class))
-                  .isZero();
-              assertThat(
-                      env.getProperty(
-                          "event.read-replica.datasource.connection-timeout", Integer.class))
+              assertThat(env.containsProperty("event.read-replica.enabled")).isFalse();
+              assertThat(env.getProperty("app.db.read.jdbc-url"))
+                  .isEqualTo("jdbc:postgresql://reader.override:5432/event_db");
+              assertThat(env.getProperty("app.db.write.jdbc-url"))
+                  .isEqualTo("jdbc:postgresql://writer.override:5432/event_db");
+              assertThat(env.getProperty("app.db.read.username")).isEqualTo("override-user");
+              assertThat(env.getProperty("app.db.read.password")).isEqualTo("override-password");
+              assertThat(env.getProperty("app.db.write.password")).isEqualTo("override-password");
+              assertThat(env.getProperty("app.db.read.read-only", Boolean.class)).isTrue();
+              assertThat(env.getProperty("app.db.write.maximum-pool-size", Integer.class))
+                  .isEqualTo(3);
+              assertThat(env.getProperty("app.db.read.maximum-pool-size", Integer.class))
+                  .isEqualTo(1);
+              assertThat(env.getProperty("app.db.read.minimum-idle", Integer.class)).isZero();
+              assertThat(env.getProperty("app.db.read.connection-timeout", Integer.class))
                   .isEqualTo(5000);
-              assertThat(env.getProperty("event.read-replica.probe-interval")).isEqualTo("2s");
-              assertThat(env.getProperty("event.read-replica.max-sample-age")).isEqualTo("5s");
-              assertThat(env.getProperty("event.read-replica.probe-query-timeout", Integer.class))
-                  .isEqualTo(2);
-              assertThat(env.getProperty("event.read-replica.transaction-timeout", Integer.class))
-                  .isEqualTo(5);
               assertThat(env.getProperty("event.images.max-bytes", Integer.class)).isEqualTo(1234);
               assertThat(env.getProperty("spring.servlet.multipart.max-file-size"))
                   .isEqualTo("1234B");
@@ -133,8 +133,11 @@ class ServiceLocalConfigurationTests {
         .withPropertyValues(
             "spring.config.location=classpath:service-config/application.yaml",
             "CONFIG_SERVER_URL=http://127.0.0.1:1/config-server-must-not-be-used",
-            "EVENT_DB_URL=jdbc:postgresql://127.0.0.1:1/event_db",
-            "EVENT_DB_PASSWORD=fixture-db",
+            "PG_RW_HOST=writer.fixture",
+            "PG_RO_HOST=reader.fixture",
+            "PG_DB=event_db",
+            "PG_USER=fixture",
+            "PG_PASSWORD=fixture-db",
             "RABBITMQ_HOST=canonical-broker",
             "RABBITMQ_PORT=5673",
             "RABBITMQ_USERNAME=canonical-user",

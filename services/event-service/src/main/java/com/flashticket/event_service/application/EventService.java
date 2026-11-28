@@ -123,7 +123,7 @@ public class EventService {
     return EventViews.owner(next);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.HomeDiscovery homeDiscovery() {
     Instant now = Instant.now();
     CachedHomeDiscovery cached = homeDiscoveryCache;
@@ -141,17 +141,17 @@ public class EventService {
     }
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public EventViews.Owner readOwned(UUID id, String actor) {
     return EventViews.owner(owned(id, actor, false));
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public EventViews.Owner readAdmin(UUID id) {
     return EventViews.owner(load(id, false));
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Public readPublic(UUID id) {
     var event = repository.find(id, false).orElseThrow(EventProblem::missing);
     if (!"PUBLISHED".equals(event.status())) throw EventProblem.missing();
@@ -159,25 +159,25 @@ public class EventService {
     return EventViews.publicView(event);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Page<EventViews.Summary> listOwner(
       String actor, String status, int size, String cursor) {
     return page(actor, status, null, null, size, cursor, false, EventViews::summary, false);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Page<EventViews.Summary> listAdmin(String status, int size, String cursor) {
     return page(null, status, null, null, size, cursor, false, EventViews::summary, false);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Page<EventViews.Public> listPublic(
       String query, UUID category, int size, String cursor) {
     return listPublic(
         query, category, null, null, null, null, false, size, cursor, EventViews::publicView, true);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Page<?> listPublic(
       String query,
       UUID category,
@@ -193,7 +193,7 @@ public class EventService {
         query, category, from, to, maxPrice, venue, includePast, size, cursor, compact, !compact);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
   public EventViews.Page<?> listPublic(
       String query,
       UUID category,
@@ -270,12 +270,12 @@ public class EventService {
         includeSeatMap);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, timeout = 5)
   public List<EventViews.Lookup> categories() {
     return repository.categories();
   }
 
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, timeout = 5)
   public List<EventViews.Venue> venues() {
     return repository.venues();
   }

@@ -30,7 +30,7 @@ public class SeatMapService {
     this.storage = storage;
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public SeatMap read(UUID id, String actor) {
     var event = own(id, actor, false);
     seatMode(event);

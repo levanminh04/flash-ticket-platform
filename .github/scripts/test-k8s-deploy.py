@@ -1105,17 +1105,49 @@ def event_fixture(root, bash, env, scripts, deployment, config):
         (app / (name + '.yaml')).write_text(json.dumps(doc))
     state = root / 'state/k8s/event-service'
     env_file = root / 'env/event-service.env'
-    prefix = 'EVENT_READ_REPLICA_'
-    writer_env = 'EVENT_DB_PASSWORD=fixture-event-writer\nRABBITMQ_PASSWORD=fixture-event-broker\nINTERNAL_SERVICE_CLIENT_SECRET=fixture-event-client\n'
-    jdbc = 'jdbc:postgresql://reader.fixture:5432/event_db?sslmode=require&targetServerType=secondary&connectTimeout=5&socketTimeout=5'
-    pilot = {'ENABLED': 'true', 'URL': jdbc, 'USERNAME': 'fixture-event-reader', 'PASSWORD': 'fixture-event-reader-password',
-             'PROBE_INTERVAL': '2s', 'MAX_SAMPLE_AGE': '5s', 'PROBE_QUERY_TIMEOUT': '2', 'TRANSACTION_TIMEOUT': '5'}
+    pg = {'PG_RW_HOST': 'writer.fixture', 'PG_RO_HOST': 'reader.fixture', 'PG_DB': 'event_db',
+          'PG_USER': 'fixture-event-account', 'PG_PASSWORD': 'fixture-event-password',
+          'PG_WRITE_POOL_SIZE': '5', 'PG_READ_POOL_SIZE': '2'}
     command = [bash, SCRIPT.as_posix(), 'event-service', REPOSITORY.replace('payment-service', 'event-service') + 'e' * 64, SHA]
+    state.mkdir(parents=True)
+    # Snapshot lịch sử dùng schema cũ literal, không render từ Secret example PG_* mới.
+    legacy = '1795860000-aaaaaaaaaaaa-1000'
+    legacy_image = command[3].split('@')[0] + '@sha256:' + 'd' * 64
+    old_config = json.loads(json.dumps(config))
+    old_config['data'].update(EVENT_DB_URL='jdbc:postgresql://writer.fixture:5432/event_db', EVENT_DB_USERNAME='fixture-event-owner')
+    for name, reader_on in ((legacy, False), ('1795860001-aaaaaaaaaaaa-1001', True)):
+        revision = state / name
+        revision.mkdir()
+        old_deployment = json.loads(json.dumps(manifest))
+        old_deployment['spec']['template']['metadata']['annotations'] = {'flash-ticket/release': name}
+        old_deployment['spec']['template']['spec']['containers'][0]['image'] = legacy_image
+        old_secret = {'EVENT_DB_PASSWORD': 'fixture-legacy-password', 'RABBITMQ_PASSWORD': 'fixture-event-broker',
+                      'INTERNAL_SERVICE_CLIENT_SECRET': 'fixture-event-client', 'EVENT_READ_REPLICA_ENABLED': str(reader_on).lower()}
+        if reader_on:
+            old_secret.update({'EVENT_READ_REPLICA_' + k: v for k, v in {
+                'URL': 'jdbc:postgresql://reader.fixture:5432/event_db?sslmode=require&targetServerType=secondary&connectTimeout=5&socketTimeout=5',
+                'USERNAME': 'fixture-event-reader', 'PASSWORD': 'fixture-legacy-reader-password',
+                'PROBE_INTERVAL': '2s', 'MAX_SAMPLE_AGE': '5s', 'PROBE_QUERY_TIMEOUT': '2', 'TRANSACTION_TIMEOUT': '5'}.items()})
+        secret = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'event-service-secret', 'namespace': 'flash-ticket'},
+                  'type': 'Opaque', 'data': {k: base64.b64encode(v.encode()).decode() for k, v in old_secret.items()}}
+        documents = {'deployment': old_deployment, 'configmap': old_config, 'hpa': hpa, 'service': service, 'secret-env': secret}
+        (revision / 'image').write_text(legacy_image + '\n')
+        for file, doc in documents.items():
+            (revision / (file + '.json')).write_text(json.dumps(doc))
+            if not reader_on:
+                (root / 'api' / (doc['kind'] + '.json')).write_text(json.dumps(doc))
+        if reader_on:
+            (revision / 'writer-baseline').write_text(legacy + '\n')
+    (state / 'current').write_text(legacy + '\n')
+    (root / 'state/k8s/event-service.current').write_text(legacy_image + '\n')
+    immutable = {str(p.relative_to(state)): p.read_bytes() for name in (legacy, '1795860001-aaaaaaaaaaaa-1001')
+                 for p in (state / name).iterdir() if p.name in ('image', 'deployment.json', 'configmap.json', 'hpa.json', 'service.json', 'secret-env.json', 'writer-baseline')}
 
     def run(values, mode='deploy'):
-        env_file.write_text(writer_env + ''.join(f'{prefix + k}={v}\n' for k, v in values.items()), encoding='utf-8')
+        env_file.write_text('RABBITMQ_PASSWORD=fixture-event-broker\nINTERNAL_SERVICE_CLIENT_SECRET=fixture-event-client\n'
+                            + ''.join(f'{k}={v}\n' for k, v in values.items()), encoding='utf-8')
         result = subprocess.run([*command, mode], env=env, capture_output=True, text=True, timeout=90)
-        assert not any(v in result.stdout + result.stderr for v in (jdbc, 'fixture-event-reader-password', 'fixture-event-writer'))
+        assert not any(v in result.stdout + result.stderr for v in ('fixture-event-password', 'fixture-legacy-password', 'fixture-legacy-reader-password'))
         return result
 
     def live(kind):
@@ -1123,7 +1155,7 @@ def event_fixture(root, bash, env, scripts, deployment, config):
 
     def reject(values, marker):
         before = {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
-        pointers = {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()} if state.exists() else {}
+        pointers = {p.name: p.read_bytes() for p in state.glob('*') if p.is_file()}
         result = run(values)
         assert result.returncode and marker in result.stderr, result.stdout + result.stderr
         assert before == {p.name: p.read_bytes() for p in (root / 'api').glob('*.json')}
@@ -1135,96 +1167,107 @@ def event_fixture(root, bash, env, scripts, deployment, config):
         (root / 'port').write_text(str(server.server_port))
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
-            reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
-            result = run({})
-            assert result.returncode == 0, result.stdout + result.stderr
-            writer = (state / 'current').read_text().strip()
-            assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            # Lần migrate đầu lỗi rollout phải phục hồi đúng old image + old Secret, không chỉ đổi image.
+            (root / 'fail-once').touch()
+            result = run(pg)
+            assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == legacy
+            assert live('Deployment')['spec']['template']['spec']['containers'][0]['image'] == legacy_image
+            assert 'EVENT_DB_PASSWORD' in live('Secret')['data'] and 'PG_PASSWORD' not in live('Secret')['data']
+            result = run(pg)
+            assert result.returncode == 0, 'EVENT_PG_MIGRATION_REJECTED: ' + result.stdout + result.stderr
+            modern = (state / 'current').read_text().strip()
+            assert (state / 'previous').read_text().strip() == legacy
+            assert live('Deployment')['spec']['template']['spec']['containers'][0]['image'] == command[3]
+            assert set(pg).issubset(live('Secret')['data']) and 'EVENT_DB_PASSWORD' not in live('Secret')['data']
+            assert not (state / modern / 'writer-baseline').exists()
             assert not (root / 'api/PodDisruptionBudget.json').exists()
+            assert live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            for key in pg:
+                reject(dict(pg, **{key: ''}), 'MISSING_SECRET_KEYS')
+            for key, value in [('PG_WRITE_POOL_SIZE', '0'), ('PG_READ_POOL_SIZE', '3'), ('PG_WRITE_POOL_SIZE', '6'),
+                               ('PG_READ_POOL_SIZE', '1.5'), ('PG_RW_HOST', 'user@writer.fixture'),
+                               ('PG_RO_HOST', 'reader.fixture:5432'), ('PG_RO_HOST', 'writer.fixture'), ('PG_DB', 'event_db?sslmode=disable')]:
+                reject(dict(pg, **{key: value}), 'INVALID_EVENT_DB_POOL' if 'POOL' in key else 'INVALID_EVENT_DB_ENDPOINT')
+            for key in ('EVENT_DB_PASSWORD', 'EVENT_DB_URL', 'EVENT_DB_USERNAME', 'EVENT_READ_REPLICA_ENABLED', 'EVENT_READ_REPLICA_URL', 'SPRING_DATASOURCE_URL'):
+                reject(dict(pg, **{key: 'retired'}), 'RETIRED_EVENT_DB_KEYS')
             live_path = root / 'api/Deployment.json'
             clean_live = live_path.read_bytes()
             pinned = json.loads(clean_live)
             pinned['spec']['template']['spec']['affinity']['nodeAffinity'] = {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': []}}
             live_path.write_text(json.dumps(pinned))
             try:
-                reject(pilot, 'EVENT_NODE_PINNING_PRESENT')
+                reject(pg, 'EVENT_NODE_PINNING_PRESENT')
             finally:
                 live_path.write_bytes(clean_live)
             unmanaged = root / 'api/PodDisruptionBudget.json'
             unmanaged.write_text('{"kind":"PodDisruptionBudget","metadata":{"name":"event-service"}}')
             try:
-                reject(pilot, 'EVENT_UNMANAGED_PDB_PRESENT')
+                reject(pg, 'EVENT_UNMANAGED_PDB_PRESENT')
             finally:
                 unmanaged.unlink()
-            for values, marker in [(dict(pilot, ENABLED='yes'), 'INVALID_EVENT_READER_FLAG'),
-                                   (dict(pilot, PASSWORD=''), 'MISSING_EVENT_READER_KEYS'),
-                                   (dict(pilot, TRANSACTION_TIMEOUT='0'), 'INVALID_EVENT_READER_TIMING')]:
-                reject(values, marker)
-            for url in [jdbc + '&sslmode=disable', jdbc.replace('/event_db', '/booking_db'),
-                        jdbc.replace('reader.fixture:5432', 'reader.fixture:5432,writer.fixture:5432'),
-                        jdbc + '&user=embedded', jdbc.replace('socketTimeout=5', 'socketTimeout=0')]:
-                reject(dict(pilot, URL=url), 'INVALID_EVENT_READER_URL')
             for file, change, marker in [
                 ('hpa', lambda d: d['spec'].update(maxReplicas=2), 'INVALID_EVENT_RECOVERY_PROFILE'),
                 ('deployment', lambda d: d['spec']['template']['spec'].update(nodeName='fixed'), 'INVALID_EVENT_RECOVERY_PROFILE'),
                 ('deployment', lambda d: d['spec']['template']['spec']['affinity']['podAntiAffinity']['requiredDuringSchedulingIgnoredDuringExecution'][0]['labelSelector']['matchLabels'].update({'app.kubernetes.io/name': 'other'}), 'INVALID_EVENT_RECOVERY_PROFILE'),
-                ('configmap', lambda d: d['data'].update({prefix + 'ENABLED': 'false'}), 'INVALID_EVENT_READER_FLAG_SOURCE'),
-                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"event":{"read-replica":{"enabled":false}}}'), 'INVALID_EVENT_READER_FLAG_SOURCE'),
-                ('configmap', lambda d: d['data'].update({'spring.application.json': '{"event.read-replica.enabled":false}'}), 'INVALID_EVENT_READER_FLAG_SOURCE')]:
+                ('configmap', lambda d: d['data'].update(PG_PASSWORD='inline'), 'INVALID_EVENT_DB_SOURCE'),
+                ('configmap', lambda d: d['data'].update(EVENT_READ_REPLICA_ENABLED='false'), 'INVALID_EVENT_DB_SOURCE'),
+                ('configmap', lambda d: d['data'].update(SPRING_APPLICATION_JSON='{"app":{"db":{"read":{"jdbc-url":"override"}}}}'), 'INVALID_EVENT_DB_SOURCE'),
+                ('configmap', lambda d: d['data'].update({'spring.application.json': '{"spring.datasource.url":"override"}'}), 'INVALID_EVENT_DB_SOURCE'),
+                ('configmap', lambda d: d['data'].update(SPRING_CONFIG_IMPORT='optional:file:override'), 'INVALID_EVENT_DB_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].update(env=[{'name': 'PG_PASSWORD', 'valueFrom': {'secretKeyRef': {'name': 'other', 'key': 'password'}}}]), 'INVALID_EVENT_DB_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].update(args=['--app.db.read.jdbc-url=override']), 'INVALID_EVENT_DB_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0].update(env=[{'name': 'JAVA_TOOL_OPTIONS', 'value': '-DPG_RW_HOST=override'}]), 'INVALID_EVENT_DB_SOURCE'),
+                ('deployment', lambda d: d['spec']['template']['spec']['containers'][0]['envFrom'].append({'secretRef': {'name': 'other'}}), 'INVALID_EVENT_DB_SOURCE')]:
                 path = app / (file + '.yaml')
                 original = path.read_bytes()
                 document = json.loads(original)
                 change(document)
                 path.write_text(json.dumps(document))
                 try:
-                    reject(pilot, marker)
+                    reject(pg, marker)
                 finally:
                     path.write_bytes(original)
-            baseline = state / writer
-            original_hpa = (baseline / 'hpa.json').read_bytes()
-            (baseline / 'hpa.json').write_text('{}')
-            try:
-                reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
-            finally:
-                (baseline / 'hpa.json').write_bytes(original_hpa)
-            result = run(pilot)
-            assert result.returncode == 0, result.stdout + result.stderr
-            active = state / (state / 'current').read_text().strip()
-            assert (active / 'writer-baseline').read_text().strip() == writer
-            for broken in (None, '../invalid'):
-                pointer = active / 'writer-baseline'
-                original = pointer.read_bytes()
-                if broken is None:
-                    pointer.unlink()
-                else:
-                    pointer.write_text(broken)
-                try:
-                    reject(pilot, 'EVENT_WRITER_REVISION_REQUIRED')
-                finally:
-                    pointer.write_bytes(original)
-            assert run(pilot).returncode == 0
-            assert (state / 'previous').read_text().strip() == writer
+            # previous trỏ revision trước thực tế, kể cả khác digest và Secret.
+            command[3] = command[3].split('@')[0] + '@sha256:' + 'f' * 64
+            assert run(dict(pg, PG_PASSWORD='fixture-event-password-v2')).returncode == 0
+            second = (state / 'current').read_text().strip()
+            assert (state / 'previous').read_text().strip() == modern
             (root / 'fail-once').touch()
-            result = run(pilot)
+            result = run(pg)
             assert result.returncode and 'RESTORED_PREVIOUS' in result.stderr
-            assert (state / 'current').read_text().strip() == writer
-            assert (root / 'state/k8s/event-service.current').read_text().strip() == command[3]
-            assert prefix + 'ENABLED' not in live('Secret')['data']
-            assert run(pilot).returncode == 0
-            assert run({'ENABLED': 'false'}).returncode == 0
-            assert (state / 'previous').read_text().strip() == writer
-            # Lượt bật sau lấy writer-only hiện tại làm baseline mới, không quay về active cũ.
-            writer = (state / 'current').read_text().strip()
-            assert run(pilot).returncode == 0
+            assert (state / 'current').read_text().strip() == second
+            assert base64.b64decode(live('Secret')['data']['PG_PASSWORD']).decode() == 'fixture-event-password-v2'
+            assert (state / 'previous').read_text().strip() == second
+            # Failure restore chọn revision vừa phục hồi; chọn snapshot modern để kiểm manual rollback khác digest.
+            (state / 'previous').write_text(modern + '\n')
             env_file.unlink()
+            command[3] = (state / modern / 'image').read_text().strip()
             result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
             assert result.returncode == 0, result.stdout + result.stderr
-            assert (state / 'current').read_text().strip() == writer
+            assert (state / 'current').read_text().strip() == modern
+            assert base64.b64decode(live('Secret')['data']['PG_PASSWORD']).decode() == pg['PG_PASSWORD']
+            command[3] = legacy_image
+            (state / 'previous').write_text(legacy + '\n')
+            assert subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90).returncode == 0
+            assert (state / 'current').read_text().strip() == legacy
+            assert 'EVENT_DB_PASSWORD' in live('Secret')['data'] and 'PG_PASSWORD' not in live('Secret')['data']
+            # Cả snapshot reader-on lịch sử cũng được restore nguyên vẹn, không ép baseline OFF.
+            (state / 'previous').write_text('1795860001-aaaaaaaaaaaa-1001\n')
+            result = subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert base64.b64decode(live('Secret')['data']['EVENT_READ_REPLICA_ENABLED']) == b'true'
+            command[3] = (state / modern / 'image').read_text().strip()
+            (state / 'previous').write_text(modern + '\n')
+            assert subprocess.run([*command, 'rollback'], env=env, capture_output=True, text=True, timeout=90).returncode == 0
+            assert (state / 'current').read_text().strip() == modern
+            assert (root / 'state/k8s/event-service.current').read_text().strip() == command[3]
+            for name, original in immutable.items():
+                assert (state / name).read_bytes() == original
             assert live('Deployment')['spec']['replicas'] == 1
-            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == 1
         finally:
             server.shutdown()
-    print('Event fixtures passed: recovery-1, reader admission, writer baseline and restore pointers.')
+    print('Event fixtures passed: PG routing, pool/source guards, recovery-1 and exact old/new image+config rollback.')
 
 
 def ticket_fixture(root, bash, env, scripts):

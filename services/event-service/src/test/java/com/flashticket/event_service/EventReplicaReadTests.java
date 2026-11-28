@@ -7,14 +7,20 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.flashticket.event_service.api.EventCommands;
+import com.flashticket.event_service.api.*;
+import com.flashticket.event_service.application.*;
 import com.flashticket.event_service.application.CancellationTransactions;
 import com.flashticket.event_service.application.EventService;
+import com.flashticket.event_service.domain.EventData.ImageRole;
 import com.flashticket.event_service.integration.EventImageStorage;
+import com.flashticket.event_service.integration.EventSummaries;
 import com.flashticket.event_service.integration.HttpEventSummaries;
 import com.flashticket.event_service.messaging.OutboxStore;
 import com.flashticket.event_service.persistence.CancellationRepository;
 import com.flashticket.event_service.persistence.EventRepository;
+import com.flashticket.event_service.persistence.SeatMapRepository;
+import com.flashticket.event_service.web.EventProblem;
+import jakarta.persistence.EntityManagerFactory;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.*;
@@ -24,13 +30,21 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.orm.jpa.EntityManagerFactoryUtils;
+import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -58,9 +72,13 @@ class EventReplicaReadTests {
   @Autowired JdbcTemplate jdbc;
   @Autowired MockMvc mvc;
 
-  @Autowired
-  @org.springframework.beans.factory.annotation.Qualifier("eventReplicaHealth")
-  com.flashticket.event_service.config.EventReplicaHealth health;
+  @Autowired PlatformTransactionManager manager;
+  @Autowired EntityManagerFactory entityManagerFactory;
+  @Autowired ApplicationContext context;
+  @Autowired SeatMapService seatMaps;
+  @Autowired VenueService venues;
+  @Autowired CancellationService cancellationService;
+  @MockitoSpyBean SeatMapRepository maps;
 
   @Autowired com.flashticket.event_service.application.EventImageTransactions images;
   @MockitoBean org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
@@ -73,22 +91,24 @@ class EventReplicaReadTests {
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) throws Exception {
     startPostgresPair();
-    registry.add("spring.datasource.url", primary::getJdbcUrl);
-    registry.add("spring.datasource.username", () -> "event_admin");
-    registry.add("spring.datasource.password", () -> "isolated-event");
-    registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET ROLE event_owner");
-    registry.add("event.read-replica.enabled", () -> "true");
-    registry.add("event.read-replica.datasource.jdbc-url", standby::getJdbcUrl);
-    registry.add("event.read-replica.datasource.username", () -> "event_reader");
-    registry.add("event.read-replica.datasource.password", () -> "isolated-reader");
-    registry.add("event.read-replica.datasource.read-only", () -> "true");
-    registry.add("event.read-replica.datasource.maximum-pool-size", () -> "2");
-    registry.add("event.read-replica.datasource.minimum-idle", () -> "0");
-    registry.add("event.read-replica.datasource.connection-timeout", () -> "5000");
-    registry.add("event.read-replica.probe-interval", () -> "1h");
-    registry.add("event.read-replica.max-sample-age", () -> "5s");
-    registry.add("event.read-replica.probe-query-timeout", () -> "2");
-    registry.add("event.read-replica.transaction-timeout", () -> "5");
+    for (String pool : List.of("write", "read")) {
+      String prefix = "app.db." + pool + ".";
+      registry.add(
+          prefix + "jdbc-url", pool.equals("write") ? primary::getJdbcUrl : standby::getJdbcUrl);
+      registry.add(prefix + "username", () -> "event_admin");
+      registry.add(prefix + "password", () -> "isolated-event");
+      registry.add(prefix + "schema", () -> "event_schema");
+      registry.add(prefix + "maximum-pool-size", () -> pool.equals("write") ? "5" : "2");
+      registry.add(prefix + "minimum-idle", () -> pool.equals("write") ? "1" : "0");
+      registry.add(prefix + "connection-timeout", () -> "5000");
+      registry.add(prefix + "data-source-properties.sslmode", () -> "disable");
+      registry.add(
+          prefix + "data-source-properties.targetServerType",
+          () -> pool.equals("write") ? "primary" : "secondary");
+      registry.add(prefix + "data-source-properties.socketTimeout", () -> "5");
+    }
+    registry.add("app.db.write.connection-init-sql", () -> "SET ROLE event_owner");
+    registry.add("app.db.read.read-only", () -> "true");
   }
 
   private static void startPostgresPair() throws Exception {
@@ -114,7 +134,6 @@ class EventReplicaReadTests {
         statement.execute("GRANT event_owner TO event_admin");
         statement.execute("CREATE SCHEMA event_schema AUTHORIZATION event_owner");
         statement.execute("CREATE ROLE replicator REPLICATION LOGIN");
-        statement.execute("CREATE ROLE event_reader LOGIN PASSWORD 'isolated-reader'");
       }
       var root = Path.of(System.getProperty("basedir", ".")).resolve("../..").normalize();
       primary.copyFileToContainer(
@@ -132,9 +151,9 @@ class EventReplicaReadTests {
       try (var connection =
               DriverManager.getConnection(primary.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
           var statement = connection.createStatement()) {
-        statement.execute("GRANT CONNECT ON DATABASE event_db TO event_reader");
-        statement.execute("GRANT USAGE ON SCHEMA event_schema TO event_reader");
-        statement.execute("GRANT SELECT ON ALL TABLES IN SCHEMA event_schema TO event_reader");
+        statement.execute("GRANT CONNECT ON DATABASE event_db TO event_admin");
+        statement.execute("GRANT USAGE ON SCHEMA event_schema TO event_admin");
+        statement.execute("GRANT SELECT ON ALL TABLES IN SCHEMA event_schema TO event_admin");
       }
       assertThat(
               primary
@@ -174,7 +193,8 @@ class EventReplicaReadTests {
 
   @BeforeEach
   void resetFixture() throws Exception {
-    reset(events, requests);
+    reset(events, requests, maps);
+    ReflectionTestUtils.setField(service, "homeDiscoveryCache", null);
     try (var connection =
             DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
         var statement = connection.createStatement()) {
@@ -211,13 +231,7 @@ class EventReplicaReadTests {
       while (true) {
         try (var row = s.executeQuery("SELECT pg_last_wal_replay_lsn() >= '" + lsn + "'::pg_lsn")) {
           row.next();
-          if (row.getBoolean(1)) {
-            org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
-            if (health.tryBeginRead()) {
-              health.finishRead();
-              return;
-            }
-          }
+          if (row.getBoolean(1)) return;
         }
         if (System.nanoTime() >= deadline)
           throw new IllegalStateException("Standby replay deadline exceeded");
@@ -227,7 +241,6 @@ class EventReplicaReadTests {
   }
 
   private List<Map<String, Object>> inspectRead(Callable<?> request) throws Exception {
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
     var observed = new ArrayList<Map<String, Object>>();
     org.mockito.stubbing.Answer<Object> answer =
         invocation -> {
@@ -260,12 +273,17 @@ class EventReplicaReadTests {
     doAnswer(answer).when(events).withChildren(anyList(), anyBoolean());
     doAnswer(answer).when(events).categories();
     doAnswer(answer).when(events).venues();
+    doAnswer(answer).when(events).homeDiscovery();
+    doAnswer(answer).when(maps).load(anyList());
+    doAnswer(answer).when(events).venueExists(any());
+    doAnswer(answer).when(events).createVenue(any(), any(), any(), any(), any(), any());
+    doAnswer(answer).when(events).updateVenue(any(), any(), any(), any(), any(), any());
     doAnswer(answer).when(events).imageReferenced(anyString());
     doAnswer(answer).when(requests).list(any(), any(), anyInt(), any());
     try {
       request.call();
     } finally {
-      reset(events, requests);
+      reset(events, requests, maps);
     }
     return observed;
   }
@@ -296,16 +314,15 @@ class EventReplicaReadTests {
     return service.publish(event.eventId(), "owner-a", approved.rowVersion()).eventId();
   }
 
+  private void assertPhysicalRole(boolean expectedReplica, Callable<?> operation) throws Exception {
+    var observed = inspectRead(operation);
+    assertThat(observed).isNotEmpty();
+    for (var row : observed) assertThat(row.get("replica")).isEqualTo(expectedReplica);
+  }
+
   @Test
-  void whitelistedPayloadsUsePhysicalStandbyAndOneSnapshot() throws Exception {
-    UUID id = createPublishedEvent("Replica event");
-    awaitReplay();
-    jdbc.update(
-        "INSERT INTO event_schema.tbl_event_cancellation_requests(id,event_id,requested_by,reason) VALUES(?,?,?,?)",
-        UUID.randomUUID(),
-        id,
-        "owner-a",
-        "Fixture cancellation");
+  void approvedReadApisUsePhysicalStandby() throws Exception {
+    UUID id = createPublishedEvent("Replica catalogue");
     awaitReplay();
     for (String path :
         List.of(
@@ -313,14 +330,11 @@ class EventReplicaReadTests {
             "/api/v1/events",
             "/api/v1/events?compact=true",
             "/api/v1/events?includeSeatMap=false",
+            "/api/v1/events/home-discovery",
             "/api/v1/categories",
             "/api/v1/venues",
             "/api/v1/organizer/events",
-            "/api/v1/admin/events?status=PUBLISHED",
-            "/api/v1/organizer/events/" + id + "/cancellation-requests",
-            "/api/v1/admin/cancellation-requests",
-            "/api/v1/admin/events/" + id + "/cancellation-requests")) {
-      String role = path.contains("/admin/") ? "ADMIN" : "ORGANIZER";
+            "/api/v1/admin/events?status=PUBLISHED")) {
       var observed =
           inspectRead(
               () ->
@@ -328,255 +342,468 @@ class EventReplicaReadTests {
                           get(path)
                               .with(
                                   jwt()
-                                      .jwt(
-                                          org.springframework.security.oauth2.jwt.Jwt
-                                              .withTokenValue("fixture")
-                                              .header("alg", "RS256")
-                                              .subject("owner-a")
-                                              .build())
-                                      .authorities(new SimpleGrantedAuthority("ROLE_" + role))))
+                                      .jwt(j -> j.subject("owner-a"))
+                                      .authorities(
+                                          new SimpleGrantedAuthority(
+                                              path.contains("/admin/")
+                                                  ? "ROLE_ADMIN"
+                                                  : "ROLE_ORGANIZER"))))
                       .andExpect(status().isOk()));
       assertThat(observed).as(path).isNotEmpty();
       for (var row : observed) {
-        assertThat(row.get("replica")).as("whitelisted physical standby: %s", path).isEqualTo(true);
+        assertThat(row.get("replica")).as(path).isEqualTo(true);
         assertThat(row.get("readonly")).isEqualTo("on");
-        assertThat(row.get("isolation")).isEqualTo("repeatable read");
-        assertThat(row.get("pid")).isEqualTo(observed.getFirst().get("pid"));
-        assertThat(row.get("snapshot")).isEqualTo(observed.getFirst().get("snapshot"));
+        if (!path.endsWith("categories") && !path.endsWith("venues")) {
+          assertThat(row.get("isolation")).isEqualTo("repeatable read");
+          assertThat(row.get("pid")).isEqualTo(observed.getFirst().get("pid"));
+          assertThat(row.get("snapshot")).isEqualTo(observed.getFirst().get("snapshot"));
+        }
       }
     }
-    mvc.perform(get("/api/v1/events/" + id))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.title").value("Replica event"));
-    mvc.perform(
-            get("/api/v1/organizer/events/" + id + "/cancellation-requests")
-                .with(
-                    jwt()
-                        .jwt(
-                            org.springframework.security.oauth2.jwt.Jwt.withTokenValue("fixture")
-                                .header("alg", "RS256")
-                                .subject("owner-a")
-                                .build())
-                        .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath("$.items[0].eventRowVersion")
-                .value(service.readOwned(id, "owner-a").rowVersion()));
   }
 
   @Test
-  void managementWritesAndOutboxStayOnWriter() throws Exception {
-    UUID id = createPublishedEvent("Writer event");
+  void springTransactionsRouteJdbcAndJpaOnPhysicalConnections() throws Exception {
+    assertThat(context.getBeansOfType(EntityManagerFactory.class)).hasSize(1);
+    assertThat(context.getBeansOfType(PlatformTransactionManager.class)).hasSize(1);
+    assertThat(manager).isInstanceOf(JpaTransactionManager.class);
+    assertThat(context.getBean("dataSource"))
+        .isInstanceOf(org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy.class);
+    assertThat(context.getBean("writeDs")).isInstanceOf(com.zaxxer.hikari.HikariDataSource.class);
+    assertThat(context.getBean("readDs")).isInstanceOf(com.zaxxer.hikari.HikariDataSource.class);
+    for (boolean readOnly : List.of(false, true)) {
+      var transaction = new TransactionTemplate(manager);
+      transaction.setReadOnly(readOnly);
+      transaction.executeWithoutResult(
+          status -> {
+            var em = EntityManagerFactoryUtils.getTransactionalEntityManager(entityManagerFactory);
+            assertThat(em).isNotNull();
+            var jpa =
+                (Object[])
+                    em.createNativeQuery("SELECT pg_is_in_recovery(), pg_backend_pid()")
+                        .getSingleResult();
+            var jdbcRow =
+                jdbc.queryForMap("SELECT pg_is_in_recovery() AS replica, pg_backend_pid() AS pid");
+            assertThat(jpa[0]).isEqualTo(readOnly);
+            assertThat(jdbcRow.get("replica")).isEqualTo(readOnly);
+            assertThat(((Number) jpa[1]).intValue())
+                .isEqualTo(((Number) jdbcRow.get("pid")).intValue());
+          });
+    }
+    assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+    assertThat(jdbc.queryForObject("SELECT pg_is_in_recovery()", Boolean.class)).isFalse();
+  }
+
+  @Test
+  void outerWriteTransactionKeepsNestedReadOnlyCallsOnPrimary() throws Exception {
+    createPublishedEvent("Outer write");
     awaitReplay();
-    for (String path :
-        List.of(
-            "/api/v1/organizer/events/" + id,
-            "/api/v1/admin/events/" + id,
-            "/api/v1/organizer/events/" + id + "/images")) {
-      String role = path.contains("/admin/") ? "ADMIN" : "ORGANIZER";
-      var observed =
-          inspectRead(
+    assertPhysicalRole(
+        false,
+        () ->
+            new TransactionTemplate(manager)
+                .execute(
+                    status -> {
+                      service.categories();
+                      return service.listPublic(null, null, 20, null);
+                    }));
+  }
+
+  @Test
+  void managementAndHistoryReadsStayPrimaryDuringReplicaLag() throws Exception {
+    var input =
+        new EventCommands.Draft(
+            "Before edit",
+            "Summary",
+            "Body",
+            CATEGORY,
+            VENUE,
+            "SEAT_MAP",
+            "2027-01-01T12:00:00Z",
+            "2027-01-01T15:00:00Z",
+            "2026-12-01T00:00:00Z",
+            "2027-01-01T14:00:00Z",
+            4,
+            List.of(),
+            List.of(),
+            List.of());
+    var draft = service.create("owner-a", input);
+    var json = new tools.jackson.databind.json.JsonMapper();
+    var map = json.readValue(SeatMapFixtures.map(false), SeatMap.class);
+    seatMaps.save(draft.eventId(), "owner-a", "0", map);
+    var request =
+        cancellations.request(
+            draft.eventId(),
+            "owner-a",
+            new CancellationCommands.Request("1", "Fixture request"),
+            java.time.Instant.now());
+    awaitReplay();
+    try (var c =
+            DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+        var s = c.createStatement()) {
+      s.execute("SELECT pg_wal_replay_pause()");
+      try {
+        cancellations.review(request.requestId(), "admin", "2", false, "Reviewed now");
+        UUID id = draft.eventId();
+        for (String path :
+            List.of(
+                "/api/v1/organizer/events/" + id,
+                "/api/v1/admin/events/" + id,
+                "/api/v1/organizer/events/" + id + "/images",
+                "/api/v1/organizer/events/" + id + "/seat-map",
+                "/api/v1/organizer/events/" + id + "/cancellation-requests",
+                "/api/v1/admin/events/" + id + "/cancellation-requests",
+                "/api/v1/admin/cancellation-requests?status=REJECTED")) {
+          assertPhysicalRole(
+              false,
               () ->
                   mvc.perform(
                           get(path)
                               .with(
                                   jwt()
-                                      .jwt(
-                                          org.springframework.security.oauth2.jwt.Jwt
-                                              .withTokenValue("fixture")
-                                              .header("alg", "RS256")
-                                              .subject("owner-a")
-                                              .build())
-                                      .authorities(new SimpleGrantedAuthority("ROLE_" + role))))
+                                      .jwt(j -> j.subject("owner-a"))
+                                      .authorities(
+                                          new SimpleGrantedAuthority(
+                                              path.contains("/admin/")
+                                                  ? "ROLE_ADMIN"
+                                                  : "ROLE_ORGANIZER"))))
                       .andExpect(status().isOk()));
-      assertThat(observed).isNotEmpty();
-      for (var row : observed) assertThat(row.get("replica")).as(path).isEqualTo(false);
+        }
+        assertThat(service.readOwned(id, "owner-a").rowVersion()).isEqualTo("3");
+        assertThat(
+                cancellations
+                    .history(id, "owner-a", true, null, 20, null)
+                    .items()
+                    .getFirst()
+                    .status())
+            .isEqualTo("REJECTED");
+        mvc.perform(
+                get("/api/v1/organizer/events/" + id)
+                    .with(
+                        jwt()
+                            .jwt(j -> j.subject("foreign"))
+                            .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER"))))
+            .andExpect(status().isNotFound());
+      } finally {
+        s.execute("SELECT pg_wal_replay_resume()");
+      }
     }
-    var directHistory =
-        inspectRead(() -> cancellations.history(id, "owner-a", true, null, 20, null));
-    for (var row : directHistory) assertThat(row.get("replica")).isEqualTo(false);
-    var reference = inspectRead(() -> images.referenced("events/poster"));
-    assertThat(reference).isNotEmpty();
-    for (var row : reference) assertThat(row.get("replica")).isEqualTo(false);
-    // Standby không thể UPDATE; claim/confirm/retry thật thành công chứng minh writer path.
-    var first = outbox.claim(java.time.Duration.ofSeconds(30)).getFirst();
-    assertThat(outbox.backlog()).isEqualTo(3);
-    jdbc.update(
-        "UPDATE event_schema.tbl_outbox_messages SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE message_id=?",
-        first.id());
-    var newer = outbox.claim(java.time.Duration.ofSeconds(30)).getFirst();
-    assertThat(newer.id()).isEqualTo(first.id());
-    assertThat(newer.attempt()).isEqualTo(first.attempt() + 1);
-    assertThat(outbox.confirmed(first)).isFalse();
-    outbox.retry(first, "STALE_WORKER", java.time.Duration.ZERO);
-    assertThat(outbox.confirmed(newer)).isTrue();
-    assertThat(outbox.backlog()).isEqualTo(2);
   }
 
   @Test
-  void readerIneligibilityAndAttemptFailureKeepDistinctContracts() throws Exception {
-    UUID id = createPublishedEvent("Failure policy");
+  void cancellationPrechecksUseLatestPrimaryState() throws Exception {
+    var draft =
+        service.create(
+            "owner-a",
+            new EventCommands.Draft(
+                "Cancellation latest",
+                "Summary",
+                "Body",
+                CATEGORY,
+                VENUE,
+                "QUANTITY",
+                "2027-01-01T12:00:00Z",
+                "2027-01-01T15:00:00Z",
+                "2026-12-01T00:00:00Z",
+                "2027-01-01T14:00:00Z",
+                4,
+                List.of(),
+                List.of(
+                    new EventCommands.TicketType(
+                        null, "Standard", "100005", "VND", "10", "#ABCDEF")),
+                List.of()));
+    UUID id = draft.eventId();
     awaitReplay();
-    try (var connection =
+    try (var c =
             DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
-        var statement = connection.createStatement()) {
-      statement.execute("SELECT pg_wal_replay_pause()");
+        var s = c.createStatement()) {
+      s.execute("SELECT pg_wal_replay_pause()");
       try {
-        var writerRows =
-            inspectRead(() -> mvc.perform(get("/api/v1/events/" + id)).andExpect(status().isOk()));
-        assertThat(writerRows).isNotEmpty();
-        for (var row : writerRows) assertThat(row.get("replica")).isEqualTo(false);
+        var pending = service.submit(id, "owner-a", draft.rowVersion());
+        var approved =
+            service.approve(id, "admin", new EventCommands.Approval(pending.rowVersion(), "0.1"));
+        var published = service.publish(id, "owner-a", approved.rowVersion());
+        when(summaries.financial(id, "owner-a", true))
+            .thenReturn(
+                new EventSummaries.Financial(
+                    1,
+                    id,
+                    "owner-a",
+                    java.time.Instant.now().toString(),
+                    true,
+                    "VND",
+                    "100",
+                    "0",
+                    "10",
+                    "90"));
+        assertPhysicalRole(
+            false,
+            () -> {
+              assertThatThrownBy(
+                      () -> cancellationService.direct(id, "owner-a", published.rowVersion()))
+                  .isInstanceOf(EventProblem.class)
+                  .hasMessage("CANCELLATION_REQUEST_REQUIRED");
+              return null;
+            });
+        assertPhysicalRole(
+            false,
+            () ->
+                cancellationService.request(
+                    id,
+                    "owner-a",
+                    new CancellationCommands.Request(published.rowVersion(), "Collected orders")));
+        verify(summaries, times(2)).financial(id, "owner-a", true);
       } finally {
-        statement.execute("SELECT pg_wal_replay_resume()");
+        s.execute("SELECT pg_wal_replay_resume()");
       }
     }
+  }
+
+  @Test
+  void imagePrechecksAndReferenceChecksStayPrimaryDuringLag() throws Exception {
+    var draft =
+        service.create(
+            "owner-a",
+            new EventCommands.Draft(
+                "Image latest",
+                "Summary",
+                "Body",
+                CATEGORY,
+                VENUE,
+                "QUANTITY",
+                "2027-01-01T12:00:00Z",
+                "2027-01-01T15:00:00Z",
+                "2026-12-01T00:00:00Z",
+                "2027-01-01T14:00:00Z",
+                4,
+                List.of(new EventCommands.Image(null, "events/poster", 0)),
+                List.of(
+                    new EventCommands.TicketType(
+                        null, "Standard", "100005", "VND", "10", "#ABCDEF")),
+                List.of()));
     awaitReplay();
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
-    assertThat(health.tryBeginRead()).isTrue();
-    try {
-      var busyRows =
-          inspectRead(() -> mvc.perform(get("/api/v1/categories")).andExpect(status().isOk()));
-      for (var row : busyRows) assertThat(row.get("replica")).isEqualTo(false);
-    } finally {
-      health.finishRead();
+    try (var c =
+            DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+        var s = c.createStatement()) {
+      s.execute("SELECT pg_wal_replay_pause()");
+      try {
+        var attached =
+            images.attach(
+                draft.eventId(),
+                "owner-a",
+                "0",
+                null,
+                1,
+                ImageRole.GALLERY,
+                "events/new-reference");
+        assertThat(attached.rowVersion()).isEqualTo("1");
+        assertPhysicalRole(false, () -> images.referenced("events/new-reference"));
+        assertThat(images.referenced("events/new-reference")).isTrue();
+        assertThatThrownBy(
+                () -> images.prepare(draft.eventId(), "owner-a", "0", null, 2, ImageRole.GALLERY))
+            .isInstanceOf(EventProblem.class)
+            .hasMessage("STALE_EVENT_VERSION");
+        verifyNoInteractions(imageStorage);
+      } finally {
+        s.execute("SELECT pg_wal_replay_resume()");
+      }
     }
+  }
+
+  @Test
+  void backgroundAndVenueOperationsUsePrimaryWithoutOuterTransaction() throws Exception {
+    var draft =
+        service.create(
+            "owner-a",
+            new EventCommands.Draft(
+                "Background",
+                "Summary",
+                "Body",
+                CATEGORY,
+                VENUE,
+                "SEAT_MAP",
+                "2027-01-01T12:00:00Z",
+                "2027-01-01T15:00:00Z",
+                "2026-12-01T00:00:00Z",
+                "2027-01-01T14:00:00Z",
+                4,
+                List.of(),
+                List.of(),
+                List.of()));
+    var file = new MockMultipartFile("file", "image.png", "image/png", new byte[] {1});
+    when(imageStorage.uploadSeatMapBackground(eq(draft.eventId()), any()))
+        .thenAnswer(
+            invocation -> {
+              assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+              return new EventImageStorage.Uploaded("events/background", "fixture");
+            });
+    assertPhysicalRole(false, () -> seatMaps.uploadBackground(draft.eventId(), "owner-a", file));
+    when(imageStorage.uploadVenue(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+              return new EventImageStorage.Uploaded("events/venue", "fixture");
+            });
+    var venue = venues.create("New venue", "Address", null, null, null);
+    assertThat(venue.name()).isEqualTo("New venue");
+    assertPhysicalRole(
+        false, () -> venues.update(venue.id(), "Updated venue", null, null, null, file));
+    assertThat(venues.update(venue.id(), "Last name", null, null, null, null).name())
+        .isEqualTo("Last name");
+  }
+
+  @Test
+  void pausedReplicaCanReturnStaleCatalogueAndCachedHome() throws Exception {
+    UUID id = createPublishedEvent("Stale public");
     awaitReplay();
+    try (var c =
+            DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+        var s = c.createStatement()) {
+      s.execute("SELECT pg_wal_replay_pause()");
+      try {
+        cancellations.cancel(id, "admin", service.readAdmin(id).rowVersion(), false);
+        assertThat(service.readAdmin(id).status()).isEqualTo("CANCELLED");
+        assertPhysicalRole(
+            true, () -> mvc.perform(get("/api/v1/events/" + id)).andExpect(status().isOk()));
+        var stale = service.homeDiscovery();
+        assertThat(stale.totalLiveEvents()).isEqualTo(1);
+        var cachedObservations =
+            inspectRead(
+                () -> {
+                  assertThat(service.homeDiscovery()).isEqualTo(stale);
+                  return null;
+                });
+        assertThat(cachedObservations).isEmpty();
+        createPublishedEvent("Not replayed");
+        assertPhysicalRole(
+            true,
+            () -> {
+              assertThat(service.homeDiscovery().totalLiveEvents()).isEqualTo(1);
+              return null;
+            });
+      } finally {
+        s.execute("SELECT pg_wal_replay_resume()");
+      }
+    }
+  }
+
+  @Test
+  void replicaSqlFailureDoesNotRetryPrimary() throws Exception {
+    UUID id = createPublishedEvent("Reader failure");
+    awaitReplay();
+    clearInvocations(events);
     doAnswer(
             invocation -> {
-              Object resource =
-                  org.springframework.transaction.support.TransactionSynchronizationManager
-                      .getResource(jdbc.getDataSource());
-              assertThat(
-                      org.springframework.transaction.support.TransactionSynchronizationManager
-                          .getCurrentTransactionName())
-                  .isEqualTo("eventReplicaRead");
-              assertThat(resource)
-                  .isInstanceOf(org.springframework.jdbc.datasource.ConnectionHolder.class);
-              assertThat(
-                      ((org.springframework.jdbc.datasource.ConnectionHolder) resource)
-                          .hasTimeout())
-                  .isTrue();
-              // Tách timeout khỏi recovery conflict; chỉ pause fixture sau reader admission.
-              try (var connection =
-                      DriverManager.getConnection(
-                          standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
-                  var statement = connection.createStatement()) {
-                statement.setQueryTimeout(2);
-                statement.execute("SELECT pg_wal_replay_pause()");
-                try {
-                  long deadline = System.nanoTime() + java.time.Duration.ofSeconds(2).toNanos();
-                  while (true) {
-                    try (var row =
-                        statement.executeQuery("SELECT pg_get_wal_replay_pause_state()")) {
-                      assertThat(row.next()).isTrue();
-                      if ("paused".equals(row.getString(1))) break;
-                    }
-                    assertThat(System.nanoTime())
-                        .as("fixture replay pause deadline")
-                        .isLessThan(deadline);
-                    Thread.sleep(10);
-                  }
-                  assertThat(jdbc.queryForObject("SELECT pg_is_in_recovery()", Boolean.class))
-                      .isTrue();
-                  jdbc.queryForObject("SELECT pg_sleep(10)", Object.class);
-                  return invocation.callRealMethod();
-                } finally {
-                  statement.execute("SELECT pg_wal_replay_resume()");
-                }
-              }
+              assertThat(jdbc.queryForObject("SELECT pg_is_in_recovery()", Boolean.class)).isTrue();
+              jdbc.execute("SET LOCAL statement_timeout=100");
+              jdbc.queryForObject("SELECT pg_sleep(2)", Object.class);
+              return invocation.callRealMethod();
             })
         .when(events)
         .find(id, false);
-    long start = System.nanoTime();
     try {
-      var timedOut =
+      var result =
           mvc.perform(get("/api/v1/events/" + id))
               .andExpect(status().isServiceUnavailable())
               .andExpect(jsonPath("$.code").value("STORAGE_UNAVAILABLE"))
               .andReturn();
       var cause =
           org.springframework.core.NestedExceptionUtils.getMostSpecificCause(
-              timedOut.getResolvedException());
+              result.getResolvedException());
       assertThat(cause).isInstanceOf(java.sql.SQLException.class);
       assertThat(((java.sql.SQLException) cause).getSQLState()).isEqualTo("57014");
       verify(events, times(1)).find(id, false);
-      assertThat(java.time.Duration.ofNanos(System.nanoTime() - start))
-          .isLessThan(java.time.Duration.ofSeconds(9));
-      assertThat(health.tryBeginRead()).as("reader error invalidates sample").isFalse();
     } finally {
       reset(events);
     }
+    assertPhysicalRole(false, () -> service.readOwned(id, "owner-a"));
+  }
+
+  @Test
+  void writesReadBackFromPrimaryAndOutboxFencingIsPreserved() throws Exception {
+    var draft =
+        service.create(
+            "owner-a",
+            new EventCommands.Draft(
+                "Write readback",
+                "Summary",
+                "Body",
+                CATEGORY,
+                VENUE,
+                "QUANTITY",
+                "2027-01-01T12:00:00Z",
+                "2027-01-01T15:00:00Z",
+                "2026-12-01T00:00:00Z",
+                "2027-01-01T14:00:00Z",
+                4,
+                List.of(new EventCommands.Image(null, "events/poster", 0)),
+                List.of(
+                    new EventCommands.TicketType(
+                        null, "Standard", "100005", "VND", "10", "#ABCDEF")),
+                List.of()));
     awaitReplay();
-    assertThat(health.tryBeginRead()).as("permit released after failure").isTrue();
-    health.finishRead();
-    // Thiếu ACL reader không được che bằng retry writer.
-    try (var connection =
-            DriverManager.getConnection(primary.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
-        var statement = connection.createStatement()) {
-      statement.execute("REVOKE SELECT ON event_schema.tbl_events FROM event_reader");
-      awaitReplay();
+    try (var c =
+            DriverManager.getConnection(standby.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+        var s = c.createStatement()) {
+      s.execute("SELECT pg_wal_replay_pause()");
       try {
-        var observations =
-            inspectRead(
-                () ->
-                    mvc.perform(get("/api/v1/events/" + id))
-                        .andExpect(status().isServiceUnavailable()));
-        assertThat(observations).hasSize(1);
-        assertThat(observations.getFirst().get("replica")).isEqualTo(true);
-      } finally {
-        statement.execute("GRANT SELECT ON event_schema.tbl_events TO event_reader");
-        awaitReplay();
-      }
-    }
-    var reading = new java.util.concurrent.CountDownLatch(1);
-    var outcome = new java.util.concurrent.atomic.AtomicInteger();
-    var asyncFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
-    doAnswer(
-            invocation -> {
-              jdbc.queryForObject(
-                  "SELECT id FROM event_schema.tbl_events WHERE id=?", UUID.class, id);
-              reading.countDown();
-              jdbc.queryForObject("SELECT pg_sleep(10)", Object.class);
-              return invocation.callRealMethod();
-            })
-        .when(events)
-        .find(id, false);
-    Thread request =
-        new Thread(
+        assertPhysicalRole(
+            false,
             () -> {
-              try {
-                outcome.set(
-                    mvc.perform(get("/api/v1/events/" + id)).andReturn().getResponse().getStatus());
-              } catch (Exception failure) {
-                asyncFailure.set(failure);
-              }
+              var changed =
+                  service.save(
+                      draft.eventId(),
+                      "owner-a",
+                      new EventCommands.Save(
+                          "0",
+                          new EventCommands.Draft(
+                              "New title",
+                              "Summary",
+                              "Body",
+                              CATEGORY,
+                              VENUE,
+                              "QUANTITY",
+                              "2027-01-01T12:00:00Z",
+                              "2027-01-01T15:00:00Z",
+                              "2026-12-01T00:00:00Z",
+                              "2027-01-01T14:00:00Z",
+                              4,
+                              List.of(new EventCommands.Image(null, "events/poster", 0)),
+                              List.of(
+                                  new EventCommands.TicketType(
+                                      null, "Standard", "100005", "VND", "10", "#ABCDEF")),
+                              List.of())));
+              assertThat(changed.title()).isEqualTo("New title");
+              var pending = service.submit(draft.eventId(), "owner-a", changed.rowVersion());
+              var approved =
+                  service.approve(
+                      draft.eventId(),
+                      "admin",
+                      new EventCommands.Approval(pending.rowVersion(), "0.1"));
+              var published = service.publish(draft.eventId(), "owner-a", approved.rowVersion());
+              assertThat(published.status()).isEqualTo("PUBLISHED");
+              return published;
             });
-    request.start();
-    try (var connection =
-            DriverManager.getConnection(primary.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
-        var statement = connection.createStatement()) {
-      try {
-        assertThat(reading.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-        // ACCESS EXCLUSIVE WAL buộc standby hủy transaction đang giữ snapshot cũ.
-        statement.execute(
-            "ALTER TABLE event_schema.tbl_events ADD COLUMN replica_conflict_fixture integer");
-        request.join(8000);
-        assertThat(request.isAlive()).isFalse();
-        assertThat(asyncFailure.get()).isNull();
-        assertThat(outcome.get()).as("real recovery conflict maps SQLSTATE40001").isEqualTo(409);
-        assertThat(health.tryBeginRead()).isFalse();
+        var first = outbox.claim(java.time.Duration.ofSeconds(30)).getFirst();
+        assertThat(outbox.backlog()).isEqualTo(3);
+        jdbc.update(
+            "UPDATE event_schema.tbl_outbox_messages SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE message_id=?",
+            first.id());
+        var newer = outbox.claim(java.time.Duration.ofSeconds(30)).getFirst();
+        assertThat(newer.id()).isEqualTo(first.id());
+        assertThat(newer.attempt()).isEqualTo(first.attempt() + 1);
+        assertThat(outbox.confirmed(first)).isFalse();
+        outbox.retry(first, "STALE_WORKER", java.time.Duration.ZERO);
+        assertThat(outbox.confirmed(newer)).isTrue();
+        assertThat(outbox.backlog()).isEqualTo(2);
       } finally {
-        request.join(8000);
-        statement.execute(
-            "ALTER TABLE event_schema.tbl_events DROP COLUMN IF EXISTS replica_conflict_fixture");
-        reset(events);
-        awaitReplay();
+        s.execute("SELECT pg_wal_replay_resume()");
       }
     }
   }
 
   @Test
-  void visibilityOwnershipAndListCursorsRemainCompatible() throws Exception {
+  void visibilitySecurityAndCursorContractsRemainCompatible() throws Exception {
     UUID id = createPublishedEvent("Visible owned event");
     UUID other = createPublishedEvent("Other owner event");
     jdbc.update("UPDATE event_schema.tbl_events SET organizer_subject='owner-b' WHERE id=?", other);
@@ -722,7 +949,6 @@ class EventReplicaReadTests {
             seated.eventId(), "admin", new EventCommands.Approval(submitted.rowVersion(), "0.1"));
     service.publish(seated.eventId(), "owner-a", approved.rowVersion());
     awaitReplay();
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
     mvc.perform(get("/api/v1/events").param("q", "Seated reader contract"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].seatMap.sectors[0].seats.length()").value(1));
@@ -752,7 +978,51 @@ class EventReplicaReadTests {
         .andExpect(status().isConflict());
     jdbc.update("UPDATE event_schema.tbl_events SET status='CANCELLED' WHERE id=?", id);
     awaitReplay();
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(health, "refresh");
     mvc.perform(get("/api/v1/events/" + id)).andExpect(status().isNotFound());
+    awaitReplay();
+    var reading = new java.util.concurrent.CountDownLatch(1);
+    var outcome = new java.util.concurrent.atomic.AtomicInteger();
+    var asyncFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+    doAnswer(
+            invocation -> {
+              jdbc.queryForObject(
+                  "SELECT id FROM event_schema.tbl_events WHERE id=?", UUID.class, id);
+              reading.countDown();
+              jdbc.queryForObject("SELECT pg_sleep(10)", Object.class);
+              return invocation.callRealMethod();
+            })
+        .when(events)
+        .find(id, false);
+    Thread conflictRequest =
+        new Thread(
+            () -> {
+              try {
+                outcome.set(
+                    mvc.perform(get("/api/v1/events/" + id)).andReturn().getResponse().getStatus());
+              } catch (Exception failure) {
+                asyncFailure.set(failure);
+              }
+            });
+    conflictRequest.start();
+    try (var connection =
+            DriverManager.getConnection(primary.getJdbcUrl(), "bootstrap", "isolated-bootstrap");
+        var statement = connection.createStatement()) {
+      try {
+        assertThat(reading.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        // ACCESS EXCLUSIVE WAL buộc standby hủy transaction đang giữ snapshot cũ.
+        statement.execute(
+            "ALTER TABLE event_schema.tbl_events ADD COLUMN replica_conflict_fixture integer");
+        conflictRequest.join(8000);
+        assertThat(conflictRequest.isAlive()).isFalse();
+        assertThat(asyncFailure.get()).isNull();
+        assertThat(outcome.get()).as("real recovery conflict maps SQLSTATE40001").isEqualTo(409);
+      } finally {
+        conflictRequest.join(8000);
+        statement.execute(
+            "ALTER TABLE event_schema.tbl_events DROP COLUMN IF EXISTS replica_conflict_fixture");
+        reset(events);
+        awaitReplay();
+      }
+    }
   }
 }

@@ -103,7 +103,7 @@ public class CancellationTransactions {
     return requests.find(requestId, false);
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public EventViews.Page<CancellationRepository.Request> history(
       UUID eventId, String actor, boolean owner, String status, int size, String cursor) {
     if (eventId != null) {

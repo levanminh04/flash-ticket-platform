@@ -32,8 +32,14 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @org.springframework.context.annotation.Import(IsolatedInfrastructure.class)
 class InfrastructureSecurityTests {
-  @MockitoBean(name = "eventWriterDataSource")
+  @MockitoBean(name = "writeDs")
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource readDs;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "dataSource")
+  javax.sql.DataSource dataSource;
 
   @Autowired MockMvc mvc;
   @MockitoBean JwtDecoder decoder;
