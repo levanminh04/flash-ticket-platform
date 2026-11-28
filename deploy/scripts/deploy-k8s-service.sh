@@ -216,20 +216,26 @@ if service == 'booking-service' and (root / 'pdb.json').is_file():
     selector = {'matchLabels': {'app.kubernetes.io/name': 'booking-service'}}
     hpa = json.loads((root / 'hpa-live.json').read_text())['spec']
     pdb = json.loads((root / 'pdb-live.json').read_text())['spec']
-    assert desired == 2 and hpa['minReplicas'] == 2 and hpa['maxReplicas'] == 2, 'BOOKING_HA_REPLICA_COUNT_MISMATCH'
+    profile = json.loads((root / 'hpa.json').read_text())['spec']
+    expected_replicas = profile.get('minReplicas')
+    assert (expected_replicas in (1, 2) and profile.get('maxReplicas') == expected_replicas
+            and desired == hpa.get('minReplicas') == hpa.get('maxReplicas') == expected_replicas), 'BOOKING_HA_REPLICA_COUNT_MISMATCH'
     nodes = [p['spec'].get('nodeName') for p in pods]
-    assert all(nodes) and len(set(nodes)) == 2, 'BOOKING_HA_NODE_PLACEMENT_MISMATCH'
+    assert all(nodes) and len(set(nodes)) == expected_replicas, 'BOOKING_HA_NODE_PLACEMENT_MISMATCH'
     assert pdb.get('minAvailable') == 1 and pdb.get('selector') == selector and 'maxUnavailable' not in pdb, 'BOOKING_HA_PDB_MISMATCH'
 if service == 'payment-service' and (root / 'pdb.json').is_file():
     selector = {'matchLabels': {'app.kubernetes.io/name': 'payment-service'}}
     hpa_doc = json.loads((root / 'hpa-live.json').read_text())
     pdb_doc = json.loads((root / 'pdb-live.json').read_text())
     hpa, pdb = hpa_doc['spec'], pdb_doc['spec']
-    assert desired == hpa.get('minReplicas') == hpa.get('maxReplicas') == 2, 'PAYMENT_HA_REPLICA_COUNT_MISMATCH'
+    profile = json.loads((root / 'hpa.json').read_text())['spec']
+    expected_replicas = profile.get('minReplicas')
+    assert (expected_replicas in (1, 2) and profile.get('maxReplicas') == expected_replicas
+            and desired == hpa.get('minReplicas') == hpa.get('maxReplicas') == expected_replicas), 'PAYMENT_HA_REPLICA_COUNT_MISMATCH'
     assert (hpa_doc['metadata'].get('name') == 'payment-service' and hpa_doc['metadata'].get('namespace') == 'flash-ticket'
             and hpa.get('scaleTargetRef') == {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'payment-service'}), 'PAYMENT_HA_REPLICA_COUNT_MISMATCH'
     nodes = [p['spec'].get('nodeName') for p in pods]
-    assert all(nodes) and len(set(nodes)) == 2, 'PAYMENT_HA_NODE_PLACEMENT_MISMATCH'
+    assert all(nodes) and len(set(nodes)) == expected_replicas, 'PAYMENT_HA_NODE_PLACEMENT_MISMATCH'
     pod_spec = deployment['spec']['template']['spec']
     assert not (pod_spec.get('nodeName') or pod_spec.get('nodeSelector') or pod_spec.get('affinity', {}).get('nodeAffinity')), 'PAYMENT_HA_NODE_PINNING_PRESENT'
     assert pod_spec.get('affinity', {}).get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution') == [
@@ -432,6 +438,8 @@ def writer_revision(revision, pilot):
             and deployment['spec'].get('affinity') == pilot_pod.get('affinity')
             and deployment['spec'].get('nodeName') == pilot_pod.get('nodeName')
             and deployment['spec'].get('nodeSelector') == pilot_pod.get('nodeSelector')
+            and load(revision, 'hpa.json')['spec'].get('minReplicas') == 2
+            and load(revision, 'hpa.json')['spec'].get('maxReplicas') == 2
             and load(revision, 'hpa.json')['spec'] == load(pilot, 'hpa.json')['spec']
             and load(revision, 'pdb.json')['spec'] == load(pilot, 'pdb.json')['spec']
             and all(load(revision, resource)['metadata'].get(key) == load(pilot, resource)['metadata'].get(key)
@@ -453,7 +461,10 @@ try:
     affinity = pod.get('affinity', {})
     has_pdb = (target / 'pdb.json').is_file()
     if has_pdb or 'podAntiAffinity' in affinity or hpa.get('minReplicas') == 2 or use_reader:
-        if not has_pdb or hpa.get('minReplicas') != 2 or hpa.get('maxReplicas') != 2:
+        # Một Pod chỉ là chế độ writer-only tạm; reader vẫn cần baseline HA2.
+        if (not has_pdb or hpa.get('minReplicas') not in (1, 2)
+                or hpa.get('maxReplicas') != hpa.get('minReplicas')
+                or (any(settings.values()) and hpa.get('minReplicas') != 2)):
             sys.exit('INVALID_BOOKING_POD_HA')
         pdb = load(target, 'pdb.json')
         selector = {'matchLabels': {'app.kubernetes.io/name': 'booking-service'}}
@@ -946,7 +957,8 @@ def payment_profile(revision):
             and not pod.get('nodeName') and not pod.get('nodeSelector') and 'nodeAffinity' not in pod.get('affinity', {})
             and pod.get('affinity', {}).get('podAntiAffinity', {}).get('requiredDuringSchedulingIgnoredDuringExecution') == [rule]
             and hpa_doc.get('kind') == 'HorizontalPodAutoscaler' and hpa_doc['metadata'].get('name') == 'payment-service'
-            and hpa_doc['metadata'].get('namespace') == 'flash-ticket' and hpa.get('minReplicas') == hpa.get('maxReplicas') == 2
+            and hpa_doc['metadata'].get('namespace') == 'flash-ticket'
+            and hpa.get('minReplicas') in (1, 2) and hpa.get('maxReplicas') == hpa.get('minReplicas')
             and hpa.get('scaleTargetRef') == {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': 'payment-service'}
             and pdb.get('apiVersion') == 'policy/v1' and pdb.get('kind') == 'PodDisruptionBudget'
             and pdb['metadata'].get('name') == 'payment-service' and pdb['metadata'].get('namespace') == 'flash-ticket'
@@ -959,6 +971,8 @@ def payment_writer_revision(revision, candidate):
         if not all((r / file).is_file() for r in (revision, candidate) for file in files):
             return False
         if payment_enabled(payment_load(revision, 'secret-env.json')['data']) or not payment_profile(revision) or not payment_profile(candidate):
+            return False
+        if any(payment_load(r, 'hpa.json')['spec'].get('minReplicas') != 2 for r in (revision, candidate)):
             return False
         image = (revision / 'image').read_text().strip()
         if image != (candidate / 'image').read_text().strip():
@@ -1019,7 +1033,8 @@ try:
     if modern:
         if container.get('envFrom') != [{'configMapRef': {'name': 'payment-service-config'}}, {'secretRef': {'name': 'payment-service-secret'}}]:
             sys.exit('INVALID_PAYMENT_READER_FLAG_SOURCE')
-        if not payment_profile(target):
+        # Không dùng profile một Pod để bật reader hoặc làm baseline HA2.
+        if not payment_profile(target) or (use_reader and hpa.get('minReplicas') != 2):
             sys.exit('INVALID_PAYMENT_POD_HA')
     if mode == 'rollback' and use_reader:
         sys.exit('PAYMENT_ROLLBACK_REQUIRES_WRITER_REVISION')

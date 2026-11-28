@@ -226,6 +226,10 @@ def run_fixtures():
         (app / 'deployment.yaml').write_text(json.dumps(deployment))
         config = {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'payment-service-config'}, 'data': {'revision': 'first'}}
         (app / 'configmap.yaml').write_text(json.dumps(config))
+        if '--one-pod-only' in sys.argv:
+            payment_ha_fixture(root / 'payment-ha-fixture', bash, env, scripts, deployment, config)
+            booking_fixture(root / 'booking-fixture', bash, env, scripts, deployment, config)
+            return
         if '--payment-only' in sys.argv:
             payment_ha_fixture(root / 'payment-ha-fixture', bash, env, scripts, deployment, config)
             return
@@ -596,6 +600,44 @@ def payment_ha_fixture(root, bash, env, scripts, deployment, config):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
             reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+            # Writer-only một Pod phải deploy/restore được mà không nới reader/HA2 guard.
+            one_hpa = dict(hpa, spec=dict(hpa['spec'], minReplicas=1, maxReplicas=1))
+            (app / 'hpa.yaml').write_text(json.dumps(one_hpa))
+            result = run({})
+            assert result.returncode == 0, 'PAYMENT_ONE_POD_WRITER_REJECTED: ' + result.stdout + result.stderr
+            one = (state / 'current').read_text().strip()
+            assert live('Deployment')['spec']['replicas'] == 1
+            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            assert live('PodDisruptionBudget')['spec'] == pdb['spec']
+            reject(pilot, 'INVALID_PAYMENT_POD_HA')
+            for wrong_min, wrong_max in ((1, 2), (0, 0)):
+                (app / 'hpa.yaml').write_text(json.dumps(dict(hpa, spec=dict(hpa['spec'], minReplicas=wrong_min, maxReplicas=wrong_max))))
+                reject({}, 'INVALID_PAYMENT_POD_HA')
+            (app / 'hpa.yaml').write_text(json.dumps(one_hpa))
+            check_source = SCRIPT.read_text(encoding='utf-8').split(
+                '    if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<\'PY\'\n', 1)[1].split('\nPY\n', 1)[0]
+            path = state / one / 'hpa-live.json'
+            original = path.read_bytes()
+            wrong = json.loads(original)
+            wrong['spec'].update(minReplicas=2, maxReplicas=2)
+            path.write_text(json.dumps(wrong))
+            try:
+                checked = subprocess.run([sys.executable, '-I', '-c', check_source, str(state / one), 'payment-service'], capture_output=True, text=True, timeout=15)
+                assert checked.returncode and 'PAYMENT_HA_REPLICA_COUNT_MISMATCH' in checked.stderr
+            finally:
+                path.write_bytes(original)
+            (app / 'hpa.yaml').write_text(json.dumps(hpa))
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert live('Deployment')['spec']['replicas'] == 2
+            result = run({}, 'rollback')
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == one
+            assert live('Deployment')['spec']['replicas'] == 1
+            reject(pilot, 'PAYMENT_WRITER_REVISION_REQUIRED')
+            if '--one-pod-only' in sys.argv:
+                print('Payment one-Pod writer fixtures passed: admission, reader rejection, live drift and HA2-to-one restore.')
+                return
             result = run({})
             assert result.returncode == 0, result.stdout + result.stderr
             writer = (state / 'current').read_text().strip()
@@ -834,6 +876,44 @@ def booking_fixture(root, bash, env, scripts, deployment, config):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
             reject(pilot, 'BOOKING_WRITER_REVISION_REQUIRED')
+            # Cùng PDB/placement, writer-only1 không phải baseline cho reader HA2.
+            one_hpa = dict(hpa, spec=dict(hpa['spec'], minReplicas=1, maxReplicas=1))
+            (app / 'hpa.yaml').write_text(json.dumps(one_hpa))
+            result = run({})
+            assert result.returncode == 0, 'BOOKING_ONE_POD_WRITER_REJECTED: ' + result.stdout + result.stderr
+            one = (state / 'current').read_text().strip()
+            assert live('Deployment')['spec']['replicas'] == 1
+            assert live('HorizontalPodAutoscaler')['spec']['minReplicas'] == live('HorizontalPodAutoscaler')['spec']['maxReplicas'] == 1
+            assert live('PodDisruptionBudget')['spec'] == pdb['spec']
+            reject(pilot, 'INVALID_BOOKING_POD_HA')
+            for wrong_min, wrong_max in ((1, 2), (0, 0)):
+                (app / 'hpa.yaml').write_text(json.dumps(dict(hpa, spec=dict(hpa['spec'], minReplicas=wrong_min, maxReplicas=wrong_max))))
+                reject({}, 'INVALID_BOOKING_POD_HA')
+            (app / 'hpa.yaml').write_text(json.dumps(one_hpa))
+            check_source = SCRIPT.read_text(encoding='utf-8').split(
+                '    if python3 - "$revision" "$service" 2>"$revision/rollout-check.error" <<\'PY\'\n', 1)[1].split('\nPY\n', 1)[0]
+            path = state / one / 'hpa-live.json'
+            original = path.read_bytes()
+            wrong = json.loads(original)
+            wrong['spec'].update(minReplicas=2, maxReplicas=2)
+            path.write_text(json.dumps(wrong))
+            try:
+                checked = subprocess.run([sys.executable, '-I', '-c', check_source, str(state / one), 'booking-service'], capture_output=True, text=True, timeout=15)
+                assert checked.returncode and 'BOOKING_HA_REPLICA_COUNT_MISMATCH' in checked.stderr
+            finally:
+                path.write_bytes(original)
+            (app / 'hpa.yaml').write_text(json.dumps(hpa))
+            result = run({})
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert live('Deployment')['spec']['replicas'] == 2
+            result = run({}, 'rollback')
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert (state / 'current').read_text().strip() == one
+            assert live('Deployment')['spec']['replicas'] == 1
+            reject(pilot, 'BOOKING_WRITER_REVISION_REQUIRED')
+            if '--one-pod-only' in sys.argv:
+                print('Booking one-Pod writer fixtures passed: admission, reader rejection, live drift and HA2-to-one restore.')
+                return
             result = run({})
             assert result.returncode == 0, result.stdout + result.stderr
             assert 'binaryData' not in live('ConfigMap')
