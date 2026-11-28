@@ -12,16 +12,6 @@ spring:
     multipart:
       max-file-size: ${EVENT_IMAGES_MAX_BYTES:5242880}B
       max-request-size: ${EVENT_IMAGES_MAX_REQUEST_BYTES:6291456}B
-  datasource:
-    url: ${EVENT_DB_URL}
-    username: ${EVENT_DB_USERNAME:event_admin}
-    password: ${EVENT_DB_PASSWORD}
-    hikari:
-      connection-init-sql: SET ROLE event_owner
-      maximum-pool-size: 5
-      minimum-idle: 1
-      data-source-properties:
-        reWriteBatchedInserts: true
   jpa:
     open-in-view: false
     hibernate:
@@ -64,21 +54,36 @@ spring:
           audiences:
             - ${EVENT_KEYCLOAK_AUDIENCE:${KEYCLOAK_AUDIENCE:flash-ticket-api}}
 
-event:
-  read-replica:
-    enabled: ${EVENT_READ_REPLICA_ENABLED:false}
-    probe-interval: ${EVENT_READ_REPLICA_PROBE_INTERVAL}
-    max-sample-age: ${EVENT_READ_REPLICA_MAX_SAMPLE_AGE}
-    probe-query-timeout: ${EVENT_READ_REPLICA_PROBE_QUERY_TIMEOUT}
-    transaction-timeout: ${EVENT_READ_REPLICA_TRANSACTION_TIMEOUT}
-    datasource:
-      jdbc-url: ${EVENT_READ_REPLICA_URL}
-      username: ${EVENT_READ_REPLICA_USERNAME}
-      password: ${EVENT_READ_REPLICA_PASSWORD}
-      read-only: true
-      maximum-pool-size: 2
+app:
+  db:
+    write:
+      jdbc-url: jdbc:postgresql://${PG_RW_HOST}:5432/${PG_DB}
+      username: ${PG_USER}
+      password: ${PG_PASSWORD}
+      maximum-pool-size: ${PG_WRITE_POOL_SIZE:5}
+      minimum-idle: 1
+      schema: event_schema
+      connection-init-sql: SET ROLE event_owner
+      data-source-properties:
+        reWriteBatchedInserts: true
+        sslmode: require
+        targetServerType: primary
+    read:
+      jdbc-url: jdbc:postgresql://${PG_RO_HOST}:5432/${PG_DB}
+      username: ${PG_USER}
+      password: ${PG_PASSWORD}
+      maximum-pool-size: ${PG_READ_POOL_SIZE:2}
       minimum-idle: 0
+      schema: event_schema
+      read-only: true
       connection-timeout: 5000
+      data-source-properties:
+        sslmode: require
+        targetServerType: secondary
+        connectTimeout: 5
+        socketTimeout: 5
+
+event:
   images:
     cloud-name: ${EVENT_IMAGES_CLOUD_NAME:}
     api-key: ${EVENT_IMAGES_API_KEY:}

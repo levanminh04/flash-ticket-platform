@@ -14,13 +14,11 @@ import org.springframework.web.bind.annotation.*;
 public class CancellationController {
   private final CancellationService service;
   private final CancellationTransactions transactions;
-  private final EventReadService reads;
 
   public CancellationController(
-      CancellationService service, CancellationTransactions transactions, EventReadService reads) {
+      CancellationService service, CancellationTransactions transactions) {
     this.service = service;
     this.transactions = transactions;
-    this.reads = reads;
   }
 
   @PostMapping("/organizer/events/{id}/cancel")
@@ -46,7 +44,7 @@ public class CancellationController {
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return reads.cancellationHistory(id, EventController.actor(jwt), true, null, size, cursor);
+    return transactions.history(id, EventController.actor(jwt), true, null, size, cursor);
   }
 
   @GetMapping("/admin/cancellation-requests")
@@ -55,7 +53,7 @@ public class CancellationController {
       @RequestParam(defaultValue = "PENDING") String status,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return reads.cancellationHistory(null, EventController.actor(jwt), false, status, size, cursor);
+    return transactions.history(null, EventController.actor(jwt), false, status, size, cursor);
   }
 
   @GetMapping("/admin/events/{id}/cancellation-requests")
@@ -64,7 +62,7 @@ public class CancellationController {
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return reads.cancellationHistory(id, EventController.actor(jwt), false, null, size, cursor);
+    return transactions.history(id, EventController.actor(jwt), false, null, size, cursor);
   }
 
   @PostMapping("/admin/events/{id}/cancel")

@@ -48,7 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
       "event.outbox.enabled=false",
       "event.read-model.cancellation-max-age=1s",
       "spring.jpa.hibernate.ddl-auto=none",
-      "spring.datasource.hikari.connection-init-sql=SET ROLE event_owner"
+      "app.db.write.connection-init-sql=SET ROLE event_owner"
     })
 @AutoConfigureMockMvc
 @Testcontainers
@@ -87,6 +87,13 @@ class EventFlowTests {
         if (result.getExitCode() != 0)
           throw new IllegalStateException("Canonical test schema initialization failed");
       }
+      try (var connection =
+              DriverManager.getConnection(
+                  POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+          var statement = connection.createStatement()) {
+        statement.execute("GRANT USAGE ON SCHEMA event_schema TO event_admin");
+        statement.execute("GRANT SELECT ON ALL TABLES IN SCHEMA event_schema TO event_admin");
+      }
     } catch (Exception exception) {
       POSTGRES.stop();
       throw new ExceptionInInitializerError(exception);
@@ -118,14 +125,18 @@ class EventFlowTests {
     } catch (java.io.IOException failure) {
       throw new java.io.UncheckedIOException(failure);
     }
-    registry.add(
-        "spring.datasource.url",
-        () ->
-            POSTGRES.getJdbcUrl()
-                + (POSTGRES.getJdbcUrl().contains("?") ? "&" : "?")
-                + "currentSchema=event_schema");
-    registry.add("spring.datasource.username", () -> "event_admin");
-    registry.add("spring.datasource.password", () -> "isolated-event");
+    for (String pool : List.of("write", "read")) {
+      String prefix = "app.db." + pool + ".";
+      registry.add(prefix + "jdbc-url", POSTGRES::getJdbcUrl);
+      registry.add(prefix + "username", () -> "event_admin");
+      registry.add(prefix + "password", () -> "isolated-event");
+      registry.add(prefix + "schema", () -> "event_schema");
+      registry.add(prefix + "maximum-pool-size", () -> pool.equals("write") ? "5" : "2");
+      registry.add(prefix + "minimum-idle", () -> pool.equals("write") ? "1" : "0");
+      registry.add(prefix + "data-source-properties.sslmode", () -> "disable");
+      registry.add(prefix + "data-source-properties.targetServerType", () -> "primary");
+    }
+    registry.add("app.db.read.read-only", () -> "true");
   }
 
   @AfterAll

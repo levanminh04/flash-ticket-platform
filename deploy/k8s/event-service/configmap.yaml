@@ -17,8 +17,6 @@ data:
   RABBITMQ_USERNAME: flash_ticket_app
   RABBITMQ_VHOST: /
   RABBITMQ_BUSINESS_EXCHANGE: business.ex
-  EVENT_DB_URL: jdbc:postgresql://172.31.41.236:5432/event_db
-  EVENT_DB_USERNAME: event_admin
   KEYCLOAK_TOKEN_URI: http://172.31.41.236:8080/realms/flash-ticket/protocol/openid-connect/token
   KEYCLOAK_JWK_SET_URI: http://172.31.41.236:8080/realms/flash-ticket/protocol/openid-connect/certs
   KEYCLOAK_AUDIENCE: flash-ticket-api

@@ -344,6 +344,8 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
     key = key.strip()
     if separator and service == 'payment-service' and (key.startswith('PAYMENT_REPORT_REPLICA_') or key in ('PAYMENT_DB_URL', 'PAYMENT_DB_USERNAME', 'PAYMENT_DB_PASSWORD', 'PAYMENT_DOCKER_DB_URL', 'SPRING_DATASOURCE_URL')):
         sys.exit('RETIRED_PAYMENT_DB_KEYS')
+    if separator and service == 'event-service' and (key.startswith('EVENT_READ_REPLICA_') or key in ('EVENT_DB_URL', 'EVENT_DB_USERNAME', 'EVENT_DB_PASSWORD', 'SPRING_DATASOURCE_URL')):
+        sys.exit('RETIRED_EVENT_DB_KEYS')
     if separator and key in allowed:
         value = value.strip()
         if value[:1] in ('"', "'") and value[-1:] == value[:1]:
@@ -353,8 +355,6 @@ for line in pathlib.Path(env_file).read_text(encoding='utf-8-sig').splitlines():
                 'BOOKING_SALES_ORGANIZER_REPORT_REPLICA_ENABLED',
                 'BOOKING_SALES_EVENT_REPORT_REPLICA_ENABLED') and value not in ('true', 'false'):
             sys.exit('INVALID_BOOKING_READER_FLAG')
-        if service == 'event-service' and key == 'EVENT_READ_REPLICA_ENABLED' and value not in ('true', 'false'):
-            sys.exit('INVALID_EVENT_READER_FLAG')
         if service == 'ticket-service' and key == 'TICKET_LIST_REPLICA_ENABLED' and value not in ('true', 'false'):
             sys.exit('INVALID_TICKET_READER_FLAG')
         if value:
@@ -549,59 +549,71 @@ def event_load(revision, file):
     return json.loads((revision / file).read_text(encoding='utf-8'))
 
 
-def event_enabled(secret):
-    setting = base64.b64decode(secret.get(prefix + 'ENABLED', 'ZmFsc2U='), validate=True)
-    if setting not in (b'true', b'false'):
-        sys.exit('INVALID_EVENT_READER_FLAG')
-    return setting == b'true'
-
-
-def event_writer_revision(revision, candidate):
-    try:
-        expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json', 'hpa.json')
-        if not all((r / file).is_file() for r in (revision, candidate) for file in expected):
-            return False
-        if any((r / 'pdb.json').exists() for r in (revision, candidate)):
-            return False
-        deployment = event_load(revision, 'deployment.json')
-        pilot = event_load(candidate, 'deployment.json')
-        template = deployment['spec']['template']
-        pod = template['spec']
-        pilot_pod = pilot['spec']['template']['spec']
-        image = (revision / 'image').read_text().strip()
-        config = event_load(revision, 'configmap.json')
-        alternate = [*config.get('data', {}), *(v.get('name', '') for v in pod['containers'][0].get('env', []))]
-        # Cùng image/profile/readiness và không nguồn flag thay thế trong baseline.
-        return (not event_enabled(event_load(revision, 'secret-env.json')['data'])
-                and not any(re.sub('[^a-z0-9]', '', key.lower()).startswith('eventreadreplica') for key in alternate)
-                and template['metadata']['annotations'].get('flash-ticket/release') == revision.name
-                and pod['containers'][0]['image'] == image == pilot_pod['containers'][0]['image']
-                and image == (candidate / 'image').read_text().strip()
-                and deployment['metadata'].get('name') == pilot['metadata'].get('name') == 'event-service'
-                and deployment['metadata'].get('namespace') == pilot['metadata'].get('namespace') == 'flash-ticket'
-                and all(deployment['spec'].get(key) == pilot['spec'].get(key) for key in ('selector', 'strategy', 'minReadySeconds'))
-                and all(pod.get(key) == pilot_pod.get(key) for key in ('affinity', 'nodeName', 'nodeSelector', 'terminationGracePeriodSeconds'))
-                and all(pod['containers'][0].get(key) == pilot_pod['containers'][0].get(key) for key in ('envFrom', 'env', 'command', 'args', 'startupProbe', 'readinessProbe', 'livenessProbe', 'lifecycle'))
-                and event_load(revision, 'hpa.json') == event_load(candidate, 'hpa.json')
-                and config == event_load(candidate, 'configmap.json')
-                and event_load(revision, 'service.json') == event_load(candidate, 'service.json'))
-    except (OSError, ValueError, KeyError, TypeError, binascii.Error):
-        return False
-
-
 try:
+    expected = ('image', 'deployment.json', 'service.json', 'configmap.json', 'secret-env.json', 'hpa.json')
+    if not all((target / file).is_file() for file in expected):
+        sys.exit('INVALID_EVENT_DB_CONFIG')
     secret = event_load(target, 'secret-env.json')['data']
-    use_reader = event_enabled(secret)
     config = event_load(target, 'configmap.json')
     deployment = event_load(target, 'deployment.json')
     pod = deployment['spec']['template']['spec']
     container = pod['containers'][0]
-    # Relaxed binding, JSON và JVM args không được ghi đè flag của Secret revision.
+    image = (target / 'image').read_text().strip()
+    if (container['image'] != image or deployment['spec']['template']['metadata']['annotations'].get('flash-ticket/release') != target.name):
+        sys.exit('INVALID_EVENT_DB_CONFIG')
+    pg_keys = {'PG_RW_HOST', 'PG_RO_HOST', 'PG_DB', 'PG_USER', 'PG_PASSWORD', 'PG_WRITE_POOL_SIZE', 'PG_READ_POOL_SIZE'}
+    new_format = mode != 'rollback' or bool(pg_keys.intersection(secret))
+    use_reader = False
+    if new_format:
+        if any(key.startswith(prefix) or key in ('EVENT_DB_URL', 'EVENT_DB_USERNAME', 'EVENT_DB_PASSWORD') for key in secret):
+            sys.exit('RETIRED_EVENT_DB_KEYS')
+        if any(not secret.get(key) for key in pg_keys):
+            sys.exit('MISSING_SECRET_KEYS EVENT_DATABASE')
+        values = {key: base64.b64decode(secret[key], validate=True).decode('utf-8') for key in pg_keys}
+        for key, maximum in (('PG_WRITE_POOL_SIZE', 5), ('PG_READ_POOL_SIZE', 2)):
+            if not re.fullmatch(r'[1-9][0-9]*', values[key]) or int(values[key]) > maximum:
+                sys.exit('INVALID_EVENT_DB_POOL')
+        if (any(not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?', values[key]) for key in ('PG_RW_HOST', 'PG_RO_HOST'))
+                or values['PG_RW_HOST'].lower() == values['PG_RO_HOST'].lower()
+                or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', values['PG_DB'])):
+            sys.exit('INVALID_EVENT_DB_ENDPOINT')
+    else:
+        # Chỉ restore snapshot cũ cùng image/config gốc; không chuyển Secret tại chỗ.
+        setting = base64.b64decode(secret.get(prefix + 'ENABLED', 'ZmFsc2U='), validate=True)
+        if setting not in (b'true', b'false'):
+            sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+        use_reader = setting == b'true'
+        if not secret.get('EVENT_DB_PASSWORD') or not config.get('data', {}).get('EVENT_DB_URL') or not config['data'].get('EVENT_DB_USERNAME'):
+            sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+        if use_reader:
+            keys = ('URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'MAX_SAMPLE_AGE', 'PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT')
+            if any(not secret.get(prefix + key) for key in keys):
+                sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+            for key in ('PROBE_INTERVAL', 'MAX_SAMPLE_AGE'):
+                value = base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')
+                if not re.fullmatch(r'(?:[1-9][0-9]*(?:ms|s|m|h)|PT[1-9][0-9]*[SMH])', value):
+                    sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+            for key in ('PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT'):
+                if not re.fullmatch(r'[1-9][0-9]*', base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')):
+                    sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+            jdbc = base64.b64decode(secret[prefix + 'URL'], validate=True).decode('utf-8')
+            url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
+            params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
+            required = {'sslmode': 'require', 'targetServerType': 'secondary', 'connectTimeout': '5', 'socketTimeout': '5'}
+            if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
+                    or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
+                    or url.path != '/event_db' or len(params) != len(required) or dict(params) != required):
+                sys.exit('INVALID_EVENT_LEGACY_SNAPSHOT')
+    # Một nguồn cấu hình DB duy nhất; JSON/JVM/CLI không được ghi đè Secret revision.
+    forbidden = ('appdb', 'springdatasource', 'eventreadreplica', 'springconfig', 'springprofiles')
+    normalized_pg = {re.sub('[^a-z0-9]', '', key.lower()) for key in pg_keys}
+    if new_format:
+        forbidden += ('eventdb',)
     entries = [*config.get('data', {}).items(), *((v.get('name', ''), v.get('value', '')) for v in container.get('env', []))]
     for key, value in entries:
         normalized = re.sub('[^a-z0-9]', '', key.lower())
-        if normalized.startswith('eventreadreplica'):
-            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+        if normalized in normalized_pg or normalized.startswith(forbidden):
+            sys.exit('INVALID_EVENT_DB_SOURCE')
         if normalized == 'springapplicationjson':
             pending = [('', json.loads(value))]
             while pending:
@@ -609,20 +621,22 @@ try:
                 if isinstance(node, dict):
                     for name, child in node.items():
                         joined = parent + re.sub('[^a-z0-9]', '', name.lower())
-                        if joined.startswith('eventreadreplica'):
-                            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+                        if joined in normalized_pg or joined.startswith(forbidden):
+                            sys.exit('INVALID_EVENT_DB_SOURCE')
                         pending.append((joined, child))
-        if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'EVENT_JAVA_OPTIONS') and 'eventreadreplica' in re.sub('[^a-z0-9]', '', value.lower()):
-            sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
-    if any('eventreadreplica' in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])]):
-        sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+        if key in ('JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'JAVA_OPTS', 'EVENT_JAVA_OPTIONS'):
+            setting = re.sub('[^a-z0-9]', '', value.lower())
+            if any(token in setting for token in (*forbidden, *normalized_pg)):
+                sys.exit('INVALID_EVENT_DB_SOURCE')
+    if any(token in re.sub('[^a-z0-9]', '', value.lower()) for value in [*container.get('command', []), *container.get('args', [])] for token in (*forbidden, *normalized_pg)):
+        sys.exit('INVALID_EVENT_DB_SOURCE')
     expected_sources = [{'configMapRef': {'name': 'event-service-config'}}, {'secretRef': {'name': 'event-service-secret'}}]
     if container.get('envFrom') != expected_sources:
-        sys.exit('INVALID_EVENT_READER_FLAG_SOURCE')
+        sys.exit('INVALID_EVENT_DB_SOURCE')
     hpa_doc = event_load(target, 'hpa.json')
     hpa = hpa_doc['spec']
     affinity = pod.get('affinity', {})
-    legacy = mode == 'rollback' and not use_reader and hpa.get('minReplicas') == 1 and hpa.get('maxReplicas') == 2 and not affinity.get('podAntiAffinity')
+    legacy = mode == 'rollback' and not new_format and not use_reader and hpa.get('minReplicas') == 1 and hpa.get('maxReplicas') == 2 and not affinity.get('podAntiAffinity')
     if (target / 'pdb.json').exists() or (target / 'event-pdb-live.json').read_text().strip():
         sys.exit('EVENT_UNMANAGED_PDB_PRESENT')
     if not legacy:
@@ -648,58 +662,9 @@ try:
             live_pod = json.loads(live)['spec']['template']['spec']
             if live_pod.get('nodeName') or live_pod.get('nodeSelector') or live_pod.get('affinity', {}).get('nodeAffinity'):
                 sys.exit('EVENT_NODE_PINNING_PRESENT')
-    if mode == 'rollback' and use_reader:
-        sys.exit('EVENT_ROLLBACK_REQUIRES_WRITER_REVISION')
-    if use_reader:
-        keys = ('URL', 'USERNAME', 'PASSWORD', 'PROBE_INTERVAL', 'MAX_SAMPLE_AGE', 'PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT')
-        if any(not secret.get(prefix + key) for key in keys):
-            sys.exit('MISSING_EVENT_READER_KEYS')
-        for key in ('PROBE_INTERVAL', 'MAX_SAMPLE_AGE'):
-            value = base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')
-            if not re.fullmatch(r'(?:[1-9][0-9]*(?:ms|s|m|h)|PT[1-9][0-9]*[SMH])', value):
-                sys.exit('INVALID_EVENT_READER_TIMING')
-        for key in ('PROBE_QUERY_TIMEOUT', 'TRANSACTION_TIMEOUT'):
-            value = base64.b64decode(secret[prefix + key], validate=True).decode('utf-8')
-            if not re.fullmatch(r'[1-9][0-9]*', value):
-                sys.exit('INVALID_EVENT_READER_TIMING')
-        jdbc = base64.b64decode(secret[prefix + 'URL'], validate=True).decode('utf-8')
-        try:
-            url = urllib.parse.urlsplit(jdbc.removeprefix('jdbc:'))
-            params = urllib.parse.parse_qsl(url.query, strict_parsing=True, keep_blank_values=True)
-            required = {'sslmode': 'require', 'targetServerType': 'secondary', 'connectTimeout': '5', 'socketTimeout': '5'}
-            if (not jdbc.startswith('jdbc:postgresql://') or re.search(r'[\s\x00-\x1f#]', jdbc)
-                    or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?:5432', url.netloc)
-                    or url.path != '/event_db' or len(params) != len(required) or dict(params) != required):
-                raise ValueError
-        except ValueError:
-            sys.exit('INVALID_EVENT_READER_URL')
-        if not current:
-            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
-        active = target.parent / current
-        baseline = current
-        if event_enabled(event_load(active, 'secret-env.json')['data']):
-            if not (active / 'writer-baseline').is_file():
-                sys.exit('EVENT_WRITER_REVISION_REQUIRED')
-            baseline = (active / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
-            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
-        (target / 'writer-baseline').write_text(baseline + '\n')
-    if current and not use_reader and event_enabled(event_load(target.parent / current, 'secret-env.json')['data']):
-        active = target.parent / current
-        if not event_writer_revision(target, active):
-            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
-        baseline = target.name if mode == 'rollback' else (active / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
-            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
-        (target / 'writer-baseline').write_text(baseline + '\n')
-    if (target / 'writer-baseline').is_file():
-        baseline = (target / 'writer-baseline').read_text().strip()
-        if not re.fullmatch(r'[0-9]+-[a-f0-9]{12}-[0-9]+', baseline) or not event_writer_revision(target.parent / baseline, target):
-            sys.exit('EVENT_WRITER_REVISION_REQUIRED')
 except (OSError, ValueError, KeyError, TypeError, binascii.Error):
-    sys.exit('INVALID_EVENT_READER_CONFIG')
+    sys.exit('INVALID_EVENT_DB_CONFIG')
 PY
-  if [[ -f $target/writer-baseline ]]; then previous=$(cat "$target/writer-baseline"); fi
 fi
 if [[ $service == ticket-service ]]; then
   # Snapshot QR/business phải còn đủ để rollback; không dùng profile/PDB của Booking.

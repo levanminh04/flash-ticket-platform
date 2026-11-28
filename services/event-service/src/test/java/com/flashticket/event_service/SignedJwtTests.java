@@ -30,9 +30,14 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @Import(IsolatedInfrastructure.class)
 class SignedJwtTests {
-  @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "eventWriterDataSource")
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "writeDs")
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource readDs;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "dataSource")
+  javax.sql.DataSource dataSource;
 
   static final RSAKey KEY;
   static final HttpServer SERVER;

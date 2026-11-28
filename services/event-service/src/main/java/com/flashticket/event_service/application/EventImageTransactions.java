@@ -38,7 +38,7 @@ public class EventImageTransactions {
     if (maxCount < 1) throw new IllegalArgumentException("Invalid Event image count limit");
   }
 
-  @Transactional(readOnly = true, timeout = 5)
+  @Transactional(timeout = 5)
   public ImageRole prepare(
       UUID id, String actor, String version, UUID imageId, Integer position, ImageRole role) {
     var event = writable(id, actor, version, false);
@@ -102,7 +102,7 @@ public class EventImageTransactions {
     return persist(event, actor, images, "reorder-image");
   }
 
-  @Transactional(readOnly = true, timeout = 5)
+  @Transactional(timeout = 5)
   public boolean referenced(String reference) {
     return repository.imageReferenced(reference);
   }
