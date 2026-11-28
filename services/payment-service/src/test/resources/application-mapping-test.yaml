@@ -5,10 +5,6 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
-  datasource:
-    url: ${PAYMENT_TEST_DB_URL}
-    username: ${PAYMENT_TEST_DB_USERNAME}
-    password: ${PAYMENT_TEST_DB_PASSWORD}
   sql:
     init:
       mode: never

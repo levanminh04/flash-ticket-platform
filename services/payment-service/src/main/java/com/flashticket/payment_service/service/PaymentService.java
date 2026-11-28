@@ -227,7 +227,7 @@ public class PaymentService {
     return "{\"RspCode\":\"00\",\"Message\":\"Confirm success\"}";
   }
 
-  @Transactional(readOnly = true)
+  @Transactional
   public PaymentStart handleReturn(Map<String, String> params) {
     if (!VNPayUtil.verifySecureHash(params, vnPayConfig.getHashSecret())
         || !vnPayConfig.getTmnCode().equals(params.get("vnp_TmnCode")))
@@ -255,7 +255,7 @@ public class PaymentService {
     return starts.toDto(payment, snapshot.getExpiresAt());
   }
 
-  @Transactional(readOnly = true)
+  @Transactional
   public URI buildAppReturnUri(Map<String, String> params) {
     var builder = UriComponentsBuilder.fromUriString(vnPayConfig.getAppReturnUrl());
     try {
@@ -314,7 +314,7 @@ public class PaymentService {
     return httpRequest.getRemoteAddr();
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
   public PaymentView getPayment(UUID orderId, UUID requestId, String buyerSubject) {
     if (buyerSubject == null || buyerSubject.isBlank())
       throw new PaymentException(PaymentErrorCode.AUTHENTICATION_REQUIRED);

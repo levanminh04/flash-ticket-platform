@@ -1,9 +1,6 @@
 spring:
   application:
     name: payment-service
-  datasource:
-    hikari:
-      schema: payment_schema
   security:
     oauth2:
       client:

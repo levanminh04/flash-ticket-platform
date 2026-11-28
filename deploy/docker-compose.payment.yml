@@ -9,10 +9,13 @@ services:
     environment:
       PAYMENT_SERVICE_PORT: "8083"
       EUREKA_CLIENT_ENABLED: "false"
-      SPRING_DATASOURCE_URL: ${PAYMENT_DOCKER_DB_URL:-jdbc:postgresql://host.docker.internal:5432/payment_db}
-      PAYMENT_DB_URL: ${PAYMENT_DOCKER_DB_URL:-jdbc:postgresql://host.docker.internal:5432/payment_db}
-      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME:-payment_admin}
-      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD in the root .env}
+      PG_RW_HOST: ${PG_RW_HOST:?Set PG_RW_HOST in the root .env}
+      PG_RO_HOST: ${PG_RO_HOST:?Set PG_RO_HOST in the root .env}
+      PG_DB: ${PG_DB:?Set PG_DB in the root .env}
+      PG_USER: ${PG_USER:?Set PG_USER in the root .env}
+      PG_PASSWORD: ${PG_PASSWORD:?Set PG_PASSWORD in the root .env}
+      PG_WRITE_POOL_SIZE: ${PG_WRITE_POOL_SIZE:-5}
+      PG_READ_POOL_SIZE: ${PG_READ_POOL_SIZE:-2}
       BOOKING_SERVICE_URL: ${PAYMENT_DOCKER_BOOKING_URL:-http://host.docker.internal:8082}
       KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?Set KEYCLOAK_ISSUER_URI in the root .env}
       KEYCLOAK_JWK_SET_URI: ${KEYCLOAK_JWK_SET_URI:?Set KEYCLOAK_JWK_SET_URI in the root .env}

@@ -162,16 +162,35 @@ public final class PaymentPostgresFixture {
     startInfrastructure();
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put(
-        "spring.datasource.url",
+        "app.db.write.jdbc-url",
+        "jdbc:postgresql://127.0.0.1:" + primary.getMappedPort(5432) + "/payment_db");
+    properties.put("app.db.write.username", "postgres");
+    properties.put("app.db.write.password", databasePassword);
+    properties.put("app.db.write.schema", "payment_schema");
+    properties.put("app.db.write.connection-init-sql", "SET ROLE payment_owner");
+    properties.put("app.db.write.maximum-pool-size", 5);
+    properties.put("app.db.write.minimum-idle", 1);
+    // Chỉ container disposable không TLS; production vẫn sslmode=require.
+    properties.put("app.db.write.data-source-properties.sslmode", "disable");
+    properties.put("app.db.write.data-source-properties.targetServerType", "primary");
+    properties.put(
+        "app.db.read.jdbc-url",
         "jdbc:postgresql://127.0.0.1:"
-            + primary.getMappedPort(5432)
-            + "/payment_db?connectTimeout=5&socketTimeout=5");
-    properties.put("spring.datasource.username", "postgres");
-    properties.put("spring.datasource.password", databasePassword);
-    properties.put("spring.datasource.hikari.schema", "payment_schema");
-    properties.put("spring.datasource.hikari.connection-init-sql", "SET ROLE payment_owner");
-    properties.put("spring.datasource.hikari.maximum-pool-size", 5);
-    properties.put("spring.datasource.hikari.minimum-idle", 1);
+            + (readerEnabled ? standby : primary).getMappedPort(5432)
+            + "/payment_db");
+    properties.put("app.db.read.username", "postgres");
+    properties.put("app.db.read.password", databasePassword);
+    properties.put("app.db.read.schema", "payment_schema");
+    properties.put("app.db.read.read-only", true);
+    properties.put("app.db.read.maximum-pool-size", 2);
+    properties.put("app.db.read.minimum-idle", 0);
+    properties.put("app.db.read.connection-timeout", 5000);
+    properties.put("app.db.read.data-source-properties.sslmode", "disable");
+    properties.put(
+        "app.db.read.data-source-properties.targetServerType",
+        readerEnabled ? "secondary" : "primary");
+    properties.put("app.db.read.data-source-properties.connectTimeout", 5);
+    properties.put("app.db.read.data-source-properties.socketTimeout", 5);
     properties.put("spring.rabbitmq.host", "127.0.0.1");
     properties.put("spring.rabbitmq.port", rabbit.getMappedPort(5672));
     properties.put("spring.rabbitmq.username", "payment_test");
@@ -180,26 +199,6 @@ public final class PaymentPostgresFixture {
     // Giữ lựa chọn worker của từng profile; mapping-test không có RabbitTemplate.
     properties.put("payment.worker.initial-delay", 86400000);
     properties.put("spring.rabbitmq.listener.simple.auto-startup", false);
-    properties.put("payment.report-replica.enabled", readerEnabled);
-    if (readerEnabled) {
-      properties.put(
-          "payment.report-replica.datasource.jdbc-url",
-          "jdbc:postgresql://127.0.0.1:"
-              + standby.getMappedPort(5432)
-              + "/payment_db?targetServerType=secondary&connectTimeout=5&socketTimeout=5");
-      properties.put("payment.report-replica.datasource.username", "payment_ha_reader");
-      properties.put("payment.report-replica.datasource.password", databasePassword);
-      properties.put("payment.report-replica.datasource.schema", "payment_schema");
-      properties.put("payment.report-replica.datasource.read-only", true);
-      properties.put("payment.report-replica.datasource.maximum-pool-size", 2);
-      properties.put("payment.report-replica.datasource.minimum-idle", 0);
-      properties.put("payment.report-replica.datasource.connection-timeout", 5000);
-      // Không scheduler tự đổi mẫu giữa một phép thử fault/expiry; probe được gọi tường minh.
-      properties.put("payment.report-replica.probe-interval", "PT24H");
-      properties.put("payment.report-replica.probe-query-timeout", 2);
-      properties.put("payment.report-replica.max-sample-age", "PT5S");
-      properties.put("payment.report-replica.reader-transaction-timeout", 10);
-    }
     return properties;
   }
 
@@ -257,12 +256,6 @@ public final class PaymentPostgresFixture {
             "-f",
             "/tmp/99-table-prefix.sql");
     assertThat(result.getExitCode()).withFailMessage(result.getStderr()).isZero();
-    // Login đọc riêng trong fixture để permission fault có ý nghĩa, không dùng superuser reader.
-    psql(
-        false,
-        "create role payment_ha_reader login password '"
-            + databasePassword
-            + "'; grant pg_monitor to payment_ha_reader; grant usage on schema payment_schema to payment_ha_reader; grant select on all tables in schema payment_schema to payment_ha_reader");
     awaitReplay();
     assertThat(psql(true, "select to_regclass('payment_schema.tbl_refunds') is not null"))
         .isEqualTo("t");

@@ -1,10 +1,6 @@
 spring:
   autoconfigure:
     exclude: []
-  datasource:
-    url: ${PAYMENT_TEST_DB_URL:jdbc:postgresql://127.0.0.1:25432/payment_db}
-    username: ${PAYMENT_TEST_DB_USERNAME:postgres}
-    password: ${PAYMENT_TEST_DB_PASSWORD:payment-flow-test}
   jpa:
     open-in-view: false
     hibernate:

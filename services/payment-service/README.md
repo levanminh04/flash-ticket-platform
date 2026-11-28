@@ -49,23 +49,27 @@ $env:JAVA_TOOL_OPTIONS = '-Duser.timezone=UTC'
 
 JVM của formatter cần các compiler exports trong `.mvn/jvm.config`. Test JVM tự dùng UTC qua Surefire. JVM ứng dụng cũng nên dùng UTC: PostgreSQL có thể không nhận tên alias múi giờ cũ `Asia/Saigon` do JDBC gửi khi mở kết nối; `hibernate.jdbc.time_zone` chỉ áp dụng sau khi đã kết nối.
 
-Suite mặc định chạy smoke context, DTO, mapper và YAML; không chạy `EntityMappingTest`. Smoke context tắt JPA nên không chứng minh mapping hoặc database đúng. Không giảm enforcer/quality gates nếu môi trường chưa sẵn sàng.
+`verify` chạy unit/Surefire và Failsafe gồm mapping, business, physical routing primary/standby và hai application context trên PostgreSQL/RabbitMQ disposable. Docker phải sẵn sàng; không giảm enforcer/quality gates nếu thiếu môi trường. Smoke context riêng tắt JPA không phải bằng chứng mapping/routing.
 
 ## Kiểm mapping PostgreSQL thật
 
 Chuẩn bị một instance PostgreSQL test tách biệt hoàn toàn với volume deploy dùng chung, có database `payment_db` và schema `payment_schema`. Trong instance test mới, dùng bootstrap role tạo `payment_owner` và `payment_app`, chạy DDL `docs/architecture/data/postgres/30-payment.sql`, sau đó `services/99-table-prefix.sql`, và cấp USAGE schema cùng SELECT/INSERT/UPDATE bảng cho app. Không dùng Hibernate để tạo bảng; không chạy lại initializer trên DB hiện có. Có thể dùng PostgreSQL 16.15 trong container tạm với port riêng, không mount volume production/dev hiện tại.
 
-Đặt các biến sau trong phiên kiểm; lấy credential từ môi trường của DB test, không commit hoặc in password:
-
-- `PAYMENT_TEST_DB_URL`: JDBC URL instance test riêng.
-- `PAYMENT_TEST_DB_USERNAME`: application role trong instance test.
-- `PAYMENT_TEST_DB_PASSWORD`: password của application role.
+Các test mapping/flow hiện lấy endpoint/port/password từ `PaymentPostgresFixture`, không cần ba biến `PAYMENT_TEST_DB_*` cũ. Boolean fixture chỉ chọn standby thật hoặc hai pool cùng primary; không còn feature flag trong app. Không trỏ fixture vào DB dùng chung hoặc production.
 
 ```powershell
 .\mvnw.cmd -Pmapping-tests verify -B -ntp
 ```
 
 Profile Maven này chạy cả suite thường và test mapping, không skip khi thiếu DB. Spring profile `mapping-test` override danh sách exclusion của smoke test để bật DataSource/JPA; Config Client, Eureka và RabbitMQ được cô lập. `EntityMappingTest` cũng bật `local-foundation` để kiểm listener tắt và DB vẫn hoạt động. Test dùng UUID riêng, transaction rollback khi phù hợp; test concurrent version commit fixture vào DB test để kiểm hai transaction độc lập. Không dùng database dùng chung vì fixture này giữ lại một ít hàng đã commit.
+
+## Routing PostgreSQL hiện hành
+
+- Một `PaymentDataSourceConfig`, hai Hikari pool `app.db.write/read`, primary lazy datasource route theo transaction readOnly; không thư viện mới hoặc persistence unit thứ hai.
+- Chỉ `RefundServiceImpl.getRefunds/getEventRefundProgress` dùng replica. Status/return, reconciliation/owner, financial-summary và worker scans giữ primary theo ma trận đã duyệt.
+- Không flag/WAL gate/permit/fallback. Refund GET có thể trễ hoặc lỗi nếu reader lỗi; không cam kết60s. Hai report giữ isolation mặc định, không còn snapshot REPEATABLE_READ do facade cũ áp ngoài. Outer write TX quyết định nguồn cho REQUIRED reads; repository tự tạo readOnly TX không phải truy vấn ngoài TX.
+- Giữ writer schema/SET ROLE, reader read-only và TLS require/targetServerType. Production giữ pool5/2 qua env-file; mặc định10/10. Password chỉ qua Secret/env-file, không commit giá trị thật.
+- Kiểm physical routing trong `PaymentReportReplicaRoutingIT`: readOnly→`pg_is_in_recovery()=true`, write/no-TX→false, quan sát đúng connection JPA. `psql` trực tiếp chỉ chứng minh vai trò endpoint, không chứng minh router Spring.
 
 ## Cấu hình chạy nền local
 
@@ -75,7 +79,8 @@ Config Server vẫn bắt buộc, mặc định `http://localhost:8888`; Payment
 | --- | --- |
 | CONFIG_SERVER_URL | Địa chỉ Config Server; có mặc định localhost:8888 |
 | PAYMENT_SERVICE_PORT | Cổng Payment; mặc định 8083 |
-| PAYMENT_DB_URL / PAYMENT_DB_USERNAME / PAYMENT_DB_PASSWORD | Kết nối runtime có quyền app, không dùng payment_erd hoặc mặc định maintenance login |
+| PG_RW_HOST / PG_RO_HOST / PG_DB / PG_USER / PG_PASSWORD | Hai endpoint primary/replica; cùng account Payment; password từ env-file/Secret, không URL có credential |
+| PG_WRITE_POOL_SIZE / PG_READ_POOL_SIZE | Mặc định10/10; đặt rõ5/2 trong env-file triển khai để giữ budget |
 | RABBITMQ_HOST / RABBITMQ_PORT / RABBITMQ_USERNAME / RABBITMQ_PASSWORD | Cấu hình broker được phân phối từ Config Server |
 | RABBITMQ_VHOST / RABBITMQ_BUSINESS_EXCHANGE | Mặc định `/` và `business.ex`, thống nhất với Booking trên `dev/son` |
 | SPRING_PROFILES_ACTIVE | Đặt local-foundation khi chỉ kiểm nền DB, chưa dùng broker/Eureka |

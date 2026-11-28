@@ -18,16 +18,6 @@ spring:
           time_zone: UTC
         type:
           json_format_mapper: org.hibernate.type.format.jackson.Jackson3JsonFormatMapper
-  datasource:
-    url: ${PAYMENT_DB_URL}
-    username: ${PAYMENT_DB_USERNAME:payment_admin}
-    password: ${PAYMENT_DB_PASSWORD}
-    hikari:
-      # Để JDBC trả tên domain nhất quán với columnDefinition trong entity.
-      schema: payment_schema
-      connection-init-sql: SET ROLE payment_owner
-      maximum-pool-size: 5
-      minimum-idle: 1
   security:
     oauth2:
       client:
@@ -60,22 +50,36 @@ spring:
         acknowledge-mode: manual
         prefetch: 20
 
-payment:
-  report-replica:
-    enabled: ${PAYMENT_REPORT_REPLICA_ENABLED:false}
-    probe-interval: ${PAYMENT_REPORT_REPLICA_PROBE_INTERVAL:PT2S}
-    probe-query-timeout: ${PAYMENT_REPORT_REPLICA_PROBE_QUERY_TIMEOUT:2}
-    max-sample-age: ${PAYMENT_REPORT_REPLICA_MAX_SAMPLE_AGE:PT5S}
-    reader-transaction-timeout: ${PAYMENT_REPORT_REPLICA_READER_TRANSACTION_TIMEOUT:10}
-    datasource:
-      jdbc-url: ${PAYMENT_REPORT_REPLICA_JDBC_URL}
-      username: ${PAYMENT_REPORT_REPLICA_USERNAME}
-      password: ${PAYMENT_REPORT_REPLICA_PASSWORD}
+app:
+  db:
+    write:
+      jdbc-url: jdbc:postgresql://${PG_RW_HOST}:5432/${PG_DB}
+      username: ${PG_USER}
+      password: ${PG_PASSWORD}
+      maximum-pool-size: ${PG_WRITE_POOL_SIZE:10}
+      minimum-idle: 1
+      # Giữ domain và quyền ghi hiện có khi đổi prefix datasource.
+      schema: payment_schema
+      connection-init-sql: SET ROLE payment_owner
+      data-source-properties:
+        sslmode: require
+        targetServerType: primary
+    read:
+      jdbc-url: jdbc:postgresql://${PG_RO_HOST}:5432/${PG_DB}
+      username: ${PG_USER}
+      password: ${PG_PASSWORD}
+      maximum-pool-size: ${PG_READ_POOL_SIZE:10}
+      minimum-idle: 0
       schema: payment_schema
       read-only: true
-      maximum-pool-size: 2
-      minimum-idle: 0
       connection-timeout: 5000
+      data-source-properties:
+        sslmode: require
+        targetServerType: secondary
+        connectTimeout: 5
+        socketTimeout: 5
+
+payment:
   booking:
     discovery-enabled: ${PAYMENT_BOOKING_DISCOVERY_ENABLED:false}
     base-url: ${BOOKING_SERVICE_URL:http://localhost:8082}

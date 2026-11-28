@@ -310,7 +310,7 @@ public class PaymentSagaServiceImpl implements PaymentSagaService {
   }
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public List<UUID> findRecoverableOrderIds(Instant dueAt, int limit) {
     return paymentSagaRepository.findRecoverableOrderIds(
         dueAt, PageRequest.of(0, Math.min(Math.max(limit, 1), 100)));

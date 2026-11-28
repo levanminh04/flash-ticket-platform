@@ -17,8 +17,12 @@ import org.springframework.context.annotation.Import;
 @SpringBootTest(properties = "spring.data.jpa.repositories.enabled=false")
 class MapperBeansTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "paymentWriterDataSource")
+      name = "writeDs",
+      answers = org.mockito.Answers.RETURNS_MOCKS)
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource reader;
 
   @Test
   void rejectsMissingPurchaseBeforeCreatingSnapshot() {

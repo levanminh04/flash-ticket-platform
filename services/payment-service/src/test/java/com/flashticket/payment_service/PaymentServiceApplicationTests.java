@@ -32,8 +32,12 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(OutputCaptureExtension.class)
 class PaymentServiceApplicationTests {
   @org.springframework.test.context.bean.override.mockito.MockitoBean(
-      name = "paymentWriterDataSource")
+      name = "writeDs",
+      answers = org.mockito.Answers.RETURNS_MOCKS)
   com.zaxxer.hikari.HikariDataSource writer;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean(name = "readDs")
+  com.zaxxer.hikari.HikariDataSource reader;
 
   @Autowired ApplicationContext context;
   @Autowired JsonMapper jsonMapper;

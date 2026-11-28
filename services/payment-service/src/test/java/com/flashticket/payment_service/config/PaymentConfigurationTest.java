@@ -16,12 +16,11 @@ class PaymentConfigurationTest {
             new MapPropertySource(
                 "testInputs",
                 Map.of(
-                    "PAYMENT_DB_URL",
-                    "jdbc:postgresql://localhost/test",
-                    "PAYMENT_DB_USERNAME",
-                    "fixture",
-                    "PAYMENT_DB_PASSWORD",
-                    "fixture-only")));
+                    "PG_RW_HOST", "writer.fixture",
+                    "PG_RO_HOST", "reader.fixture",
+                    "PG_DB", "test",
+                    "PG_USER", "fixture",
+                    "PG_PASSWORD", "fixture-only")));
     var loader = new YamlPropertySourceLoader();
     for (var ps :
         loader.load("payment", new FileSystemResource("src/main/resources/application.yaml")))
@@ -40,8 +39,11 @@ class PaymentConfigurationTest {
   @Test
   void bindsDatabaseWithoutAllowingSchemaMutation() throws Exception {
     var env = configuration(false);
-    assertThat(env.getProperty("spring.datasource.url"))
-        .isEqualTo("jdbc:postgresql://localhost/test");
+    assertThat(env.getProperty("app.db.write.jdbc-url"))
+        .isEqualTo("jdbc:postgresql://writer.fixture:5432/test");
+    assertThat(env.getProperty("app.db.read.jdbc-url"))
+        .isEqualTo("jdbc:postgresql://reader.fixture:5432/test");
+    assertThat(env.containsProperty("spring.datasource.url")).isFalse();
     assertThat(env.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
     assertThat(env.getProperty("spring.jpa.open-in-view", Boolean.class)).isFalse();
     assertThat(env.getProperty("spring.jpa.properties.hibernate.default_schema"))
@@ -121,8 +123,11 @@ class PaymentConfigurationTest {
   @Test
   void localProfileKeepsDatasourceAndDisablesUnimplementedIntegrations() throws Exception {
     var env = configuration(true);
-    assertThat(env.getProperty("spring.datasource.url"))
-        .isEqualTo("jdbc:postgresql://localhost/test");
+    assertThat(env.getProperty("app.db.write.jdbc-url"))
+        .isEqualTo("jdbc:postgresql://writer.fixture:5432/test");
+    assertThat(env.getProperty("app.db.read.jdbc-url"))
+        .isEqualTo("jdbc:postgresql://reader.fixture:5432/test");
+    assertThat(env.containsProperty("spring.datasource.url")).isFalse();
     assertThat(env.getProperty("eureka.client.enabled", Boolean.class)).isFalse();
     assertThat(env.getProperty("spring.rabbitmq.listener.simple.auto-startup", Boolean.class))
         .isFalse();
@@ -139,10 +144,6 @@ class PaymentConfigurationTest {
             new MapPropertySource(
                 "testInputs",
                 Map.of(
-                    "PAYMENT_DB_URL",
-                    "jdbc:postgresql://localhost/test",
-                    "PAYMENT_DB_PASSWORD",
-                    "fixture-only",
                     "KEYCLOAK_TOKEN_URI",
                     "https://keycloak.example.com/realms/flash-ticket/protocol/openid-connect/token",
                     "PAYMENT_INTERNAL_SERVICE_CLIENT_SECRET",
@@ -178,10 +179,6 @@ class PaymentConfigurationTest {
             new MapPropertySource(
                 "testInputs",
                 Map.of(
-                    "PAYMENT_DB_URL",
-                    "jdbc:postgresql://localhost/test",
-                    "PAYMENT_DB_PASSWORD",
-                    "fixture-only",
                     "PAYMENT_SERVICE_TOKEN_URI",
                     "https://legacy-token.example.com/token",
                     "PAYMENT_SERVICE_CLIENT_SECRET",
